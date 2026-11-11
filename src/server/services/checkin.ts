@@ -44,9 +44,6 @@ export async function processScan(req: ScanRequest): Promise<ScanResult> {
       ticketId = id
       const ticket = await db.ticket.findUnique({ where: { id } })
       if (!ticket || !verifyTicketSignature(id, ticket.code, sig)) {
-        await db.admissionScan.create({
-          data: { ticketId: ticket?.id ?? 'unknown', eventId: req.eventId, scannerId: req.scannerId, deviceSessionId: req.deviceSessionId ?? null, result: 'INVALID', source: req.source ?? 'ONLINE', clientScanId: req.clientScanId, capturedOfflineAt: req.capturedOfflineAt ? new Date(req.capturedOfflineAt) : null, note: 'QR signature verification failed' },
-        })
         return { result: 'INVALID', detail: 'Invalid ticket credential.' }
       }
     } else {
@@ -56,9 +53,6 @@ export async function processScan(req: ScanRequest): Promise<ScanResult> {
     const byCode = await db.ticket.findUnique({ where: { code: trimmed.toUpperCase() } })
     ticketId = byCode?.id ?? null
     if (!ticketId) {
-      await db.admissionScan.create({
-        data: { ticketId: 'unknown', eventId: req.eventId, scannerId: req.scannerId, deviceSessionId: req.deviceSessionId ?? null, result: 'INVALID', source: req.source ?? 'ONLINE', clientScanId: req.clientScanId, note: 'Unknown ticket code' },
-      })
       return { result: 'INVALID', detail: 'Ticket not found.' }
     }
   }

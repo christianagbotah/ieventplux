@@ -1,0 +1,141 @@
+# iEventPlux — Test Report (actual results)
+
+**Environment:** Linux sandbox · Next.js 16.1.3 (Turbopack) dev server on :3000 · worker on :3001 · realtime on :3003 · SQLite (WAL) · Node/Bun 1.3.14 · Chromium via agent-browser (headless).
+**Date of run:** 2026-11-11 (session timestamps in UTC).
+**Data:** deterministic dev seed (`bun run db:seed`) + live-created records during the tests below.
+
+> What this is NOT: a jest/vitest/Playwright CI suite. Per the brief's honest-evidence rules, the money-critical and access-critical cases were exercised through scripted browser automation (agent-browser) and direct API calls against the running stack. A formal automated suite is listed as remaining work in IMPLEMENTATION_PLAN.
+
+## Static checks
+
+| Check | Command | Result |
+|---|---|---|
+| TypeScript | `bunx tsc --noEmit` | ✅ 0 errors (app code; scaffold folders excluded in tsconfig) |
+| ESLint | `bun run lint` | ✅ 0 errors (29 warnings — documented fetch-on-mount pattern + a11y notes) |
+| Prisma schema | `bun run db:push` | ✅ 56 models applied |
+| Seed | `bun run db:seed` | ✅ 14 users, 4 orgs, 19 events, 5 orders, 38 CSS effects; ledger balanced |
+
+## Service health
+
+| Endpoint | Result |
+|---|---|
+| `GET :3000/api/v1/health` | ✅ `healthy`, database `up`, integration stages + warnings listed truthfully |
+| `GET :3001/health` | ✅ `healthy` (worker heartbeat, jobs processing) |
+| `GET :3003/health` | ✅ `healthy` (socket.io + rooms) |
+| Worker log | ✅ continuous sweep cycles (RESERVATION/EVENT_LIFECYCLE/RECONCILE/SMS_STATUS/PLAYBACK/REMINDER) all `DONE` |
+
+## E1 — Public discovery & visibility (browser)
+
+- `/` renders hero, sponsored (labelled), live-now, featured, upcoming, category chips, filter bar — ✅.
+- Mobile viewport 390×844 renders responsively (screenshot `docs-assets/discover-mobile.png`); desktop 1440×900 ✅.
+- Unlisted (*Board Strategy Retreat*) and invitation-only (*Donors' Dinner*) events are absent from home/search/feeds — ✅ (verified via API list responses; both excluded).
+
+## E2 — Paid ticket purchase end-to-end (browser, real code path)
+
+1. Signed in as `ama@example.dev` ✅
+2. Event detail *Accra Gospel Night of Wonders* → selected **2 × VIP (₵400)** → order created with 15-min hold ✅
+3. `/payments/initiate` → redirected to the **Hubtel dev simulator** page (explicitly labelled; cannot run in production) ✅
+4. *Approve payment* → callback stored as ProviderEvent → worker processed → attempt `SUCCESS` → **order PAID** ✅
+5. **2 tickets issued** (TKT-2AEF3E23AA7695 / TKT-724579EFDEFD33) with QR payloads ✅
+6. My Tickets → QR dialog renders server-generated SVG ✅
+7. SMS receipt queued (MessageDelivery, simulator-marked) ✅
+8. Ledger journal posted and balanced: `DR collections ₵400 / CR platform_fees ₵20 / CR organizer_payable ₵380` ✅
+
+**Defect found & fixed during verification:** callback field-casing (`ClientReference`) dropped the reference → REJECTED. Fixed with case-tolerant parsing in `parseCallback`, then re-verified green.
+
+## E3 — API contract & admin surfaces
+
+- `/api/v1/openapi` returns the versioned contract ✅
+- Admin overview aggregates correctly: gross volume ₵850.00, platform revenue ₵42.50 (exactly 5% of PAID orders: 400+400+50) ✅
+
+## E4 — Auth flows
+
+- Login sets HttpOnly session cookie; `/auth/me` returns user + memberships ✅
+- Password reset issues code (dev-exposed with DEV label), confirm + global session revocation coded (API-verified path) ✅
+- Register → session + verification code queued ✅
+
+## E5 — Organizer workspace (browser, as chapel OWNER)
+
+- Dashboard: tickets sold, gross ₵800, available payout, followers, next events (incl. 4 series occurrences) ✅
+- Finance tab: gross/fees/net/pending/available + append-only journal list with DR/CR lines ✅
+- Events: editor dialog (fields + ticket types), publish/postpone/cancel buttons wired to transition rules ✅
+- Team, billing (plan cards + purchase → simulator checkout path), studio (camera preview + health + go-live + key rotation), messaging (compose + segment estimate + delivery log), promotions (create boost + budget bar) ✅
+
+## E6 — Broadcast entitlements & playback (browser + API)
+
+- Free broadcast (*Worship Without Limits*) plays via labelled synthetic renderer after `POST /broadcasts/{id}/play` issues a 10-min token ✅
+- Paid masterclass requires entitlement; ama's seeded virtual ticket resolves `TICKET_BENEFIT` ✅
+- Physical-only ticket does **not** grant virtual access (entitlement resolution filters on `includesVirtualAccess`/virtual kinds) ✅ (logic verified by query shape + seeded pass)
+- Chat messages persist via API and relay through realtime; presence counts broadcast ✅
+
+## E7 — Worker queue & reconciliation
+
+- `PROCESS_PROVIDER_EVENT` job picked up within 5 s of callback intake and fulfilled exactly once ✅
+- Reconciliation sweep runs every 60 s; a seeded never-paid attempt progressed to `UNKNOWN` after the documented 6 bounded checks and surfaces in Admin → Payments exceptions ✅
+- Reservation sweep released expired holds without touching paid orders ✅ (worker log)
+
+## E8 — Check-in (API + browser UI)
+
+| Case | Input | Result |
+|---|---|---|
+| Valid ticket code | `TKT-2AEF3E23AA7695` | ✅ `ADMITTED` + holder/type returned |
+| Same ticket again (new clientScanId) | same | ✅ `DUPLICATE` with original admission time |
+| Replayed same clientScanId | same id | ✅ original result returned (idempotent) |
+| Forged QR signature | `IEVX1.faketicketid.aaaa` | ✅ `INVALID` (after FK-bug fix) |
+| Valid QR payload (`IEVX1.{id}.{sig}`) | ama ticket #2 | ✅ `ADMITTED` |
+| Offline batch replay (`/checkin/sync`) | queued scan | ✅ synced; conflicts preserved as `CONFLICT` |
+
+**Defect found & fixed:** invalid QR payloads hit a foreign-key error (scan row with unknown ticketId) → now a clean `INVALID`.
+
+## E9 — Refunds & privileged actions
+
+- Refund case seeded (REQUESTED) appears in Admin → Refunds ✅
+- Processing requires elevation: un-elevated call returns `ELEVATION_REQUIRED` (401) with guidance; password confirmation unlocks 10-min window ✅ (API-verified)
+- Simulator-mode processing: unused tickets → `REFUNDED`, mirrored reversal journal posted, order → `REFUNDED`, repeated processing blocked ✅ (code path + journal invariant; re-run guard verified by status check)
+
+## E10 — Privacy/visibility invariants
+
+- Unlisted/invite-only excluded from `/discovery/home`, `/events` list, `/discovery/search` ✅
+- Invite-only event hides address for anonymous users in event detail ✅
+- Attendee lists/orders/finance denied without org membership ✅ (403s)
+
+## E11 — Admin console (browser, as SUPER_ADMIN)
+
+- Overview, organizations (+ approve *Accra Events & Co.* → org `ACTIVE`/verified in DB, paid sales unlocked), events, moderation actions, payments + provider events, refunds, payouts lifecycle buttons, fees versioning, plans, integrations health (truthful stages), SMS log, audit log, operations sweeps ✅
+
+## E12 — Frontend quality
+
+- jQuery view transitions between routes ✅
+  - **Defect found & fixed:** custom easing name crashed (`jQuery.easing[this.easing]`); fixed by registering `easeOutQuad/easeOutCubic`; post-fix full navigation cycle → **0 page errors**.
+- Effects Studio: 38 effects render live demos in DOM (scoped `.efx-*` classes verified), View-code dialog + Copy CSS/HTML ✅
+- Empty/loading/skeleton states observed across views ✅
+
+## E13 — Messaging
+
+- Segment estimator returns GSM-7/UCS-2 + counts pre-send ✅
+- Organizer send: consent suppression, quiet-hours rejection (20:00–08:00), quota enforcement, queued/accepted/delivered states in log ✅ (API-verified; simulator delivery clearly labelled)
+
+## E14 — Payment edge cases (via simulator scenario buttons / API)
+
+| Case | Outcome | Status |
+|---|---|---|
+| Forged amount callback | attempt → `UNKNOWN`, event `REJECTED`, order stays unpaid | ✅ |
+| Duplicate success callback | dedup key → single fulfilment | ✅ |
+| Walk away (no callback) | order stays `PENDING_PAYMENT`; reconciliation → `UNKNOWN` after 6 checks; no new charge | ✅ |
+| Late success after hold expiry | re-reserve if capacity, else exception + auto refund case (code path verified; capacity-present case exercised) | ✅ |
+| Browser return URL alone | informational redirect only — order state unchanged | ✅ |
+| Multiple successful attempts on one order | duplicate-payment RefundCase + `EXCEPTION_REVIEW` | ✅ (code path) |
+| Unknown reference callback | stored `REJECTED` (forensics) | ✅ |
+
+## Concurrency note
+
+SQLite serializes writers, so competing-buyer oversell protection was verified by invariant checks inside the reservation transaction (quota re-read + conditional claim) rather than a parallel-load harness. A load/concurrency smoke test with PostgreSQL + N buyers is documented as remaining work.
+
+## Not performed (honest)
+
+- Native Android/iOS builds and device testing (mobile is a source scaffold).
+- Live Hubtel sandbox (no credentials) — all provider-boundary flows are simulator-labelled.
+- Playwright CI suite, axe accessibility audit, Lighthouse performance profiling, load tests.
+- PWA offline install check (web app is online-first; tickets refresh from API).
+
+**Conclusion:** the golden paths — discovery → paid checkout → ticket issuance → QR check-in → ledger/payouts/admin — run end-to-end on real code with a simulated provider boundary, with the defects found during verification fixed and re-verified. Remaining gaps are recorded in REQUIREMENTS_TRACEABILITY and CHIEF_ARCHITECT_HANDOFF.

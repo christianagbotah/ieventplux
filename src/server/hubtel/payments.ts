@@ -101,8 +101,10 @@ export interface ParsedCallback {
 
 /** Parse + redact a Hubtel v1 checkout callback. Sensitive fields never hit routine logs. */
 export function parseCallback(payload: ProviderCallbackPayload): ParsedCallback {
-  const reference = (payload.clientReference ?? payload.token ?? null) as string | null
-  const providerPaymentId = (payload.transactionId ?? null) as string | null
+  // Field names are accepted in either casing (provider docs use PascalCase in samples;
+  // the parser stays tolerant so a documented field-name variant cannot drop a payment).
+  const reference = (payload.clientReference ?? payload.ClientReference ?? payload.token ?? payload.Token ?? null) as string | null
+  const providerPaymentId = (payload.transactionId ?? payload.TransactionId ?? null) as string | null
   const responseCode = String(payload.responseCode ?? payload.ResponseCode ?? '')
   const amountRaw = payload.amount ?? payload.Amount
   let amountMinor: number | null = null
@@ -121,7 +123,7 @@ export function parseCallback(payload: ProviderCallbackPayload): ParsedCallback 
     providerPaymentId,
     outcome,
     amountMinor,
-    currency: (payload.currency ?? null) as string | null,
+    currency: (payload.currency ?? payload.Currency ?? null) as string | null,
     dedupKey,
     redactedPayload: JSON.stringify(redacted).slice(0, 2000),
   }

@@ -8,9 +8,10 @@ const globalForPrisma = globalThis as unknown as {
 // mini-services. WAL mode is required for safe concurrent readers/writer.
 async function configureSQLite(prisma: PrismaClient) {
   try {
+    // PRAGMAs that return values (journal_mode, busy_timeout) must use queryRaw.
     await prisma.$queryRawUnsafe('PRAGMA journal_mode=WAL;')
-    await prisma.$executeRawUnsafe('PRAGMA busy_timeout=5000;')
-    await prisma.$executeRawUnsafe('PRAGMA foreign_keys=ON;')
+    await prisma.$queryRawUnsafe('PRAGMA busy_timeout=5000;')
+    await prisma.$queryRawUnsafe('PRAGMA foreign_keys=ON;')
   } catch {
     // Non-fatal: single-process operation still works without WAL.
   }

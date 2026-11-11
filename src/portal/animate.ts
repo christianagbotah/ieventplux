@@ -5,20 +5,24 @@
  * animation effects alongside React rendering — jQuery only touches wrapper
  * elements that React does not manage, avoiding re-render conflicts).
  */
-let jqueryPromise: Promise<typeof import('jquery')> | null = null
+let jqueryPromise: Promise<JQueryStatic> | null = null
 
 async function jq(): Promise<JQueryStatic> {
   if (!jqueryPromise) {
-    jqueryPromise = import('jquery')
-    // Register jQuery globally for any legacy transition code paths.
-    jqueryPromise.then(($mod) => {
+    // Load jQuery, register it globally and attach custom easings before first use.
+    jqueryPromise = (async () => {
+      const $ = (await import('jquery')).default as JQueryStatic
       const w = window as unknown as { $?: JQueryStatic; jQuery?: JQueryStatic }
-      w.$ = $mod.default
-      w.jQuery = $mod.default
-    })
+      w.$ = $
+      w.jQuery = $
+      const easing = (($ as unknown as { easing?: Record<string, (p: number) => number> }).easing ?? {})
+      easing.easeOutQuad = (p: number) => 1 - (1 - p) * (1 - p)
+      easing.easeOutCubic = (p: number) => 1 - Math.pow(1 - p, 3)
+      ;($ as unknown as { easing: Record<string, (p: number) => number> }).easing = easing
+      return $
+    })()
   }
-  const mod = await jqueryPromise
-  return mod.default
+  return jqueryPromise
 }
 
 /** Animate a container out (fade+slide), returning after completion. */

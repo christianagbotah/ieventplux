@@ -1,0 +1,29 @@
+# Dependencies (never committed — see README: run bun/npm install yourself)
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Native build output
+android/
+ios/
+
+# Logs
+*.log
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+pnpm-debug.*
+
+# macOS
+.DS_Store
+
+# TypeScript
+*.tsbuildinfo
+
+# Env files (configure the API base URL instead; never commit secrets)
+.env
+.env.*
