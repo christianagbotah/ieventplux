@@ -44,6 +44,14 @@ None open. (`bun run lint`: 0 errors / warnings only. `bunx tsc --noEmit`: 0 err
 - **Modern UX polish:** confetti on PAID orders (reduced-motion aware, one-shot), animated count-up hero stats, "Selling fast"/"Sold out" badges from real quota/soldCount, For You rail, evergreen AI example chips, mobile headline spacing fix.
 - Verification: `docs/TEST_REPORT.md` → "Re-verification round 3"; lint 0 errors / 17 warnings; tsc clean; all endpoints + browser flows re-verified.
 
+### Round 4 — Effects Studio design pass (2026-11-11)
+
+- **The studio became the design system:** `src/portal/components/EffectsRuntime.tsx` injects the full 38-effect `efx-*` catalog globally, so every portal view is styled with the exact copy-ready effects the studio demos.
+- Per-view pass (all browser-verified, light+dark, 1280×800 and 390×844): aurora/gradient heroes (Discover, Auth), glassmorphism checkout + ticket panels (EventDetail, OrderView, ClaimTicket, Admin banner, Organizer KPI), ken-burns heroes (EventDetail, OrgProfile, Reels), heart-burst likes (Reels), copy-success checkmarks (OrderView, Me QR dialog, AiStudio, Reels share), floating-label + glow-focus forms (Auth, CreateOrg, checkout, chat), neon-pulse / ripple / shine-sweep CTAs, badge-ping attention dots, underline-slide navs/links, typewriter + neon-glow text moments, dual-ring/orbit/pie loaders, striped capacity bars.
+- Dark-mode adaptations for light-hardcoded catalog effects live in `globals.css` (inputs, navs, toggles, buttons, grid, toast, badge ring); `prefers-reduced-motion` respected everywhere (catalog built-in + belt-and-braces block).
+- Defect fixed: event title layered behind the ken-burns compositing layer (`relative z-10`).
+- Verification: `docs/TEST_REPORT.md` → "Re-verification round 4" incl. a real restyled checkout (ORD-F134813A3F-A1 paid, ticket issued); lint 0 errors / 16 warnings; tsc 0 errors. Commit `75a65ae` pushed.
+
 ## External blockers
 
 Hubtel checkout/Send Money/SMS credentials + merchant agreement; Cloudflare Stream credentials; SMTP relay; Apple/Google store accounts. All truthfully surfaced at `/api/v1/health` and Admin → Integrations. ~~git remote~~ **resolved 2026-11-11:** remote `github.com/christianagbotah/ieventplux` configured and pushed (`main`, upstream tracking set; every verified milestone is now committed and pushed).

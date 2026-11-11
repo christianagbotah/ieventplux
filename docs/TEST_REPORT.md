@@ -172,6 +172,29 @@ New feature surface verified with the same honest-evidence rules (browser automa
 
 **Defects found & fixed in round 3:** (1) confetti hooks were declared after an early return in OrderView (rules-of-hooks lint error) — moved above the guard; (2) mobile hero headline rendered "gathering.Attend" without a space when the `<br>` was hidden — explicit `{' '}` added; (3) raw enum values in AI applied-filter chips (THIS_WEEKEND) — humanized mapping added.
 
+## Re-verification round 4 (2026-11-11, Effects Studio design pass)
+
+Every portal view was re-skinned using the studio's own `efx-*` catalog (38 effects, injected globally by a new `EffectsRuntime` component — the same copy-ready CSS the studio demos showcase, now the portal's actual design system). Verified with browser automation at 1280×800 and 390×844, light and dark themes:
+
+| Case | Outcome | Status |
+|---|---|---|
+| Global effects runtime | `<EffectsRuntime />` in AppPortal injects the full catalog once; all views compose with `efx-*` classes; dark-mode adaptations for light-hardcoded effects added in globals.css | ✅ |
+| Discover | Aurora hero stage + animated gradient headline + neon-pulse CTA + glow-focus search + badge-ping "Live" chip + underline-slide section links; verified desktop + mobile, both themes | ✅ |
+| Event detail | Ken-burns cinematic hero, glassmorphism checkout panel (dark glass on both themes), typewriter summary (only when ≤24 chars), glow inputs, neon CTAs, underline links | ✅ |
+| Defect found & fixed | Event title was painted **behind** the ken-burns image (always-on transform creates a compositing layer above the overlapping `-mt-16` title block) — fixed with `relative z-10` on the title container; re-verified | ✅ |
+| Real checkout E2E (restyled UI) | pastor@lightworld.dev → Get tickets (glass panel) → +1 Regular → neon "Checkout · ₵80.00" → Hubtel dev simulator → Approve → **ORD-F134813A3F-A1 PAID, ticket TKT-CB08989742C69A issued**; OrderView shows copy-success-checkmark control + glass "1 ticket issued" panel | ✅ |
+| Reels | Heart-burst like toggle (pure-CSS burst wired to real react state), share chip as copy-success-checkmark, ken-burns posters, one-shot message slide-ins | ✅ |
+| Live Now / Broadcast | Neon "On Air" stage header (rendered only when live broadcasts exist), badge-ping radar dots, ripple-click watch CTA, glow chat input, `iefx-msg-in` on new chat messages | ✅ |
+| Auth | Aurora welcome stage, floating-label email/password (label floats verified by filling the form and signing in), neon submit; signed in as pastor through the restyled form | ✅ |
+| Me / OrgProfile | Underline-slide tab nav (amber active), badge-ping on VALID tickets, copy-checkmark in QR dialog, ken-burns org cover, shine-sweep follow CTA | ✅ |
+| Organizer workspace | Gradient section headlines, glass "Gross sales" KPI, vertical underline-slide sidebar, striped capacity overlay, dual-ring loaders on async actions | ✅ |
+| AI Content Studio (as pastor/owner) | Gradient headline, glow "Key notes" textarea, shine-sweep Generate CTA, orbit/dual-ring generating state, caption reveal on poster | ✅ |
+| Effects Studio page | All 38 live demos still render (catalog CSS now shared with the app); filters + copy flows intact | ✅ |
+| Mobile 390×844 | Discover hero/CTAs, event detail, reels action rail, studio grid — no overflow; footer + bottom nav safe-areas intact | ✅ |
+| Console errors | None on fresh loads of /, event, reels, me, signin, organizer, ai-studio, effects (a hydration warning seen mid-session was stale buffer from a prior hash-routed session, absent on clean reloads) | ✅ |
+| `bun run lint` / `bunx tsc --noEmit` | 0 errors / 0 errors (16 warnings — down from 34 baseline) | ✅ |
+
+
 ## Not performed (honest)
 
 - Native Android/iOS builds and device testing (mobile is a source scaffold).

@@ -109,6 +109,10 @@ curl -s localhost:3000/api/v1/health | jq .status            # healthy
 
 Browser walkthrough: follow README "Demo journeys" 1–8.
 
+### Design system note (round 4)
+
+The Effects Studio (`/#/effects`) is not a demo appendix — its 38-effect catalog (`src/data/css-effects.ts`) is the portal's actual design system. `src/portal/components/EffectsRuntime.tsx` injects the catalog CSS globally at the shell level; views compose with `efx-*` classes; `src/app/globals.css` carries the in-app adaptation layer (`iefx-*` helpers + `.dark .efx-*` theme adaptations). When adding a new view, pick effects from the catalog first; when adding a new effect, add it to the catalog so it lands in both the studio and the runtime.
+
 ## 7. Honest completion assessment
 
 This is a **working, end-to-end development build** of the full product surface — not a production-ready claim. All core workflows (discovery → paid/free ticketing → QR admission → ledger/refunds/payouts → broadcasting entitlements → moderation/admin → AI concierge) execute against the real database and queue infrastructure, with the provider boundaries (payments, SMS, video, email) either adapter-ready-and-blocked or exercised through clearly-isolated simulators. Native mobile is source-only. Provider endpoint contracts must be re-verified against current official documentation when credentials arrive, and the automated test/CI layer plus load testing remain to be built before any scale launch.
