@@ -4,11 +4,11 @@ import { db } from '@/lib/db'
 import { getSession } from '@/server/auth'
 
 /** GET /api/v1/orgs/[slug]/profile — public organizer profile + public events only. */
-export async function GET(req: NextRequest, ctx: { params: Promise<{ slug: string }> }) {
+export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   return handle(async () => {
     void req
-    const { slug } = await ctx.params
-    const org = await db.organization.findUnique({ where: { slug } })
+    const { id } = await ctx.params
+    const org = await db.organization.findUnique({ where: { slug: id } })
     if (!org || org.deletedAt) throw errors.notFound('Organizer not found.')
     const session = await getSession()
     const following = session ? Boolean(await db.follow.findFirst({ where: { followerId: session.user.id, orgId: org.id } })) : false

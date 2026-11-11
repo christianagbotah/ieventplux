@@ -19,6 +19,9 @@ const eslintConfig = [...nextCoreWebVitals, ...nextTypescript, {
     // React rules
     "react-hooks/exhaustive-deps": "off",
     "react-hooks/purity": "off",
+    // Standard fetch-on-mount pattern (async setState after await) trips this rule;
+    // genuine synchronous setStates are reviewed manually.
+    "react-hooks/set-state-in-effect": "warn",
     "react/no-unescaped-entities": "off",
     "react/display-name": "off",
     "react/prop-types": "off",
