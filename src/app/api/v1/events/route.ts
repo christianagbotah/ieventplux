@@ -118,8 +118,61 @@ export async function POST(req: NextRequest) {
         createdBy: user.id,
       },
     })
+    // ── Optional weekly series: generate future occurrences (all DRAFT) ──
+    // The parent keeps its own lifecycle; occurrences are independent events the
+    // organizer publishes individually (or edits once and applies to the series).
+    let seriesId: string | null = null
+    const repeatWeeks = Math.max(0, Math.min(26, Math.round(Number(body.repeatWeeks ?? 0))))
+    if (repeatWeeks > 0) {
+      const seriesSlug = `${slug}-series`
+      const series = await db.eventSeries.create({
+        data: {
+          orgId,
+          title,
+          slug: seriesSlug,
+          description: sanitizeText(body.summary, 200) || null,
+          categorySlug: sanitizeText(body.categorySlug, 40) || 'community',
+          recurrence: JSON.stringify({ freq: 'WEEKLY', interval: 1, count: repeatWeeks }),
+          isActive: true,
+        },
+      })
+      seriesId = series.id
+      const durationMs = endsAt.getTime() - startsAt.getTime()
+      await db.event.update({ where: { id: event.id }, data: { seriesId: series.id } })
+      await db.event.createMany({
+        data: Array.from({ length: repeatWeeks }, (_, i) => ({
+          orgId,
+          seriesId: series.id,
+          title,
+          slug: `${slug}-w${i + 2}`,
+          summary: sanitizeText(body.summary, 200) || null,
+          description: sanitizeText(body.description, 8000) || '',
+          categorySlug: sanitizeText(body.categorySlug, 40) || 'community',
+          tags: JSON.stringify(parseTags(body.tags)),
+          coverImageUrl: typeof body.coverImageUrl === 'string' && body.coverImageUrl.startsWith('/') ? body.coverImageUrl : null,
+          mode,
+          visibility,
+          status: 'DRAFT',
+          venueId: typeof body.venueId === 'string' && body.venueId ? body.venueId : null,
+          country: sanitizeText(body.country, 2).toUpperCase() || 'GH',
+          city: sanitizeText(body.city, 60) || null,
+          timezone: sanitizeText(body.timezone, 60) || 'Africa/Accra',
+          startsAt: new Date(startsAt.getTime() + (i + 1) * 7 * 24 * 60 * 60 * 1000),
+          endsAt: new Date(endsAt.getTime() + (i + 1) * 7 * 24 * 60 * 60 * 1000),
+          contactEmail: sanitizeText(body.contactEmail, 160) || null,
+          contactPhone: sanitizeText(body.contactPhone, 24) || null,
+          accessibilityInfo: sanitizeText(body.accessibilityInfo, 500) || null,
+          attendanceRules: sanitizeText(body.attendanceRules, 500) || null,
+          ageGuidance: sanitizeText(body.ageGuidance, 60) || null,
+          refundPolicy: sanitizeText(body.refundPolicy, 500) || null,
+          createdBy: user.id,
+        })),
+      })
+      void durationMs
+    }
+
     const { audit } = await import('@/server/audit')
-    await audit({ actorUserId: user.id, actorLabel: user.email, action: 'event.create', entityType: 'Event', entityId: event.id, after: { title } })
-    return jsonOk({ event })
+    await audit({ actorUserId: user.id, actorLabel: user.email, action: 'event.create', entityType: 'Event', entityId: event.id, after: { title, seriesOccurrences: repeatWeeks || undefined } })
+    return jsonOk({ event, seriesId, occurrencesCreated: repeatWeeks })
   })
 }

@@ -28,9 +28,14 @@ function parseHash(): Route {
 }
 
 export function useRoute(): Route {
-  const [route, setRoute] = useState<Route>(() => (typeof window === 'undefined' ? { path: '/', segments: [], query: new URLSearchParams(), raw: '/' } : parseHash()))
+  // Hydration-safe hash routing: the server can never know the URL hash, so the
+  // initial client render MUST match it ('/' until after mount). Resolving the
+  // real hash in an effect keeps SSR and the first client paint identical — the
+  // swap below is a plain re-render, not a hydration mismatch.
+  const [route, setRoute] = useState<Route>(() => ({ path: '/', segments: [], query: new URLSearchParams(), raw: '/' }))
 
   useEffect(() => {
+    setRoute(parseHash())
     const onChange = () => setRoute(parseHash())
     window.addEventListener('hashchange', onChange)
     return () => window.removeEventListener('hashchange', onChange)

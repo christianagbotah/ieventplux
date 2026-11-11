@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { CalendarDays, CalendarPlus, Clock, MapPin, Monitor, Share2, Heart, Bookmark, Flag, Users, ChevronLeft, Info, ExternalLink, Accessibility, Ticket, ShieldCheck, Church, Hourglass } from 'lucide-react'
+import { CalendarDays, CalendarPlus, Clock, MapPin, Monitor, Share2, Heart, Bookmark, Flag, Users, ChevronLeft, Info, ExternalLink, Accessibility, Ticket, ShieldCheck, Church, Hourglass, Repeat } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -72,6 +72,11 @@ interface EventDetailPayload {
   canManage: boolean
 }
 
+interface SeriesInfo {
+  series: { id: string; title: string; recurrence: string } | null
+  occurrences: { id: string; slug: string; title: string; startsAt: string; status: string }[]
+}
+
 interface WaitlistStatus {
   count: number
   mine: { position: number; status: string; partySize: number; notifiedAt: string | null } | null
@@ -103,6 +108,7 @@ export default function EventDetail({ slug }: { slug: string }) {
   const [reportReason, setReportReason] = useState('SPAM')
   const [reportDetails, setReportDetails] = useState('')
   const [waitlist, setWaitlist] = useState<WaitlistStatus | null>(null)
+  const [seriesInfo, setSeriesInfo] = useState<SeriesInfo | null>(null)
   const [wlOpen, setWlOpen] = useState(false)
   const [wlType, setWlType] = useState('')
   const [wlForm, setWlForm] = useState({ name: '', contact: '', partySize: 1 })
@@ -117,6 +123,12 @@ export default function EventDetail({ slug }: { slug: string }) {
       setComments(commentsPayload.items)
       const wl = await api.get<WaitlistStatus>(`/events/${payload.event.id}/waitlist`).catch(() => null)
       setWaitlist(wl)
+      if (payload.event.seriesId) {
+        const si = await api.get<SeriesInfo>(`/events/${payload.event.id}/series`).catch(() => null)
+        setSeriesInfo(si)
+      } else {
+        setSeriesInfo(null)
+      }
       setError(null)
     } catch (err) {
       setError(err instanceof ApiClientError ? err.message : 'This event could not be loaded.')
@@ -146,6 +158,14 @@ export default function EventDetail({ slug }: { slug: string }) {
       (!tt.saleEndsAt || new Date(tt.saleEndsAt).getTime() >= now) &&
       tt.quota > 0 && tt.soldCount + tt.reservedCount >= tt.quota)
   }, [event])
+
+  const nextOccurrence = useMemo(() => {
+    if (!seriesInfo || !event) return null
+    const future = seriesInfo.occurrences
+      .filter((o) => new Date(o.startsAt).getTime() > Date.now())
+      .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime())
+    return future[0] ?? null
+  }, [seriesInfo, event])
 
   const selectedTotal = useMemo(() => {
     if (!event) return 0
@@ -363,6 +383,12 @@ export default function EventDetail({ slug }: { slug: string }) {
                 <span className="efx-underline-slide-link" style={{ fontSize: '0.95rem', color: 'inherit' }}>{event.org.name}</span>
                 {event.org.verifiedAt && <ShieldCheck className="h-4 w-4 text-primary" aria-label="Verified organizer" />}
               </button>
+              {nextOccurrence && (
+                <button type="button" onClick={() => navigate(`/event/${nextOccurrence.slug}`)} className="efx-badge-ping mt-2 inline-flex w-fit items-center gap-2 rounded-full border border-primary/40 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary">
+                  <Repeat className="h-3.5 w-3.5" aria-hidden />
+                  Weekly series — next date {dateLong(nextOccurrence.startsAt, event.timezone)}
+                </button>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <Button variant="outline" size="icon" className="rounded-full" aria-label={mine.saved ? 'Remove from saved' : 'Save event'} onClick={() => void toggleInterest('SAVE')}>

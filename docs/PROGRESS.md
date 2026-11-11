@@ -61,6 +61,14 @@ None open. (`bun run lint`: 0 errors / warnings only. `bunx tsc --noEmit`: 0 err
 - **Organizer visibility:** waitlist queue (contacts, party size, per-type, status) surfaces on the event page for org members; count badge visible publicly.
 - Verification: `docs/TEST_REPORT.md` → "Re-verification round 5" (full API matrix + browser sweep light/dark, both viewports, zero console errors); lint 0 errors / 16 warnings; tsc 0 errors.
 
+## Round 6 — Recurring series tooling (2026-11-11)
+
+- **Create with weekly repeat:** `POST /events` accepts `repeatWeeks` (1–26) → creates the `EventSeries` (previously schema-only, no write path existed) + DRAFT occurrences +7d each with preserved duration; organizer publishes each individually. UI toggle in the create dialog.
+- **Apply to future occurrences:** `POST /events/[id]/apply-to-series` bulk-propagates whitelisted content fields (title/summary/description/category/cover/city/directions/contacts/accessibility/rules/age/refund) and optionally adopts the source's local time-of-day + duration, correctly resolved in the event timezone (Intl offset math). Never touches started/ended/cancelled events. UI: field-chip dialog from any series event's editor.
+- **Public series awareness:** `GET /events/[id]/series` + "Weekly series — next date …" chip on the event page linking to the nearest future sibling; "Series" badges in the organizer events list.
+- **Defects fixed:** (1) the "New event" button could never open the editor (render gate bug, pre-existing); (2) hash-router hydration mismatch on every deep-link load — `useRoute()` now hydrates at `/` and resolves the real hash post-mount, eliminating the console error and double-render platform-wide.
+- Verification: `docs/TEST_REPORT.md` → "Re-verification round 6"; lint 0 errors / 17 warnings (intentional mount-sync); tsc 0 errors.
+
 ## External blockers
 
 Hubtel checkout/Send Money/SMS credentials + merchant agreement; Cloudflare Stream credentials; SMTP relay; Apple/Google store accounts. All truthfully surfaced at `/api/v1/health` and Admin → Integrations. ~~git remote~~ **resolved 2026-11-11:** remote `github.com/christianagbotah/ieventplux` configured and pushed (`main`, upstream tracking set; every verified milestone is now committed and pushed).
@@ -72,7 +80,7 @@ Hubtel checkout/Send Money/SMS credentials + merchant agreement; Cloudflare Stre
 3. Migrate to PostgreSQL for concurrency (`docs/ARCHITECTURE.md` migration path) + add load/concurrency smoke tests.
 4. Add automated test suite (jest integration + Playwright journeys from TEST_REPORT E1–E14).
 5. Native dev builds for mobile broadcasting + store billing configuration.
-6. Series tooling (create EventSeries from the organizer UI, then bulk "apply to future occurrences" editing); shared-store rate limiting when scaling beyond one instance.
+shared-store rate limiting when scaling beyond one instance.
 
 ## Commands to resume
 

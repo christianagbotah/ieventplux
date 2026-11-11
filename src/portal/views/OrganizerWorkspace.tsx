@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   LayoutDashboard, CalendarPlus, Users, Ticket, Radio, Megaphone, MessageSquare, Wallet, UserCog, CreditCard, Settings,
-  ChevronLeft, Plus, Loader2, Camera, ScanLine, Search, Play, Square, RefreshCw, KeyRound, Pause, PlayCircle, Trash2, FileText, ShieldAlert, TrendingUp,
+  ChevronLeft, Plus, Loader2, Camera, ScanLine, Search, Play, Square, RefreshCw, KeyRound, Pause, PlayCircle, Trash2, FileText, ShieldAlert, TrendingUp, Repeat,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -36,6 +36,7 @@ interface OrgEvent {
   categorySlug: string
   coverImageUrl?: string | null
   summary?: string | null
+  seriesId?: string | null
 }
 
 const NAV = [
@@ -325,6 +326,7 @@ function EventsManager({ orgId, role }: { orgId: string; role: string }) {
                     <p className="truncate font-semibold">{e.title}</p>
                     <Badge variant={statusTone(e.status) === 'success' ? 'default' : 'secondary'} className="capitalize text-[10px]">{humanize(e.status)}</Badge>
                     {e.visibility !== 'PUBLIC' && <Badge variant="outline" className="text-[10px]">{humanize(e.visibility)}</Badge>}
+                    {e.seriesId && <Badge variant="outline" className="gap-1 text-[10px]"><Repeat className="h-3 w-3" aria-hidden /> Series</Badge>}
                   </div>
                   <p className="text-xs text-muted-foreground">{dateLong(e.startsAt)} · {humanize(e.categorySlug)} · {e.mode === 'VIRTUAL' ? 'Online' : e.city ?? '—'}</p>
                   {stats[e.id] && <p className="text-xs text-muted-foreground">{stats[e.id].ticketsSold} tickets · gross {money(stats[e.id].grossMinor)} · {stats[e.id].checkedIn} checked in</p>}
@@ -347,10 +349,11 @@ function EventsManager({ orgId, role }: { orgId: string; role: string }) {
         </div>
       )}
 
-      {editing !== null && <EventEditor
+      {(editing !== null || creating) && <EventEditor
+        key={creating ? 'create-new' : editing?.id ?? 'none'}
         orgId={orgId}
         event={creating ? null : editing}
-        onClose={() => { setEditing(null); void load() }}
+        onClose={() => { setEditing(null); setCreating(false); void load() }}
       />}
     </div>
   )
@@ -378,6 +381,12 @@ function EventEditor({ orgId, event, onClose }: { orgId: string; event: OrgEvent
   const [tt, setTt] = useState({ name: '', price: '0.00', quota: '100', perBuyerLimit: '4', kind: 'PHYSICAL', includesVirtualAccess: false })
   const [busy, setBusy] = useState(false)
   const [savingTt, setSavingTt] = useState(false)
+  const [repeat, setRepeat] = useState(false)
+  const [repeatWeeks, setRepeatWeeks] = useState('3')
+  const [seriesOpen, setSeriesOpen] = useState(false)
+  const [seriesFields, setSeriesFields] = useState<string[]>(['summary', 'city'])
+  const [seriesAdoptTime, setSeriesAdoptTime] = useState(false)
+  const [applying, setApplying] = useState(false)
 
   useEffect(() => {
     if (event) {
@@ -407,8 +416,8 @@ function EventEditor({ orgId, event, onClose }: { orgId: string; event: OrgEvent
         await api.patch(`/events/${event.id}`, payload)
         toast({ title: 'Event saved' })
       } else {
-        const result = await api.post<{ event: { id: string } }>('/events', { ...payload, orgId })
-        toast({ title: 'Event created', description: 'Add ticket types, then publish.' })
+        const result = await api.post<{ event: { id: string }; occurrencesCreated: number }>('/events', { ...payload, orgId, repeatWeeks: repeat ? Math.max(0, Math.min(26, Number(repeatWeeks) || 0)) : 0 })
+        toast({ title: 'Event created', description: result.occurrencesCreated > 0 ? `${result.occurrencesCreated} weekly occurrences added as drafts.` : 'Add ticket types, then publish.' })
         void result
       }
       onClose()
@@ -445,6 +454,36 @@ function EventEditor({ orgId, event, onClose }: { orgId: string; event: OrgEvent
   const deactivateTt = async (id: string) => {
     await api.delete(`/events/${event?.id}/ticket-types/${id}`).catch(() => {})
     setTicketTypes((list) => (list ?? []).map((t) => (t.id === id ? { ...t, active: false } : t)))
+  }
+
+  const SERIES_FIELD_OPTIONS: { key: string; label: string }[] = [
+    { key: 'title', label: 'Title' },
+    { key: 'summary', label: 'Summary' },
+    { key: 'description', label: 'Description' },
+    { key: 'categorySlug', label: 'Category' },
+    { key: 'coverImageUrl', label: 'Poster image' },
+    { key: 'city', label: 'City' },
+    { key: 'directionsUrl', label: 'Directions link' },
+    { key: 'contactEmail', label: 'Contact email' },
+    { key: 'contactPhone', label: 'Contact phone' },
+    { key: 'accessibilityInfo', label: 'Accessibility info' },
+    { key: 'attendanceRules', label: 'Attendance rules' },
+    { key: 'ageGuidance', label: 'Age guidance' },
+    { key: 'refundPolicy', label: 'Refund policy' },
+  ]
+
+  const applyToSeries = async () => {
+    if (!event) return
+    setApplying(true)
+    try {
+      const res = await api.post<{ updated: number }>(`/events/${event.id}/apply-to-series`, { fields: seriesFields, adoptTime: seriesAdoptTime })
+      setSeriesOpen(false)
+      toast({ title: res.updated > 0 ? `Applied to ${res.updated} upcoming ${res.updated === 1 ? 'occurrence' : 'occurrences'}` : 'No upcoming occurrences to update', description: 'Only DRAFT, scheduled, published or postponed future events in this series were touched. Already-started and ended ones are never edited.' })
+    } catch (err) {
+      toast({ title: 'Could not apply to the series', description: err instanceof ApiClientError ? err.message : undefined, variant: 'destructive' })
+    } finally {
+      setApplying(false)
+    }
   }
 
   return (
@@ -525,6 +564,20 @@ function EventEditor({ orgId, event, onClose }: { orgId: string; event: OrgEvent
               <Label htmlFor="refund">Refund policy</Label>
               <Input id="refund" value={form.refundPolicy} onChange={(e) => setForm((f) => ({ ...f, refundPolicy: e.target.value }))} placeholder="Full refunds up to 48h before start…" />
             </div>
+            {!event && (
+              <div className="rounded-xl border border-border/70 p-4 sm:col-span-2">
+                <label className="flex items-center gap-2 text-sm font-medium">
+                  <Switch checked={repeat} onCheckedChange={setRepeat} aria-label="Repeat weekly" />
+                  <Repeat className="h-4 w-4 text-primary" aria-hidden /> Repeat weekly
+                </label>
+                {repeat && (
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <Input className="h-8 w-24" inputMode="numeric" value={repeatWeeks} onChange={(e) => setRepeatWeeks(e.target.value.replace(/\D/g, ''))} aria-label="Number of extra weekly occurrences" />
+                    <p className="text-xs text-muted-foreground">extra weekly occurrences, created as drafts you publish individually (1–26).</p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {event && (
@@ -565,7 +618,55 @@ function EventEditor({ orgId, event, onClose }: { orgId: string; event: OrgEvent
               </label>
             </div>
           )}
+          {event?.seriesId && (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/30 bg-primary/5 p-4">
+              <div className="min-w-0">
+                <p className="flex items-center gap-2 text-sm font-bold"><Repeat className="h-4 w-4 text-primary" aria-hidden /> Part of a weekly series</p>
+                <p className="text-xs text-muted-foreground">Edits here can be pushed to every upcoming occurrence in one step — dates, started and ended events are never touched.</p>
+              </div>
+              <Button size="sm" variant="outline" className="rounded-full efx-underline-slide-link" onClick={() => setSeriesOpen(true)}>
+                Apply to future occurrences
+              </Button>
+            </div>
+          )}
         </div>
+        {/* Apply-to-series dialog */}
+        <Dialog open={seriesOpen} onOpenChange={setSeriesOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Apply to future occurrences</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">Pick what to copy from <span className="font-semibold text-foreground">{event?.title}</span> to every upcoming occurrence in this series.</p>
+              <div className="flex flex-wrap gap-1.5">
+                {SERIES_FIELD_OPTIONS.map((opt) => {
+                  const on = seriesFields.includes(opt.key)
+                  return (
+                    <button
+                      key={opt.key}
+                      type="button"
+                      aria-pressed={on}
+                      onClick={() => setSeriesFields((f) => (on ? f.filter((k) => k !== opt.key) : [...f, opt.key]))}
+                      className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${on ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}`}
+                    >
+                      {opt.label}
+                    </button>
+                  )
+                })}
+              </div>
+              <label className="flex items-center gap-2 text-sm">
+                <Switch checked={seriesAdoptTime} onCheckedChange={setSeriesAdoptTime} aria-label="Also adopt time of day" />
+                Also set the same start time (and duration) on each occurrence
+              </label>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setSeriesOpen(false)}>Cancel</Button>
+              <Button className="rounded-full ievx-press" disabled={applying || (seriesFields.length === 0 && !seriesAdoptTime)} onClick={() => void applyToSeries()}>
+                {applying ? 'Applying…' : 'Apply to series'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
         <DialogFooter>
           <Button variant="outline" className="rounded-full" onClick={onClose}>Close</Button>
           {busy && (

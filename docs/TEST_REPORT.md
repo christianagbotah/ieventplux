@@ -172,6 +172,32 @@ New feature surface verified with the same honest-evidence rules (browser automa
 
 **Defects found & fixed in round 3:** (1) confetti hooks were declared after an early return in OrderView (rules-of-hooks lint error) — moved above the guard; (2) mobile hero headline rendered "gathering.Attend" without a space when the `<br>` was hidden — explicit `{' '}` added; (3) raw enum values in AI applied-filter chips (THIS_WEEKEND) — humanized mapping added.
 
+## Re-verification round 6 (2026-11-11, recurring series tooling)
+
+**Feature set under test:** weekly series creation with occurrence generation, bulk apply-to-future-occurrences (content fields + wall-clock time adoption), public series sibling list + "next date" chip, plus two real defect fixes (New-event dialog could never open; hash-router hydration mismatch).
+
+**API-level evidence (live stack):**
+
+| Case | Result |
+|---|---|
+| `POST /events` with `repeatWeeks:3` → base event + `EventSeries` row + 3 DRAFT occurrences (+7d each, duration preserved) → `{seriesId, occurrencesCreated:3}` | ✅ |
+| `GET /events/[id]/series` → series metadata + up to 12 future sibling occurrences (invite-only filtered out, self excluded) | ✅ |
+| `PATCH` base event (summary, city) then `POST /events/[id]/apply-to-series {fields:[summary,city], adoptTime:true}` → `{updated:3}`; sibling detail check confirms propagated summary/city and 09:00–11:30 wall-clock adopted with duration intact | ✅ |
+| Whitelist enforcement: only the 13 whitelisted content fields are copyable; adoptTime recomputes each occurrence's local start in the event timezone via Intl offset math | ✅ |
+| Guard: apply-to-series on a non-series event → 400 "not part of a series"; empty selection → 400 | ✅ |
+
+**Browser evidence (agent-browser, 1280×800 + 390×844):**
+- Organizer Events list: "Series" badge on series rows (base + occurrences).
+- EventEditor (edit): "Part of a weekly series" panel → Apply dialog (13 field chips + "same start time" switch) → apply via UI → toast "Applied to 3 upcoming occurrences".
+- EventEditor (create): "Repeat weekly" toggle + occurrences input; UI-created "Midweek Bible Study" with 2 extra weeks → DB shows base + `-w2` + `-w3` DRAFTs + EventSeries row; list shows Series badge.
+- EventDetail: "Weekly series — next date Sat, 28 Nov 2026, 9:00" chip links to the nearest future sibling (verified on base AND on an occurrence page).
+
+**Defects fixed this round:**
+1. **"New event" button never opened the editor** — render gate `{editing !== null && …}` made `openEditor(null)` a no-op. Fixed to `(editing !== null || creating)` with a remount `key` so the create form starts clean. (Pre-existing since the events manager was built.)
+2. **Hash-router hydration mismatch on every direct load** — `useRoute()` read `window.location.hash` in its client initializer while the server always rendered `/`, so any deep link (`#/organizer`, `#/event/…`) logged "Hydration failed" and forced a full client regeneration. Fixed by initializing to `/` on both sides and resolving the real hash in the mount effect (identical SSR/first-paint output, then a plain re-render). Verified: zero hydration errors across `/`, `#/effects`, `#/reels`, `#/me`, `#/organizer`, `#/event/…` deep links; deep-linked views render correctly.
+
+**Static:** `bun run lint` 0 errors / 17 warnings (the +1 is the intentional mount-sync `setRoute` in router.ts — same documented set-state-in-effect category as ThemeToggle/AiSearchPanel); `bunx tsc --noEmit` 0 errors.
+
 ## Re-verification round 5 (2026-11-11, sold-out waitlist + calendar export)
 
 **Feature set under test:** per-event waitlist for sold-out inventory (guest + authed join, FIFO positions, honest first-come-first-served promotion), refund-frees-inventory fix, .ics calendar export, organizer waitlist visibility. New model `WaitlistEntry` (schema now 57 models).

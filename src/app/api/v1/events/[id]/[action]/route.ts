@@ -19,6 +19,29 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
       return jsonOk({ items })
     }
 
+    if (action === 'series') {
+      const event = await db.event.findUnique({ where: { id } })
+      if (!event || event.deletedAt || !event.seriesId) return jsonOk({ series: null, occurrences: [] })
+      const series = await db.eventSeries.findUnique({ where: { id: event.seriesId } })
+      const occurrences = await db.event.findMany({
+        where: {
+          seriesId: event.seriesId,
+          deletedAt: null,
+          id: { not: event.id },
+          status: { in: ['DRAFT', 'SCHEDULED', 'PUBLISHED', 'POSTPONED', 'LIVE'] },
+          startsAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+        },
+        orderBy: { startsAt: 'asc' },
+        take: 12,
+        select: { id: true, slug: true, title: true, startsAt: true, endsAt: true, status: true, visibility: true },
+      })
+      const visible = occurrences.filter((o) => o.visibility !== 'INVITE_ONLY')
+      return jsonOk({
+        series: series ? { id: series.id, title: series.title, recurrence: series.recurrence } : null,
+        occurrences: visible.map((o) => ({ id: o.id, slug: o.slug, title: o.title, startsAt: o.startsAt.toISOString(), status: o.status })),
+      })
+    }
+
     if (action === 'waitlist') {
       const event = await db.event.findUnique({ where: { id } })
       if (!event || event.deletedAt) throw errors.notFound('Event not found.')
@@ -212,6 +235,73 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     }
 
     const user = await requireUser()
+
+    // ── Apply-to-series: bulk edit future occurrences of the same series ──
+    if (action === 'apply-to-series') {
+      const access = await eventOrgAccess(user.id, id, 'event:edit')
+      if (!access.event) throw errors.notFound('Event not found.')
+      if (!access.allowed) throw errors.forbidden('You do not have permission to edit this event.')
+      const source = await db.event.findUnique({ where: { id } })
+      if (!source || source.deletedAt) throw errors.notFound('Event not found.')
+      if (!source.seriesId) throw errors.badRequest('This event is not part of a series.')
+
+      const fields = Array.isArray(body.fields) ? body.fields.map(String) : []
+      const WHITELIST = ['title', 'summary', 'description', 'categorySlug', 'coverImageUrl', 'city', 'directionsUrl', 'contactEmail', 'contactPhone', 'accessibilityInfo', 'attendanceRules', 'ageGuidance', 'refundPolicy'] as const
+      const picked = fields.filter((f) => (WHITELIST as readonly string[]).includes(f))
+      const adoptTime = Boolean(body.adoptTime)
+      if (picked.length === 0 && !adoptTime) throw errors.badRequest('Pick at least one field to apply (or time-of-day).')
+
+      const now = new Date()
+      const targets = await db.event.findMany({
+        where: {
+          seriesId: source.seriesId,
+          id: { not: source.id },
+          deletedAt: null,
+          status: { in: ['DRAFT', 'SCHEDULED', 'PUBLISHED', 'POSTPONED'] },
+          startsAt: { gt: now },
+        },
+        orderBy: { startsAt: 'asc' },
+      })
+
+      // Wall-clock adoption: each occurrence keeps its local date but takes the
+      // source's local time-of-day + duration, resolved in the event timezone.
+      const zonedOffsetMs = (utc: Date, tz: string) => {
+        try {
+          const dtf = new Intl.DateTimeFormat('en-US', { timeZone: tz, hour12: false, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })
+          const parts = dtf.formatToParts(utc)
+          const get = (t: string) => Number(parts.find((x) => x.type === t)?.value ?? '0')
+          const asUTC = Date.UTC(get('year'), get('month') - 1, get('day'), get('hour') % 24, get('minute'), get('second'))
+          return asUTC - utc.getTime()
+        } catch {
+          return 0
+        }
+      }
+
+      let updated = 0
+      for (const target of targets) {
+        const data: Record<string, unknown> = {}
+        for (const f of picked) data[f] = (source as unknown as Record<string, unknown>)[f] ?? null
+        if (adoptTime) {
+          const tz = source.timezone || 'Africa/Accra'
+          const srcStartLocal = new Date(source.startsAt.getTime() + zonedOffsetMs(source.startsAt, tz))
+          const srcEndLocal = new Date(source.endsAt.getTime() + zonedOffsetMs(source.endsAt, tz))
+          const durationMs = srcEndLocal.getTime() - srcStartLocal.getTime()
+          const tgtLocal = new Date(target.startsAt.getTime() + zonedOffsetMs(target.startsAt, tz))
+          tgtLocal.setUTCHours(srcStartLocal.getUTCHours(), srcStartLocal.getUTCMinutes(), 0, 0)
+          const newStart = new Date(tgtLocal.getTime() - zonedOffsetMs(tgtLocal, tz))
+          data.startsAt = newStart
+          data.endsAt = new Date(newStart.getTime() + durationMs)
+        }
+        if (Object.keys(data).length > 0) {
+          await db.event.update({ where: { id: target.id }, data })
+          updated += 1
+        }
+      }
+
+      const { audit } = await import('@/server/audit')
+      await audit({ actorUserId: user.id, actorLabel: user.email, action: 'event.apply-to-series', entityType: 'EventSeries', entityId: String(source.seriesId), after: { fields: picked, adoptTime, updated } })
+      return jsonOk({ updated, fields: picked, adoptTime })
+    }
 
     // ── Lifecycle transitions (publish/cancel/postpone/schedule) ──────────
     if (action === 'transition') {
