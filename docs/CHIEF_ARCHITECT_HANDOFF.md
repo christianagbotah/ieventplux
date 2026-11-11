@@ -21,6 +21,7 @@
   - `17f9f31` Stages B/C — full REST API v1 (auth/elevation, events lifecycle + visibility, social, transactional orders, payments incl. simulator, tickets/QR, check-in, finance, broadcasts, promotions, subscriptions, messaging, AI, admin, OpenAPI)
   - `5962304` UI — complete portal frontend (jQuery transitions, checkout UX, organizer workspace, admin console, Effects Studio, voice concierge, realtime chat)
   - `F-final` — verification fixes (callback casing, check-in FK, jQuery easings, route conflict), mobile scaffold, documentation suite, this handoff
+  - `4ca3093` — **post-handoff re-verification round 2:** voice-TTS defect fix (provider rejects `mp3`; route now `wav` + `audio/wav`, full ASR→LLM→TTS round-trip verified), footer iOS safe-area + mobile-nav clearance, `.env` untracked (template → `.env.example`), TEST_REPORT round-2 section. Working tree clean at this commit.
 - **Branch:** `main` · **Working tree:** clean at handoff.
 
 ## 2. What actually runs (verified)
