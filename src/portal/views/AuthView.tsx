@@ -4,7 +4,6 @@ import { useState } from 'react'
 import { Church, Ticket, ShieldCheck, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useToast } from '@/hooks/use-toast'
 import { api, ApiClientError } from '../api'
@@ -27,7 +26,7 @@ export default function AuthView({ mode }: { mode: 'signin' | 'register' }) {
     if (!me.user) return
     setUser(me.user)
     setMemberships(me.memberships ?? [])
-    toast({ title: mode === 'signin' ? 'Welcome back 👋' : `Welcome to iEventPlux, ${me.user.displayName.split(' ')[0]}!` })
+    toast({ title: mode === 'signin' ? 'Welcome back' : `Welcome to iEventPlux, ${me.user.displayName.split(' ')[0]}!` })
     navigate('/')
   }
 
@@ -84,6 +83,15 @@ export default function AuthView({ mode }: { mode: 'signin' | 'register' }) {
 
   return (
     <div className="mx-auto grid max-w-5xl gap-10 px-4 py-10 md:grid-cols-2 md:items-center">
+      {/* Aurora welcome banner */}
+      <div className="efx-aurora-bg iefx-stage md:col-span-2" style={{ padding: 'clamp(1.5rem, 4vw, 2.5rem)' }}>
+        <div className="efx-aurora-bg__content">
+          <span className="efx-aurora-bg__kicker">Welcome to iEventPlux</span>
+          <p className="efx-aurora-bg__title">{mode === 'signin' ? 'Good to see you again' : 'Your next gathering starts here'}</p>
+          <p className="efx-aurora-bg__meta">Discover events, pay with mobile money and keep every QR ticket in your pocket.</p>
+        </div>
+      </div>
+
       <div className="hidden md:block">
         <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/30">
           <Ticket className="h-7 w-7" aria-hidden />
@@ -114,48 +122,92 @@ export default function AuthView({ mode }: { mode: 'signin' | 'register' }) {
         <p className="mt-1 text-sm text-muted-foreground">
           {mode === 'signin' ? 'Use your email and password.' : 'It takes less than a minute.'}
         </p>
-        <form onSubmit={submit} className="mt-6 space-y-4">
+        <form onSubmit={submit} className="mt-6">
           {mode === 'register' && (
-            <div className="space-y-1.5">
-              <Label htmlFor="displayName">Full name</Label>
-              <Input id="displayName" required value={form.displayName} onChange={(e) => setForm((f) => ({ ...f, displayName: e.target.value }))} placeholder="Ama Darko" autoComplete="name" />
+            <div className="efx-floating-label-input" style={{ maxWidth: '100%', margin: '0 0 0.9rem' }}>
+              <input
+                id="displayName"
+                name="displayName"
+                className="efx-floating-label-input__field"
+                placeholder=" "
+                required
+                value={form.displayName}
+                onChange={(e) => setForm((f) => ({ ...f, displayName: e.target.value }))}
+                autoComplete="name"
+              />
+              <label htmlFor="displayName" className="efx-floating-label-input__label">Full name</label>
             </div>
           )}
-          <div className="space-y-1.5">
-            <Label htmlFor="email">Email</Label>
-            <Input id="email" type="email" required value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} placeholder="you@example.com" autoComplete="email" />
+          <div className="efx-floating-label-input" style={{ maxWidth: '100%', margin: '0 0 0.9rem' }}>
+            <input
+              id="email"
+              name="email"
+              type="email"
+              className="efx-floating-label-input__field"
+              placeholder=" "
+              required
+              value={form.email}
+              onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+              autoComplete="email"
+            />
+            <label htmlFor="email" className="efx-floating-label-input__label">Email</label>
           </div>
           {mode === 'register' && (
-            <div className="space-y-1.5">
-              <Label htmlFor="phone">Phone (optional — for ticket SMS)</Label>
-              <Input id="phone" value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} placeholder="+233 24 000 0000" inputMode="tel" autoComplete="tel" />
+            <div className="efx-floating-label-input" style={{ maxWidth: '100%', margin: '0 0 0.9rem' }}>
+              <input
+                id="phone"
+                name="phone"
+                className="efx-floating-label-input__field"
+                placeholder=" "
+                value={form.phone}
+                onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+                inputMode="tel"
+                autoComplete="tel"
+              />
+              <label htmlFor="phone" className="efx-floating-label-input__label">Phone (optional — for ticket SMS)</label>
             </div>
           )}
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="password">Password</Label>
-              {mode === 'signin' && (
-                <button type="button" className="text-xs font-medium text-primary hover:underline" onClick={() => setResetOpen(true)}>Forgot password?</button>
-              )}
-            </div>
-            <Input id="password" type="password" required minLength={8} value={form.password} onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))} placeholder="••••••••" autoComplete={mode === 'signin' ? 'current-password' : 'new-password'} />
+          <div className="efx-floating-label-input" style={{ maxWidth: '100%', margin: '0 0 0.35rem' }}>
+            <input
+              id="password"
+              name="password"
+              type="password"
+              className="efx-floating-label-input__field"
+              placeholder=" "
+              required
+              minLength={8}
+              value={form.password}
+              onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
+              autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
+            />
+            <label htmlFor="password" className="efx-floating-label-input__label">Password</label>
           </div>
+          {mode === 'signin' && (
+            <div className="mb-3 flex justify-end">
+              <button type="button" className="text-xs font-medium text-primary hover:underline" onClick={() => setResetOpen(true)}>Forgot password?</button>
+            </div>
+          )}
           {mode === 'register' && (
-            <label className="flex items-start gap-2.5 text-sm text-muted-foreground">
+            <label className="mb-4 flex items-start gap-2.5 text-sm text-muted-foreground">
               <Checkbox checked={form.marketingSms} onCheckedChange={(v) => setForm((f) => ({ ...f, marketingSms: v === true }))} />
               <span>Send me event updates and offers by SMS (transactional messages like tickets are always sent; you can unsubscribe anytime).</span>
             </label>
           )}
-          <Button type="submit" className="w-full rounded-xl py-5 ievx-press" disabled={busy}>
-            {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />}
+          <button
+            type="submit"
+            className="efx-neon-pulse-button"
+            style={{ width: '100%', ...(busy ? { opacity: 0.6, cursor: 'not-allowed', animation: 'none' } : {}) }}
+            disabled={busy}
+          >
+            {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
             {mode === 'signin' ? 'Sign in' : 'Create account'}
-          </Button>
+          </button>
         </form>
         <p className="mt-4 text-center text-sm text-muted-foreground">
           {mode === 'signin' ? (
-            <>New to iEventPlux? <button className="font-semibold text-primary hover:underline" onClick={() => navigate('/register')}>Create an account</button></>
+            <>New to iEventPlux? <button type="button" className="efx-underline-slide-link" style={{ fontSize: 'inherit', color: 'inherit', fontWeight: 600, paddingBottom: '2px' }} onClick={() => navigate('/register')}>Create an account</button></>
           ) : (
-            <>Already have an account? <button className="font-semibold text-primary hover:underline" onClick={() => navigate('/signin')}>Sign in</button></>
+            <>Already have an account? <button type="button" className="efx-underline-slide-link" style={{ fontSize: 'inherit', color: 'inherit', fontWeight: 600, paddingBottom: '2px' }} onClick={() => navigate('/signin')}>Sign in</button></>
           )}
         </p>
       </div>

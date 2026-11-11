@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  Search, SlidersHorizontal, Sparkles, Radio, MapPin, TrendingUp, X, ArrowRight, Wand2,
+  Search, SlidersHorizontal, Radio, MapPin, TrendingUp, X, ArrowRight, Wand2,
   Church, Music, Presentation, Wrench, Code2, Heart, Users, Sparkles as SparklesIcon,
   PartyPopper, Activity, Smartphone, QrCode, CalendarCheck, Building2,
 } from 'lucide-react'
@@ -169,66 +169,89 @@ export default function Discover({ route }: { route: Route }) {
   }
 
   const sponsoredEvents = home?.sponsored ?? []
+  // Featured (or first upcoming) gathering powers the hero CTA.
+  const primaryEvent = home?.featured[0] ?? home?.upcoming[0]
 
   return (
     <div>
       {/* Hero */}
       {!browsing && (
-        <section className="ievx-hero relative border-b border-border/60">
-          <div className="absolute inset-0">
-            { }
-            <img src="/images/hero-banner.png" alt="" className="h-full w-full object-cover opacity-60" />
-            <div className="absolute inset-0 bg-gradient-to-r from-background via-background/85 to-background/40" />
-          </div>
-          <div className="relative mx-auto max-w-7xl px-4 py-14 sm:py-20">
-            <Badge className="mb-4 gap-1.5 bg-accent text-accent-foreground">
-              <Sparkles className="h-3.5 w-3.5" aria-hidden /> Ghana&apos;s events, tickets & live streams — in one place
-            </Badge>
-            <h1 className="max-w-2xl text-3xl font-extrabold leading-tight tracking-tight sm:text-5xl">
-              Discover your next <span className="ievx-gradient-text">gathering</span>.
-              <br className="hidden sm:block" />{' '}
-              Attend in person or live online.
-            </h1>
-            <p className="mt-4 max-w-xl text-sm text-muted-foreground sm:text-base">
-              Church services, concerts, conferences, workshops and community moments — with secure mobile-money checkout,
-              QR tickets and protected live broadcasts.
-            </p>
-            <div className="mt-6 flex flex-wrap items-center gap-3">
-              <Button size="lg" className="rounded-full ievx-press" onClick={() => { setBrowseAll(true); setPage(1) }}>
-                Browse all events <ArrowRight className="ml-1 h-4 w-4" aria-hidden />
-              </Button>
-              <Button size="lg" variant="outline" className="rounded-full bg-card/70 ievx-press" onClick={() => document.getElementById('ai-search')?.scrollIntoView({ behavior: 'smooth' })}>
-                <Wand2 className="mr-2 h-4 w-4" aria-hidden /> Ask AI to find events
-              </Button>
-              <Button size="lg" variant="outline" className="rounded-full bg-card/70 ievx-press" onClick={() => navigate('/live')}>
-                <Radio className="mr-2 h-4 w-4" /> Watch live
-              </Button>
-            </div>
-            {/* Quick links — the fastest paths into the catalogue */}
-            <div className="mt-5 flex flex-wrap items-center gap-x-1 gap-y-2 text-sm">
-              <span className="pr-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Quick find:</span>
-              {[
-                { label: 'Today', filter: () => applyFilter('when', 'TODAY') },
-                { label: 'This weekend', filter: () => applyFilter('when', 'THIS_WEEKEND') },
-                { label: 'Free events', filter: () => applyFilter('price', 'FREE') },
-                { label: 'Online only', filter: () => applyFilter('mode', 'VIRTUAL') },
-              ].map((quick) => (
-                <button
-                  key={quick.label}
-                  onClick={quick.filter}
-                  className="rounded-full px-2.5 py-1 text-xs font-medium text-primary underline-offset-4 transition-colors hover:bg-primary/10 hover:underline ievx-press"
-                >
-                  {quick.label}
-                </button>
-              ))}
-            </div>
-            {home && (
-              <div className="mt-8 flex flex-wrap gap-2 text-sm">
-                <span className="rounded-full bg-card/80 px-4 py-2 font-semibold backdrop-blur"><TrendingUp className="mr-1.5 inline h-4 w-4 text-primary" aria-hidden />{statEvents} upcoming event{statEvents !== 1 ? 's' : ''}</span>
-                <span className="rounded-full bg-card/80 px-4 py-2 font-semibold backdrop-blur"><MapPin className="mr-1.5 inline h-4 w-4 text-primary" aria-hidden />{statOrgs} verified organizer{statOrgs !== 1 ? 's' : ''}</span>
-                <span className="rounded-full bg-card/80 px-4 py-2 font-semibold backdrop-blur"><Radio className="mr-1.5 inline h-4 w-4 text-destructive" aria-hidden />{statLive} live right now</span>
+        <section className="relative border-b border-border/60">
+          <div className="mx-auto max-w-7xl px-4 py-8 sm:py-12">
+            <div className="efx-aurora-bg iefx-stage">
+              {/* Brand artwork, dimmed so the aurora ribbons stay the lead act */}
+              <img
+                src="/images/hero-banner.png"
+                alt=""
+                className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-25"
+              />
+              <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#031a15] via-[#031a15]/80 to-[#031a15]/25" aria-hidden />
+              <div className="efx-aurora-bg__content" style={{ zIndex: 1 }}>
+                <span className="efx-aurora-bg__kicker">ACCRA · GHANA · TICKETING, SOCIAL & BROADCASTING</span>
+                <h1 className="efx-animated-gradient-text iefx-headline max-w-2xl">
+                  Discover your next gathering.
+                  <br className="hidden sm:block" />{' '}
+                  Attend in person or live online.
+                </h1>
+                <p className="efx-aurora-bg__meta max-w-xl" style={{ marginTop: '1rem' }}>
+                  Church services, concerts, conferences, workshops and community moments — with secure mobile-money checkout,
+                  QR tickets and protected live broadcasts.
+                </p>
+                <div className="mt-6 flex flex-wrap items-center gap-3">
+                  <button
+                    type="button"
+                    className="efx-neon-pulse-button"
+                    style={{ fontSize: '0.95rem', padding: '0.8rem 1.7rem' }}
+                    aria-label={primaryEvent ? `View featured event: ${primaryEvent.title}` : 'Browse the event grid'}
+                    onClick={() => {
+                      if (primaryEvent) {
+                        navigate(`/event/${primaryEvent.slug}`)
+                      } else {
+                        setBrowseAll(true)
+                        setPage(1)
+                        document.getElementById('browse')?.scrollIntoView({ behavior: 'smooth' })
+                      }
+                    }}
+                  >
+                    {primaryEvent ? 'View featured event' : 'Browse all events'}
+                    <ArrowRight className="h-4 w-4" aria-hidden />
+                  </button>
+                  <Button size="lg" variant="outline" className="rounded-full bg-card/70 ievx-press" onClick={() => document.getElementById('ai-search')?.scrollIntoView({ behavior: 'smooth' })}>
+                    <Wand2 className="mr-2 h-4 w-4" aria-hidden /> Ask AI to find events
+                  </Button>
+                  <Button size="lg" variant="outline" className="rounded-full bg-card/70 ievx-press" onClick={() => navigate('/live')}>
+                    <Radio className="mr-2 h-4 w-4" /> Watch live
+                  </Button>
+                </div>
+                {/* Quick links — the fastest paths into the catalogue */}
+                <div className="mt-5 flex flex-wrap items-center gap-x-1 gap-y-2 text-sm">
+                  <span className="pr-1 text-xs font-medium uppercase tracking-wide" style={{ color: 'rgba(226, 232, 240, 0.72)' }}>Quick find:</span>
+                  {[
+                    { label: 'Today', filter: () => applyFilter('when', 'TODAY') },
+                    { label: 'This weekend', filter: () => applyFilter('when', 'THIS_WEEKEND') },
+                    { label: 'Free events', filter: () => applyFilter('price', 'FREE') },
+                    { label: 'Online only', filter: () => applyFilter('mode', 'VIRTUAL') },
+                  ].map((quick) => (
+                    <button
+                      key={quick.label}
+                      type="button"
+                      onClick={quick.filter}
+                      className="rounded-full px-2.5 py-1 text-xs font-medium underline-offset-4 transition-colors hover:bg-white/10 hover:underline ievx-press"
+                      style={{ color: '#a7f3d0' }}
+                    >
+                      {quick.label}
+                    </button>
+                  ))}
+                </div>
+                {home && (
+                  <div className="mt-8 flex flex-wrap gap-2 text-sm">
+                    <span className="rounded-full bg-card/80 px-4 py-2 font-semibold backdrop-blur"><TrendingUp className="mr-1.5 inline h-4 w-4 text-primary" aria-hidden />{statEvents} upcoming event{statEvents !== 1 ? 's' : ''}</span>
+                    <span className="rounded-full bg-card/80 px-4 py-2 font-semibold backdrop-blur"><MapPin className="mr-1.5 inline h-4 w-4 text-primary" aria-hidden />{statOrgs} verified organizer{statOrgs !== 1 ? 's' : ''}</span>
+                    <span className="rounded-full bg-card/80 px-4 py-2 font-semibold backdrop-blur"><Radio className="mr-1.5 inline h-4 w-4 text-destructive" aria-hidden />{statLive} live right now</span>
+                  </div>
+                )}
               </div>
-            )}
+            </div>
           </div>
         </section>
       )}
@@ -246,8 +269,8 @@ export default function Discover({ route }: { route: Route }) {
               if (input.value) navigate(`/search?q=${encodeURIComponent(input.value)}`, { replace: true })
             }}
           >
-            <div className="relative w-full max-w-md">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+            <div className="efx-glow-focus-input w-full" style={{ margin: 0, maxWidth: '28rem', borderRadius: '999px' }}>
+              <Search className="efx-glow-focus-input__icon pointer-events-none" style={{ width: 18, height: 18 }} aria-hidden />
               <input
                 name="q"
                 defaultValue={filters.q}
@@ -255,7 +278,8 @@ export default function Discover({ route }: { route: Route }) {
                 type="search"
                 placeholder="Search events, organizers, cities…"
                 aria-label="Search events"
-                className="h-10 w-full rounded-full border border-border bg-card pl-9 pr-4 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                className="efx-glow-focus-input__field"
+                style={{ padding: '0.55rem 0' }}
               />
             </div>
           </form>
@@ -274,10 +298,13 @@ export default function Discover({ route }: { route: Route }) {
                 </button>
               ))}
               <button
+                type="button"
                 onClick={() => navigate('/live')}
-                className="rounded-full border border-destructive/30 bg-destructive/5 px-3.5 py-1.5 text-xs font-semibold text-destructive ievx-press"
+                className="relative rounded-full border border-destructive/30 bg-destructive/5 px-3.5 py-1.5 pr-5 text-xs font-semibold text-destructive ievx-press"
               >
-                Live now
+                <span className="efx-badge-ping__ping" aria-hidden style={{ width: 8, height: 8, top: 'calc(50% - 4px)', right: 6 }} />
+                <span className="efx-badge-ping__dot" aria-hidden style={{ width: 8, height: 8, top: 'calc(50% - 4px)', right: 6 }} />
+                <span className="relative">Live now</span>
               </button>
             </div>
             <Sheet open={filtersOpen} onOpenChange={setFiltersOpen}>
@@ -444,7 +471,14 @@ export default function Discover({ route }: { route: Route }) {
                 <div className="mb-4 flex items-center gap-2">
                   <span className="ievx-live-dot" />
                   <h2 className="text-lg font-bold">Happening live</h2>
-                  <Button variant="ghost" size="sm" className="ml-auto rounded-full" onClick={() => navigate('/live')}>See all</Button>
+                  <button
+                    type="button"
+                    className="efx-underline-slide-link ml-auto"
+                    style={{ fontSize: '0.875rem', fontWeight: 600, color: 'inherit', display: 'inline-flex', alignItems: 'center' }}
+                    onClick={() => navigate('/live')}
+                  >
+                    See all
+                  </button>
                 </div>
                 <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
                   {home.liveNow.map((event, i) => <EventCard key={event.id} event={event} index={i} />)}
@@ -455,9 +489,14 @@ export default function Discover({ route }: { route: Route }) {
               <section className="mb-10" aria-label="Featured events">
                 <div className="mb-4 flex items-center justify-between">
                   <h2 className="text-lg font-bold">Featured gatherings</h2>
-                  <Button variant="ghost" size="sm" className="rounded-full" onClick={() => { setBrowseAll(true); setPage(1) }}>
+                  <button
+                    type="button"
+                    className="efx-underline-slide-link"
+                    style={{ fontSize: '0.875rem', fontWeight: 600, color: 'inherit', display: 'inline-flex', alignItems: 'center' }}
+                    onClick={() => { setBrowseAll(true); setPage(1) }}
+                  >
                     Browse all <ArrowRight className="ml-1 h-3.5 w-3.5" aria-hidden />
-                  </Button>
+                  </button>
                 </div>
                 <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
                   {home.featured.map((event, i) => <EventCard key={event.id} event={event} index={i} />)}
@@ -469,9 +508,14 @@ export default function Discover({ route }: { route: Route }) {
                 <h2 className="text-lg font-bold">Coming up</h2>
                 <div className="flex items-center gap-2">
                   {user && <Button variant="outline" size="sm" className="rounded-full" onClick={() => navigate('/me?tab=saved')}>Saved events</Button>}
-                  <Button variant="ghost" size="sm" className="rounded-full" onClick={() => { setBrowseAll(true); setPage(1) }}>
+                  <button
+                    type="button"
+                    className="efx-underline-slide-link"
+                    style={{ fontSize: '0.875rem', fontWeight: 600, color: 'inherit', display: 'inline-flex', alignItems: 'center' }}
+                    onClick={() => { setBrowseAll(true); setPage(1) }}
+                  >
                     Browse all <ArrowRight className="ml-1 h-3.5 w-3.5" aria-hidden />
-                  </Button>
+                  </button>
                 </div>
               </div>
               {home === null ? (

@@ -62,6 +62,7 @@ export default function Me({ route }: { route: Route }) {
   const [notifications, setNotifications] = useState<NotificationRow[] | null>(null)
   const [selectedTicket, setSelectedTicket] = useState<{ row: TicketRow; qrSvg: string; qrPayload: string } | null>(null)
   const [transferUrl, setTransferUrl] = useState<string | null>(null)
+  const [copiedCode, setCopiedCode] = useState(false)
   const [profile, setProfile] = useState({ displayName: '', phone: '', city: '', bio: '' })
   const [prefs, setPrefs] = useState<Record<string, boolean>>({})
   const [savingProfile, setSavingProfile] = useState(false)
@@ -110,6 +111,7 @@ export default function Me({ route }: { route: Route }) {
       const detail = await api.get<{ ticket: TicketRow & { qrSvg: string; qrPayload: string } }>(`/tickets/${row.id}`)
       setSelectedTicket({ row: detail.ticket, qrSvg: detail.ticket.qrSvg, qrPayload: detail.ticket.qrPayload })
       setTransferUrl(null)
+      setCopiedCode(false)
     } catch (err) {
       toast({ description: err instanceof ApiClientError ? err.message : 'Could not load the ticket.', variant: 'destructive' })
     }
@@ -159,6 +161,9 @@ export default function Me({ route }: { route: Route }) {
 
   if (!user) return null
 
+  const navTrigger = (active: boolean) =>
+    `efx-underline-slide-nav__link flex-none rounded-none border-0 bg-transparent shadow-none data-[state=active]:bg-transparent data-[state=active]:shadow-none dark:data-[state=active]:bg-transparent dark:data-[state=active]:border-transparent${active ? ' efx-underline-slide-nav__link--active' : ''}`
+
   return (
     <div className="mx-auto max-w-5xl px-4 py-8">
       {/* Header */}
@@ -174,15 +179,18 @@ export default function Me({ route }: { route: Route }) {
       </div>
 
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="mb-4 flex h-auto flex-wrap gap-1 rounded-2xl bg-secondary/60 p-1.5">
-          <TabsTrigger value="tickets" className="rounded-xl data-[state=active]:bg-card gap-1.5"><Ticket className="h-4 w-4" /> Tickets</TabsTrigger>
-          <TabsTrigger value="orders" className="rounded-xl data-[state=active]:bg-card gap-1.5"><ShoppingBag className="h-4 w-4" /> Orders</TabsTrigger>
-          <TabsTrigger value="saved" className="rounded-xl data-[state=active]:bg-card gap-1.5"><Heart className="h-4 w-4" /> Saved</TabsTrigger>
-          <TabsTrigger value="following" className="rounded-xl data-[state=active]:bg-card gap-1.5"><UserRound className="h-4 w-4" /> Following</TabsTrigger>
-          <TabsTrigger value="notifications" className="rounded-xl data-[state=active]:bg-card gap-1.5">
+        <TabsList
+          className="efx-underline-slide-nav h-auto w-full rounded-none border-0 bg-transparent"
+          style={{ maxWidth: '100%', margin: 0, justifyContent: 'flex-start', flexWrap: 'wrap', gap: '0.4rem 1.4rem', paddingBottom: '0.75rem' }}
+        >
+          <TabsTrigger value="tickets" aria-current={tab === 'tickets' ? 'true' : undefined} className={navTrigger(tab === 'tickets')}><Ticket className="h-4 w-4" /> Tickets</TabsTrigger>
+          <TabsTrigger value="orders" aria-current={tab === 'orders' ? 'true' : undefined} className={navTrigger(tab === 'orders')}><ShoppingBag className="h-4 w-4" /> Orders</TabsTrigger>
+          <TabsTrigger value="saved" aria-current={tab === 'saved' ? 'true' : undefined} className={navTrigger(tab === 'saved')}><Heart className="h-4 w-4" /> Saved</TabsTrigger>
+          <TabsTrigger value="following" aria-current={tab === 'following' ? 'true' : undefined} className={navTrigger(tab === 'following')}><UserRound className="h-4 w-4" /> Following</TabsTrigger>
+          <TabsTrigger value="notifications" aria-current={tab === 'notifications' ? 'true' : undefined} className={navTrigger(tab === 'notifications')}>
             <Bell className="h-4 w-4" /> Notifications {unread > 0 && <Badge className="ml-1 h-4 min-w-4 px-1 text-[10px]">{unread}</Badge>}
           </TabsTrigger>
-          <TabsTrigger value="profile" className="rounded-xl data-[state=active]:bg-card gap-1.5">Profile</TabsTrigger>
+          <TabsTrigger value="profile" aria-current={tab === 'profile' ? 'true' : undefined} className={navTrigger(tab === 'profile')}>Profile</TabsTrigger>
         </TabsList>
 
         {/* Tickets */}
@@ -206,7 +214,10 @@ export default function Me({ route }: { route: Route }) {
                   <p className="text-xs text-muted-foreground">{t.ticketType.name} · {dateLong(t.event.startsAt, t.event.timezone)}</p>
                   <p className="text-xs text-muted-foreground">{t.event.venue?.name ?? 'Online'} · <span className="font-mono">{t.code}</span></p>
                 </div>
-                <Badge variant={t.status === 'VALID' ? 'default' : 'secondary'} className="capitalize shrink-0">{humanize(t.status)}</Badge>
+                <Badge variant={t.status === 'VALID' ? 'default' : 'secondary'} className="relative shrink-0 overflow-visible capitalize">
+                  {humanize(t.status)}
+                  {t.status === 'VALID' && <span className="efx-badge-ping__ping" aria-hidden />}
+                </Badge>
               </button>
             ))
           )}
@@ -301,7 +312,11 @@ export default function Me({ route }: { route: Route }) {
                   if (n.link) navigate(n.link.replace(/^#/, ''))
                 }}
               >
-                <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${n.readAt ? 'bg-border' : 'bg-primary'}`} aria-hidden />
+                {n.readAt ? (
+                  <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-border" aria-hidden />
+                ) : (
+                  <span className="efx-badge-ping__dot shrink-0" style={{ position: 'static', width: '8px', height: '8px', marginTop: '4px' }} aria-hidden />
+                )}
                 <div className="min-w-0">
                   <p className="font-medium">{n.title}</p>
                   <p className="text-sm text-muted-foreground">{n.body}</p>
@@ -386,6 +401,29 @@ export default function Me({ route }: { route: Route }) {
                   <p className="text-xs text-muted-foreground">{selectedTicket.row.ticketType.name} · {dateLong(selectedTicket.row.event.startsAt, selectedTicket.row.event.timezone)}</p>
                   <p className="text-xs text-muted-foreground">{selectedTicket.row.event.venue?.name ?? 'Online'} · {selectedTicket.row.event.org.name}</p>
                 </div>
+                <label
+                  className="efx-copy-success-checkmark"
+                  style={{ margin: '0.25rem 0 0' }}
+                  onClick={() => {
+                    if (selectedTicket && !copiedCode) {
+                      void navigator.clipboard.writeText(selectedTicket.row.code).catch(() => {})
+                      setCopiedCode(true)
+                    }
+                  }}
+                >
+                  <input type="checkbox" className="efx-copy-success-checkmark__input" checked={copiedCode} onChange={() => {}} aria-label="Copy ticket reference" />
+                  <span className="efx-copy-success-checkmark__button">
+                    <span className="efx-copy-success-checkmark__badge" aria-hidden="true">
+                      <svg className="efx-copy-success-checkmark__icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <path className="efx-copy-success-checkmark__path" d="M5 12.5l4.5 4.5L19 7.5" />
+                      </svg>
+                    </span>
+                    <span className="efx-copy-success-checkmark__text">
+                      <span className="efx-copy-success-checkmark__text-copy">Copy ticket ref</span>
+                      <span className="efx-copy-success-checkmark__text-done">Copied!</span>
+                    </span>
+                  </span>
+                </label>
                 <Badge variant={selectedTicket.row.status === 'VALID' ? 'default' : 'secondary'} className="capitalize">{humanize(selectedTicket.row.status)}</Badge>
                 {selectedTicket.row.status === 'VALID' ? (
                   <Button variant="outline" className="w-full rounded-full" onClick={() => void createTransfer()}>

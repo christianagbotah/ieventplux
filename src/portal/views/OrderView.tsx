@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { CheckCircle2, Clock, XCircle, AlertTriangle, Ticket, Loader2, ChevronLeft, RefreshCw } from 'lucide-react'
+import { CheckCircle2, Clock, XCircle, AlertTriangle, Ticket, ChevronLeft, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -50,6 +50,8 @@ export default function OrderView({ reference }: { reference: string }) {
   const [data, setData] = useState<OrderPayload | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [polling, setPolling] = useState(false)
+  // Mirrors the copy-success-checkmark animation; the real clipboard write happens in copyReference.
+  const [refCopied, setRefCopied] = useState(false)
 
   // One-shot celebration when the order is confirmed (respects reduced motion).
   const celebratedRef = useRef(false)
@@ -103,6 +105,16 @@ export default function OrderView({ reference }: { reference: string }) {
     }
   }
 
+  const copyReference = async () => {
+    try {
+      await navigator.clipboard.writeText(reference)
+      setRefCopied(true)
+      window.setTimeout(() => setRefCopied(false), 2600)
+    } catch {
+      /* clipboard unavailable */
+    }
+  }
+
   if (error) {
     return <div className="mx-auto max-w-3xl px-4 py-16"><EmptyState title="Order unavailable" description={error} action={<Button className="rounded-full" onClick={() => navigate('/me?tab=orders')}>My orders</Button>} /></div>
   }
@@ -140,10 +152,32 @@ export default function OrderView({ reference }: { reference: string }) {
             <p className="mt-1 text-sm text-muted-foreground">
               Order <span className="font-mono font-semibold">{order.reference}</span> · {dateLong(order.createdAt)}
             </p>
-            {polling && <p className="mt-2 flex items-center justify-center gap-1.5 text-xs text-primary"><Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> Listening for the payment confirmation…</p>}
+            <label className="efx-copy-success-checkmark" style={{ margin: '0.75rem 0 0' }} onClick={() => void copyReference()}>
+              <input className="efx-copy-success-checkmark__input" type="checkbox" checked={refCopied} onChange={() => {}} aria-label="Copy order reference" />
+              <span className="efx-copy-success-checkmark__button">
+                <span className="efx-copy-success-checkmark__badge" aria-hidden="true">
+                  <svg className="efx-copy-success-checkmark__icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path className="efx-copy-success-checkmark__path" d="M5 12.5l4.5 4.5L19 7.5" />
+                  </svg>
+                </span>
+                <span className="efx-copy-success-checkmark__text">
+                  <span className="efx-copy-success-checkmark__text-copy">Copy reference</span>
+                  <span className="efx-copy-success-checkmark__text-done">Copied!</span>
+                </span>
+              </span>
+            </label>
+            {polling && (
+              <div className="mt-2 flex items-center justify-center gap-3" role="status" aria-label="Waiting for payment confirmation">
+                <span className="efx-pie-spinner shrink-0" aria-hidden="true" style={{ width: '44px', height: '44px', margin: 0 }} />
+                <p className="text-xs font-medium text-primary">Listening for the payment confirmation…</p>
+              </div>
+            )}
             {order.exceptionReason && <p className="mt-2 max-w-md text-xs text-amber-700">{order.exceptionReason}</p>}
           </div>
-          <Badge variant={statusTone(order.status) === 'success' ? 'default' : 'secondary'} className="capitalize">{humanize(order.status)}</Badge>
+          <Badge variant={statusTone(order.status) === 'success' ? 'default' : 'secondary'} className={`capitalize${order.status === 'PENDING_PAYMENT' ? ' relative' : ''}`}>
+            {humanize(order.status)}
+            {order.status === 'PENDING_PAYMENT' && <span className="efx-badge-ping__ping" aria-hidden="true" style={{ top: 3, right: 3, width: 6, height: 6 }} />}
+          </Badge>
         </div>
 
         <CardContent className="space-y-6 p-6">
@@ -198,14 +232,17 @@ export default function OrderView({ reference }: { reference: string }) {
           )}
 
           {isPaid && ticketCount > 0 && (
-            <div className="rounded-xl border border-primary/25 bg-primary/5 p-4">
-              <p className="flex items-center gap-2 text-sm font-semibold text-primary">
-                <Ticket className="h-4 w-4" aria-hidden /> {ticketCount} ticket{ticketCount > 1 ? 's' : ''} issued
-              </p>
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {order.tickets.map((t) => <Badge key={t.id} variant="outline" className="font-mono text-[10px]">{t.code}</Badge>)}
+            <div className="efx-glassmorphism-card" style={{ borderRadius: '1.25rem', padding: '1.5rem' }}>
+              <div className="efx-glassmorphism-card__backdrop" aria-hidden="true" />
+              <div className="efx-glassmorphism-card__panel">
+                <p className="efx-glassmorphism-card__meta flex items-center gap-2 font-semibold">
+                  <Ticket className="h-4 w-4 text-emerald-300" aria-hidden /> {ticketCount} ticket{ticketCount > 1 ? 's' : ''} issued
+                </p>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {order.tickets.map((t) => <Badge key={t.id} variant="outline" className="font-mono text-[10px]" style={{ borderColor: 'rgba(255,255,255,0.35)', backgroundColor: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.9)' }}>{t.code}</Badge>)}
+                </div>
+                <Button className="mt-3 rounded-full ievx-press" onClick={() => navigate('/me?tab=tickets')}>View tickets & QR codes</Button>
               </div>
-              <Button className="mt-3 rounded-full ievx-press" onClick={() => navigate('/me?tab=tickets')}>View tickets & QR codes</Button>
             </div>
           )}
 

@@ -116,22 +116,32 @@ export function AiSearchPanel({ id }: { id?: string }) {
               void runSearch(query)
             }}
           >
-            <div className="relative flex-1">
-              <Wand2 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+            <div className="efx-glow-focus-input flex-1" style={{ margin: 0, maxWidth: 'none', borderRadius: '999px' }}>
+              <Wand2 className="efx-glow-focus-input__icon pointer-events-none" style={{ width: 18, height: 18 }} aria-hidden />
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="e.g. affordable online workshops for creators this weekend"
                 aria-label="Describe the events you are looking for"
                 maxLength={300}
-                className="h-11 w-full rounded-full border border-border bg-background pl-9 pr-4 text-sm outline-none transition-shadow focus:border-primary focus:ring-2 focus:ring-primary/20"
+                className="efx-glow-focus-input__field"
+                style={{ padding: '0.55rem 0' }}
               />
             </div>
             <div className="flex gap-2">
-              <Button type="submit" className="h-11 flex-1 rounded-full sm:flex-none sm:px-6" disabled={state === 'loading' || query.trim().length < 3}>
+              <button
+                type="submit"
+                className="efx-neon-pulse-button flex-1 sm:flex-none"
+                style={{
+                  fontSize: '0.9rem',
+                  padding: '0.65rem 1.4rem',
+                  ...(state === 'loading' || query.trim().length < 3 ? { opacity: 0.6, cursor: 'not-allowed' } : {}),
+                }}
+                disabled={state === 'loading' || query.trim().length < 3}
+              >
                 {state === 'loading' ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <SendHorizonal className="h-4 w-4" aria-hidden />}
                 Search with AI
-              </Button>
+              </button>
               {state !== 'idle' && (
                 <Button type="button" variant="outline" className="h-11 rounded-full" onClick={reset} aria-label="Reset AI search">
                   <RotateCcw className="h-4 w-4" aria-hidden />

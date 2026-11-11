@@ -121,6 +121,133 @@
   }
 }
 
+/* ─────────────────── Effects Studio in-app adaptation layer ───────────────────
+   The efx-* catalog is injected globally by <EffectsRuntime />. These rules
+   (a) tune studio effects for in-app layout contexts and (b) adapt light-hardcoded
+   effects for dark mode. Unlayered on purpose: they win over both @layer utilities
+   and the injected catalog CSS. View code tunes layout via inline styles. */
+
+/* Brand headline — strip demo margins/sizing when used as a page headline. */
+.iefx-headline.efx-animated-gradient-text {
+  margin: 0;
+  font-size: clamp(1.9rem, 4.6vw, 3.1rem);
+  line-height: 1.12;
+}
+.iefx-subhead.efx-animated-gradient-text {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+/* Full-bleed hero stage — catalog demos ship fixed radius/min-height. */
+.iefx-stage.efx-aurora-bg {
+  border-radius: 1.25rem;
+  min-height: 0;
+  padding: 1.75rem 1.5rem;
+}
+
+/* Dark-mode adaptations (light-hardcoded catalog colors → theme-aware). */
+.dark .efx-gradient-border-button {
+  background:
+    linear-gradient(oklch(0.23 0.01 170), oklch(0.23 0.01 170)) padding-box,
+    linear-gradient(120deg, #10b981, #14b8a6, #f59e0b, #f43f5e, #10b981) border-box;
+  color: #5eead4;
+}
+.dark .efx-glow-focus-input {
+  background: oklch(0.24 0.01 170);
+  border-color: oklch(1 0 0 / 16%);
+}
+.dark .efx-glow-focus-input__field { color: oklch(0.985 0 0); }
+.dark .efx-glow-focus-input__field::placeholder { color: oklch(0.72 0.01 170); }
+
+.dark .efx-search-expand-input {
+  background: oklch(0.24 0.01 170);
+  border-color: oklch(1 0 0 / 16%);
+}
+.dark .efx-search-expand-input__field { color: oklch(0.985 0 0); }
+.dark .efx-search-expand-input__field::placeholder { color: oklch(0.72 0.01 170); }
+
+.dark .efx-floating-label-input__field {
+  background: oklch(0.24 0.01 170);
+  border-color: oklch(1 0 0 / 16%);
+  color: oklch(0.985 0 0);
+}
+.dark .efx-floating-label-input__label { color: oklch(0.68 0.01 170); }
+
+.dark .efx-underline-slide-link { color: oklch(0.9 0.01 170); }
+.dark .efx-underline-slide-link:hover { color: #34d399; }
+
+.dark .efx-underline-slide-nav { border-bottom-color: oklch(1 0 0 / 12%); }
+.dark .efx-underline-slide-nav__link { color: oklch(0.72 0.01 170); }
+.dark .efx-underline-slide-nav__link:hover { color: #2dd4bf; }
+.dark .efx-underline-slide-nav__link--active { color: #fbbf24; }
+
+.dark .efx-pill-nav {
+  background: oklch(0.26 0.01 170);
+  border-color: oklch(1 0 0 / 12%);
+}
+.dark .efx-pill-nav__indicator { background: oklch(0.34 0.02 170); }
+.dark .efx-pill-nav__tab { color: oklch(0.72 0.01 170); }
+
+.dark .efx-copy-success-checkmark__button {
+  background: oklch(0.24 0.01 170);
+  border-color: oklch(1 0 0 / 14%);
+  color: oklch(0.92 0.01 170);
+}
+.dark .efx-copy-success-checkmark__input:checked ~ .efx-copy-success-checkmark__button {
+  background: oklch(0.26 0.04 165);
+  border-color: #10b981;
+}
+.dark .efx-copy-success-checkmark__badge { background: oklch(0.3 0.04 165); }
+
+.dark .efx-heart-burst-toggle__stack {
+  background: oklch(0.3 0.05 20);
+  border-color: oklch(1 0 0 / 14%);
+}
+.dark .efx-heart-burst-toggle__input:checked ~ .efx-heart-burst-toggle__stack {
+  background: oklch(0.34 0.08 20);
+  border-color: #fda4af;
+}
+.dark .efx-heart-burst-toggle__text { color: oklch(0.9 0.01 170); }
+
+.dark .efx-animated-grid-bg {
+  background-color: oklch(0.2 0.015 170);
+}
+.dark .efx-animated-grid-bg__grid {
+  background-image:
+    linear-gradient(oklch(0.7 0.08 175 / 0.14) 1px, transparent 1px),
+    linear-gradient(90deg, oklch(0.7 0.08 175 / 0.14) 1px, transparent 1px);
+}
+.dark .efx-animated-grid-bg__title { color: oklch(0.9 0.03 170); }
+
+.dark .efx-toast-slide-in__toast {
+  background: oklch(0.26 0.01 170);
+  border-color: oklch(0.6 0.1 165);
+}
+.dark .efx-toast-slide-in__title { color: oklch(0.95 0.02 165); }
+
+.dark .efx-badge-ping__dot { box-shadow: 0 0 0 2px oklch(0.24 0.01 170); }
+
+/* Reusable derivatives of studio keyframes for real app content. */
+.iefx-kenburns {
+  animation: efx-ken-burns-image-zoom 18s ease-in-out infinite alternate;
+  will-change: transform;
+}
+.iefx-msg-in { animation: iefx-msg-in 0.32s cubic-bezier(0.3, 0.9, 0.3, 1) both; }
+@keyframes iefx-msg-in {
+  from { opacity: 0; transform: translateY(-10px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Reduced motion: belt-and-braces for the injected catalog as a whole. */
+@media (prefers-reduced-motion: reduce) {
+  .efx-aurora-bg::before,
+  .efx-aurora-bg::after,
+  .iefx-kenburns,
+  .iefx-msg-in { animation: none !important; }
+}
+
 /* ───────────────────────── iEventPlux portal layer ───────────────────────── */
 
 @keyframes ievx-fade-up {

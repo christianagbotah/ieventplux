@@ -48,11 +48,16 @@ export default function AdminConsole({ route }: { route: Route }) {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-6">
-      <div className="mb-5 flex flex-wrap items-center gap-3">
-        <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary text-primary-foreground"><ShieldCheck className="h-5 w-5" aria-hidden /></span>
-        <div>
-          <h1 className="text-xl font-extrabold">Platform Administration</h1>
-          <p className="text-xs text-muted-foreground">{humanize(user.role)} · actions are audited · privileged finance requires re-authentication</p>
+      <div className="efx-glassmorphism-card mb-5">
+        <div className="efx-glassmorphism-card__backdrop" aria-hidden="true" />
+        <div className="efx-glassmorphism-card__panel">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/15 text-white"><ShieldCheck className="h-5 w-5" aria-hidden /></span>
+            <div>
+              <h1 className="efx-glassmorphism-card__title text-xl">Platform Administration</h1>
+              <p className="text-xs text-white/75">{humanize(user.role)} · actions are audited · privileged finance requires re-authentication</p>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -90,19 +95,31 @@ export default function AdminConsole({ route }: { route: Route }) {
   )
 }
 
-function useAdmin<T>(path: string): [T | null, () => void] {
+function useAdmin<T>(path: string): [T | null, () => void, boolean] {
   const [data, setData] = useState<T | null>(null)
+  const [initialized, setInitialized] = useState(false)
   const load = useCallback(async () => {
     try {
       setData(await api.get<T>(path))
     } catch {
       setData(null)
+    } finally {
+      setInitialized(true)
     }
   }, [path])
   useEffect(() => {
     void load()
   }, [load])
-  return [data, load]
+  return [data, load, !initialized]
+}
+
+function AdminLoader({ label }: { label: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center gap-1 py-12" role="status" aria-live="polite">
+      <span className="efx-orbit-dots-loader" aria-hidden="true" style={{ margin: 0, transform: 'scale(0.59)' }} />
+      <p className="text-sm text-muted-foreground">{label}</p>
+    </div>
+  )
 }
 
 function StatGrid({ stats }: { stats: { label: string; value: string; tone?: string }[] }) {
@@ -121,13 +138,14 @@ function StatGrid({ stats }: { stats: { label: string; value: string; tone?: str
 }
 
 function Overview() {
-  const [data] = useAdmin<{
+  const [data, , loading] = useAdmin<{
     counts: Record<string, number>
     grossVolumeMinor: number
     platformRevenueMinor: number
     orderStatuses: { status: string; _count: number }[]
   }>('/admin/overview')
 
+  if (loading) return <AdminLoader label="Loading platform overview…" />
   if (!data) return <EmptyState title="Overview unavailable" description="You may lack the required platform role." />
   return (
     <div className="space-y-5">
@@ -159,7 +177,7 @@ function Overview() {
 
 function Orgs() {
   const { toast } = useToast()
-  const [data, reload] = useAdmin<{ items: { id: string; name: string; slug: string; status: string; city?: string | null; verifiedAt?: string | null; verification?: { status: string } | null; _count: { events: number } }[] }>('/admin/orgs')
+  const [data, reload, loading] = useAdmin<{ items: { id: string; name: string; slug: string; status: string; city?: string | null; verifiedAt?: string | null; verification?: { status: string } | null; _count: { events: number } }[] }>('/admin/orgs')
 
   const verify = async (id: string, decision: 'APPROVE' | 'REJECT') => {
     try {
@@ -171,6 +189,7 @@ function Orgs() {
     }
   }
 
+  if (loading) return <AdminLoader label="Loading organizations…" />
   if (!data) return <EmptyState title="Organizations unavailable" />
   return (
     <div className="space-y-3">
@@ -202,7 +221,7 @@ function Orgs() {
 
 function EventsAdmin() {
   const { toast } = useToast()
-  const [data, reload] = useAdmin<{ items: { id: string; title: string; slug: string; status: string; visibility: string; org: { name: string }; _count: { tickets: number } }[] }>('/admin/events')
+  const [data, reload, loading] = useAdmin<{ items: { id: string; title: string; slug: string; status: string; visibility: string; org: { name: string }; _count: { tickets: number } }[] }>('/admin/events')
 
   const suspend = async (id: string) => {
     await api.post(`/admin/events/${id}/suspend`, { reason: 'Suspended by platform moderation.' }).catch(() => {})
@@ -210,6 +229,7 @@ function EventsAdmin() {
     reload()
   }
 
+  if (loading) return <AdminLoader label="Loading events…" />
   if (!data) return <EmptyState title="Events unavailable" />
   return (
     <div className="overflow-x-auto rounded-2xl border border-border/70">
@@ -240,7 +260,7 @@ function EventsAdmin() {
 
 function Moderation() {
   const { toast } = useToast()
-  const [data, reload] = useAdmin<{ items: { id: string; targetType: string; targetId: string; reason: string; details?: string | null; status: string; createdAt: string; reporter?: { displayName: string; email: string } | null }[] }>('/admin/moderation')
+  const [data, reload, loading] = useAdmin<{ items: { id: string; targetType: string; targetId: string; reason: string; details?: string | null; status: string; createdAt: string; reporter?: { displayName: string; email: string } | null }[] }>('/admin/moderation')
 
   const action = async (id: string, act: string) => {
     try {
@@ -252,6 +272,7 @@ function Moderation() {
     }
   }
 
+  if (loading) return <AdminLoader label="Loading reports…" />
   if (!data || data.items.length === 0) return <EmptyState title="No open reports" description="User reports on events, comments and broadcasts land here." />
   return (
     <div className="space-y-3">
@@ -279,7 +300,7 @@ function Moderation() {
 
 function Payments() {
   const { toast } = useToast()
-  const [data, reload] = useAdmin<{
+  const [data, reload, loading] = useAdmin<{
     items: { id: string; reference: string; status: string; provider: string; amountMinor: number; callbackCount: number; reconcileCheckCount: number; initiatedAt: string; failureReason?: string | null; order?: { reference: string; status: string; buyerEmail: string } | null }[]
     providerEvents: { id: string; reference?: string | null; status: string; receivedAt: string; errorNote?: string | null }[]
   }>('/admin/payments')
@@ -294,6 +315,7 @@ function Payments() {
     }
   }
 
+  if (loading) return <AdminLoader label="Loading payment attempts…" />
   if (!data) return <EmptyState title="Payments unavailable" description="Finance administrator role required." />
   return (
     <div className="space-y-4">
@@ -345,7 +367,7 @@ function Payments() {
 function Refunds() {
   const { toast } = useToast()
   const [elevPassword, setElevPassword] = useState('')
-  const [data, reload] = useAdmin<{ items: { id: string; type: string; status: string; amountMinor: number; reason: string; createdAt: string; order: { reference: string; status: string; totalMinor: number; event?: { title: string } | null } }[] }>('/admin/refunds')
+  const [data, reload, loading] = useAdmin<{ items: { id: string; type: string; status: string; amountMinor: number; reason: string; createdAt: string; order: { reference: string; status: string; totalMinor: number; event?: { title: string } | null } }[] }>('/admin/refunds')
 
   const act = async (id: string, op: 'approve' | 'process' | 'reject') => {
     try {
@@ -361,6 +383,7 @@ function Refunds() {
     }
   }
 
+  if (loading) return <AdminLoader label="Loading refund cases…" />
   if (!data) return <EmptyState title="Refunds unavailable" description="Finance administrator role required." />
   return (
     <div className="space-y-3">
@@ -405,7 +428,7 @@ function Refunds() {
 
 function Payouts() {
   const { toast } = useToast()
-  const [data, reload] = useAdmin<{ items: { id: string; amountMinor: number; status: string; createdAt: string; org: { name: string }; failureReason?: string | null; providerRef?: string | null }[] }>('/admin/payouts')
+  const [data, reload, loading] = useAdmin<{ items: { id: string; amountMinor: number; status: string; createdAt: string; org: { name: string }; failureReason?: string | null; providerRef?: string | null }[] }>('/admin/payouts')
 
   const act = async (id: string, op: string) => {
     try {
@@ -417,6 +440,7 @@ function Payouts() {
     }
   }
 
+  if (loading) return <AdminLoader label="Loading payouts…" />
   if (!data) return <EmptyState title="Payouts unavailable" description="Finance administrator role required." />
   return (
     <div className="space-y-3">
@@ -516,8 +540,9 @@ function FeesPlans() {
 }
 
 function Integrations() {
-  const [data] = useAdmin<{ integrations: { key: string; name: string; stage: string; configured: boolean; mode: string; detail: string }[]; validation: { errors: string[]; warnings: string[] } }>('/admin/integrations')
+  const [data, , loading] = useAdmin<{ integrations: { key: string; name: string; stage: string; configured: boolean; mode: string; detail: string }[]; validation: { errors: string[]; warnings: string[] } }>('/admin/integrations')
 
+  if (loading) return <AdminLoader label="Loading integration health…" />
   if (!data) return <EmptyState title="Integration health unavailable" />
   return (
     <div className="space-y-4">
@@ -537,7 +562,16 @@ function Integrations() {
             <CardContent className="space-y-2 p-4">
               <div className="flex items-center justify-between gap-2">
                 <p className="text-sm font-bold">{i.name}</p>
-                <Badge variant={i.mode === 'real' ? 'default' : i.mode === 'simulated' ? 'secondary' : 'outline'} className="capitalize">{i.mode}</Badge>
+                <Badge variant={i.mode === 'real' ? 'default' : i.mode === 'simulated' ? 'secondary' : 'outline'} className="capitalize">
+                  {i.mode === 'real' && (
+                    <span
+                      aria-hidden="true"
+                      className="efx-badge-ping__ping"
+                      style={{ position: 'static', width: 7, height: 7, background: 'rgba(16, 185, 129, 0.55)', flex: 'none' }}
+                    />
+                  )}
+                  {i.mode}
+                </Badge>
               </div>
               <p className="text-xs text-muted-foreground">{i.detail}</p>
               <p className="text-[10px] uppercase tracking-wide text-muted-foreground">stage: {i.stage.replace('-', ' ')} · {i.configured ? 'credentials present' : 'credentials missing'}</p>
@@ -550,12 +584,22 @@ function Integrations() {
 }
 
 function SmsLog() {
-  const [data] = useAdmin<{ items: { id: string; channel: string; target: string; status: string; provider: string; purpose: string; segmentsCount?: number | null; createdAt: string; failureReason?: string | null }[]; mode: string }>('/admin/sms')
+  const [data, , loading] = useAdmin<{ items: { id: string; channel: string; target: string; status: string; provider: string; purpose: string; segmentsCount?: number | null; createdAt: string; failureReason?: string | null }[]; mode: string }>('/admin/sms')
 
+  if (loading) return <AdminLoader label="Loading SMS log…" />
   if (!data) return <EmptyState title="SMS log unavailable" />
   return (
     <div className="space-y-3">
-      <Badge variant={data.mode === 'real' ? 'default' : 'secondary'}>{data.mode === 'real' ? 'Hubtel SMS active' : 'Dev simulator — no live messages'}</Badge>
+      <Badge variant={data.mode === 'real' ? 'default' : 'secondary'}>
+        {data.mode === 'real' && (
+          <span
+            aria-hidden="true"
+            className="efx-badge-ping__ping"
+            style={{ position: 'static', width: 7, height: 7, background: 'rgba(16, 185, 129, 0.55)', flex: 'none' }}
+          />
+        )}
+        {data.mode === 'real' ? 'Hubtel SMS active' : 'Dev simulator — no live messages'}
+      </Badge>
       <div className="overflow-x-auto rounded-2xl border border-border/70">
         <table className="w-full min-w-[560px] text-sm">
           <thead className="bg-secondary/60 text-left text-xs uppercase tracking-wide text-muted-foreground">
@@ -581,8 +625,9 @@ function SmsLog() {
 }
 
 function AuditLog() {
-  const [data] = useAdmin<{ items: { id: string; actorLabel: string; action: string; entityType: string; entityId: string; createdAt: string }[] }>('/admin/audit')
+  const [data, , loading] = useAdmin<{ items: { id: string; actorLabel: string; action: string; entityType: string; entityId: string; createdAt: string }[] }>('/admin/audit')
 
+  if (loading) return <AdminLoader label="Loading audit trail…" />
   if (!data) return <EmptyState title="Audit log unavailable" />
   return (
     <div className="space-y-1.5">

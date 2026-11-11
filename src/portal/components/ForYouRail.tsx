@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react'
 import { Sparkles, TrendingUp, ArrowRight, Loader2 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
 import { api } from '../api'
 import { navigate } from '../router'
 import { EventCard, EventCardSkeleton, type EventCardData } from './EventCard'
@@ -77,7 +76,14 @@ export function ForYouRail() {
             <span className="text-xs text-muted-foreground">based on your tickets, saves & follows</span>
           </>
         )}
-        <Button variant="ghost" size="sm" className="ml-auto rounded-full" onClick={() => navigate('/')}>More</Button>
+        <button
+          type="button"
+          className="efx-underline-slide-link ml-auto"
+          style={{ fontSize: '0.875rem', fontWeight: 600, color: 'inherit', display: 'inline-flex', alignItems: 'center' }}
+          onClick={() => navigate('/')}
+        >
+          More
+        </button>
       </div>
       <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
         {data.items.map((event, i) => (
@@ -97,9 +103,14 @@ export function ForYouRail() {
         ))}
       </div>
       <div className="mt-4">
-        <Button variant="link" className="h-auto p-0 text-sm" onClick={() => navigate('/#ai-search')}>
+        <button
+          type="button"
+          className="efx-underline-slide-link"
+          style={{ fontSize: '0.875rem', fontWeight: 600, color: 'inherit', display: 'inline-flex', alignItems: 'center' }}
+          onClick={() => navigate('/#ai-search')}
+        >
           Ask AI for something specific <ArrowRight className="ml-1 h-3.5 w-3.5" aria-hidden />
-        </Button>
+        </button>
       </div>
     </section>
   )

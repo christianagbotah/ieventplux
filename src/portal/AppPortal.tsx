@@ -16,6 +16,7 @@ import { initials } from './format'
 import { VoiceAssistant } from './components/VoiceAssistant'
 import { ThemeToggle } from './components/ThemeToggle'
 import { CommandPalette } from './components/CommandPalette'
+import { EffectsRuntime } from './components/EffectsRuntime'
 import { EventCardSkeleton } from './components/EventCard'
 
 const Discover = lazy(() => import('./views/Discover'))
@@ -188,6 +189,8 @@ export default function AppPortal() {
 
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
+      {/* Effects Studio catalog — globally available efx-* classes for every view. */}
+      <EffectsRuntime />
       <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded-lg focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground">
         Skip to content
       </a>
@@ -199,7 +202,7 @@ export default function AppPortal() {
               <Ticket className="h-5 w-5" aria-hidden />
             </span>
             <span className="hidden text-lg font-extrabold tracking-tight sm:block">
-              iEvent<span className="ievx-gradient-text">Plux</span>
+              iEvent<span className="efx-animated-gradient-text iefx-subhead" style={{ fontSize: 'inherit', letterSpacing: '-0.01em' }}>Plux</span>
             </span>
           </button>
 
@@ -256,7 +259,13 @@ export default function AppPortal() {
               <>
                 <Button variant="ghost" size="icon" className="relative rounded-full" aria-label={`Notifications${unread ? ` (${unread} unread)` : ''}`} onClick={() => navigate('/me?tab=notifications')}>
                   <Bell className="h-5 w-5" />
-                  {unread > 0 && <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-white">{unread > 9 ? '9+' : unread}</span>}
+                  {/* Effects Studio: badge-ping ring behind the unread counter. */}
+                  {unread > 0 && (
+                    <>
+                      <span className="efx-badge-ping__ping" aria-hidden style={{ top: 6, right: 6, width: 9, height: 9 }} />
+                      <span className="absolute -right-0.5 -top-0.5 z-10 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-white">{unread > 9 ? '9+' : unread}</span>
+                    </>
+                  )}
                 </Button>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -334,7 +343,7 @@ export default function AppPortal() {
             <span aria-hidden>·</span>
             <span>Prices in Ghana cedis (₵)</span>
             <span aria-hidden>·</span>
-            <button className="underline-offset-2 hover:text-foreground hover:underline" onClick={() => navigate('/effects')}>CSS Effects Studio</button>
+            <button className="efx-underline-slide-link" style={{ fontSize: 'inherit', fontWeight: 600, color: 'inherit', paddingBottom: 2 }} onClick={() => navigate('/effects')}>CSS Effects Studio</button>
           </p>
         </div>
       </footer>

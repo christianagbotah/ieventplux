@@ -39,6 +39,7 @@ export default function OrgProfile({ slug }: { slug: string }) {
   const [data, setData] = useState<OrgProfilePayload | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [following, setFollowing] = useState(false)
+  const [activeSection, setActiveSection] = useState('org-events')
 
   const load = useCallback(async () => {
     try {
@@ -82,12 +83,17 @@ export default function OrgProfile({ slug }: { slug: string }) {
 
   const upcoming = data.events.filter((e) => ['PUBLISHED', 'LIVE', 'POSTPONED'].includes(e.status ?? 'PUBLISHED'))
   const past = data.events.filter((e) => e.status === 'ENDED')
+  const sections = [
+    ...(data.clips.length > 0 ? [{ id: 'org-clips', label: 'Clips' }] : []),
+    { id: 'org-events', label: 'Upcoming events' },
+    ...(past.length > 0 ? [{ id: 'org-past', label: 'Past events' }] : []),
+  ]
 
   return (
     <div>
       <div className="relative h-52 w-full overflow-hidden sm:h-64">
         {data.org.coverUrl ? (
-          <img src={data.org.coverUrl} alt="" className="h-full w-full object-cover" />
+          <img src={data.org.coverUrl} alt="" className="iefx-kenburns h-full w-full object-cover" />
         ) : (
           <div className="h-full w-full bg-gradient-to-br from-primary/25 via-accent/20 to-primary/10" />
         )}
@@ -115,11 +121,46 @@ export default function OrgProfile({ slug }: { slug: string }) {
               </p>
             </div>
           </div>
-          <Button className="rounded-full ievx-press" variant={following ? 'outline' : 'default'} onClick={() => void toggleFollow()}>
-            <Bookmark className={`mr-1.5 h-4 w-4 ${following ? 'fill-primary text-primary' : ''}`} />
-            {following ? 'Following' : 'Follow'}
-          </Button>
+          {following ? (
+            <Button className="rounded-full ievx-press" variant="outline" onClick={() => void toggleFollow()}>
+              <Bookmark className="mr-1.5 h-4 w-4 fill-primary text-primary" aria-hidden />
+              Following
+            </Button>
+          ) : (
+            <button
+              type="button"
+              className="efx-shine-sweep-button"
+              style={{ borderRadius: '999px', fontSize: '0.9rem', padding: '0.6rem 1.5rem' }}
+              onClick={() => void toggleFollow()}
+            >
+              <Bookmark className="h-4 w-4" aria-hidden />
+              Follow
+            </button>
+          )}
         </div>
+
+        {sections.length > 1 && (
+          <nav
+            className="efx-underline-slide-nav"
+            aria-label="Organizer sections"
+            style={{ maxWidth: '100%', margin: '1.5rem 0 0', justifyContent: 'flex-start', flexWrap: 'wrap', gap: '0.4rem 1.4rem', paddingBottom: '0.75rem' }}
+          >
+            {sections.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                className={`efx-underline-slide-nav__link${activeSection === s.id ? ' efx-underline-slide-nav__link--active' : ''}`}
+                aria-current={activeSection === s.id ? 'true' : undefined}
+                onClick={() => {
+                  setActiveSection(s.id)
+                  document.getElementById(s.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                }}
+              >
+                {s.label}
+              </button>
+            ))}
+          </nav>
+        )}
 
         {data.org.description && (
           <Card className="mt-6 rounded-2xl">
@@ -128,7 +169,7 @@ export default function OrgProfile({ slug }: { slug: string }) {
         )}
 
         {data.clips.length > 0 && (
-          <section className="mt-8">
+          <section id="org-clips" className="mt-8 scroll-mt-24">
             <h2 className="mb-3 text-lg font-bold">Recent clips</h2>
             <div className="ievx-scrollbar flex gap-3 overflow-x-auto pb-2">
               {data.clips.map((c) => (
@@ -142,7 +183,7 @@ export default function OrgProfile({ slug }: { slug: string }) {
           </section>
         )}
 
-        <section className="mt-8">
+        <section id="org-events" className="mt-8 scroll-mt-24">
           <h2 className="mb-4 text-lg font-bold">Upcoming events ({upcoming.length})</h2>
           {upcoming.length === 0 ? (
             <EmptyState title="No upcoming events" description={`${data.org.name} has not announced their next gathering yet.`} />
@@ -154,7 +195,7 @@ export default function OrgProfile({ slug }: { slug: string }) {
         </section>
 
         {past.length > 0 && (
-          <section className="mt-10">
+          <section id="org-past" className="mt-10 scroll-mt-24">
             <h2 className="mb-4 text-lg font-bold">Past events</h2>
             <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
               {past.slice(0, 4).map((e, i) => <EventCard key={e.id} event={e} index={i} />)}
@@ -163,7 +204,23 @@ export default function OrgProfile({ slug }: { slug: string }) {
         )}
 
         {data.org.contactEmail && (
-          <p className="mt-10 text-xs text-muted-foreground">Support contact: {data.org.contactEmail}{data.org.website ? ` · ${data.org.website}` : ''}</p>
+          <p className="mt-10 text-xs text-muted-foreground">
+            Support contact: {data.org.contactEmail}
+            {data.org.website && (
+              <>
+                {' '}·{' '}
+                <a
+                  className="efx-underline-slide-link"
+                  href={data.org.website}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ fontSize: 'inherit', color: 'inherit', fontWeight: 600, paddingBottom: '1px' }}
+                >
+                  {data.org.website}
+                </a>
+              </>
+            )}
+          </p>
         )}
       </div>
     </div>

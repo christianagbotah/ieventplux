@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Heart, MessageCircle, Play, Share2, ArrowRight, Volume2 } from 'lucide-react'
+import { MessageCircle, Play, ArrowRight, Volume2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { api } from '../api'
@@ -31,6 +31,7 @@ export default function Reels() {
   const [clips, setClips] = useState<Clip[] | null>(null)
   const [active, setActive] = useState(0)
   const [reacted, setReacted] = useState<Record<string, boolean>>({})
+  const [copiedId, setCopiedId] = useState<string | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -53,6 +54,7 @@ export default function Reels() {
       if (navigator.share) await navigator.share({ title: clip.event.title, url })
       else {
         await navigator.clipboard.writeText(url)
+        setCopiedId(clip.id)
       }
     } catch {
       /* cancelled */
@@ -85,9 +87,7 @@ export default function Reels() {
         <article key={c.id} className="relative mb-3 h-[calc(100vh-9rem)] snap-start overflow-hidden rounded-3xl bg-black md:h-[calc(100vh-6.5rem)]">
           {/* Synthetic animated clip: ken-burns poster + overlay */}
           <div className="absolute inset-0 overflow-hidden">
-            { }
-            <img src={c.posterUrl} alt="" className="h-full w-full animate-[ievx-float_8s_ease-in-out_infinite] object-cover opacity-90" style={{ animation: 'kenburns 14s ease-in-out infinite alternate' }} />
-            <style>{`@keyframes kenburns { from { transform: scale(1) translateY(0); } to { transform: scale(1.12) translateY(-2%); } }`}</style>
+            <img src={c.posterUrl} alt="" className="iefx-kenburns h-full w-full object-cover opacity-90" />
             <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-transparent to-black/30" />
           </div>
 
@@ -104,7 +104,7 @@ export default function Reels() {
             <div className="flex items-center gap-2">
               <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">{c.org.name.slice(0, 2).toUpperCase()}</span>
               <div className="min-w-0">
-                <p className="truncate text-sm font-bold text-white">{c.org.name}</p>
+                <p className="truncate text-sm font-bold text-white" style={{ textShadow: '0 1px 4px rgba(0, 0, 0, 0.55)' }}>{c.org.name}</p>
                 <p className="text-[11px] text-white/70">{c.views.toLocaleString()} views · {relative(c.event.startsAt)}</p>
               </div>
               <Badge className="ml-auto border-white/25 bg-white/10 text-white backdrop-blur">{c.durationSec ?? 30}s</Badge>
@@ -112,16 +112,70 @@ export default function Reels() {
             {c.caption && <p className="text-sm font-medium text-white/95">{c.caption}</p>}
             <p className="text-xs text-white/80">From “{c.event.title}”</p>
             <div className="flex items-center gap-4 pt-1">
-              <button className="flex items-center gap-1.5 text-white/90 hover:text-white" onClick={() => void react(c)} aria-label="Love this clip">
-                <Heart className={`h-6 w-6 ${reacted[c.id] ? 'fill-rose-500 text-rose-500' : ''}`} aria-hidden />
-                {reacted[c.id] ? 'Loved' : 'Love'}
-              </button>
+              <label className="efx-heart-burst-toggle" style={{ margin: 0 }}>
+                <input
+                  type="checkbox"
+                  className="efx-heart-burst-toggle__input"
+                  checked={!!reacted[c.id]}
+                  onChange={() => void react(c)}
+                  aria-label="Like this reel"
+                />
+                <span className="efx-heart-burst-toggle__stack">
+                  <span className="efx-heart-burst-toggle__burst" aria-hidden />
+                  <span className="efx-heart-burst-toggle__ring" aria-hidden />
+                  <svg className="efx-heart-burst-toggle__heart" viewBox="0 0 24 24" aria-hidden>
+                    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                  </svg>
+                </span>
+                <span className="efx-heart-burst-toggle__text" style={{ color: '#ffffff' }}>
+                  {reacted[c.id] ? 'Loved' : 'Love'}
+                </span>
+              </label>
               <button className="flex items-center gap-1.5 text-white/90 hover:text-white" onClick={() => navigate(`/event/${c.event.slug}`)} aria-label="Open event">
                 <MessageCircle className="h-6 w-6" aria-hidden /> Event
               </button>
-              <button className="flex items-center gap-1.5 text-white/90 hover:text-white" onClick={() => void share(c)} aria-label="Share clip">
-                <Share2 className="h-6 w-6" aria-hidden /> Share
-              </button>
+              <label
+                className="efx-copy-success-checkmark"
+                style={{ margin: 0 }}
+              >
+                <input
+                  type="checkbox"
+                  className="efx-copy-success-checkmark__input"
+                  checked={copiedId === c.id}
+                  onChange={() => {}}
+                  onClick={(e) => {
+                    e.preventDefault()
+                    void share(c)
+                  }}
+                  aria-label="Share clip"
+                />
+                <span
+                  className="efx-copy-success-checkmark__button"
+                  style={
+                    copiedId === c.id
+                      ? { fontSize: '0.8rem', padding: '0.5rem 0.9rem', borderColor: '#10b981', background: 'rgba(16, 185, 139, 0.3)', color: '#ffffff' }
+                      : { fontSize: '0.8rem', padding: '0.5rem 0.9rem', borderColor: 'rgba(255, 255, 255, 0.35)', background: 'rgba(255, 255, 255, 0.12)', color: '#ffffff', backdropFilter: 'blur(6px)' }
+                  }
+                >
+                  <span
+                    className="efx-copy-success-checkmark__badge"
+                    aria-hidden
+                    style={
+                      copiedId === c.id
+                        ? { background: '#10b981', borderColor: '#059669', color: '#ffffff' }
+                        : { background: 'rgba(255, 255, 255, 0.16)', borderColor: 'rgba(255, 255, 255, 0.35)', color: '#ffffff' }
+                    }
+                  >
+                    <svg className="efx-copy-success-checkmark__icon" viewBox="0 0 24 24" aria-hidden>
+                      <path className="efx-copy-success-checkmark__path" d="M5 12.5l4.5 4.5L19 7.5" />
+                    </svg>
+                  </span>
+                  <span className="efx-copy-success-checkmark__text">
+                    <span className="efx-copy-success-checkmark__text-copy">Share</span>
+                    <span className="efx-copy-success-checkmark__text-done" style={{ color: '#ffffff' }}>Copied!</span>
+                  </span>
+                </span>
+              </label>
             </div>
             {/* Previous-event media → next occurrence */}
             {c.nextEvent && (

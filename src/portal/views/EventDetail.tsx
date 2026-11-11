@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -256,6 +255,11 @@ export default function EventDetail({ slug }: { slug: string }) {
 
   const statusBadge = event.status === 'LIVE' ? { label: 'Live now', className: 'bg-destructive text-white' } : event.status === 'CANCELLED' ? { label: 'Cancelled', className: 'bg-destructive/15 text-destructive' } : event.status === 'POSTPONED' ? { label: 'Postponed', className: 'bg-accent text-accent-foreground' } : null
 
+  // Short taglines read well on the fixed 24ch typewriter; longer summaries stay plain text.
+  const shortSummary = event.summary && event.summary.trim().length > 0 && event.summary.trim().length <= 24 ? event.summary.trim() : null
+  const nothingSelected = Object.values(buyQty).every((q) => q === 0)
+  const checkoutDisabled = (selectedTotal === 0 && nothingSelected) || placing || nothingSelected
+
   return (
     <div className="pb-10">
       <div className="mx-auto max-w-5xl px-4 pt-4">
@@ -265,20 +269,23 @@ export default function EventDetail({ slug }: { slug: string }) {
       </div>
 
       <div className="relative">
-        <div className="relative h-64 w-full overflow-hidden sm:h-80 md:h-[420px]">
-          {event.coverImageUrl ? (
-            <img src={event.coverImageUrl} alt={`${event.title} artwork`} className="h-full w-full object-cover" />
-          ) : (
-            <div className="h-full w-full bg-gradient-to-br from-primary/20 to-accent/20" />
-          )}
-          <div className="absolute inset-0 bg-gradient-to-t from-background via-background/20 to-transparent" />
-          {statusBadge && <span className={`absolute left-4 top-4 rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide shadow ${statusBadge.className}`}>{statusBadge.label}</span>}
-          {event.visibility !== 'PUBLIC' && (
-            <span className="absolute right-4 top-4 rounded-full bg-black/55 px-3 py-1 text-xs font-semibold text-white backdrop-blur">{event.visibility === 'UNLISTED' ? 'Unlisted (link only)' : 'Invitation only'}</span>
-          )}
-        </div>
+        <figure className="relative mx-4 overflow-hidden rounded-2xl sm:mx-6 lg:mx-8">
+          <div className="relative h-64 w-full overflow-hidden sm:h-80 md:h-[420px]">
+            {event.coverImageUrl ? (
+              <img src={event.coverImageUrl} alt={`${event.title} artwork`} className="iefx-kenburns h-full w-full object-cover" />
+            ) : (
+              <div className="h-full w-full bg-gradient-to-br from-primary/20 to-accent/20" />
+            )}
+            <div className="absolute inset-0 z-10 bg-gradient-to-t from-background via-background/20 to-transparent" />
+            {statusBadge && <span className={`absolute left-4 top-4 z-20 rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide shadow ${statusBadge.className}`}>{statusBadge.label}</span>}
+            {event.visibility !== 'PUBLIC' && (
+              <span className="absolute right-4 top-4 z-20 rounded-full bg-black/55 px-3 py-1 text-xs font-semibold text-white backdrop-blur">{event.visibility === 'UNLISTED' ? 'Unlisted (link only)' : 'Invitation only'}</span>
+            )}
+          </div>
+        </figure>
 
-        <div className="mx-auto -mt-16 max-w-5xl px-4">
+        {/* relative + z-10 keeps the title above the ken-burns image's compositing layer */}
+        <div className="relative z-10 mx-auto -mt-16 max-w-5xl px-4">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="min-w-0">
               <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -286,10 +293,15 @@ export default function EventDetail({ slug }: { slug: string }) {
                 <Badge variant="outline" className="gap-1 capitalize">{event.mode === 'VIRTUAL' ? <Monitor className="h-3 w-3" /> : <MapPin className="h-3 w-3" />}{humanize(event.mode)}</Badge>
               </div>
               <h1 className="text-2xl font-extrabold leading-tight sm:text-4xl">{event.title}</h1>
-              {event.summary && <p className="mt-2 max-w-2xl text-sm text-muted-foreground sm:text-base">{event.summary}</p>}
-              <button className="mt-3 flex items-center gap-2 text-sm font-medium text-primary hover:underline" onClick={() => navigate(`/org/${event.org.slug}`)}>
+              {shortSummary && (
+                <div className="efx-typewriter-text" style={{ margin: '0.75rem 0', maxWidth: '100%' }}>
+                  <span className="efx-typewriter-text__line">{shortSummary}</span>
+                </div>
+              )}
+              {!shortSummary && event.summary && <p className="mt-2 max-w-2xl text-sm text-muted-foreground sm:text-base">{event.summary}</p>}
+              <button className="mt-3 flex items-center gap-2 text-sm font-medium text-primary" onClick={() => navigate(`/org/${event.org.slug}`)}>
                 <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10"><Church className="h-4 w-4 text-primary" aria-hidden /></span>
-                {event.org.name}
+                <span className="efx-underline-slide-link" style={{ fontSize: '0.95rem', color: 'inherit' }}>{event.org.name}</span>
                 {event.org.verifiedAt && <ShieldCheck className="h-4 w-4 text-primary" aria-label="Verified organizer" />}
               </button>
             </div>
@@ -335,8 +347,8 @@ export default function EventDetail({ slug }: { slug: string }) {
                       <p className="font-semibold">{event.venue?.name ?? 'Online broadcast'}</p>
                       {event.venue?.address && <p className="text-sm text-muted-foreground">{event.venue.address}{event.venue.city ? `, ${event.venue.city}` : ''}</p>}
                       {event.directionsUrl && (
-                        <a className="mt-1 inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline" href={event.directionsUrl} target="_blank" rel="noopener noreferrer">
-                          Get directions <ExternalLink className="h-3.5 w-3.5" />
+                        <a className="mt-1 inline-flex items-center gap-1 text-sm font-medium text-primary" href={event.directionsUrl} target="_blank" rel="noopener noreferrer">
+                          <span className="efx-underline-slide-link" style={{ fontSize: '0.875rem', color: 'inherit' }}>Get directions</span> <ExternalLink className="h-3.5 w-3.5" />
                         </a>
                       )}
                     </div>
@@ -493,15 +505,16 @@ export default function EventDetail({ slug }: { slug: string }) {
                 </Card>
               )}
 
-              <Card className="rounded-2xl">
-                <CardHeader className="pb-3">
-                  <CardTitle className="flex items-center gap-2 text-base"><Ticket className="h-4 w-4 text-primary" /> Tickets</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
+              <div className="efx-glassmorphism-card" style={{ borderRadius: '1.25rem', padding: '1.5rem' }}>
+                <div className="efx-glassmorphism-card__backdrop" aria-hidden="true" />
+                <div className="efx-glassmorphism-card__panel space-y-3">
+                  <h3 className="efx-glassmorphism-card__title flex items-center gap-2" style={{ fontSize: '1.15rem' }}>
+                    <Ticket className="h-4 w-4 text-emerald-300" aria-hidden /> Tickets
+                  </h3>
                   {['CANCELLED'].includes(event.status) ? (
-                    <p className="rounded-xl bg-destructive/10 p-3 text-sm text-destructive">This event was cancelled. Ticket holders are being notified and refunds follow the stated policy.</p>
+                    <p className="rounded-xl bg-white/10 p-3 text-sm text-rose-200">This event was cancelled. Ticket holders are being notified and refunds follow the stated policy.</p>
                   ) : saleable.length === 0 ? (
-                    <p className="rounded-xl bg-secondary p-3 text-sm text-muted-foreground">
+                    <p className="rounded-xl bg-white/10 p-3 text-sm text-white/80">
                       {event.ticketTypes.length === 0 ? 'Tickets have not been published yet.' : 'All tickets are sold out.'}
                     </p>
                   ) : (
@@ -509,34 +522,34 @@ export default function EventDetail({ slug }: { slug: string }) {
                       {saleable.map((tt) => {
                         const remaining = tt.quota > 0 ? tt.quota - tt.soldCount - tt.reservedCount : null
                         return (
-                          <div key={tt.id} className="rounded-xl border border-border/70 p-3.5">
+                          <div key={tt.id} className="rounded-xl border border-white/25 p-3.5">
                             <div className="flex items-start justify-between gap-2">
                               <div className="min-w-0">
-                                <p className="font-semibold">{tt.name}</p>
-                                <p className="text-xs text-muted-foreground">{tt.description}</p>
+                                <p className="font-semibold text-white">{tt.name}</p>
+                                <p className="text-xs text-white/70">{tt.description}</p>
                                 <div className="mt-1.5 flex flex-wrap gap-1.5">
-                                  <Badge variant="outline" className="text-[10px] capitalize">{humanize(tt.kind)}</Badge>
+                                  <Badge variant="outline" className="text-[10px] capitalize" style={{ borderColor: 'rgba(255,255,255,0.35)', backgroundColor: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.9)' }}>{humanize(tt.kind)}</Badge>
                                   {tt.includesVirtualAccess && <Badge variant="secondary" className="text-[10px]">+ online access</Badge>}
                                   {tt.groupMinQty && tt.groupPctOff && <Badge variant="secondary" className="text-[10px]">{tt.groupPctOff}% off groups of {tt.groupMinQty}+</Badge>}
                                   {remaining !== null && remaining <= 20 && <Badge variant="destructive" className="text-[10px]">{remaining === 0 ? 'Sold out' : `${remaining} left`}</Badge>}
                                 </div>
                               </div>
-                              <p className="whitespace-nowrap text-lg font-extrabold text-primary">{tt.priceMinor === 0 ? 'Free' : money(tt.priceMinor)}</p>
+                              <p className="whitespace-nowrap text-lg font-extrabold text-emerald-300">{tt.priceMinor === 0 ? 'Free' : money(tt.priceMinor)}</p>
                             </div>
                           </div>
                         )
                       })}
-                      <Button className="w-full rounded-xl py-6 text-base ievx-press" onClick={() => { setBuyQty({}); setBuyOpen(true) }}>
+                      <button type="button" className="efx-neon-pulse-button w-full" onClick={() => { setBuyQty({}); setBuyOpen(true) }}>
                         {saleable.some((t) => t.priceMinor > 0) ? 'Get tickets' : 'Free RSVP'}
-                      </Button>
-                      <p className="text-center text-[11px] text-muted-foreground">Secure checkout · Mobile money / cards via Hubtel</p>
+                      </button>
+                      <p className="text-center text-[11px] text-white/60">Secure checkout · Mobile money / cards via Hubtel</p>
                     </>
                   )}
                   {!mine.following && event.status !== 'CANCELLED' && (
-                    <Button variant="outline" className="w-full rounded-xl" onClick={() => void toggleFollow()}>Follow {event.org.name}</Button>
+                    <button type="button" className="w-full rounded-xl border border-white/30 bg-white/10 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-white/20" onClick={() => void toggleFollow()}>Follow {event.org.name}</button>
                   )}
-                </CardContent>
-              </Card>
+                </div>
+              </div>
 
               {(event.contactEmail || event.contactPhone) && (
                 <Card className="rounded-2xl">
@@ -580,11 +593,15 @@ export default function EventDetail({ slug }: { slug: string }) {
               <div className="space-y-3 pt-2">
                 <div className="space-y-1.5">
                   <Label htmlFor="discount">Discount code (optional)</Label>
-                  <Input id="discount" value={discountCode} onChange={(e) => setDiscountCode(e.target.value.toUpperCase())} placeholder="e.g. GOSPEL10" />
+                  <div className="efx-glow-focus-input" style={{ maxWidth: '100%', margin: 0 }}>
+                    <input id="discount" className="efx-glow-focus-input__field" value={discountCode} onChange={(e) => setDiscountCode(e.target.value.toUpperCase())} placeholder="e.g. GOSPEL10" />
+                  </div>
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="phone">Phone for ticket SMS (optional)</Label>
-                  <Input id="phone" value={buyerPhone} onChange={(e) => setBuyerPhone(e.target.value)} placeholder="+233 24 000 0000" inputMode="tel" />
+                  <div className="efx-glow-focus-input" style={{ maxWidth: '100%', margin: 0 }}>
+                    <input id="phone" className="efx-glow-focus-input__field" value={buyerPhone} onChange={(e) => setBuyerPhone(e.target.value)} placeholder="+233 24 000 0000" inputMode="tel" />
+                  </div>
                 </div>
               </div>
             )}
@@ -594,9 +611,15 @@ export default function EventDetail({ slug }: { slug: string }) {
               <span className="text-muted-foreground">Total</span>
               <span className="text-lg font-extrabold text-primary">{selectedTotal === 0 ? 'Free' : money(selectedTotal)}</span>
             </div>
-            <Button className="w-full rounded-xl py-5 ievx-press" disabled={selectedTotal === 0 && Object.values(buyQty).every((q) => q === 0) || placing || Object.values(buyQty).every((q) => q === 0)} onClick={() => void placeOrder()}>
+            <button
+              type="button"
+              className="efx-neon-pulse-button w-full"
+              style={checkoutDisabled ? { opacity: 0.55, cursor: 'not-allowed', animation: 'none' } : undefined}
+              disabled={checkoutDisabled}
+              onClick={() => void placeOrder()}
+            >
               {placing ? 'Reserving…' : selectedTotal === 0 ? 'Confirm free RSVP' : `Checkout · ${money(selectedTotal)}`}
-            </Button>
+            </button>
             <p className="text-center text-[11px] text-muted-foreground">Tickets are held for 15 minutes after you continue.</p>
           </DialogFooter>
         </DialogContent>

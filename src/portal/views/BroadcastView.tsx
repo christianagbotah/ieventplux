@@ -2,11 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { io } from 'socket.io-client'
-import { Send, Users, Lock, ShieldAlert, ChevronLeft } from 'lucide-react'
+import { Send, Users, Lock, ShieldAlert, ChevronLeft, MessageCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { Input } from '@/components/ui/input'
 import { api, ApiClientError } from '../api'
 import { navigate } from '../router'
 import { usePortal } from '../store'
@@ -184,9 +183,17 @@ export default function BroadcastView({ id }: { id: string }) {
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-xl font-extrabold sm:text-2xl">{b.title}</h1>
-              <Badge variant={isReplay ? 'secondary' : 'destructive'} className="capitalize">{isReplay ? 'Replay' : 'Live'}</Badge>
+              <span className="relative inline-flex">
+                <Badge variant={isReplay ? 'secondary' : 'destructive'} className="capitalize">{isReplay ? 'Replay' : 'Live'}</Badge>
+                {!isReplay && <span className="efx-badge-ping__ping" aria-hidden style={{ top: '-3px', right: '-3px', width: '8px', height: '8px' }} />}
+              </span>
               <Badge variant="outline" className="capitalize">{humanize(b.accessPolicy)}</Badge>
-              {viewers > 0 && <Badge variant="secondary" className="gap-1"><Users className="h-3 w-3" /> {viewers} watching</Badge>}
+              {viewers > 0 && (
+                <span className="relative inline-flex">
+                  <Badge variant="secondary" className="gap-1"><Users className="h-3 w-3" /> {viewers} watching</Badge>
+                  <span className="efx-badge-ping__ping" aria-hidden style={{ top: '-3px', right: '-3px', width: '8px', height: '8px' }} />
+                </span>
+              )}
             </div>
             <p className="mt-1.5 text-sm text-muted-foreground">
               {b.event.title} · {b.event.org.name}
@@ -209,9 +216,9 @@ export default function BroadcastView({ id }: { id: string }) {
             <span className="text-[11px] text-muted-foreground">moderated</span>
           </div>
           <div ref={chatRef} className="ievx-scrollbar flex-1 space-y-3 overflow-y-auto px-4 py-3">
-            {messages.length === 0 && <p className="pt-8 text-center text-xs text-muted-foreground">Say hello 👋 — messages appear here live.</p>}
+            {messages.length === 0 && <p className="pt-8 text-center text-xs text-muted-foreground">Say hello — messages appear here live.</p>}
             {messages.map((m) => (
-              <div key={m.id} className="flex gap-2.5">
+              <div key={m.id} className="iefx-msg-in flex gap-2.5">
                 <Avatar className="h-7 w-7">
                   <AvatarFallback className="bg-secondary text-[10px] font-bold">{initials(m.user.displayName)}</AvatarFallback>
                 </Avatar>
@@ -232,7 +239,18 @@ export default function BroadcastView({ id }: { id: string }) {
                   void sendChat()
                 }}
               >
-                <Input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Send a message…" aria-label="Chat message" maxLength={400} />
+                <div className="efx-glow-focus-input min-w-0 flex-1" style={{ margin: 0, maxWidth: '100%' }}>
+                  <MessageCircle className="efx-glow-focus-input__icon" aria-hidden />
+                  <input
+                    type="text"
+                    className="efx-glow-focus-input__field"
+                    value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                    placeholder="Send a message…"
+                    aria-label="Chat message"
+                    maxLength={400}
+                  />
+                </div>
                 <Button type="submit" size="icon" className="shrink-0 rounded-full ievx-press" aria-label="Send chat message" disabled={!draft.trim()}>
                   <Send className="h-4 w-4" />
                 </Button>

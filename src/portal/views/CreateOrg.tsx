@@ -2,10 +2,7 @@
 
 import { useState } from 'react'
 import { Church, Building2, Users, UserRound, Loader2 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/hooks/use-toast'
 import { api, ApiClientError } from '../api'
 import { navigate } from '../router'
@@ -69,27 +66,70 @@ export default function CreateOrg() {
           ))}
         </div>
 
-        <div className="space-y-1.5">
-          <Label htmlFor="name">Organization name</Label>
-          <Input id="name" required value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="e.g. Lightworld Chapel International" />
+        <div className="efx-floating-label-input" style={{ maxWidth: '100%', margin: '0 0 1.1rem' }}>
+          <input
+            id="name"
+            name="name"
+            className="efx-floating-label-input__field"
+            placeholder=" "
+            required
+            value={form.name}
+            onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+            autoComplete="organization"
+          />
+          <label htmlFor="name" className="efx-floating-label-input__label">Organization name</label>
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-1.5">
-            <Label htmlFor="tagline">Tagline</Label>
-            <Input id="tagline" value={form.tagline} onChange={(e) => setForm((f) => ({ ...f, tagline: e.target.value }))} placeholder="Raising a generation of light." />
+          <div className="efx-floating-label-input" style={{ maxWidth: '100%', margin: 0 }}>
+            <input
+              id="tagline"
+              name="tagline"
+              className="efx-floating-label-input__field"
+              placeholder=" "
+              value={form.tagline}
+              onChange={(e) => setForm((f) => ({ ...f, tagline: e.target.value }))}
+            />
+            <label htmlFor="tagline" className="efx-floating-label-input__label">Tagline</label>
           </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="city">City</Label>
-            <Input id="city" value={form.city} onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))} placeholder="Accra" />
+          <div className="efx-floating-label-input" style={{ maxWidth: '100%', margin: 0 }}>
+            <input
+              id="city"
+              name="city"
+              className="efx-floating-label-input__field"
+              placeholder=" "
+              value={form.city}
+              onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))}
+              autoComplete="address-level2"
+            />
+            <label htmlFor="city" className="efx-floating-label-input__label">City</label>
           </div>
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="description">About</Label>
-          <Textarea id="description" value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} placeholder="Tell attendees who you are…" />
+          <div className="efx-glow-focus-input" style={{ maxWidth: '100%', margin: 0, alignItems: 'flex-start' }}>
+            <textarea
+              id="description"
+              className="efx-glow-focus-input__field"
+              rows={4}
+              value={form.description}
+              onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+              placeholder="Tell attendees who you are…"
+              style={{ padding: '0.85rem 0', resize: 'vertical', minHeight: '110px' }}
+            />
+          </div>
         </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="contactPhone">Public contact phone</Label>
-          <Input id="contactPhone" value={form.contactPhone} onChange={(e) => setForm((f) => ({ ...f, contactPhone: e.target.value }))} placeholder="+233 …" inputMode="tel" />
+        <div className="efx-floating-label-input" style={{ maxWidth: '100%', margin: '0 0 1.1rem' }}>
+          <input
+            id="contactPhone"
+            name="contactPhone"
+            className="efx-floating-label-input__field"
+            placeholder=" "
+            value={form.contactPhone}
+            onChange={(e) => setForm((f) => ({ ...f, contactPhone: e.target.value }))}
+            inputMode="tel"
+            autoComplete="tel"
+          />
+          <label htmlFor="contactPhone" className="efx-floating-label-input__label">Public contact phone</label>
         </div>
 
         <div className="rounded-xl bg-secondary/60 p-4 text-sm text-muted-foreground">
@@ -101,9 +141,14 @@ export default function CreateOrg() {
           </ol>
         </div>
 
-        <Button type="submit" className="w-full rounded-xl py-5 ievx-press" disabled={busy}>
-          {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />} Create organization
-        </Button>
+        <button
+          type="submit"
+          className="efx-neon-pulse-button"
+          style={{ width: '100%', ...(busy ? { opacity: 0.6, cursor: 'not-allowed', animation: 'none' } : {}) }}
+          disabled={busy}
+        >
+          {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />} Create organization
+        </button>
       </form>
     </div>
   )

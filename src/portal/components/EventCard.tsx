@@ -82,8 +82,11 @@ export function EventCard({ event, index = 0, footer }: { event: EventCardData; 
         )}
         <div className="absolute left-3 top-3 flex flex-wrap gap-1.5">
           {isLive && (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-destructive px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-white shadow">
-              <span className="ievx-live-dot" style={{ background: 'white' }} /> Live
+            <span className="relative inline-flex">
+              <span className="efx-badge-ping__ping" aria-hidden style={{ width: 8, height: 8, top: 3, right: 3 }} />
+              <span className="relative inline-flex items-center gap-1.5 rounded-full bg-destructive px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-white shadow">
+                <span className="ievx-live-dot" style={{ background: 'white' }} /> Live
+              </span>
             </span>
           )}
           {event.sponsored && (

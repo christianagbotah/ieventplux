@@ -52,6 +52,14 @@ export default function LiveNow() {
         </div>
       </div>
 
+      {live !== null && live.length > 0 && (
+        <div className="mb-8">
+          <div className="efx-neon-glow-text" style={{ margin: 0, padding: '1rem 1rem', borderRadius: '1rem' }}>
+            <h2 className="efx-neon-glow-text__word">On Air</h2>
+          </div>
+        </div>
+      )}
+
       {live === null ? (
         <div className="grid gap-5 md:grid-cols-2">
           {Array.from({ length: 4 }).map((_, i) => <div key={i} className="ievx-skeleton h-56 rounded-2xl" />)}
@@ -70,6 +78,7 @@ export default function LiveNow() {
                   <div className="absolute inset-0 bg-black/35" />
                   <span className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-destructive px-2.5 py-1 text-[11px] font-bold uppercase text-white">
                     <span className="ievx-live-dot" style={{ background: 'white' }} /> Live
+                    <span className="efx-badge-ping__ping" aria-hidden style={{ left: '10px', right: 'auto', top: 'calc(50% - 4px)', width: '8px', height: '8px' }} />
                   </span>
                   <span className="absolute inset-0 m-auto flex h-14 w-14 items-center justify-center rounded-full bg-white/90 text-primary shadow-lg transition-transform group-hover:scale-110">
                     <Play className="ml-0.5 h-6 w-6 fill-primary" aria-hidden />
@@ -85,7 +94,14 @@ export default function LiveNow() {
                   <Badge variant="outline" className="text-[11px]">{accessLabel(b)}</Badge>
                   <Badge variant="secondary" className="text-[11px] gap-1"><Users className="h-3 w-3" /> cap {b.viewerCapacity.toLocaleString()}</Badge>
                 </div>
-                <Button size="sm" className="rounded-full ievx-press" onClick={() => navigate(`/broadcast/${b.id}`)}>Watch now</Button>
+                <button
+                  type="button"
+                  className="efx-ripple-click-button ievx-press"
+                  style={{ fontSize: '0.9rem', padding: '0.65rem 1.4rem', borderRadius: '999px' }}
+                  onClick={() => navigate(`/broadcast/${b.id}`)}
+                >
+                  Watch now
+                </button>
               </div>
             </Card>
           ))}

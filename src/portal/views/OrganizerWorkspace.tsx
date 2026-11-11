@@ -89,7 +89,11 @@ export default function OrganizerWorkspace({ route }: { route: Route }) {
             ))}
           </SelectContent>
         </Select>
-        <nav className="space-y-0.5" aria-label="Organizer sections">
+        <nav
+          className="efx-underline-slide-nav"
+          aria-label="Organizer sections"
+          style={{ maxWidth: 'none', margin: 0, padding: 0, flexDirection: 'column', alignItems: 'stretch', justifyContent: 'flex-start', gap: '0.125rem', borderBottom: 'none' }}
+        >
           {NAV.map((item) => (
             <button
               key={item.key}
@@ -98,12 +102,13 @@ export default function OrganizerWorkspace({ route }: { route: Route }) {
                 setSidebarOpen(false)
                 navigate(`/organizer?tab=${item.key}`, { replace: true })
               }}
-              className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
-                section === item.key ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+              className={`efx-underline-slide-nav__link flex w-full items-center gap-2.5 text-left text-sm ${
+                section === item.key ? 'efx-underline-slide-nav__link--active' : ''
               }`}
+              style={{ padding: '0.625rem 0.75rem' }}
               aria-current={section === item.key ? 'page' : undefined}
             >
-              <item.icon className="h-4 w-4" aria-hidden />
+              <item.icon className="h-4 w-4 shrink-0" aria-hidden />
               {item.label}
             </button>
           ))}
@@ -159,13 +164,21 @@ function Dashboard({ orgId }: { orgId: string }) {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-extrabold">Dashboard</h1>
+          <h1 className="efx-animated-gradient-text iefx-headline text-xl font-extrabold">Dashboard</h1>
           <p className="text-sm text-muted-foreground">{data.counts.published} published · {data.counts.draft} drafts · {data.counts.live} live now</p>
         </div>
       </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {cards.map((c) => (
-          <Card key={c.label} className="rounded-2xl" ref={(el) => { if (el) void flash(el) }}>
+        {cards.map((c) => c.label === 'Gross sales' ? (
+          <div key={c.label} className="efx-glassmorphism-card" ref={(el) => { if (el) void flash(el) }}>
+            <div className="efx-glassmorphism-card__backdrop" aria-hidden="true" />
+            <div className="efx-glassmorphism-card__panel">
+              <p className="efx-glassmorphism-card__title uppercase" style={{ fontSize: '0.8rem' }}>{c.label}</p>
+              <p className="text-white font-extrabold text-3xl">{c.value}</p>
+            </div>
+          </div>
+        ) : (
+          <Card key={c.label} className="ievx-card-hover rounded-2xl" ref={(el) => { if (el) void flash(el) }}>
             <CardContent className="flex items-center gap-3 p-5">
               <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10"><c.icon className="h-5 w-5 text-primary" aria-hidden /></span>
               <div>
@@ -287,7 +300,7 @@ function EventsManager({ orgId, role }: { orgId: string; role: string }) {
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-extrabold">Events</h1>
+          <h1 className="efx-animated-gradient-text iefx-headline text-xl font-extrabold">Events</h1>
           <p className="text-sm text-muted-foreground">{events?.length ?? '…'} events · series occurrences tracked separately</p>
         </div>
         {canPublish && <Button className="rounded-full ievx-press" onClick={() => void openEditor(null)}><Plus className="mr-1 h-4 w-4" /> New event</Button>}
@@ -300,7 +313,7 @@ function EventsManager({ orgId, role }: { orgId: string; role: string }) {
       ) : (
         <div className="space-y-3">
           {events.map((e) => (
-            <Card key={e.id} className="rounded-2xl">
+            <Card key={e.id} className="ievx-card-hover rounded-2xl">
               <CardContent className="flex flex-wrap items-center gap-3 p-4">
                 <div className="h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-muted">
                   {e.coverImageUrl && (
@@ -555,8 +568,11 @@ function EventEditor({ orgId, event, onClose }: { orgId: string; event: OrgEvent
         </div>
         <DialogFooter>
           <Button variant="outline" className="rounded-full" onClick={onClose}>Close</Button>
+          {busy && (
+            <span className="efx-dual-ring-loader shrink-0" role="status" aria-label="Saving event" style={{ width: 36, height: 36, margin: 0, borderWidth: 4 }} />
+          )}
           <Button className="rounded-full ievx-press" onClick={() => void save()} disabled={busy || form.title.trim().length < 3}>
-            {busy && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" aria-hidden />} {event ? 'Save event' : 'Create event'}
+            {event ? 'Save event' : 'Create event'}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -599,7 +615,7 @@ function OrdersView({ orgId }: { orgId: string }) {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-xl font-extrabold">Orders</h1>
+        <h1 className="efx-animated-gradient-text iefx-headline text-xl font-extrabold">Orders</h1>
         <Select value={eventId} onValueChange={setEventId}>
           <SelectTrigger className="w-64 rounded-xl" aria-label="Select event"><SelectValue placeholder="Select event" /></SelectTrigger>
           <SelectContent>
@@ -762,7 +778,7 @@ function AttendeesView({ orgId }: { orgId: string }) {
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-extrabold">Attendees & Check-in</h1>
+          <h1 className="efx-animated-gradient-text iefx-headline text-xl font-extrabold">Attendees & Check-in</h1>
           {stats && <p className="text-sm text-muted-foreground">{stats.admitted}/{stats.ticketsIssued} admitted · {stats.anomalies} anomalies</p>}
         </div>
         <div className="flex gap-2">
@@ -937,7 +953,7 @@ function StudioView({ orgId }: { orgId: string }) {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-xl font-extrabold">Streaming Studio</h1>
+        <h1 className="efx-animated-gradient-text iefx-headline text-xl font-extrabold">Streaming Studio</h1>
         <p className="text-sm text-muted-foreground">Phone camera or OBS/vMix ingest · entitlement-protected playback.</p>
       </div>
 
@@ -1090,7 +1106,7 @@ function PromotionsView({ orgId }: { orgId: string }) {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-xl font-extrabold">Promotions</h1>
+        <h1 className="efx-animated-gradient-text iefx-headline text-xl font-extrabold">Promotions</h1>
         <p className="text-sm text-muted-foreground">Internal sponsored placements in discovery — clearly labelled, budget-capped.</p>
       </div>
 
@@ -1131,8 +1147,14 @@ function PromotionsView({ orgId }: { orgId: string }) {
                 <div className="rounded-lg bg-secondary/50 p-2.5"><p className="text-muted-foreground">Unique users</p><p className="text-base font-bold">{c.metrics.uniqueUsers.toLocaleString()}</p></div>
                 <div className="rounded-lg bg-secondary/50 p-2.5"><p className="text-muted-foreground">Spend / budget</p><p className="text-base font-bold">{money(c.spentMinor)} / {money(c.budgetMinor)}</p></div>
               </div>
-              <div className="h-2 overflow-hidden rounded-full bg-secondary">
-                <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${Math.min(100, (c.spentMinor / Math.max(1, c.budgetMinor)) * 100)}%` }} />
+              <div className="relative h-2 overflow-hidden rounded-full bg-secondary">
+                <div className="relative h-full rounded-full bg-primary transition-all" style={{ width: `${Math.min(100, (c.spentMinor / Math.max(1, c.budgetMinor)) * 100)}%` }}>
+                  <div
+                    aria-hidden="true"
+                    className="efx-progress-stripes-loader__bar pointer-events-none absolute inset-0"
+                    style={{ width: '100%', background: 'repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.28) 0 12px, transparent 12px 24px)' }}
+                  />
+                </div>
               </div>
               <p className="text-[11px] text-muted-foreground">Observed delivery only — estimates are never shown as guaranteed reach. Duplicated telemetry cannot bill twice.</p>
             </CardContent>
@@ -1203,7 +1225,7 @@ function MessagesView({ orgId }: { orgId: string }) {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-xl font-extrabold">Messaging (Hubtel SMS)</h1>
+        <h1 className="efx-animated-gradient-text iefx-headline text-xl font-extrabold">Messaging (Hubtel SMS)</h1>
         <p className="text-sm text-muted-foreground">Transactional updates or consented marketing · quiet hours & quotas enforced.</p>
       </div>
 
@@ -1232,9 +1254,17 @@ function MessagesView({ orgId }: { orgId: string }) {
                 </p>
               </div>
             )}
-            <Button className="rounded-full ievx-press" disabled={!body.trim() || !eventId || sending} onClick={() => void send()}>
-              {sending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" aria-hidden />} Send to ticket holders
-            </Button>
+            <div className="flex flex-wrap items-center gap-3">
+              <Button className="rounded-full ievx-press" disabled={!body.trim() || !eventId || sending} onClick={() => void send()}>
+                Send to ticket holders
+              </Button>
+              {sending && (
+                <span className="flex items-center gap-2 text-sm text-muted-foreground" role="status" aria-live="polite">
+                  <span className="efx-dual-ring-loader" aria-hidden="true" style={{ width: 36, height: 36, margin: 0, borderWidth: 4 }} />
+                  Sending
+                </span>
+              )}
+            </div>
             <p className="text-[11px] text-muted-foreground">Dev simulator active: messages are accepted + marked delivered locally — never real handset delivery.</p>
           </CardContent>
         </Card>
@@ -1330,7 +1360,7 @@ function FinanceView({ orgId, role }: { orgId: string; role: string }) {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-xl font-extrabold">Finance & Payouts</h1>
+        <h1 className="efx-animated-gradient-text iefx-headline text-xl font-extrabold">Finance & Payouts</h1>
         <p className="text-sm text-muted-foreground">Balanced ledger · settlement holds · payout requests</p>
       </div>
 
@@ -1368,9 +1398,17 @@ function FinanceView({ orgId, role }: { orgId: string; role: string }) {
                 <Input id="recipient" value={payoutForm.name} onChange={(e) => setPayoutForm((f) => ({ ...f, name: e.target.value }))} placeholder="Org name" />
               </div>
             </div>
-            <Button className="rounded-full ievx-press" disabled={!canPayout || requesting || !payoutForm.amount || !payoutForm.momo} onClick={() => void requestPayout()}>
-              {requesting && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" aria-hidden />} Request payout
-            </Button>
+            <div className="flex flex-wrap items-center gap-3">
+              <Button className="rounded-full ievx-press" disabled={!canPayout || requesting || !payoutForm.amount || !payoutForm.momo} onClick={() => void requestPayout()}>
+                Request payout
+              </Button>
+              {requesting && (
+                <span className="flex items-center gap-2 text-sm text-muted-foreground" role="status" aria-live="polite">
+                  <span className="efx-dual-ring-loader" aria-hidden="true" style={{ width: 36, height: 36, margin: 0, borderWidth: 4 }} />
+                  Requesting
+                </span>
+              )}
+            </div>
             <p className="text-[11px] text-muted-foreground">
               Payouts settle to your verified mobile-money destination after platform review. In-flight amounts are held so they can never be double-spent.
               Provider submission (Hubtel Send Money) requires credentials + merchant agreement — status below is truthful.
@@ -1466,7 +1504,7 @@ function TeamView({ orgId, role }: { orgId: string; role: string }) {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-xl font-extrabold">Team</h1>
+        <h1 className="efx-animated-gradient-text iefx-headline text-xl font-extrabold">Team</h1>
         <p className="text-sm text-muted-foreground">Roles: Owner · Admin · Event Manager · Finance · Check-in Staff · Analyst</p>
       </div>
       {canManage && (
@@ -1549,7 +1587,7 @@ function BillingView({ orgId }: { orgId: string }) {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-xl font-extrabold">Subscription</h1>
+        <h1 className="efx-animated-gradient-text iefx-headline text-xl font-extrabold">Subscription</h1>
         <p className="text-sm text-muted-foreground">Entitlements are enforced on the backend; expiry never invalidates attendee tickets.</p>
       </div>
 
@@ -1644,7 +1682,7 @@ function SettingsView({ orgId, role }: { orgId: string; role: string }) {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-xl font-extrabold">Settings</h1>
+        <h1 className="efx-animated-gradient-text iefx-headline text-xl font-extrabold">Settings</h1>
         <p className="text-sm text-muted-foreground">Public profile, contacts and payout destination.</p>
       </div>
 

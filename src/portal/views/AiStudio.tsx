@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import {
-  Sparkles, Loader2, Copy, Check, Download, Wand2, Type, Share2, ImageIcon,
+  Sparkles, Loader2, Download, Wand2, Type, Share2, ImageIcon,
   LibraryBig, LogIn, Building2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -64,26 +64,40 @@ function CopyButton({ text, label }: { text: string; label: string }) {
   const { toast } = useToast()
   const [copied, setCopied] = useState(false)
   return (
-    <Button
-      type="button"
-      variant="outline"
-      size="sm"
-      className="rounded-full"
-      disabled={!text}
-      onClick={async () => {
-        if (!text) return
-        const ok = await copyText(text)
-        if (ok) {
-          setCopied(true)
-          toast({ title: `${label} copied`, description: 'Paste it anywhere — the text is on your clipboard.' })
-          setTimeout(() => setCopied(false), 1800)
-        } else {
-          toast({ title: 'Copy failed', description: 'Select the text manually and copy it.', variant: 'destructive' })
-        }
-      }}
+    <label
+      className="efx-copy-success-checkmark"
+      style={{ margin: 0, opacity: text ? undefined : 0.6, pointerEvents: text ? undefined : 'none' }}
     >
-      {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />} {copied ? 'Copied' : 'Copy'}
-    </Button>
+      <input
+        type="checkbox"
+        className="efx-copy-success-checkmark__input"
+        checked={copied}
+        onChange={() => {}}
+        aria-label={copied ? `${label} copied to clipboard` : `Copy ${label}`}
+        onClick={async () => {
+          if (!text) return
+          const ok = await copyText(text)
+          if (ok) {
+            setCopied(true)
+            toast({ title: `${label} copied`, description: 'Paste it anywhere — the text is on your clipboard.' })
+            setTimeout(() => setCopied(false), 1800)
+          } else {
+            toast({ title: 'Copy failed', description: 'Select the text manually and copy it.', variant: 'destructive' })
+          }
+        }}
+      />
+      <span className="efx-copy-success-checkmark__button">
+        <span className="efx-copy-success-checkmark__badge" aria-hidden="true">
+          <svg className="efx-copy-success-checkmark__icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path className="efx-copy-success-checkmark__path" d="M5 12.5l4.5 4.5L19 7.5" />
+          </svg>
+        </span>
+        <span className="efx-copy-success-checkmark__text">
+          <span className="efx-copy-success-checkmark__text-copy">Copy</span>
+          <span className="efx-copy-success-checkmark__text-done">Copied!</span>
+        </span>
+      </span>
+    </label>
   )
 }
 
@@ -134,7 +148,7 @@ export default function AiStudio() {
             <Sparkles className="h-6 w-6" aria-hidden />
           </span>
           <div>
-            <h1 className="text-2xl font-extrabold tracking-tight">AI Content Studio</h1>
+            <h1 className="efx-animated-gradient-text iefx-headline text-2xl font-extrabold tracking-tight">AI Content Studio</h1>
             <p className="text-sm text-muted-foreground">
               Drafting for <span className="font-semibold text-foreground">{org.orgName}</span> — everything here is an editable draft.
             </p>
@@ -248,11 +262,34 @@ function DescriptionTab({ categories }: { categories: { slug: string; name: stri
             </div>
             <div className="sm:col-span-2">
               <Label htmlFor="d-notes">Key notes (line-up, tickets, perks…)</Label>
-              <Textarea id="d-notes" value={form.notes} onChange={set('notes')} maxLength={1200} rows={4} placeholder="Bullet points are fine — the AI will turn them into flowing copy." className="mt-1.5" />
+              <div className="efx-glow-focus-input" style={{ margin: '0.375rem 0 0', maxWidth: '100%' }}>
+                <Wand2 className="efx-glow-focus-input__icon" aria-hidden />
+                <Textarea
+                  id="d-notes"
+                  value={form.notes}
+                  onChange={set('notes')}
+                  maxLength={1200}
+                  rows={4}
+                  placeholder="Bullet points are fine — the AI will turn them into flowing copy."
+                  className="efx-glow-focus-input__field"
+                  style={{ margin: 0, maxWidth: '100%' }}
+                />
+              </div>
             </div>
           </div>
-          <Button className="w-full rounded-full" onClick={generate} disabled={loading}>
-            {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
+          <Button
+            className="efx-shine-sweep-button w-full"
+            onClick={generate}
+            disabled={loading}
+            style={{
+              borderRadius: '999px',
+              fontSize: '0.92rem',
+              padding: '0.65rem 1.5rem',
+              cursor: loading ? 'not-allowed' : undefined,
+              opacity: loading ? 0.6 : undefined,
+            }}
+          >
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
             {loading ? 'Writing…' : 'Generate description'}
           </Button>
         </div>
@@ -367,8 +404,19 @@ function CaptionsTab() {
             <Label htmlFor="c-link">Ticket link (optional)</Label>
             <Input id="c-link" value={form.link} onChange={set('link')} maxLength={200} placeholder="https://ieventplux.gh/#/event/…" className="mt-1.5" />
           </div>
-          <Button className="w-full rounded-full" onClick={generate} disabled={loading}>
-            {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Share2 className="mr-2 h-4 w-4" />}
+          <Button
+            className="efx-shine-sweep-button w-full"
+            onClick={generate}
+            disabled={loading}
+            style={{
+              borderRadius: '999px',
+              fontSize: '0.92rem',
+              padding: '0.65rem 1.5rem',
+              cursor: loading ? 'not-allowed' : undefined,
+              opacity: loading ? 0.6 : undefined,
+            }}
+          >
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Share2 className="h-4 w-4" />}
             {loading ? 'Writing…' : 'Generate captions'}
           </Button>
         </div>
@@ -501,8 +549,19 @@ function PosterTab({ orgId }: { orgId: string }) {
               <SelectContent>{PALETTES.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
             </Select>
           </div>
-          <Button className="w-full rounded-full" onClick={generate} disabled={loading}>
-            {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
+          <Button
+            className="efx-shine-sweep-button w-full"
+            onClick={generate}
+            disabled={loading}
+            style={{
+              borderRadius: '999px',
+              fontSize: '0.92rem',
+              padding: '0.65rem 1.5rem',
+              cursor: loading ? 'not-allowed' : undefined,
+              opacity: loading ? 0.6 : undefined,
+            }}
+          >
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
             {loading ? 'Designing… (about 20–40s)' : 'Generate poster'}
           </Button>
           <p className="text-[11px] leading-relaxed text-muted-foreground">
@@ -528,12 +587,20 @@ function PosterTab({ orgId }: { orgId: string }) {
         </div>
         <div className="flex min-h-80 items-center justify-center overflow-hidden rounded-2xl border border-dashed border-border bg-secondary/30">
           {loading ? (
-            <div className="flex flex-col items-center gap-3 p-10 text-center" aria-live="polite">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" aria-hidden />
-              <p className="text-sm text-muted-foreground">Painting your poster…</p>
+            <div className="flex flex-col items-center gap-3 p-10 text-center" aria-live="polite" role="status">
+              <span className="efx-dual-ring-loader" aria-hidden="true" style={{ margin: 0, transform: 'scale(0.485)' }} />
+              <p className="text-sm text-muted-foreground">Generating your poster…</p>
             </div>
           ) : image ? (
-            <img src={image} alt={`AI generated poster for ${form.title}`} className="max-h-[560px] w-full object-contain" />
+            <div className="group relative overflow-hidden rounded-2xl">
+              <img src={image} alt={`AI generated poster for ${form.title}`} className="max-h-[560px] w-full object-contain" />
+              <div className="absolute inset-x-0 bottom-0 translate-y-full group-hover:translate-y-0 transition-transform duration-500 bg-gradient-to-t from-black/85 to-transparent p-3 text-white">
+                <p className="text-sm font-bold">{form.title}</p>
+                {(form.dateText || form.city) && (
+                  <p className="text-xs text-white/80">{[form.dateText, form.city].filter(Boolean).join(' · ')}</p>
+                )}
+              </div>
+            </div>
           ) : (
             <div className="flex flex-col items-center p-10 text-center">
               <ImageIcon className="mb-3 h-8 w-8 text-muted-foreground" aria-hidden />
