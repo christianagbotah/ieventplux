@@ -28,11 +28,11 @@ None open. (`bun run lint`: 0 errors / warnings only. `bunx tsc --noEmit`: 0 err
 
 ## External blockers
 
-Hubtel checkout/Send Money/SMS credentials + merchant agreement; Cloudflare Stream credentials; SMTP relay; Apple/Google store accounts; git remote. All truthfully surfaced at `/api/v1/health` and Admin → Integrations.
+Hubtel checkout/Send Money/SMS credentials + merchant agreement; Cloudflare Stream credentials; SMTP relay; Apple/Google store accounts. All truthfully surfaced at `/api/v1/health` and Admin → Integrations. ~~git remote~~ **resolved 2026-11-11:** remote `github.com/christianagbotah/ieventplux` configured and pushed (`main`, upstream tracking set; every verified milestone is now committed and pushed).
 
 ## Next tasks for the next engineer/session
 
-1. Connect a git remote and push (`git remote add origin … && git push -u origin main`).
+1. ~~Connect a git remote and push~~ ✅ done 2026-11-11 — remote `https://github.com/christianagbotah/ieventplux.git`, branch `main` pushed with full Stage A–F history; ongoing convention: commit and push each verified milestone.
 2. Obtain Hubtel credentials → run the sandbox verification protocol in `docs/PROVIDER_CAPABILITIES.md` (re-verify v1 endpoints first).
 3. Migrate to PostgreSQL for concurrency (`docs/ARCHITECTURE.md` migration path) + add load/concurrency smoke tests.
 4. Add automated test suite (jest integration + Playwright journeys from TEST_REPORT E1–E14).

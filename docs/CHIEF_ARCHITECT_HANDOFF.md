@@ -9,11 +9,9 @@
 
 ## 1. Repository
 
-- **Location:** `/home/z/my-project` (this workspace). **No git remote is configured** — commits are local (`main` branch). To connect a remote:
-  ```bash
-  git remote add origin <REPOSITORY_URL>
-  git push -u origin main
-  ```
+- **Location:** `/home/z/my-project` (this workspace). **Remote configured and pushed:** `https://github.com/christianagbotah/ieventplux.git` (public, branch `main`, upstream tracking set).
+  - Push auth: GitHub PAT stored in the git credential store **outside the repo** (`/home/z/.git-credentials`, chmod 600) — the token is never committed and a pre-push scan confirmed it appears in no tracked file.
+  - Going forward, every verified milestone is committed and pushed (`git push origin main`).
   No GitHub repository was fabricated (per brief §1). Nothing outside this workspace was modified.
 - **Commits (verified milestones):**
   - `5320e36` scaffold base (pre-existing)
