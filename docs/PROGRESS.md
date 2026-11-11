@@ -26,6 +26,14 @@ None open. (`bun run lint`: 0 errors / warnings only. `bunx tsc --noEmit`: 0 err
 - Footer hardened for iOS safe-area + fixed mobile-bottom-nav clearance.
 - Repo hygiene: runtime `.env` untracked (template recovered as `.env.example`).
 
+## Production-polish round 3 (2026-11-11, "done" pass)
+
+- **Homepage elevation:** "Browse all events" CTA + dedicated all-events mode; Quick find links (Today / This weekend / Free / Online); category chips now carry their DB icons (church/music/… 10/10 verified); "How iEventPlux works" 3-step strip; organizer CTA band (auth-adaptive copy, 95% organizer split surfaced); Browse-all affordances on Featured/Coming up + Reset.
+- **PWA / SEO:** `public/manifest.webmanifest` (standalone, app shortcuts: Browse / Live / Tickets / Effects), apple-web-app + OpenGraph/Twitter meta in `layout.tsx`.
+- **Lint hygiene:** 34 → 16 warnings, 0 errors (removed genuinely-unused disables, fixed 2 real a11y alt-text issues in RN scaffold via accessibilityLabel, restructured `submitScan` declaration-before-use instead of suppression).
+- **Full authenticated sweep (agent-browser):** guest + attendee (Me tabs, Live, Reels, Effects, purchase ORD-4E157EE0D3 ₵30 → PAID → TKT-36D8153970DFF8) + organizer (8/8 tabs as chapel owner) + admin (12/12 sections) — **zero console errors platform-wide**; responsive checks at 390×844 and 1440×900.
+- Milestone commit `98e7181` pushed to GitHub.
+
 ## External blockers
 
 Hubtel checkout/Send Money/SMS credentials + merchant agreement; Cloudflare Stream credentials; SMTP relay; Apple/Google store accounts. All truthfully surfaced at `/api/v1/health` and Admin → Integrations. ~~git remote~~ **resolved 2026-11-11:** remote `github.com/christianagbotah/ieventplux` configured and pushed (`main`, upstream tracking set; every verified milestone is now committed and pushed).
