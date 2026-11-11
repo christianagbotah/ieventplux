@@ -1,7 +1,11 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Search, SlidersHorizontal, Sparkles, Radio, MapPin, TrendingUp, X } from 'lucide-react'
+import {
+  Search, SlidersHorizontal, Sparkles, Radio, MapPin, TrendingUp, X, ArrowRight,
+  Church, Music, Presentation, Wrench, Code2, Heart, Users, Sparkles as SparklesIcon,
+  PartyPopper, Activity, Smartphone, QrCode, CalendarCheck, Building2,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -15,6 +19,7 @@ interface Category {
   slug: string
   name: string
   icon: string
+  color?: string | null
 }
 
 interface HomePayload {
@@ -33,6 +38,40 @@ const WHEN_CHIPS = [
   { value: 'THIS_WEEKEND', label: 'This weekend' },
 ]
 
+// Category icons from the DB (`icon` slug) → lucide components, tinted with each category's brand color.
+const CATEGORY_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
+  church: Church,
+  music: Music,
+  presentation: Presentation,
+  wrench: Wrench,
+  code: Code2,
+  heart: Heart,
+  users: Users,
+  sparkles: SparklesIcon,
+  'party-popper': PartyPopper,
+  activity: Activity,
+}
+
+const EMPTY_FILTERS = { q: '', category: '', city: '', mode: '', price: '', when: '' }
+
+const HOW_IT_WORKS = [
+  {
+    icon: Search,
+    title: 'Find your gathering',
+    body: 'Search by category, city or date. Save what you love and follow organizers you trust.',
+  },
+  {
+    icon: Smartphone,
+    title: 'Pay with mobile money',
+    body: 'Secure Hubtel checkout (MoMo & cards) — free events simply take an RSVP. Refunds are real and tracked.',
+  },
+  {
+    icon: QrCode,
+    title: 'Scan & step in',
+    body: 'Your QR ticket works at the gate — or watch live online with a protected virtual pass.',
+  },
+]
+
 export default function Discover({ route }: { route: Route }) {
   const { user } = usePortal()
   const [home, setHome] = useState<HomePayload | null>(null)
@@ -40,17 +79,11 @@ export default function Discover({ route }: { route: Route }) {
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
+  const [browseAll, setBrowseAll] = useState(false)
   const isSearch = route.segments[0] === 'search'
   const searchQuery = route.query.get('q') ?? ''
 
-  const [filters, setFilters] = useState({
-    q: searchQuery,
-    category: '',
-    city: '',
-    mode: '',
-    price: '',
-    when: '',
-  })
+  const [filters, setFilters] = useState({ ...EMPTY_FILTERS, q: searchQuery })
   const [filtersOpen, setFiltersOpen] = useState(false)
 
   useEffect(() => {
@@ -82,19 +115,25 @@ export default function Discover({ route }: { route: Route }) {
         setLoading(false)
       }
     },
-    [filterKey] // eslint-disable-line react-hooks/exhaustive-deps
+    [filterKey]  
   )
 
-  const browsing = isSearch || Boolean(filters.category || filters.city || filters.mode || filters.price || filters.when || filters.q)
+  const browsing = isSearch || browseAll || Boolean(filters.category || filters.city || filters.mode || filters.price || filters.when || filters.q)
 
   useEffect(() => {
     if (browsing) void loadList(page)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [browsing, filterKey, page])
 
   const applyFilter = (key: keyof typeof filters, value: string) => {
     setFilters((f) => ({ ...f, [key]: value }))
     setPage(1)
+  }
+
+  const clearFilters = () => {
+    setFilters({ ...EMPTY_FILTERS })
+    setPage(1)
+    setBrowseAll(false)
+    setFiltersOpen(false)
   }
 
   const sponsoredEvents = home?.sponsored ?? []
@@ -105,7 +144,7 @@ export default function Discover({ route }: { route: Route }) {
       {!browsing && (
         <section className="ievx-hero relative border-b border-border/60">
           <div className="absolute inset-0">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
+            { }
             <img src="/images/hero-banner.png" alt="" className="h-full w-full object-cover opacity-60" />
             <div className="absolute inset-0 bg-gradient-to-r from-background via-background/85 to-background/40" />
           </div>
@@ -122,12 +161,30 @@ export default function Discover({ route }: { route: Route }) {
               QR tickets and protected live broadcasts.
             </p>
             <div className="mt-6 flex flex-wrap items-center gap-3">
-              <Button size="lg" className="rounded-full ievx-press" onClick={() => document.getElementById('browse')?.scrollIntoView({ behavior: 'smooth' })}>
-                Browse events
+              <Button size="lg" className="rounded-full ievx-press" onClick={() => { setBrowseAll(true); setPage(1) }}>
+                Browse all events <ArrowRight className="ml-1 h-4 w-4" aria-hidden />
               </Button>
               <Button size="lg" variant="outline" className="rounded-full bg-card/70 ievx-press" onClick={() => navigate('/live')}>
                 <Radio className="mr-2 h-4 w-4" /> Watch live now
               </Button>
+            </div>
+            {/* Quick links — the fastest paths into the catalogue */}
+            <div className="mt-5 flex flex-wrap items-center gap-x-1 gap-y-2 text-sm">
+              <span className="pr-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Quick find:</span>
+              {[
+                { label: 'Today', filter: () => applyFilter('when', 'TODAY') },
+                { label: 'This weekend', filter: () => applyFilter('when', 'THIS_WEEKEND') },
+                { label: 'Free events', filter: () => applyFilter('price', 'FREE') },
+                { label: 'Online only', filter: () => applyFilter('mode', 'VIRTUAL') },
+              ].map((quick) => (
+                <button
+                  key={quick.label}
+                  onClick={quick.filter}
+                  className="rounded-full px-2.5 py-1 text-xs font-medium text-primary underline-offset-4 transition-colors hover:bg-primary/10 hover:underline ievx-press"
+                >
+                  {quick.label}
+                </button>
+              ))}
             </div>
             {home && (
               <div className="mt-8 flex flex-wrap gap-2 text-sm">
@@ -257,7 +314,7 @@ export default function Discover({ route }: { route: Route }) {
                       ))}
                     </div>
                   </div>
-                  <Button className="w-full rounded-full" onClick={() => { setFilters({ q: '', category: '', city: '', mode: '', price: '', when: '' }); setPage(1); setFiltersOpen(false) }}>
+                  <Button className="w-full rounded-full" onClick={clearFilters}>
                     <X className="mr-1 h-4 w-4" /> Clear all filters
                   </Button>
                 </div>
@@ -265,18 +322,22 @@ export default function Discover({ route }: { route: Route }) {
             </Sheet>
           </div>
         </div>
-        {/* Category chips */}
+        {/* Category chips — icon + brand colour for fast visual navigation */}
         {home?.categories && !browsing && (
-          <div className="ievx-scrollbar mx-auto flex max-w-7xl gap-2 overflow-x-auto px-4 pb-3">
-            {home.categories.map((c) => (
-              <button
-                key={c.slug}
-                onClick={() => applyFilter('category', c.slug)}
-                className="shrink-0 rounded-full border border-border/70 bg-card px-3.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-primary hover:text-primary ievx-press"
-              >
-                {c.name}
-              </button>
-            ))}
+          <div className="ievx-scrollbar mx-auto flex max-w-7xl items-center gap-2 overflow-x-auto px-4 pb-3">
+            {home.categories.map((c) => {
+              const Icon = CATEGORY_ICONS[c.icon] ?? SparklesIcon
+              return (
+                <button
+                  key={c.slug}
+                  onClick={() => applyFilter('category', c.slug)}
+                  className="flex shrink-0 items-center gap-1.5 rounded-full border border-border/70 bg-card px-3.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-primary hover:text-primary ievx-press"
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                  {c.name}
+                </button>
+              )
+            })}
           </div>
         )}
       </section>
@@ -302,9 +363,14 @@ export default function Discover({ route }: { route: Route }) {
           <section aria-label="Search results">
             <div className="mb-4 flex items-baseline justify-between">
               <h2 className="text-lg font-bold">
-                {isSearch && searchQuery ? `Results for “${searchQuery}”` : 'Browse events'}
+                {isSearch && searchQuery ? `Results for “${searchQuery}”` : browseAll && !filters.category && !filters.q ? 'All upcoming events' : 'Browse events'}
               </h2>
-              <p className="text-sm text-muted-foreground">{total} event{total !== 1 ? 's' : ''}</p>
+              <div className="flex items-center gap-3">
+                <p className="text-sm text-muted-foreground">{total} event{total !== 1 ? 's' : ''}</p>
+                <Button variant="ghost" size="sm" className="rounded-full" onClick={clearFilters}>
+                  <X className="h-3.5 w-3.5" aria-hidden /> Reset
+                </Button>
+              </div>
             </div>
             {loading ? (
               <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
@@ -325,7 +391,7 @@ export default function Discover({ route }: { route: Route }) {
               <EmptyState
                 title="No events match those filters"
                 description="Try a different category, city or date — or clear the filters to see everything."
-                action={<Button className="mt-2 rounded-full" onClick={() => setFilters({ q: '', category: '', city: '', mode: '', price: '', when: '' })}>Clear filters</Button>}
+                action={<Button className="mt-2 rounded-full" onClick={clearFilters}>Clear filters</Button>}
               />
             )}
           </section>
@@ -345,16 +411,26 @@ export default function Discover({ route }: { route: Route }) {
             )}
             {home?.featured && home.featured.length > 0 && (
               <section className="mb-10" aria-label="Featured events">
-                <h2 className="mb-4 text-lg font-bold">Featured gatherings</h2>
+                <div className="mb-4 flex items-center justify-between">
+                  <h2 className="text-lg font-bold">Featured gatherings</h2>
+                  <Button variant="ghost" size="sm" className="rounded-full" onClick={() => { setBrowseAll(true); setPage(1) }}>
+                    Browse all <ArrowRight className="ml-1 h-3.5 w-3.5" aria-hidden />
+                  </Button>
+                </div>
                 <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
                   {home.featured.map((event, i) => <EventCard key={event.id} event={event} index={i} />)}
                 </div>
               </section>
             )}
-            <section aria-label="Upcoming events">
+            <section className="mb-10" aria-label="Upcoming events">
               <div className="mb-4 flex items-center justify-between">
                 <h2 className="text-lg font-bold">Coming up</h2>
-                {user && <Button variant="outline" size="sm" className="rounded-full" onClick={() => navigate('/me?tab=saved')}>Saved events</Button>}
+                <div className="flex items-center gap-2">
+                  {user && <Button variant="outline" size="sm" className="rounded-full" onClick={() => navigate('/me?tab=saved')}>Saved events</Button>}
+                  <Button variant="ghost" size="sm" className="rounded-full" onClick={() => { setBrowseAll(true); setPage(1) }}>
+                    Browse all <ArrowRight className="ml-1 h-3.5 w-3.5" aria-hidden />
+                  </Button>
+                </div>
               </div>
               {home === null ? (
                 <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
@@ -367,6 +443,53 @@ export default function Discover({ route }: { route: Route }) {
               ) : (
                 <EmptyState title="No upcoming events yet" description="Check back soon — organizers are preparing their next gatherings." />
               )}
+            </section>
+
+            {/* How it works — reassurance for first-time buyers */}
+            <section className="mb-10" aria-label="How it works">
+              <div className="mb-4 flex items-center gap-2">
+                <CalendarCheck className="h-5 w-5 text-primary" aria-hidden />
+                <h2 className="text-lg font-bold">How iEventPlux works</h2>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-3">
+                {HOW_IT_WORKS.map((step, i) => (
+                  <div key={step.title} className="rounded-2xl border border-border/60 bg-card p-5 ievx-card-hover">
+                    <div className="mb-3 flex items-center gap-3">
+                      <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                        <step.icon className="h-5 w-5" aria-hidden />
+                      </span>
+                      <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Step {i + 1}</span>
+                    </div>
+                    <p className="font-semibold">{step.title}</p>
+                    <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{step.body}</p>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            {/* Organizer CTA — the two-sided marketplace, made explicit */}
+            <section aria-label="For organizers" className="mb-4">
+              <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-primary via-primary to-emerald-700 p-8 text-primary-foreground sm:p-10">
+                <Building2 className="pointer-events-none absolute -right-6 -top-6 h-40 w-40 opacity-10" aria-hidden />
+                <div className="relative flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="max-w-xl">
+                    <h2 className="text-xl font-extrabold sm:text-2xl">Organizing a gathering?</h2>
+                    <p className="mt-2 text-sm leading-relaxed text-primary-foreground/85">
+                      Publish in minutes — ticketing with mobile-money checkout, QR check-in scanning, live broadcasts,
+                      promotions, payouts and finance reports built in. Verified organizers keep 95% of face value.
+                    </p>
+                  </div>
+                  <div className="shrink-0">
+                    <Button
+                      size="lg"
+                      className="rounded-full bg-background font-bold text-foreground hover:bg-background/90 ievx-press"
+                      onClick={() => navigate(user ? '/create-org' : '/register')}
+                    >
+                      {user ? 'Create your organization' : 'Start organizing'} <ArrowRight className="ml-1 h-4 w-4" aria-hidden />
+                    </Button>
+                  </div>
+                </div>
+              </div>
             </section>
           </>
         )}

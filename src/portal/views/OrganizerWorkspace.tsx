@@ -304,7 +304,6 @@ function EventsManager({ orgId, role }: { orgId: string; role: string }) {
               <CardContent className="flex flex-wrap items-center gap-3 p-4">
                 <div className="h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-muted">
                   {e.coverImageUrl && (
-                    // eslint-disable-next-line @next/next/no-img-element
                     <img src={e.coverImageUrl} alt="" className="h-full w-full object-cover" />
                   )}
                 </div>
@@ -673,6 +672,31 @@ function AttendeesView({ orgId }: { orgId: string }) {
     void refresh()
   }, [refresh])
 
+  // Manual + camera scan submission (declared before the camera effect that calls it).
+  const submitScan = async (payload: string) => {
+    if (!eventId || !payload.trim()) return
+    const clientScanId = `web-${Date.now()}-${scanIdRef.current++}`
+    try {
+      const result = await api.post<{ result: string; detail: string; ticket?: { holderName: string; ticketType: string } }>(`/checkin/scan`, {
+        eventId,
+        payload: payload.trim(),
+        clientScanId,
+      })
+      setLastResult(result)
+      setScanValue('')
+      await refresh()
+    } catch (err) {
+      if (err instanceof ApiClientError) {
+        // Offline mode: queue locally (durable local scan queue; conflicts preserved on sync).
+        setOfflineQueue((q) => [...q, { payload: payload.trim(), clientScanId, at: new Date().toISOString() }])
+        setLastResult({ result: 'QUEUED_OFFLINE', detail: 'Queued locally — will sync with conflict detection when back online.', ticket: undefined })
+        setScanValue('')
+      } else {
+        toast({ description: 'Scan failed.', variant: 'destructive' })
+      }
+    }
+  }
+
   // Camera preview + BarcodeDetector scanning where supported.
   useEffect(() => {
     if (!scanMode) return
@@ -711,32 +735,7 @@ function AttendeesView({ orgId }: { orgId: string }) {
       if (timer) clearInterval(timer)
       stream?.getTracks().forEach((t) => t.stop())
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scanMode])
-
-  const submitScan = async (payload: string) => {
-    if (!eventId || !payload.trim()) return
-    const clientScanId = `web-${Date.now()}-${scanIdRef.current++}`
-    try {
-      const result = await api.post<{ result: string; detail: string; ticket?: { holderName: string; ticketType: string } }>(`/checkin/scan`, {
-        eventId,
-        payload: payload.trim(),
-        clientScanId,
-      })
-      setLastResult(result)
-      setScanValue('')
-      await refresh()
-    } catch (err) {
-      if (err instanceof ApiClientError) {
-        // Offline mode: queue locally (durable local scan queue; conflicts preserved on sync).
-        setOfflineQueue((q) => [...q, { payload: payload.trim(), clientScanId, at: new Date().toISOString() }])
-        setLastResult({ result: 'QUEUED_OFFLINE', detail: 'Queued locally — will sync with conflict detection when back online.', ticket: undefined })
-        setScanValue('')
-      } else {
-        toast({ description: 'Scan failed.', variant: 'destructive' })
-      }
-    }
-  }
 
   const syncOffline = async () => {
     if (offlineQueue.length === 0 || !eventId) return

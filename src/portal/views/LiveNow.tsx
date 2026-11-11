@@ -65,7 +65,6 @@ export default function LiveNow() {
               <button className="block w-full text-left" onClick={() => navigate(`/broadcast/${b.id}`)} aria-label={`Watch ${b.title}`}>
                 <div className="relative aspect-video overflow-hidden bg-muted">
                   {b.event.coverImageUrl && (
-                    // eslint-disable-next-line @next/next/no-img-element
                     <img src={b.event.coverImageUrl} alt="" className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]" loading="lazy" />
                   )}
                   <div className="absolute inset-0 bg-black/35" />
@@ -101,7 +100,6 @@ export default function LiveNow() {
               <button key={b.id} className="ievx-card-hover overflow-hidden rounded-2xl border border-border/70 bg-card text-left" onClick={() => navigate(`/broadcast/${b.id}`)}>
                 <div className="relative aspect-video overflow-hidden bg-muted">
                   {b.event.coverImageUrl && (
-                    // eslint-disable-next-line @next/next/no-img-element
                     <img src={b.event.coverImageUrl} alt="" className="h-full w-full object-cover opacity-80" loading="lazy" />
                   )}
                   <span className="absolute bottom-2 right-2 rounded-md bg-black/60 px-1.5 py-0.5 text-[10px] font-semibold text-white">REPLAY</span>

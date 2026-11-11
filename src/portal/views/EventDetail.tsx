@@ -267,7 +267,6 @@ export default function EventDetail({ slug }: { slug: string }) {
       <div className="relative">
         <div className="relative h-64 w-full overflow-hidden sm:h-80 md:h-[420px]">
           {event.coverImageUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
             <img src={event.coverImageUrl} alt={`${event.title} artwork`} className="h-full w-full object-cover" />
           ) : (
             <div className="h-full w-full bg-gradient-to-br from-primary/20 to-accent/20" />
@@ -372,7 +371,7 @@ export default function EventDetail({ slug }: { slug: string }) {
                     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                       {event.gallery.map((g) => (
                         <figure key={g.id} className="overflow-hidden rounded-xl">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          { }
                           <img src={g.url} alt={g.caption ?? 'Event photo'} className="aspect-square w-full object-cover transition-transform duration-300 hover:scale-105" loading="lazy" />
                           {g.caption && <figcaption className="truncate p-2 text-xs text-muted-foreground">{g.caption}</figcaption>}
                         </figure>

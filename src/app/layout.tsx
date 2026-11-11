@@ -19,6 +19,29 @@ export const metadata: Metadata = {
     "iEventPlux by Lightworld Technologies: events discovery, ticketing, social feeds and live broadcasting for churches, ministries and organizations in Ghana. Prices in Ghana cedis.",
   keywords: ["iEventPlux", "events", "Ghana", "Accra", "tickets", "live streaming", "church events", "conferences"],
   applicationName: "iEventPlux",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    title: "iEventPlux",
+    statusBarStyle: "default",
+  },
+  openGraph: {
+    type: "website",
+    siteName: "iEventPlux",
+    title: "iEventPlux — Discover, Ticket & Broadcast Events in Ghana",
+    description:
+      "Church services, concerts, conferences, workshops and community moments — secure mobile-money checkout, QR tickets and protected live broadcasts.",
+    locale: "en_GH",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "iEventPlux — Discover, Ticket & Broadcast Events in Ghana",
+    description: "Events discovery, ticketing and live broadcasting for Ghana. Prices in Ghana cedis.",
+  },
+  icons: {
+    icon: "/logo.svg",
+    apple: "/logo.svg",
+  },
 };
 
 export const viewport: Viewport = {

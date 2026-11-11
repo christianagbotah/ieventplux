@@ -50,7 +50,6 @@ export function EventCard({ event, index = 0 }: { event: EventCardData; index?: 
     >
       <div className="relative aspect-[3/4] overflow-hidden bg-muted">
         {event.coverImageUrl && !imgFailed ? (
-          // eslint-disable-next-line @next/next/no-img-element
           <img
             src={event.coverImageUrl}
             alt={`${event.title} artwork`}
@@ -125,7 +124,6 @@ export function EventRow({ event }: { event: EventCardData }) {
     >
       <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-muted">
         {event.coverImageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
           <img src={event.coverImageUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
         ) : (
           <div className="flex h-full w-full items-center justify-center"><Ticket className="h-5 w-5 text-muted-foreground" /></div>

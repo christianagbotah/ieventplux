@@ -85,7 +85,7 @@ export default function Reels() {
         <article key={c.id} className="relative mb-3 h-[calc(100vh-9rem)] snap-start overflow-hidden rounded-3xl bg-black md:h-[calc(100vh-6.5rem)]">
           {/* Synthetic animated clip: ken-burns poster + overlay */}
           <div className="absolute inset-0 overflow-hidden">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
+            { }
             <img src={c.posterUrl} alt="" className="h-full w-full animate-[ievx-float_8s_ease-in-out_infinite] object-cover opacity-90" style={{ animation: 'kenburns 14s ease-in-out infinite alternate' }} />
             <style>{`@keyframes kenburns { from { transform: scale(1) translateY(0); } to { transform: scale(1.12) translateY(-2%); } }`}</style>
             <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-transparent to-black/30" />

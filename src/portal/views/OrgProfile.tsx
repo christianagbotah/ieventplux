@@ -87,7 +87,6 @@ export default function OrgProfile({ slug }: { slug: string }) {
     <div>
       <div className="relative h-52 w-full overflow-hidden sm:h-64">
         {data.org.coverUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
           <img src={data.org.coverUrl} alt="" className="h-full w-full object-cover" />
         ) : (
           <div className="h-full w-full bg-gradient-to-br from-primary/25 via-accent/20 to-primary/10" />
@@ -134,7 +133,7 @@ export default function OrgProfile({ slug }: { slug: string }) {
             <div className="ievx-scrollbar flex gap-3 overflow-x-auto pb-2">
               {data.clips.map((c) => (
                 <button key={c.id} className="group h-40 w-28 shrink-0 overflow-hidden rounded-xl" onClick={() => navigate('/reels')}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  { }
                   <img src={c.url} alt={c.caption ?? 'Clip'} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" loading="lazy" />
                   {c.caption && <p className="sr-only">{c.caption}</p>}
                 </button>

@@ -245,7 +245,6 @@ export default function Me({ route }: { route: Route }) {
             saved.map((s, i) => (
               <button key={i} className="flex w-full items-center gap-3 rounded-xl border border-border/60 bg-card p-3 text-left ievx-card-hover" onClick={() => navigate(`/event/${s.event.slug}`)}>
                 {s.event.coverImageUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
                   <img src={s.event.coverImageUrl} alt="" className="h-12 w-12 rounded-lg object-cover" loading="lazy" />
                 ) : <div className="h-12 w-12 rounded-lg bg-secondary" />}
                 <div className="min-w-0 flex-1">

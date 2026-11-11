@@ -149,7 +149,8 @@ function EventRow({ event, onPress }: { event: DiscoveryEventCard; onPress: () =
       accessibilityLabel={`Open event ${event.title}`}
     >
       {event.coverImageUrl ? (
-        <Image source={{ uri: event.coverImageUrl }} style={styles.poster} />
+        // eslint-disable-next-line jsx-a11y/alt-text -- React Native Image uses accessibility props, not alt
+        <Image source={{ uri: event.coverImageUrl }} style={styles.poster} accessibilityLabel={`${event.title} artwork`} />
       ) : (
         <View style={[styles.poster, styles.posterPlaceholder]}>
           <Text style={styles.posterPlaceholderText} numberOfLines={3}>

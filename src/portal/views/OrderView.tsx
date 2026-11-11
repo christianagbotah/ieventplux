@@ -137,7 +137,6 @@ export default function OrderView({ reference }: { reference: string }) {
           <button className="flex w-full items-center gap-4 rounded-xl border border-border/70 p-4 text-left ievx-card-hover" onClick={() => navigate(`/event/${order.event.slug}`)}>
             <div className="h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-muted">
               {order.event.coverImageUrl && (
-                // eslint-disable-next-line @next/next/no-img-element
                 <img src={order.event.coverImageUrl} alt="" className="h-full w-full object-cover" />
               )}
             </div>

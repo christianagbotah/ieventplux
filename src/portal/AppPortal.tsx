@@ -73,7 +73,6 @@ export default function AppPortal() {
     return () => {
       cancelled = true
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Realtime notifications over the gateway WebSocket (port ONLY in XTransformPort).

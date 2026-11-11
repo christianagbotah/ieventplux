@@ -162,7 +162,8 @@ export default function EventDetailScreen({ navigation, route }: EventDetailScre
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       {event.coverImageUrl ? (
-        <Image source={{ uri: event.coverImageUrl }} style={styles.cover} />
+        // eslint-disable-next-line jsx-a11y/alt-text -- React Native Image uses accessibility props, not alt
+        <Image source={{ uri: event.coverImageUrl }} style={styles.cover} accessibilityLabel={`${event.title} artwork`} />
       ) : (
         <View style={[styles.cover, styles.coverPlaceholder]}>
           <Text style={styles.coverPlaceholderText}>{event.title}</Text>
