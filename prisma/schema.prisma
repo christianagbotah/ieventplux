@@ -1,0 +1,1155 @@
+// iEventPlux — Prisma schema (SQLite development deployment; designed to be portable to PostgreSQL)
+// Conventions:
+//  - Money: integer minor units (GHS pesewas) + ISO currency code string. Never floats.
+//  - Enums: string fields validated at the application boundary (zod) because SQLite lacks enums.
+//  - JSON payloads: String fields holding JSON, parsed/serialized at the service layer.
+//  - Times: DateTime stored in UTC; events additionally carry an IANA timezone name.
+//  - Soft deletion: deletedAt where retention rules require it. Financial history is never deleted.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────── Identity & tenancy ───────────────────────────────
+
+model User {
+  id                String    @id @default(cuid())
+  email             String    @unique
+  phone             String?   @unique
+  passwordHash      String
+  displayName       String
+  avatarUrl         String?
+  bio               String?
+  // Platform role: USER | SUPPORT | MODERATOR | FINANCE_ADMIN | SUPER_ADMIN
+  role              String    @default("USER")
+  country           String    @default("GH")
+  city              String?
+  timezone          String    @default("Africa/Accra")
+  locale            String    @default("en")
+  emailVerifiedAt   DateTime?
+  phoneVerifiedAt   DateTime?
+  notifPrefs        String    @default("{}") // JSON: {email,push,sms,marketing}
+  status            String    @default("ACTIVE") // ACTIVE | SUSPENDED | DELETED
+  deletedAt         DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  sessions            Session[]
+  memberships         Membership[]
+  ownedOrgs           Organization[]         @relation("OrgOwner")
+  followsGiven        Follow[]               @relation("FollowFollower")
+  followsReceived     Follow[]               @relation("FollowTargetUser")
+  interests           EventInterest[]
+  orders              Order[]
+  tickets             Ticket[]
+  scans               AdmissionScan[]        @relation("Scanner")
+  deviceSessions      DeviceSession[]
+  comments            Comment[]
+  reactions           Reaction[]
+  notifications       Notification[]
+  messageDeliveries   MessageDelivery[]
+  blocksMade          UserBlock[]            @relation("Blocker")
+  blocksReceived      UserBlock[]            @relation("Blocked")
+  mutesMade           UserMute[]             @relation("Muter")
+  mutesReceived       UserMute[]             @relation("Muted")
+  reportsFiled        ModerationReport[]     @relation("Reporter")
+  auditLogs           AuditLog[]
+  uploads             MediaAsset[]
+  aiConversations     AiConversation[]
+  viewingEntitlements ViewingEntitlement[]
+  playbackSessions    PlaybackSession[]
+  promotionDeliveries PromotionDelivery[]
+  refundRequests      RefundCase[]           @relation("RefundRequester")
+  verifications       ContactVerification[]
+  chatMessages        ChatMessage[]
+}
+
+model Session {
+  id          String    @id @default(cuid())
+  userId      String
+  tokenHash   String    @unique
+  elevatedAt  DateTime? // recent password re-auth for privileged financial actions
+  ip          String?
+  userAgent   String?
+  createdAt   DateTime  @default(now())
+  lastSeenAt  DateTime  @default(now())
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model ContactVerification {
+  id         String    @id @default(cuid())
+  userId     String?
+  channel    String // EMAIL | SMS
+  target     String
+  codeHash   String
+  purpose    String // VERIFY | PASSWORD_RESET | LOGIN_OTP
+  expiresAt  DateTime
+  consumedAt DateTime?
+  attempts   Int       @default(0)
+  createdAt  DateTime  @default(now())
+  user       User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([target, purpose])
+}
+
+model Organization {
+  id            String    @id @default(cuid())
+  name          String
+  slug          String    @unique
+  tagline       String?
+  description   String?
+  logoUrl       String?
+  coverUrl      String?
+  orgType       String    @default("ORGANIZATION") // CHURCH | MINISTRY | ASSOCIATION | COMPANY | INDIVIDUAL
+  country       String    @default("GH")
+  city          String?
+  address       String?
+  contactEmail  String?
+  contactPhone  String?
+  website       String?
+  ownerId       String
+  status        String    @default("PENDING_VERIFICATION") // PENDING_VERIFICATION | ACTIVE | SUSPENDED
+  verifiedAt    DateTime?
+  payoutProfile String    @default("{}") // JSON, secrets masked at rest; destination changes audited
+  smsQuotaPerMonth Int    @default(100)
+  streamMinutesAllowance Int @default(120)
+  deletedAt     DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  owner          User                  @relation("OrgOwner", fields: [ownerId], references: [id])
+  memberships    Membership[]
+  followers      Follow[]
+  verification   OrganizerVerification?
+  venues         Venue[]
+  series         EventSeries[]
+  events         Event[]
+  media          MediaAsset[]
+  ticketTypes    TicketType[]          @relation("OrgTicketTypes")
+  orders         Order[]
+  ledgerAccounts LedgerAccount[]
+  payouts        Payout[]
+  holds          SettlementHold[]
+  subscription   Subscription?
+  campaigns      PromotionCampaign[]
+  chatMessages   ChatMessage[]
+  updates        EventUpdate[]
+  invoices       Invoice[]
+  messageSends   MessageDelivery[]     @relation("OrgMessageSends")
+  journals       LedgerJournal[]       @relation("OrgJournals")
+}
+
+model Membership {
+  id         String    @id @default(cuid())
+  orgId      String
+  userId     String
+  role       String    @default("MEMBER") // OWNER | ADMIN | EVENT_MANAGER | FINANCE | CHECKIN_STAFF | ANALYST
+  invitedAt  DateTime  @default(now())
+  acceptedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, userId])
+}
+
+model OrganizerVerification {
+  id          String    @id @default(cuid())
+  orgId       String    @unique
+  status      String    @default("PENDING") // PENDING | APPROVED | REJECTED
+  evidence    String    @default("[]") // JSON array of document references
+  notes       String?
+  submittedAt DateTime  @default(now())
+  reviewerId  String?
+  decidedAt   DateTime?
+  org         Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+}
+
+// ─────────────────────────────── Catalog & events ───────────────────────────────
+
+model Category {
+  id        String  @id @default(cuid())
+  name      String
+  slug      String  @unique
+  icon      String  @default("calendar")
+  color     String  @default("#10b981")
+  sortOrder Int     @default(0)
+  active    Boolean @default(true)
+}
+
+model Venue {
+  id                 String  @id @default(cuid())
+  orgId              String
+  name               String
+  address            String?
+  city               String?
+  region             String?
+  country            String  @default("GH")
+  lat                Float?
+  lng                Float?
+  mapsUrl            String?
+  capacity           Int?
+  accessibilityInfo  String?
+  directionsNote     String?
+  org                Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  events Event[]
+}
+
+model EventSeries {
+  id          String   @id @default(cuid())
+  orgId       String
+  title       String
+  slug        String   @unique
+  description String?
+  categorySlug String
+  timezone    String   @default("Africa/Accra")
+  recurrence  String   @default("{}") // JSON: {freq:"WEEKLY", byWeekDay:[0], time:"09:00", durationMin:90}
+  visibility  String   @default("PUBLIC") // PUBLIC | UNLISTED
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  org    Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  events Event[]
+
+  @@index([orgId])
+}
+
+model Event {
+  id               String    @id @default(cuid())
+  orgId            String
+  seriesId         String?
+  title            String
+  slug             String    @unique
+  summary          String?
+  description      String
+  categorySlug     String
+  tags             String    @default("[]") // JSON string[]
+  coverImageUrl    String?
+  gallery          String    @default("[]") // JSON MediaAsset ids/urls
+  mode             String    @default("PHYSICAL") // PHYSICAL | VIRTUAL | HYBRID
+  visibility       String    @default("PUBLIC") // PUBLIC | UNLISTED | INVITE_ONLY
+  status           String    @default("DRAFT") // DRAFT|SCHEDULED|PUBLISHED|POSTPONED|CANCELLED|LIVE|ENDED
+  venueId          String?
+  country          String    @default("GH")
+  city             String?
+  timezone         String    @default("Africa/Accra")
+  startsAt         DateTime
+  endsAt           DateTime
+  publishAt        DateTime? // scheduled publication
+  publishedAt      DateTime?
+  postponedAt      DateTime?
+  cancelledAt      DateTime?
+  cancelReason     String?
+  contactEmail     String?
+  contactPhone     String?
+  accessibilityInfo String?
+  attendanceRules  String?
+  directionsUrl    String?
+  ageGuidance      String?
+  refundPolicy     String?
+  capacityTotal    Int?
+  isFeatured       Boolean   @default(false)
+  boostedUntil     DateTime? // active promotion window
+  createdBy        String?
+  deletedAt        DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  org          Organization     @relation(fields: [orgId], references: [id])
+  series       EventSeries?     @relation(fields: [seriesId], references: [id])
+  venue        Venue?           @relation(fields: [venueId], references: [id])
+  agenda       AgendaItem[]
+  media        MediaAsset[] @relation("EventMedia")
+  linkedClips  MediaAsset[] @relation("ClipLinksTo")
+  interests    EventInterest[]
+  invitations  Invitation[]
+  rsvps        Rsvp[]
+  ticketTypes  TicketType[]
+  discountCodes DiscountCode[]
+  orders       Order[]
+  tickets      Ticket[]
+  scans        AdmissionScan[]
+  deviceSessions DeviceSession[]
+  broadcasts   LiveBroadcast[]
+  comments     Comment[]
+  updates      EventUpdate[]
+  campaigns    PromotionCampaign[]
+
+  @@index([status, visibility, startsAt])
+  @@index([orgId, status])
+  @@index([categorySlug])
+  @@index([city, country])
+  @@index([seriesId])
+}
+
+model AgendaItem {
+  id          String   @id @default(cuid())
+  eventId     String
+  title       String
+  startsAt    DateTime
+  endsAt      DateTime?
+  speaker     String?
+  description String?
+  sortOrder   Int      @default(0)
+  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId])
+}
+
+model MediaAsset {
+  id            String    @id @default(cuid())
+  orgId         String
+  eventId       String?   // event this media belongs to (poster/gallery/clip)
+  linksToEventId String?  // "previous event clip" that should surface the NEXT occurrence
+  uploaderId    String?
+  kind          String    @default("GALLERY") // POSTER | GALLERY | CLIP | RECORDING
+  url           String
+  posterUrl     String?
+  durationSec   Int?
+  caption       String?
+  status        String    @default("READY") // READY | PROCESSING | FAILED
+  views         Int       @default(0)
+  createdAt     DateTime  @default(now())
+
+  org        Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  event      Event?       @relation("EventMedia", fields: [eventId], references: [id], onDelete: SetNull)
+  linksTo    Event?       @relation("ClipLinksTo", fields: [linksToEventId], references: [id], onDelete: SetNull)
+  uploader   User?        @relation(fields: [uploaderId], references: [id], onDelete: SetNull)
+
+  @@index([orgId, kind])
+  @@index([eventId])
+}
+
+model EventUpdate {
+  id           String   @id @default(cuid())
+  eventId      String
+  orgId        String
+  title        String
+  body         String
+  mediaAssetId String?
+  createdAt    DateTime @default(now())
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  org   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([eventId, createdAt])
+}
+
+// ─────────────────────────────── Social ───────────────────────────────
+
+model Follow {
+  id          String   @id @default(cuid())
+  followerId  String
+  orgId       String?
+  userId      String?
+  createdAt   DateTime @default(now())
+
+  follower    User         @relation("FollowFollower", fields: [followerId], references: [id], onDelete: Cascade)
+  org         Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  targetUser  User?        @relation("FollowTargetUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, orgId])
+  @@unique([followerId, userId])
+}
+
+model EventInterest {
+  id        String   @id @default(cuid())
+  userId    String
+  eventId   String
+  kind      String   @default("SAVE") // SAVE | INTEREST | GOING
+  privacy   String   @default("PUBLIC") // PUBLIC | FOLLOWERS | PRIVATE
+  createdAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, eventId, kind])
+}
+
+model Invitation {
+  id             String    @id @default(cuid())
+  eventId        String
+  code           String    @unique
+  displayName    String?
+  contact        String?
+  maxGuests      Int       @default(2)
+  guestsUsed     Int       @default(0)
+  requireApproval Boolean  @default(false)
+  expiresAt      DateTime?
+  status         String    @default("ACTIVE") // ACTIVE | REVOKED | EXHAUSTED
+  createdBy      String?
+  createdAt      DateTime  @default(now())
+
+  event      Event       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  rsvps Rsvp[]
+
+  @@index([eventId])
+}
+
+model Rsvp {
+  id           String    @id @default(cuid())
+  eventId      String
+  invitationId String?
+  userId       String?
+  name         String
+  email        String?
+  phone        String?
+  guests       Int       @default(1)
+  status       String    @default("PENDING") // PENDING | APPROVED | DECLINED
+  createdAt    DateTime  @default(now())
+  decidedAt    DateTime?
+  decidedBy    String?
+
+  event      Event       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  invitation Invitation? @relation(fields: [invitationId], references: [id], onDelete: SetNull)
+
+  tickets Ticket[]
+
+  @@index([eventId, status])
+}
+
+model Comment {
+  id        String    @id @default(cuid())
+  eventId   String
+  userId    String
+  parentId  String?
+  body      String
+  status    String    @default("VISIBLE") // VISIBLE | HIDDEN | FLAGGED | REMOVED
+  createdAt DateTime  @default(now())
+
+  event    Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent   Comment?  @relation("CommentThread", fields: [parentId], references: [id], onDelete: SetNull)
+  children Comment[] @relation("CommentThread")
+
+  @@index([eventId, status])
+}
+
+model Reaction {
+  id         String   @id @default(cuid())
+  targetType String // MEDIA | COMMENT
+  targetId   String
+  userId     String
+  kind       String   @default("LIKE") // LIKE | CELEBRATE | HEART | FIRE
+  createdAt  DateTime @default(now())
+
+  user   User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([targetType, targetId])
+}
+
+model UserBlock {
+  blockerId String
+  blockedId String
+  createdAt DateTime @default(now())
+  blocker   User     @relation("Blocker", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked   User     @relation("Blocked", fields: [blockedId], references: [id], onDelete: Cascade)
+
+  @@id([blockerId, blockedId])
+}
+
+model UserMute {
+  muterId   String
+  mutedId   String
+  createdAt DateTime @default(now())
+  muter     User     @relation("Muter", fields: [muterId], references: [id], onDelete: Cascade)
+  muted     User     @relation("Muted", fields: [mutedId], references: [id], onDelete: Cascade)
+
+  @@id([muterId, mutedId])
+}
+
+// ─────────────────────────────── Ticketing & orders ───────────────────────────────
+
+model TicketType {
+  id                 String    @id @default(cuid())
+  eventId            String
+  orgId              String
+  name               String
+  description        String?
+  kind               String    @default("PHYSICAL") // PHYSICAL | VIRTUAL | HYBRID
+  priceMinor         Int       @default(0) // integer minor units; 0 = free
+  currency           String    @default("GHS")
+  quota              Int       @default(0)
+  soldCount          Int       @default(0)
+  reservedCount      Int       @default(0)
+  perBuyerLimit      Int       @default(4)
+  saleStartsAt       DateTime?
+  saleEndsAt         DateTime?
+  includesVirtualAccess Boolean @default(false)
+  groupMinQty        Int?
+  groupPctOff        Int?
+  active            Boolean   @default(true)
+  sortOrder         Int       @default(0)
+  createdAt         DateTime  @default(now())
+
+  event        Event                 @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  org          Organization          @relation("OrgTicketTypes", fields: [orgId], references: [id])
+  reservations InventoryReservation[]
+  orderItems   OrderItem[]
+  tickets      Ticket[]
+
+  @@index([eventId])
+}
+
+model DiscountCode {
+  id             String    @id @default(cuid())
+  eventId        String
+  code           String
+  pctOff         Int?
+  amountOffMinor Int?
+  maxUses        Int       @default(100)
+  usedCount      Int       @default(0)
+  active         Boolean   @default(true)
+  expiresAt      DateTime?
+  event          Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, code])
+}
+
+model InventoryReservation {
+  id            String    @id @default(cuid())
+  orderId       String
+  ticketTypeId  String
+  qty           Int
+  status        String    @default("ACTIVE") // ACTIVE | CONSUMED | EXPIRED | RELEASED
+  expiresAt     DateTime
+  createdAt     DateTime  @default(now())
+  releasedAt    DateTime?
+
+  order       Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  ticketType  TicketType  @relation(fields: [ticketTypeId], references: [id], onDelete: Cascade)
+
+  @@index([status, expiresAt])
+  @@index([orderId])
+}
+
+model Order {
+  id              String    @id @default(cuid())
+  reference       String    @unique // ORD-XXXXXXXX, unique buyer-facing reference
+  orgId           String
+  eventId         String
+  userId          String?
+  buyerName       String
+  buyerEmail      String
+  buyerPhone      String?
+  kind            String    @default("PAID") // PAID | FREE (free RSVP-style issuance)
+  status          String    @default("DRAFT") // DRAFT|PENDING_PAYMENT|PAID|CANCELLED|EXPIRED|REFUND_PENDING|REFUNDED|PARTIALLY_REFUNDED|EXCEPTION_REVIEW
+  currency        String    @default("GHS")
+  subtotalMinor   Int       @default(0)
+  discountMinor   Int       @default(0)
+  platformFeeMinor Int      @default(0)
+  totalMinor      Int       @default(0)
+  feeVersionId    String?
+  feeSnapshot     String    @default("{}") // immutable fee rule snapshot JSON
+  discountCode    String?
+  expiresAt       DateTime?
+  paidAt          DateTime?
+  exceptionReason String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  org         Organization          @relation(fields: [orgId], references: [id])
+  event       Event                 @relation(fields: [eventId], references: [id])
+  user        User?                 @relation(fields: [userId], references: [id])
+  items       OrderItem[]
+  reservations InventoryReservation[]
+  payments    PaymentAttempt[]
+  tickets     Ticket[]
+  invoices    Invoice[]
+  refundCases RefundCase[]
+
+  @@index([eventId, status])
+  @@index([orgId, createdAt])
+  @@index([userId])
+}
+
+model OrderItem {
+  id             String  @id @default(cuid())
+  orderId        String
+  ticketTypeId   String
+  qty            Int
+  unitPriceMinor Int
+  discountMinor  Int     @default(0)
+  lineTotalMinor Int
+
+  order       Order      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  ticketType  TicketType @relation(fields: [ticketTypeId], references: [id])
+
+  @@index([orderId])
+}
+
+// ─────────────────────────────── Payments (Hubtel) ───────────────────────────────
+
+model PaymentAttempt {
+  id                  String    @id @default(cuid())
+  orderId             String
+  attemptNo           Int       @default(1)
+  provider            String    @default("HUBTEL") // HUBTEL | SIMULATOR
+  reference           String    @unique // unique per-attempt reference sent to provider
+  providerToken       String?   // Hubtel checkout token for status checks
+  providerPaymentId   String?
+  status              String    @default("INITIATED") // INITIATED|REDIRECTED|PENDING|SUCCESS|FAILED|UNKNOWN|REVERSED
+  amountMinor         Int
+  currency            String    @default("GHS")
+  checkoutUrl         String?
+  initiatedAt         DateTime  @default(now())
+  redirectedAt        DateTime?
+  lastStatusAt        DateTime?
+  verifiedAt          DateTime?
+  callbackCount       Int       @default(0)
+  failureReason       String?
+  reconcileCheckCount Int       @default(0)
+  lastReconciledAt    DateTime?
+  rawResult           String    @default("{}") // redacted provider payload
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([status, initiatedAt])
+}
+
+model ProviderEvent {
+  id              String    @id @default(cuid())
+  provider        String
+  eventType       String
+  reference       String?
+  providerPaymentId String?
+  dedupKey        String    @unique
+  payload         String    @default("{}") // redacted JSON
+  receivedAt      DateTime  @default(now())
+  processedAt     DateTime?
+  status          String    @default("RECEIVED") // RECEIVED | PROCESSED | DUPLICATE | REJECTED | ERROR
+  errorNote       String?
+
+  @@index([reference])
+  @@index([receivedAt])
+}
+
+model Ticket {
+  id            String    @id @default(cuid())
+  eventId       String
+  ticketTypeId  String
+  orderId       String?
+  rsvpId        String?
+  userId        String?
+  holderName    String
+  holderEmail   String?
+  code          String    @unique // opaque public code TKT-XXXXXXXXXXXX
+  qrSecret      String    // HMAC secret (hashed); QR payload = id.hmac
+  status        String    @default("VALID") // VALID | CHECKED_IN | REFUNDED | REVOKED | TRANSFERRED
+  issuedAt      DateTime  @default(now())
+  checkedInAt   DateTime?
+  checkedInBy   String?
+  transferToken String?
+  transferredFrom String?
+  seatInfo      String?
+
+  event      Event       @relation(fields: [eventId], references: [id])
+  ticketType TicketType  @relation(fields: [ticketTypeId], references: [id])
+  order      Order?      @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  rsvp       Rsvp?       @relation(fields: [rsvpId], references: [id], onDelete: SetNull)
+  user       User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+  scans      AdmissionScan[]
+
+  @@index([eventId, status])
+  @@index([ticketTypeId])
+  @@index([userId])
+}
+
+model AdmissionScan {
+  id                String    @id @default(cuid())
+  ticketId          String
+  eventId           String
+  scannerId         String
+  deviceSessionId   String?
+  scannedAt         DateTime  @default(now())
+  capturedOfflineAt DateTime?
+  result            String    @default("ADMITTED") // ADMITTED | DUPLICATE | INVALID | CONFLICT
+  source            String    @default("ONLINE") // ONLINE | OFFLINE_SYNC
+  note              String?
+  clientScanId      String    @unique // idempotency for offline replay
+
+  ticket         Ticket        @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  event          Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  scanner        User          @relation("Scanner", fields: [scannerId], references: [id])
+  deviceSession  DeviceSession? @relation(fields: [deviceSessionId], references: [id], onDelete: SetNull)
+
+  @@index([eventId, scannedAt])
+}
+
+model DeviceSession {
+  id            String    @id @default(cuid())
+  eventId       String
+  userId        String
+  name          String?
+  tokenHash     String    @unique
+  rosterVersion String?
+  downloadedAt  DateTime?
+  lastSyncAt    DateTime?
+  revokedAt     DateTime?
+  createdAt     DateTime  @default(now())
+
+  event   Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user    User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scans   AdmissionScan[]
+
+  @@index([eventId])
+}
+
+// ─────────────────────────────── Ledger, refunds, payouts ───────────────────────────────
+
+model RefundCase {
+  id               String    @id @default(cuid())
+  orderId          String
+  requestedBy      String
+  type             String    @default("FULL") // FULL | PARTIAL | MANUAL_ONLY (unsupported by provider → tracked)
+  amountMinor      Int
+  status           String    @default("REQUESTED") // REQUESTED|APPROVED|PROCESSED|FAILED|MANUAL_TRACKED|REJECTED
+  reason           String
+  ticketIds        String    @default("[]") // JSON
+  processedAt      DateTime?
+  providerRefundId String?
+  journalId        String?
+  resolutionNote   String?
+  createdAt        DateTime  @default(now())
+
+  order     Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  requester User  @relation("RefundRequester", fields: [requestedBy], references: [id])
+
+  @@index([status])
+}
+
+model LedgerAccount {
+  id        String   @id @default(cuid())
+  orgId     String? // null → platform-scope account
+  code      String // e.g. collections, organizer_payable, platform_fees
+  type      String // ASSET | LIABILITY | REVENUE | EXPENSE
+  name      String
+  currency  String   @default("GHS")
+  createdAt DateTime @default(now())
+
+  org     Organization? @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  entries LedgerEntry[]
+
+  @@unique([orgId, code])
+}
+
+model LedgerJournal {
+  id              String   @id @default(cuid())
+  idempotencyKey  String   @unique // e.g. order-payment:{orderId}:{attemptId}
+  orgId           String?
+  refType         String // ORDER_PAYMENT | REFUND | PAYOUT | PAYOUT_REVERSAL | SUBSCRIPTION | PROMOTION | ADJUSTMENT
+  refId           String
+  memo            String
+  status          String   @default("POSTED") // POSTED | REVERSED
+  reversedBy      String?  // journal id that reversed this one
+  createdBy       String
+  createdAt       DateTime @default(now())
+
+  org     Organization? @relation("OrgJournals", fields: [orgId], references: [id], onDelete: SetNull)
+  entries LedgerEntry[]
+
+  @@index([refType, refId])
+}
+
+model LedgerEntry {
+  id          String   @id @default(cuid())
+  journalId   String
+  accountId   String
+  direction   String // DEBIT | CREDIT
+  amountMinor Int
+  createdAt   DateTime @default(now())
+
+  journal LedgerJournal @relation(fields: [journalId], references: [id], onDelete: Cascade)
+  account LedgerAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId])
+  @@index([journalId])
+}
+
+model SettlementHold {
+  id           String    @id @default(cuid())
+  orgId        String
+  reason       String
+  amountMinor  Int
+  createdAt    DateTime  @default(now())
+  releasedAt   DateTime?
+  releasedJournalId String?
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+}
+
+model Payout {
+  id             String    @id @default(cuid())
+  orgId          String
+  requestedBy    String
+  approvedBy     String?
+  amountMinor    Int
+  currency       String    @default("GHS")
+  status         String    @default("REQUESTED") // REQUESTED|APPROVED|SUBMITTED|PAID|FAILED|UNKNOWN
+  destination    String    @default("{}") // JSON (redacted at rest)
+  providerRef    String?
+  submittedAt    DateTime?
+  reconciledAt   DateTime?
+  failureReason  String?
+  journalId      String?
+  reversalJournalId String?
+  createdAt      DateTime  @default(now())
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+}
+
+// ─────────────────────────────── Plans & billing ───────────────────────────────
+
+model SubscriptionPlan {
+  id             String   @id @default(cuid())
+  code           String   @unique // BASIC | PRO | ORG
+  name           String
+  description    String?
+  priceMinor     Int
+  currency       String   @default("GHS")
+  billingPeriodDays Int  @default(30)
+  entitlements   String   @default("{}") // JSON: maxPublishedEvents, teamSeats, analytics, smsPerMonth, streamMinutesPerMonth, replays
+  active         Boolean  @default(true)
+  sortOrder      Int      @default(0)
+
+  subscriptions Subscription[]
+}
+
+model Subscription {
+  id              String    @id @default(cuid())
+  orgId           String    @unique
+  planId          String
+  status          String    @default("ACTIVE") // ACTIVE | GRACE | EXPIRED | CANCELLED
+  startedAt       DateTime  @default(now())
+  currentPeriodEnd DateTime
+  autoRenew       Boolean   @default(false)
+  cancelledAt     DateTime?
+  createdAt       DateTime  @default(now())
+
+  org      Organization      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  plan     SubscriptionPlan  @relation(fields: [planId], references: [id])
+  invoices Invoice[]
+}
+
+model Invoice {
+  id             String   @id @default(cuid())
+  orgId          String
+  number         String   @unique
+  subscriptionId String?
+  orderId        String?
+  description    String
+  amountMinor    Int
+  currency       String   @default("GHS")
+  status         String   @default("DUE") // DUE | PAID | VOID
+  issuedAt       DateTime @default(now())
+  paidAt         DateTime?
+
+  org          Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  subscription Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  order        Order?        @relation(fields: [orderId], references: [id], onDelete: SetNull)
+}
+
+model FeeVersion {
+  id                String   @id @default(cuid())
+  version           Int      @unique
+  name              String
+  ticketCommissionPct Int    @default(500) // basis points (500 = 5.00%)
+  processingFeePct Int      @default(195) // basis points, informational; platform-borne per policy
+  smsRateMinor     Int      @default(5) // per segment
+  currency          String   @default("GHS")
+  effectiveFrom     DateTime @default(now())
+  active            Boolean  @default(true)
+  createdBy         String
+  createdAt         DateTime @default(now())
+}
+
+// ─────────────────────────────── Promotions ───────────────────────────────
+
+model PromotionCampaign {
+  id                    String   @id @default(cuid())
+  orgId                 String
+  eventId               String
+  name                  String
+  budgetMinor           Int
+  spentMinor            Int      @default(0)
+  cpmMinor              Int      @default(500) // billable cost per 1000 impressions
+  status                String   @default("DRAFT") // DRAFT|SCHEDULED|RUNNING|PAUSED|COMPLETED|EXHAUSTED
+  targeting             String   @default("{}") // JSON: cities[], radiusKm, categories[], interests[]
+  startsAt              DateTime
+  endsAt                DateTime
+  frequencyCapPerDay    Int      @default(4)
+  attributionWindowHours Int     @default(48)
+  createdAt             DateTime @default(now())
+
+  org       Organization        @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  event     Event               @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  deliveries PromotionDelivery[]
+
+  @@index([status])
+}
+
+model PromotionDelivery {
+  id           String   @id @default(cuid())
+  campaignId   String
+  kind         String // IMPRESSION | CLICK | CONVERSION
+  userId       String?
+  dedupKey     String   @unique
+  billableMinor Int     @default(0)
+  occurredAt   DateTime @default(now())
+  billed       Boolean  @default(false)
+
+  campaign PromotionCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  user     User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([campaignId, kind])
+}
+
+// ─────────────────────────────── Live broadcasting ───────────────────────────────
+
+model LiveBroadcast {
+  id              String    @id @default(cuid())
+  eventId         String
+  title           String
+  description     String?
+  accessPolicy    String    @default("FREE") // FREE | PAID | TICKET_HOLDERS | INVITED
+  priceMinor      Int?
+  currency        String    @default("GHS")
+  status          String    @default("SCHEDULED") // SCHEDULED | LIVE | ENDED | FAILED
+  ingestUrl       String?   // never exposed to attendees
+  streamKeyId     String?
+  streamKeyHash   String?
+  viewerCapacity  Int       @default(500)
+  minutesUsed     Float     @default(0)
+  startedAt       DateTime?
+  endedAt         DateTime?
+  recordingStatus String    @default("NONE") // NONE | PROCESSING | AVAILABLE
+  recordingUrl    String?
+  replayPriceMinor Int?
+  createdById     String?
+  createdAt       DateTime  @default(now())
+
+  event        Event               @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  entitlements ViewingEntitlement[]
+  sessions     PlaybackSession[]
+  messages     ChatMessage[]
+
+  @@index([status])
+}
+
+model ViewingEntitlement {
+  id             String    @id @default(cuid())
+  userId         String
+  broadcastId    String
+  kind           String    @default("PURCHASED") // PURCHASED | TICKET_BENEFIT | INVITED | ORG_STAFF
+  status         String    @default("ACTIVE") // ACTIVE | EXPIRED | REVOKED
+  expiresAt      DateTime?
+  sourceOrderId  String?
+  createdAt      DateTime  @default(now())
+
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  broadcast  LiveBroadcast  @relation(fields: [broadcastId], references: [id], onDelete: Cascade)
+  sessions   PlaybackSession[]
+
+  @@unique([userId, broadcastId])
+}
+
+model PlaybackSession {
+  id             String    @id @default(cuid())
+  broadcastId    String
+  userId         String
+  entitlementId  String?
+  tokenHash      String    @unique
+  issuedAt       DateTime  @default(now())
+  expiresAt      DateTime
+  revokedAt      DateTime?
+  lastHeartbeatAt DateTime @default(now())
+  ip             String?
+
+  broadcast   LiveBroadcast      @relation(fields: [broadcastId], references: [id], onDelete: Cascade)
+  user        User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  entitlement ViewingEntitlement? @relation(fields: [entitlementId], references: [id], onDelete: SetNull)
+}
+
+model ChatMessage {
+  id          String    @id @default(cuid())
+  broadcastId String
+  userId      String
+  orgId       String?
+  body        String
+  status      String    @default("VISIBLE") // VISIBLE | HIDDEN | FLAGGED
+  createdAt   DateTime  @default(now())
+
+  broadcast LiveBroadcast @relation(fields: [broadcastId], references: [id], onDelete: Cascade)
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  org       Organization? @relation(fields: [orgId], references: [id], onDelete: SetNull)
+}
+
+// ─────────────────────────────── Messaging & notifications ───────────────────────────────
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  type      String // TICKET_ISSUED | ORDER_PAID | REFUND | REMINDER | EVENT_CHANGE | FOLLOW | SYSTEM ...
+  title     String
+  body      String
+  link      String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+}
+
+model MessageDelivery {
+  id                String    @id @default(cuid())
+  channel           String // SMS | EMAIL | INAPP
+  userId            String?
+  orgId             String?
+  target            String // phone / email / user id
+  template          String
+  subject           String?
+  body              String
+  purpose           String    @default("TRANSACTIONAL") // TRANSACTIONAL | REMINDER | MARKETING
+  status            String    @default("QUEUED") // QUEUED|SENT|ACCEPTED|DELIVERED|FAILED|REJECTED|SUPPRESSED
+  provider          String    @default("SIMULATOR") // HUBTEL | SMTP | INAPP | SIMULATOR
+  providerMessageId String?
+  attempts          Int       @default(0)
+  nextRetryAt       DateTime?
+  sentAt            DateTime?
+  deliveredAt       DateTime?
+  failureReason     String?
+  segmentsCount     Int?
+  costMinor         Int?
+  dedupKey          String?   @unique
+  createdAt         DateTime  @default(now())
+
+  user User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  org  Organization? @relation("OrgMessageSends", fields: [orgId], references: [id], onDelete: SetNull)
+
+  @@index([status, nextRetryAt])
+  @@index([orgId, createdAt])
+}
+
+model Consent {
+  id        String    @id @default(cuid())
+  userId    String?
+  channel   String // SMS | EMAIL | PUSH
+  target    String
+  scope     String // MARKETING | TRANSACTIONAL
+  grantedAt DateTime  @default(now())
+  revokedAt DateTime?
+  source    String?
+
+  @@unique([target, channel, scope])
+}
+
+// ─────────────────────────────── Trust, safety & ops ───────────────────────────────
+
+model ModerationReport {
+  id             String    @id @default(cuid())
+  reporterId     String?
+  targetType     String // EVENT | COMMENT | USER | ORG | BROADCAST
+  targetId       String
+  reason         String // SPAM | OFFENSIVE | FRAUD | COPYRIGHT | OTHER
+  details        String?
+  status         String    @default("OPEN") // OPEN | REVIEWING | ACTIONED | DISMISSED
+  reviewerId     String?
+  resolutionNote String?
+  createdAt      DateTime  @default(now())
+  reviewedAt     DateTime?
+
+  reporter User? @relation("Reporter", fields: [reporterId], references: [id], onDelete: SetNull)
+
+  @@index([status])
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  actorUserId String?
+  actorLabel  String
+  action      String
+  entityType  String
+  entityId    String
+  before      String?
+  after       String?
+  ip          String?
+  createdAt   DateTime @default(now())
+
+  actor User? @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+model OutboxJob {
+  id          String    @id @default(cuid())
+  type        String // SEND_MESSAGE | PROCESS_PROVIDER_EVENT | RECONCILE_PAYMENT | EVENT_LIFECYCLE | REMINDER_SWEEP | RESERVATION_SWEEP | PLAYBACK_CLEANUP | SMS_STATUS_POLL | PROMOTION_BILL
+  payload     String    @default("{}")
+  status      String    @default("QUEUED") // QUEUED | RUNNING | DONE | FAILED | DEAD
+  runAt       DateTime  @default(now())
+  attempts    Int       @default(0)
+  maxAttempts Int       @default(5)
+  lastError   String?
+  lockedAt    DateTime?
+  lockedBy    String?
+  createdAt   DateTime  @default(now())
+  completedAt DateTime?
+
+  @@index([status, runAt])
+}
+
+model PlatformSetting {
+  key       String   @id
+  value     String
+  updatedBy String?
+  updatedAt DateTime @updatedAt
+}
+
+// ─────────────────────────────── CSS Effects library & AI ───────────────────────────────
+
+model CSSEffect {
+  id         String   @id // slug, matches src/data/css-effects.ts
+  name       String
+  category   String
+  difficulty String
+  demoKind   String
+  views      Int      @default(0)
+  featured   Boolean  @default(false)
+  createdAt  DateTime @default(now())
+}
+
+model AiConversation {
+  id         String   @id @default(cuid())
+  userId     String?
+  mode       String   @default("TEXT") // TEXT | VOICE
+  startedAt  DateTime @default(now())
+  lastActiveAt DateTime @default(now())
+
+  user    User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+  messages AiMessage[]
+}
+
+model AiMessage {
+  id             String   @id @default(cuid())
+  conversationId String
+  role           String // USER | ASSISTANT | SYSTEM
+  text           String
+  createdAt      DateTime @default(now())
+
+  conversation AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+}

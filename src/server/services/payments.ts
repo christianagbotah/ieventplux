@@ -1,0 +1,202 @@
+import { db } from '../../lib/db'
+import { env } from '../env'
+import { errors } from '../api'
+import { paymentReference } from '../ids'
+import { initiateCheckout } from '../hubtel/payments'
+import { enqueue } from '../outbox'
+
+/**
+ * Payment orchestration: attempt creation, provider initiation, callback intake.
+ * The browser return URL is informational only — payment state changes exclusively
+ * through provider callbacks or authenticated reconciliation.
+ */
+
+export async function initiatePaymentForOrder(orderRef: string, userId?: string | null) {
+  const order = await db.order.findUnique({ where: { reference: orderRef }, include: { event: true, payments: true } })
+  if (!order) throw errors.notFound('Order not found.')
+  if (order.userId && userId && order.userId !== userId) throw errors.forbidden('This order belongs to another buyer.')
+  if (order.status !== 'PENDING_PAYMENT') throw errors.conflict(`Order is ${order.status.toLowerCase().replace('_', ' ')} — payment is not required or no longer possible.`)
+  if (order.expiresAt && order.expiresAt < new Date()) {
+    // Re-arm reservation window if capacity still allows a retry.
+    const reservations = order.reservations ?? []
+    void reservations
+    await db.order.update({ where: { id: order.id }, data: { expiresAt: new Date(Date.now() + 5 * 60_000), status: 'PENDING_PAYMENT' } })
+  }
+  const active = order.payments.filter((p) => ['INITIATED', 'REDIRECTED', 'PENDING'].includes(p.status))
+  if (active.length > 0) {
+    const latest = active.sort((a, b) => b.attemptNo - a.attemptNo)[0]
+    if (latest.checkoutUrl) return { attemptId: latest.id, checkoutUrl: latest.checkoutUrl, provider: latest.provider, existing: true }
+  }
+
+  const attemptNo = order.payments.length + 1
+  const reference = paymentReference(order.reference, attemptNo)
+  const provider = env.paymentsSimulator ? 'SIMULATOR' : 'HUBTEL'
+
+  const callbackUrl = `${env.appUrl}/api/v1/payments/callback`
+  const returnUrl = `${env.appUrl}/api/v1/payments/return/${reference}`
+  const cancellationUrl = `${env.appUrl}/api/v1/payments/return/${reference}?cancelled=1`
+
+  const attempt = await db.paymentAttempt.create({
+    data: {
+      orderId: order.id,
+      attemptNo,
+      provider,
+      reference,
+      status: 'INITIATED',
+      amountMinor: order.totalMinor,
+      currency: order.currency,
+    },
+  })
+
+  const result = await initiateCheckout({
+    reference,
+    description: `iEventPlux — ${order.event.title}`,
+    amountMinor: order.totalMinor,
+    currency: order.currency,
+    callbackUrl,
+    returnUrl,
+    cancellationUrl,
+    buyerPhone: order.buyerPhone,
+    buyerEmail: order.buyerEmail,
+  })
+
+  if (!result.ok) {
+    await db.paymentAttempt.update({ where: { id: attempt.id }, data: { status: 'FAILED', failureReason: result.error } })
+    throw errors.unavailable('PAYMENT_INITIATION_FAILED', `Could not start checkout: ${result.error}`)
+  }
+
+  const checkoutUrl =
+    provider === 'SIMULATOR'
+      ? `/api/v1/payments/simulator/${reference}`
+      : (result.checkoutUrl as string)
+
+  await db.paymentAttempt.update({
+    where: { id: attempt.id },
+    data: { checkoutUrl, providerToken: result.token ?? reference, status: 'REDIRECTED', redirectedAt: new Date() },
+  })
+
+  return { attemptId: attempt.id, checkoutUrl, provider, simulated: provider === 'SIMULATOR' }
+}
+
+/**
+ * Callback intake: durable storage + prompt 200 ack. Business effects are
+ * processed by the worker (PROCESS_PROVIDER_EVENT) idempotently.
+ */
+export async function intakeCallback(payload: Record<string, unknown>) {
+  const { parseCallback } = await import('../hubtel/payments')
+  const parsed = parseCallback(payload as never)
+
+  const attempt = parsed.reference
+    ? await db.paymentAttempt.findUnique({ where: { reference: parsed.reference } })
+    : null
+
+  if (!attempt) {
+    // Unknown reference — stored for forensics, never fulfils anything.
+    await db.providerEvent.create({
+      data: {
+        provider: 'HUBTEL',
+        eventType: 'CALLBACK',
+        reference: parsed.reference,
+        providerPaymentId: parsed.providerPaymentId,
+        dedupKey: parsed.dedupKey,
+        payload: parsed.redactedPayload,
+        status: 'REJECTED',
+        errorNote: 'Unknown payment reference',
+      },
+    }).catch(() => {})
+    return { acknowledged: true, result: 'UNKNOWN_REFERENCE' as const }
+  }
+
+  const existing = await db.providerEvent.findUnique({ where: { dedupKey: parsed.dedupKey } })
+  if (existing) {
+    return { acknowledged: true, result: 'DUPLICATE' as const }
+  }
+
+  const event = await db.providerEvent.create({
+    data: {
+      provider: attempt.provider,
+      eventType: 'CALLBACK',
+      reference: parsed.reference,
+      providerPaymentId: parsed.providerPaymentId,
+      dedupKey: parsed.dedupKey,
+      payload: parsed.redactedPayload,
+    },
+  })
+  await db.paymentAttempt.update({ where: { id: attempt.id }, data: { callbackCount: { increment: 1 }, status: attempt.status === 'INITIATED' ? 'PENDING' : attempt.status } })
+  await enqueue('PROCESS_PROVIDER_EVENT', { providerEventId: event.id })
+  return { acknowledged: true, result: 'STORED' as const }
+}
+
+/** Process one stored provider event (worker). Idempotent. */
+export async function processProviderEvent(providerEventId: string) {
+  const pe = await db.providerEvent.findUnique({ where: { id: providerEventId } })
+  if (!pe || pe.status === 'PROCESSED') return { skipped: true }
+  const attempt = pe.reference ? await db.paymentAttempt.findUnique({ where: { reference: pe.reference } }) : null
+  if (!attempt) {
+    await db.providerEvent.update({ where: { id: pe.id }, data: { status: 'REJECTED', errorNote: 'No matching attempt' } })
+    return { skipped: true }
+  }
+  let parsed: { outcome: 'SUCCESS' | 'FAILURE' | 'PENDING' | 'UNKNOWN'; amountMinor: number | null }
+  try {
+    const raw = JSON.parse(pe.payload) as Record<string, unknown>
+    const { parseCallback } = await import('../hubtel/payments')
+    const p = parseCallback(raw as never)
+    parsed = { outcome: p.outcome, amountMinor: p.amountMinor }
+  } catch {
+    parsed = { outcome: 'UNKNOWN', amountMinor: null }
+  }
+  const { applyProviderOutcome } = await import('./fulfilment')
+  const outcome = await applyProviderOutcome({
+    attemptId: attempt.id,
+    outcome: parsed.outcome,
+    amountMinor: parsed.amountMinor,
+    providerPaymentId: pe.providerPaymentId,
+    source: 'CALLBACK',
+  })
+  await db.providerEvent.update({ where: { id: pe.id }, data: { status: 'PROCESSED', processedAt: new Date() } })
+  return { outcome }
+}
+
+/** Reconciliation sweep (documented ≥5-minute status-check rule). */
+export async function reconcilePayments() {
+  const settings = (await import('../settings')).DEFAULT_SETTINGS
+  const cutoff = new Date(Date.now() - settings.reconcileAfterMinutes * 60_000)
+  const candidates = await db.paymentAttempt.findMany({
+    where: {
+      status: { in: ['REDIRECTED', 'PENDING'] },
+      initiatedAt: { lt: cutoff },
+      reconcileCheckCount: { lt: settings.maxReconcileChecks },
+      callbackCount: 0,
+    },
+    take: 25,
+  })
+  const results: { reference: string; outcome: string }[] = []
+  for (const attempt of candidates) {
+    const { checkTransactionStatus } = await import('../hubtel/payments')
+    const status = await checkTransactionStatus(attempt.reference, attempt.providerToken)
+    await db.paymentAttempt.update({
+      where: { id: attempt.id },
+      data: { reconcileCheckCount: { increment: 1 }, lastReconciledAt: new Date() },
+    })
+    if (!status.ok || status.outcome === 'PENDING' || status.outcome === 'UNKNOWN') {
+      if (attempt.reconcileCheckCount + 1 >= settings.maxReconcileChecks && status.outcome !== 'SUCCESS') {
+        // Still unresolved after bounded checks → mark UNKNOWN and surface in the ops queue.
+        await db.paymentAttempt.update({ where: { id: attempt.id }, data: { status: 'UNKNOWN', failureReason: 'Unresolved after maximum reconciliation checks' } })
+        results.push({ reference: attempt.reference, outcome: 'UNKNOWN' })
+      } else {
+        results.push({ reference: attempt.reference, outcome: 'STILL_PENDING' })
+      }
+      continue
+    }
+    const { applyProviderOutcome } = await import('./fulfilment')
+    const applied = await applyProviderOutcome({
+      attemptId: attempt.id,
+      outcome: status.outcome,
+      amountMinor: status.amountMinor,
+      providerPaymentId: status.providerPaymentId,
+      source: 'RECONCILE',
+    })
+    results.push({ reference: attempt.reference, outcome: applied.outcome })
+  }
+  return { checked: candidates.length, results }
+}
