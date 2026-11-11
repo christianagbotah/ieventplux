@@ -16,6 +16,16 @@
 
 None open. (`bun run lint`: 0 errors / warnings only. `bunx tsc --noEmit`: 0 errors.)
 
+## Re-verification round 2 (post-handoff session, 2026-11-11)
+
+- Full golden path re-run green (order `ORD-037044A7A1`, 2 × Regular ₵160 → PAID → 2 tickets + QR).
+- Per-buyer limit 409 correctly enforced against a maxed account.
+- Effects Studio re-verified (live demos + copy CSS/HTML + toast).
+- AI text concierge re-verified against live DB context.
+- **Defect fixed:** voice replies silently degraded to text — the TTS provider rejects `response_format: 'mp3'` (code 1214). Route now uses `wav` + `audio/wav`; verified with a real round-trip (TTS-generated question → ASR exact transcript → LLM → 34.3 s spoken WAV reply).
+- Footer hardened for iOS safe-area + fixed mobile-bottom-nav clearance.
+- Repo hygiene: runtime `.env` untracked (template recovered as `.env.example`).
+
 ## External blockers
 
 Hubtel checkout/Send Money/SMS credentials + merchant agreement; Cloudflare Stream credentials; SMTP relay; Apple/Google store accounts; git remote. All truthfully surfaced at `/api/v1/health` and Admin → Integrations.

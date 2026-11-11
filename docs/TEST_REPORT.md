@@ -131,6 +131,24 @@
 
 SQLite serializes writers, so competing-buyer oversell protection was verified by invariant checks inside the reservation transaction (quota re-read + conditional claim) rather than a parallel-load harness. A load/concurrency smoke test with PostgreSQL + N buyers is documented as remaining work.
 
+## Re-verification round 2 (2026-11-11, post-handoff session)
+
+Fresh end-to-end pass after restart; all three services up (:3000 / :3001 / :3003).
+
+| Case | Outcome | Status |
+|---|---|---|
+| Golden path re-run | 2 × Regular (₵160) → order `ORD-037044A7A1` → initiate → simulator *Approve* → callback → **PAID**, tickets `TKT-8AF01EF2254288` / `TKT-955F3BE73FBA33` issued, My Tickets + QR SVG + transfer option render | ✅ |
+| Per-buyer limit | ama already at 4×VIP cap → `POST /orders` **409** "Per-buyer limit reached" — correct rule enforcement, frontend keeps sheet open | ✅ |
+| Effects Studio | 38 effects render; code dialog shows full CSS (incl. `prefers-reduced-motion`) + HTML; **Copy CSS** → clipboard + toast "self-contained" | ✅ |
+| AI concierge (text) | Question answered with **live DB events** (City Health Walk, Sunday Celebration Service, prices) | ✅ |
+| AI voice pipeline (API-level) | TTS-generated question WAV → `POST /ai/voice` → ASR transcript exact → LLM reply (real events) → **34.3 s / 1.6 MB WAV** spoken reply returned | ✅ (after fix) |
+| Voice UI degradation | Headless Chromium denies mic → honest "Microphone permission denied. You can still type" message | ✅ |
+| Sticky footer | 390×844 short page: sticks to viewport bottom; long page: pushed naturally; desktop 1280×800: sticks | ✅ (after fix) |
+| Console / dev-log errors | none during the round | ✅ |
+| `bun run lint` / `bunx tsc --noEmit` | 0 errors / 0 errors (34 warnings — documented pattern notes) | ✅ |
+
+**Defect found & fixed in round 2:** the TTS provider rejects `response_format: 'mp3'` (HTTP 400, code 1214 — isolated SDK test confirmed `wav` works). The AI voice route therefore silently degraded every spoken reply to text-only (`audioBase64: null`). Fixed to `wav` + `audio/wav` in `src/app/api/v1/ai/[mode]/route.ts`; re-verified with a real round-trip (TTS → ASR → LLM → TTS) returning valid 24 kHz audio. Also hardened the portal footer for iOS safe-area + fixed mobile-bottom-nav clearance (`pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0`).
+
 ## Not performed (honest)
 
 - Native Android/iOS builds and device testing (mobile is a source scaffold).

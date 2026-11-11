@@ -292,7 +292,8 @@ export default function AppPortal() {
         </Suspense>
       </main>
 
-      <footer className="mt-auto border-t border-border/60 bg-card">
+      {/* pb on mobile clears the fixed bottom nav + iOS safe-area inset; md: clears it since the nav is hidden */}
+      <footer className="mt-auto border-t border-border/60 bg-card pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0">
         <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-6 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
           <p>© {new Date().getFullYear()} iEventPlux · Lightworld Technologies Ltd. · Accra, Ghana</p>
           <p className="flex flex-wrap items-center gap-x-3 gap-y-1">

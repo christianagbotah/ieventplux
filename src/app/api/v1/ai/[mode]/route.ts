@@ -61,12 +61,12 @@ async function ttsBase64(text: string): Promise<string | null> {
   try {
     const ZAI = (await import('z-ai-web-dev-sdk')).default
     const zai = await ZAI.create()
-    const clipped = text.slice(0, 1000) // SDK limit: 1024 chars
+    const clipped = text.slice(0, 1000) // SDK limit: 1024 chars; wav is the supported non-streaming format here
     const response = await zai.audio.tts.create({
       input: clipped,
       voice: 'tongtong',
       speed: 1.0,
-      response_format: 'mp3',
+      response_format: 'wav',
       stream: false,
     })
     const arrayBuffer = await response.arrayBuffer()
@@ -140,7 +140,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
         transcript,
         reply,
         audioBase64,
-        audioMime: audioBase64 ? 'audio/mpeg' : null,
+        audioMime: audioBase64 ? 'audio/wav' : null,
         conversationId,
         ttsNote: audioBase64 ? null : 'Voice synthesis unavailable for this reply — showing text only.',
       })
