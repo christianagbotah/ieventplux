@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { CheckCircle2, Clock, XCircle, AlertTriangle, Ticket, ChevronLeft, RefreshCw } from 'lucide-react'
+import { CheckCircle2, Clock, XCircle, AlertTriangle, Ticket, ChevronLeft, RefreshCw, CalendarPlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -192,6 +192,16 @@ export default function OrderView({ reference }: { reference: string }) {
               <p className="text-xs text-muted-foreground">{order.event.org.name} · {dateLong(order.event.startsAt, order.event.timezone)}</p>
               {order.event.venue && <p className="text-xs text-muted-foreground">{order.event.venue.name}</p>}
             </div>
+            <a
+              href={`/api/v1/events/${order.event.id}/ics`}
+              download
+              className="efx-underline-slide-link flex shrink-0 flex-col items-center gap-1 self-center px-2 text-xs font-semibold text-primary"
+              aria-label="Add this event to your calendar (downloads an .ics file)"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <CalendarPlus className="h-5 w-5" aria-hidden />
+              Calendar
+            </a>
           </button>
 
           <div>

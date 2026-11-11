@@ -30,12 +30,20 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
       }
       data.quota = quota
     }
+    const quotaRaised = typeof data.quota === 'number' && data.quota > tt.quota
     if (body.perBuyerLimit !== undefined) data.perBuyerLimit = Math.max(1, Math.min(20, Number(body.perBuyerLimit)))
     if (body.active !== undefined) data.active = Boolean(body.active)
     if (body.includesVirtualAccess !== undefined) data.includesVirtualAccess = Boolean(body.includesVirtualAccess)
     if (body.saleEndsAt !== undefined) data.saleEndsAt = body.saleEndsAt ? new Date(String(body.saleEndsAt)) : null
     if (body.saleStartsAt !== undefined) data.saleStartsAt = body.saleStartsAt ? new Date(String(body.saleStartsAt)) : null
     const updated = await db.ticketType.update({ where: { id: ttId }, data })
+
+    // A quota raise frees inventory — wake the waitlist so waiting fans get a fair shot.
+    if (quotaRaised) {
+      const { enqueueWaitlistPromote } = await import('@/server/services/waitlist')
+      enqueueWaitlistPromote(id)
+    }
+
     return jsonOk({ ticketType: updated })
   })
 }

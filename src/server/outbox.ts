@@ -17,6 +17,8 @@ export type OutboxJobType =
   | 'SMS_STATUS_POLL'
   | 'PROMOTION_BILL'
   | 'NOTIFY_PUSH'
+  | 'WAITLIST_PROMOTE'
+  | 'WAITLIST_SWEEP'
 
 export async function enqueue(type: OutboxJobType, payload: Record<string, unknown>, options?: { runAt?: Date; maxAttempts?: number }) {
   const job = await db.outboxJob.create({

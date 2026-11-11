@@ -21,6 +21,9 @@
   - `F-final` — verification fixes (callback casing, check-in FK, jQuery easings, route conflict), mobile scaffold, documentation suite, this handoff
   - `4ca3093` — **post-handoff re-verification round 2:** voice-TTS defect fix (provider rejects `mp3`; route now `wav` + `audio/wav`, full ASR→LLM→TTS round-trip verified), footer iOS safe-area + mobile-nav clearance, `.env` untracked (template → `.env.example`), TEST_REPORT round-2 section. Working tree clean at this commit.
   - `45e08cb` — remote connected + pushed; `0d19f42`/`98e7181`/`00c0958` — production homepage polish + PWA, lint hygiene, platform-wide zero-error sweep.
+  - `945d038` — AI + UX expansion: AI smart search, personalized recommendations, AI Content Studio (writer/captions/poster), command palette, dark mode, selling-fast signals.
+  - `75a65ae`/`bcc44d5` — Effects Studio became the design system: full 38-effect catalog applied across every portal view (round-4 pass, light+dark, both viewports).
+  - Round 5 (this session): sold-out waitlist (guest join, FIFO, honest FCFS promotion via WAITLIST_PROMOTE/SWEEP + SMS), refund-frees-inventory fix, .ics calendar export, organizer waitlist visibility. See TEST_REPORT round 5.
   - AI + UX expansion (round 4): AI smart search (`/ai/search`), AI recommendations (`/ai/recommend`), AI Content Studio (`/ai/studio` + `/#/ai-studio` incl. poster image generation), command palette (⌘K), dark/light theme, confetti + selling-fast signals. Verified in TEST_REPORT round 3.
 - **Branch:** `main` · **Working tree:** clean at handoff.
 

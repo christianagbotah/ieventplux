@@ -1,4 +1,4 @@
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { handle, jsonOk, requireUser, readJson, errors, sanitizeText, jsonList, pagination, rateLimit } from '@/server/api'
 import { db } from '@/lib/db'
 import { eventOrgAccess } from '@/server/permissions'
@@ -17,6 +17,59 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
     if (action === 'agenda') {
       const items = await db.agendaItem.findMany({ where: { eventId: id }, orderBy: [{ sortOrder: 'asc' }, { startsAt: 'asc' }] })
       return jsonOk({ items })
+    }
+
+    if (action === 'waitlist') {
+      const event = await db.event.findUnique({ where: { id } })
+      if (!event || event.deletedAt) throw errors.notFound('Event not found.')
+      const session = await (await import('@/server/auth')).getSession()
+      const { waitlistStatus, waitlistOrganizerView } = await import('@/server/services/waitlist')
+      const status = await waitlistStatus(id, session?.user.id ?? null)
+      let entries: unknown = undefined
+      if (session) {
+        const access = await eventOrgAccess(session.user.id, id, 'attendees:view')
+        if (access.allowed) entries = await waitlistOrganizerView(id)
+      }
+      return jsonOk({ ...status, entries })
+    }
+
+    if (action === 'ics') {
+      const event = await db.event.findUnique({ where: { id }, include: { venue: true, org: { select: { name: true } } } })
+      if (!event || event.deletedAt) throw errors.notFound('Event not found.')
+      if (event.visibility !== 'PUBLIC') {
+        const session = await (await import('@/server/auth')).getSession()
+        if (!session) throw errors.unauthorized('This event\'s calendar file requires signing in.')
+      }
+      const fmt = (d: Date) => d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '')
+      const esc = (v: string) => v.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n')
+      const loc = event.venue ? `${event.venue.name}${event.venue.address ? ', ' + event.venue.address : ''}${event.city ? ', ' + event.city : ''}` : event.mode === 'PHYSICAL' ? (event.city ?? '') : 'Online'
+      const lines = [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'PRODID:-//iEventPlux//Events//EN',
+        'CALSCALE:GREGORIAN',
+        'METHOD:PUBLISH',
+        'BEGIN:VEVENT',
+        `UID:${event.id}@ieventplux`,
+        `DTSTAMP:${fmt(new Date())}`,
+        `DTSTART:${fmt(event.startsAt)}`,
+        `DTEND:${fmt(event.endsAt)}`,
+        `SUMMARY:${esc(event.title)}`,
+        `DESCRIPTION:${esc((event.summary ?? event.description).slice(0, 800))}`,
+        `LOCATION:${esc(loc)}`,
+        `ORGANIZER;CN=${esc(event.org.name)}:mailto:${esc(event.contactEmail ?? 'hello@ieventplux.app')}`,
+        `URL:https://ieventplux.app/#/event/${event.slug}`,
+        `STATUS:${event.status === 'CANCELLED' ? 'CANCELLED' : 'CONFIRMED'}`,
+        'END:VEVENT',
+        'END:VCALENDAR',
+      ]
+      return new NextResponse(lines.join('\r\n'), {
+        headers: {
+          'Content-Type': 'text/calendar; charset=utf-8',
+          'Content-Disposition': `attachment; filename="${event.slug}.ics"`,
+          'Cache-Control': 'no-store',
+        },
+      })
     }
 
     if (action === 'media') {
@@ -133,8 +186,32 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
 export async function POST(req: NextRequest, ctx: RouteContext) {
   return handle(async () => {
     const { id, action } = await ctx.params
-    const user = await requireUser()
     const body = await readJson<Record<string, unknown>>(req).catch(() => ({}) as Record<string, unknown>)
+
+    // ── Waitlist (guest-friendly; joins are only valid while sold out) ────
+    if (action === 'waitlist') {
+      rateLimit(req, 'waitlist-join', 5, 60_000)
+      const session = await (await import('@/server/auth')).getSession()
+      const { joinWaitlist } = await import('@/server/services/waitlist')
+      const result = await joinWaitlist({
+        eventId: id,
+        ticketTypeId: body.ticketTypeId ? String(body.ticketTypeId) : null,
+        userId: session?.user.id ?? null,
+        name: sanitizeText(String(body.name ?? ''), 80),
+        contact: String(body.contact ?? ''),
+        partySize: Number(body.partySize ?? 1),
+      })
+      return jsonOk({ position: result.position, reactivated: result.reactivated, status: result.entry.status })
+    }
+
+    if (action === 'waitlist-leave') {
+      const session = await (await import('@/server/auth')).getSession()
+      const { leaveWaitlist } = await import('@/server/services/waitlist')
+      await leaveWaitlist(id, { userId: session?.user.id ?? null, contact: body.contact ? String(body.contact) : undefined })
+      return jsonOk({ left: true })
+    }
+
+    const user = await requireUser()
 
     // ── Lifecycle transitions (publish/cancel/postpone/schedule) ──────────
     if (action === 'transition') {

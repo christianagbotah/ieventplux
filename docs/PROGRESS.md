@@ -52,6 +52,15 @@ None open. (`bun run lint`: 0 errors / warnings only. `bunx tsc --noEmit`: 0 err
 - Defect fixed: event title layered behind the ken-burns compositing layer (`relative z-10`).
 - Verification: `docs/TEST_REPORT.md` → "Re-verification round 4" incl. a real restyled checkout (ORD-F134813A3F-A1 paid, ticket issued); lint 0 errors / 16 warnings; tsc 0 errors. Commit `75a65ae` pushed.
 
+## Round 5 — Sold-out waitlist + calendar export (2026-11-11)
+
+- **Waitlist (real demand capture, honest fulfilment):** new `WaitlistEntry` model (57 models now). Guests and signed-in fans join while an event is sold out; FIFO positions are computed, never stored (no drift); duplicate joins are idempotent; leaving + re-joining reactivates at the tail. Joining is only possible while genuinely sold out — the guard returns an honest 409 pointing people at available tickets otherwise.
+- **Promotion without fake scarcity:** `WAITLIST_PROMOTE` (targeted, +2s) fires on refund processing and quota raises; `WAITLIST_SWEEP` (60s) is the self-healing backstop. Promotion NEVER reserves inventory — notified fans get an explicit first-come-first-served window via in-app notification + durable SMS (simulator-verified DELIVERED).
+- **Defect fixed:** `processRefund` never decremented `ticketType.soldCount` — refunded seats were lost from inventory forever. Now refunded seats return to stock and wake the waitlist.
+- **Calendar export:** `GET /api/v1/events/[id]/ics` produces a spec-correct VCALENDAR (UTC times, escaping, ORGANIZER, STATUS reflective of cancellations). Buttons on EventDetail hero + OrderView event card.
+- **Organizer visibility:** waitlist queue (contacts, party size, per-type, status) surfaces on the event page for org members; count badge visible publicly.
+- Verification: `docs/TEST_REPORT.md` → "Re-verification round 5" (full API matrix + browser sweep light/dark, both viewports, zero console errors); lint 0 errors / 16 warnings; tsc 0 errors.
+
 ## External blockers
 
 Hubtel checkout/Send Money/SMS credentials + merchant agreement; Cloudflare Stream credentials; SMTP relay; Apple/Google store accounts. All truthfully surfaced at `/api/v1/health` and Admin → Integrations. ~~git remote~~ **resolved 2026-11-11:** remote `github.com/christianagbotah/ieventplux` configured and pushed (`main`, upstream tracking set; every verified milestone is now committed and pushed).
@@ -63,7 +72,7 @@ Hubtel checkout/Send Money/SMS credentials + merchant agreement; Cloudflare Stre
 3. Migrate to PostgreSQL for concurrency (`docs/ARCHITECTURE.md` migration path) + add load/concurrency smoke tests.
 4. Add automated test suite (jest integration + Playwright journeys from TEST_REPORT E1–E14).
 5. Native dev builds for mobile broadcasting + store billing configuration.
-6. Bulk "apply to future occurrences" series editing; shared-store rate limiting when scaling beyond one instance.
+6. Series tooling (create EventSeries from the organizer UI, then bulk "apply to future occurrences" editing); shared-store rate limiting when scaling beyond one instance.
 
 ## Commands to resume
 

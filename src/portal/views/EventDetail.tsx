@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { CalendarDays, Clock, MapPin, Monitor, Share2, Heart, Bookmark, Flag, Users, ChevronLeft, Info, ExternalLink, Accessibility, Ticket, ShieldCheck, Church } from 'lucide-react'
+import { CalendarDays, CalendarPlus, Clock, MapPin, Monitor, Share2, Heart, Bookmark, Flag, Users, ChevronLeft, Info, ExternalLink, Accessibility, Ticket, ShieldCheck, Church, Hourglass } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -72,6 +72,12 @@ interface EventDetailPayload {
   canManage: boolean
 }
 
+interface WaitlistStatus {
+  count: number
+  mine: { position: number; status: string; partySize: number; notifiedAt: string | null } | null
+  entries?: { id: string; name: string; contact: string; partySize: number; status: string; ticketType: string | null; joinedAt: string; notifiedAt: string | null }[] | null
+}
+
 interface CommentNode {
   id: string
   body: string
@@ -96,6 +102,11 @@ export default function EventDetail({ slug }: { slug: string }) {
   const [reportOpen, setReportOpen] = useState(false)
   const [reportReason, setReportReason] = useState('SPAM')
   const [reportDetails, setReportDetails] = useState('')
+  const [waitlist, setWaitlist] = useState<WaitlistStatus | null>(null)
+  const [wlOpen, setWlOpen] = useState(false)
+  const [wlType, setWlType] = useState('')
+  const [wlForm, setWlForm] = useState({ name: '', contact: '', partySize: 1 })
+  const [wlBusy, setWlBusy] = useState(false)
 
   const load = useCallback(async () => {
     try {
@@ -104,6 +115,8 @@ export default function EventDetail({ slug }: { slug: string }) {
       setMine(payload.mine)
       const commentsPayload = await api.get<{ items: CommentNode[] }>(`/events/${payload.event.id}/comments?pageSize=20`).catch(() => ({ items: [] }))
       setComments(commentsPayload.items)
+      const wl = await api.get<WaitlistStatus>(`/events/${payload.event.id}/waitlist`).catch(() => null)
+      setWaitlist(wl)
       setError(null)
     } catch (err) {
       setError(err instanceof ApiClientError ? err.message : 'This event could not be loaded.')
@@ -123,6 +136,15 @@ export default function EventDetail({ slug }: { slug: string }) {
       if (tt.saleEndsAt && new Date(tt.saleEndsAt).getTime() < now) return false
       return tt.quota === 0 || tt.soldCount + tt.reservedCount < tt.quota
     })
+  }, [event])
+
+  const soldOutTypes = useMemo(() => {
+    if (!event) return []
+    const now = Date.now()
+    return event.ticketTypes.filter((tt) =>
+      (!tt.saleStartsAt || new Date(tt.saleStartsAt).getTime() <= now) &&
+      (!tt.saleEndsAt || new Date(tt.saleEndsAt).getTime() >= now) &&
+      tt.quota > 0 && tt.soldCount + tt.reservedCount >= tt.quota)
   }, [event])
 
   const selectedTotal = useMemo(() => {
@@ -172,6 +194,43 @@ export default function EventDetail({ slug }: { slug: string }) {
       }
     } catch {
       /* user cancelled share */
+    }
+  }
+
+  const openWaitlist = (typeId?: string) => {
+    setWlType(typeId ?? '')
+    setWlForm({ name: user?.displayName ?? '', contact: user?.email ?? '', partySize: 1 })
+    setWlOpen(true)
+  }
+
+  const joinWaitlist = async () => {
+    if (!event) return
+    setWlBusy(true)
+    try {
+      const res = await api.post<{ position: number; reactivated: boolean }>(`/events/${event.id}/waitlist`, {
+        name: wlForm.name,
+        contact: wlForm.contact,
+        partySize: wlForm.partySize,
+        ticketTypeId: wlType || undefined,
+      })
+      setWlOpen(false)
+      toast({ title: res.reactivated ? 'Back on the waitlist' : 'You are on the waitlist', description: `You are #${res.position} in line. We will alert you the moment tickets open up.` })
+      void load()
+    } catch (err) {
+      toast({ title: 'Could not join the waitlist', description: err instanceof ApiClientError ? err.message : undefined, variant: 'destructive' })
+    } finally {
+      setWlBusy(false)
+    }
+  }
+
+  const leaveWaitlist = async () => {
+    if (!event) return
+    try {
+      await api.post(`/events/${event.id}/waitlist-leave`, { contact: user?.email ?? wlForm.contact })
+      toast({ title: 'You left the waitlist', description: 'You can re-join any time while tickets remain sold out.' })
+      void load()
+    } catch (err) {
+      toast({ description: err instanceof ApiClientError ? err.message : 'Could not leave the waitlist.', variant: 'destructive' })
     }
   }
 
@@ -311,6 +370,11 @@ export default function EventDetail({ slug }: { slug: string }) {
               </Button>
               <Button variant="outline" size="icon" className="rounded-full" aria-label={mine.going ? 'Cancel interest' : 'Mark as going'} onClick={() => void toggleInterest('GOING')}>
                 <Heart className={`h-4 w-4 ${mine.going ? 'fill-destructive text-destructive' : ''}`} />
+              </Button>
+              <Button variant="outline" size="icon" className="rounded-full" asChild>
+                <a href={`/api/v1/events/${event.id}/ics`} download aria-label="Add to calendar (downloads an .ics file)">
+                  <CalendarPlus className="h-4 w-4" />
+                </a>
               </Button>
               <Button variant="outline" size="icon" className="rounded-full" aria-label="Share event" onClick={() => void share()}>
                 <Share2 className="h-4 w-4" />
@@ -514,9 +578,46 @@ export default function EventDetail({ slug }: { slug: string }) {
                   {['CANCELLED'].includes(event.status) ? (
                     <p className="rounded-xl bg-white/10 p-3 text-sm text-rose-200">This event was cancelled. Ticket holders are being notified and refunds follow the stated policy.</p>
                   ) : saleable.length === 0 ? (
-                    <p className="rounded-xl bg-white/10 p-3 text-sm text-white/80">
-                      {event.ticketTypes.length === 0 ? 'Tickets have not been published yet.' : 'All tickets are sold out.'}
-                    </p>
+                    <div className="space-y-3">
+                      <p className="rounded-xl bg-white/10 p-3 text-sm text-white/80">
+                        {event.ticketTypes.length === 0 ? 'Tickets have not been published yet.' : 'All tickets are sold out.'}
+                      </p>
+                      {event.ticketTypes.length > 0 && !['CANCELLED', 'ENDED', 'POSTPONED'].includes(event.status) && new Date(event.startsAt).getTime() > Date.now() && (
+                        <div className="efx-glassmorphism-card__panel rounded-xl border border-white/25 p-4">
+                          <p className="flex items-center gap-2 text-sm font-semibold text-white">
+                            <Hourglass className="h-4 w-4 text-amber-300" aria-hidden /> Waitlist
+                            {waitlist && waitlist.count > 0 && (
+                              <span className="efx-badge-ping relative ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-400/20 px-1.5 text-[10px] font-bold text-amber-200">
+                                {waitlist.count}
+                              </span>
+                            )}
+                          </p>
+                          {waitlist?.mine ? (
+                            <div className="mt-2 space-y-2">
+                              <p className="text-xs text-white/80">
+                                {waitlist.mine.status === 'WAITING' && <>You are <span className="font-bold text-amber-300">#{waitlist.mine.position}</span> in line ({waitlist.mine.partySize} {waitlist.mine.partySize === 1 ? 'seat' : 'seats'}). We will alert you when tickets open up.</>}
+                                {waitlist.mine.status === 'NOTIFIED' && <><span className="font-semibold text-emerald-300">Tickets opened up — check your alerts!</span> First come, first served.</>}
+                                {waitlist.mine.status === 'LEFT' && 'You left the waitlist. You can re-join below.'}
+                              </p>
+                              {waitlist.mine.status !== 'LEFT' && (
+                                <button type="button" className="text-xs font-semibold text-white/70 underline underline-offset-4 hover:text-white" onClick={() => void leaveWaitlist()}>
+                                  Leave the waitlist
+                                </button>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="mt-2 space-y-2.5">
+                              <p className="text-xs text-white/70">
+                                {waitlist && waitlist.count > 0 ? `${waitlist.count} ${waitlist.count === 1 ? 'person is' : 'people are'} waiting.` : 'Be first in line when someone cancels or the organizer adds seats.'}
+                              </p>
+                              <button type="button" className="efx-neon-pulse-button w-full" onClick={() => openWaitlist()}>
+                                Join the waitlist
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   ) : (
                     <>
                       {saleable.map((tt) => {
@@ -532,6 +633,11 @@ export default function EventDetail({ slug }: { slug: string }) {
                                   {tt.includesVirtualAccess && <Badge variant="secondary" className="text-[10px]">+ online access</Badge>}
                                   {tt.groupMinQty && tt.groupPctOff && <Badge variant="secondary" className="text-[10px]">{tt.groupPctOff}% off groups of {tt.groupMinQty}+</Badge>}
                                   {remaining !== null && remaining <= 20 && <Badge variant="destructive" className="text-[10px]">{remaining === 0 ? 'Sold out' : `${remaining} left`}</Badge>}
+                                  {remaining === 0 && (
+                                    <button type="button" className="efx-underline-slide-link text-[11px] font-semibold text-amber-300" style={{ color: 'inherit' }} onClick={() => openWaitlist(tt.id)}>
+                                      Join waitlist
+                                    </button>
+                                  )}
                                 </div>
                               </div>
                               <p className="whitespace-nowrap text-lg font-extrabold text-emerald-300">{tt.priceMinor === 0 ? 'Free' : money(tt.priceMinor)}</p>
@@ -550,6 +656,25 @@ export default function EventDetail({ slug }: { slug: string }) {
                   )}
                 </div>
               </div>
+
+              {data?.canManage && waitlist?.entries && waitlist.entries.length > 0 && (
+                <Card className="rounded-2xl">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="flex items-center gap-2 text-base"><Hourglass className="h-4 w-4 text-primary" aria-hidden /> Waitlist ({waitlist.count} waiting)</CardTitle>
+                  </CardHeader>
+                  <CardContent className="max-h-64 space-y-2 overflow-y-auto ievx-scrollbar p-4 pt-0">
+                    {waitlist.entries.map((e) => (
+                      <div key={e.id} className="flex items-center justify-between gap-2 rounded-lg border border-border/60 px-3 py-2 text-sm">
+                        <div className="min-w-0">
+                          <p className="truncate font-medium">{e.name} <span className="text-muted-foreground">· {e.partySize}</span></p>
+                          <p className="truncate text-xs text-muted-foreground">{e.contact}{e.ticketType ? ` · ${e.ticketType}` : ''}</p>
+                        </div>
+                        <Badge variant={e.status === 'WAITING' ? 'secondary' : e.status === 'NOTIFIED' ? 'default' : 'outline'} className="shrink-0 text-[10px]">{humanize(e.status)}</Badge>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              )}
 
               {(event.contactEmail || event.contactPhone) && (
                 <Card className="rounded-2xl">
@@ -644,6 +769,76 @@ export default function EventDetail({ slug }: { slug: string }) {
           <DialogFooter>
             <Button variant="outline" className="rounded-full" onClick={() => setReportOpen(false)}>Cancel</Button>
             <Button className="rounded-full" onClick={() => void submitReport()}>Submit report</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Waitlist join dialog */}
+      <Dialog open={wlOpen} onOpenChange={setWlOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Join the waitlist</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              When a seat frees up (a cancellation or the organizer adding quota) we alert this list in order. First come, first served — nothing is held automatically.
+            </p>
+            {soldOutTypes.length > 0 && (
+              <div className="space-y-1.5">
+                <Label className="text-xs">Interested in</Label>
+                <div className="flex flex-wrap gap-1.5">
+                  <button type="button" onClick={() => setWlType('')} className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${wlType === '' ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}`}>
+                    Any type
+                  </button>
+                  {soldOutTypes.map((tt) => (
+                    <button key={tt.id} type="button" onClick={() => setWlType(tt.id)} className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${wlType === tt.id ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}`}>
+                      {tt.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div className="efx-floating-label-input" style={{ margin: 0 }}>
+              <input
+                id="wl-name"
+                className="efx-floating-label-input__field"
+                placeholder=" "
+                required
+                value={wlForm.name}
+                onChange={(e) => setWlForm((f) => ({ ...f, name: e.target.value }))}
+                autoComplete="name"
+              />
+              <label htmlFor="wl-name" className="efx-floating-label-input__label">Your name</label>
+            </div>
+            <div className="efx-floating-label-input" style={{ margin: 0 }}>
+              <input
+                id="wl-contact"
+                className="efx-floating-label-input__field"
+                placeholder=" "
+                required
+                value={wlForm.contact}
+                onChange={(e) => setWlForm((f) => ({ ...f, contact: e.target.value }))}
+                autoComplete="email"
+                inputMode="email"
+              />
+              <label htmlFor="wl-contact" className="efx-floating-label-input__label">Email or phone for the alert</label>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Seats needed</Label>
+              <div className="flex items-center gap-2">
+                {[1, 2, 3, 4].map((n) => (
+                  <button key={n} type="button" onClick={() => setWlForm((f) => ({ ...f, partySize: n }))} className={`h-9 w-9 rounded-full border text-sm font-semibold transition-colors ${wlForm.partySize === n ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}`} aria-pressed={wlForm.partySize === n}>
+                    {n}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setWlOpen(false)}>Cancel</Button>
+            <Button className="rounded-full" disabled={wlBusy || wlForm.name.trim().length < 2 || wlForm.contact.trim().length < 5} onClick={() => void joinWaitlist()}>
+              {wlBusy ? 'Joining…' : 'Join waitlist'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

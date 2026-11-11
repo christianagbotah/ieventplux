@@ -66,6 +66,19 @@ export async function processRefund(refundCaseId: string, actorId: string) {
   const ticketIds = JSON.parse(rc.ticketIds || '[]') as string[]
   await db.ticket.updateMany({ where: { id: { in: ticketIds }, status: 'VALID' }, data: { status: 'REFUNDED' } })
 
+  // Refunded seats return to inventory: decrement soldCount so capacity is re-sellable,
+  // and wake the waitlist so freed seats reach waiting fans instead of sitting idle.
+  const refundedTickets = await db.ticket.findMany({ where: { id: { in: ticketIds }, status: 'REFUNDED' }, select: { ticketTypeId: true } })
+  const freedByType = new Map<string, number>()
+  for (const t of refundedTickets) freedByType.set(t.ticketTypeId, (freedByType.get(t.ticketTypeId) ?? 0) + 1)
+  for (const [ttId, qty] of freedByType) {
+    await db.ticketType.update({ where: { id: ttId }, data: { soldCount: { decrement: qty } } }).catch(() => {})
+  }
+  if (rc.order.eventId) {
+    const { enqueueWaitlistPromote } = await import('./waitlist')
+    enqueueWaitlistPromote(rc.order.eventId)
+  }
+
   // Reverse the ledger effects of the original payment journal.
   const originalJournal = await db.ledgerJournal.findFirst({ where: { refType: 'ORDER_PAYMENT', refId: rc.orderId }, include: { entries: true } })
   let journalId: string | null = null

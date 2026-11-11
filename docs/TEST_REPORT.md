@@ -172,6 +172,34 @@ New feature surface verified with the same honest-evidence rules (browser automa
 
 **Defects found & fixed in round 3:** (1) confetti hooks were declared after an early return in OrderView (rules-of-hooks lint error) — moved above the guard; (2) mobile hero headline rendered "gathering.Attend" without a space when the `<br>` was hidden — explicit `{' '}` added; (3) raw enum values in AI applied-filter chips (THIS_WEEKEND) — humanized mapping added.
 
+## Re-verification round 5 (2026-11-11, sold-out waitlist + calendar export)
+
+**Feature set under test:** per-event waitlist for sold-out inventory (guest + authed join, FIFO positions, honest first-come-first-served promotion), refund-frees-inventory fix, .ics calendar export, organizer waitlist visibility. New model `WaitlistEntry` (schema now 57 models).
+
+**API-level evidence (live stack):**
+
+| Case | Result |
+|---|---|
+| Sold-out detection after real purchase (ORD-80731C4684, quota-1 event, simulator callback `STORED` → PAID → ticket issued) | ✅ |
+| Guest waitlist join while sold out → `{position:1}`; authed join → `{position:2}` (FIFO by createdAt) | ✅ |
+| Duplicate join (same contact, case-insensitive email) → idempotent, same position, no duplicate row | ✅ |
+| Join guard on events with availability → `409 CONFLICT "Tickets are currently available — go grab one instead of the waitlist."` | ✅ |
+| Callback forgery protection: callback without a prior `initiate` → `UNKNOWN_REFERENCE`, nothing fulfils | ✅ |
+| Organizer raises quota 1→3 → `WAITLIST_PROMOTE` job → both entries `WAITING→NOTIFIED` with notifiedAt | ✅ |
+| Promotion notifications: 2 × in-app (`WAITLIST_PROMOTED`) + 2 × SMS via durable queue, both `DELIVERED` (simulator), honest "first come, first served — nothing is held" copy | ✅ |
+| Refund path: org `refund-request` → admin approve → admin elevate → process → order `REFUNDED`, ticket `REFUNDED`, ledger reversal journal posted, `soldCount` decremented 1→0 (inventory re-sellable — **pre-existing defect fixed**) | ✅ |
+| Leave waitlist → `{left:true}`; re-join after leaving → `{reactivated:true}` at tail position | ✅ |
+| `GET /events/[id]/ics` → `text/calendar; charset=utf-8` + attachment filename; VCALENDAR parses with correct DTSTART/DTEND/SUMMARY/LOCATION/ORGANIZER/STATUS | ✅ |
+| Waitlist auto-closes when capacity returns (join/leave both blocked with honest message) | ✅ |
+
+**Browser evidence (agent-browser, 1280×800 + 390×844, light + dark):**
+- EventDetail (sold out): glass panel waitlist card with count ping badge + social proof + neon CTA; join dialog (floating-label inputs, type chips, seat selector) → guest join via UI → toast "You are #2 in line"; "Add to calendar" icon button in hero action row.
+- EventDetail (organizer): "Waitlist (N waiting)" card listing every entry with contact, party size, per-type and status badges (Waiting/Notified).
+- OrderView: calendar download link on the event card (stopPropagation, no navigation hijack).
+- Zero console errors platform-wide during the sweep.
+
+**Static:** `bun run lint` 0 errors / 16 warnings (baseline); `bunx tsc --noEmit` 0 errors.
+
 ## Re-verification round 4 (2026-11-11, Effects Studio design pass)
 
 Every portal view was re-skinned using the studio's own `efx-*` catalog (38 effects, injected globally by a new `EffectsRuntime` component — the same copy-ready CSS the studio demos showcase, now the portal's actual design system). Verified with browser automation at 1280×800 and 390×844, light and dark themes:

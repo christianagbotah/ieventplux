@@ -4,6 +4,7 @@ import { sendSms, checkSmsDelivery } from '../hubtel/sms'
 import { processProviderEvent, reconcilePayments } from '../services/payments'
 import { releaseExpiredReservations } from '../services/ordering'
 import { notifyUser } from '../services/notify'
+import { runWaitlistJob } from '../services/waitlist'
 
 /**
  * Background job handlers — executed by the worker mini-service (:3001).
@@ -55,6 +56,12 @@ export async function runJob(type: string, payload: JobPayload): Promise<{ detai
         })
       }
       return { detail: 'pushed' }
+    }
+    case 'WAITLIST_PROMOTE': {
+      return await runWaitlistJob({ eventId: payload.eventId ? String(payload.eventId) : undefined })
+    }
+    case 'WAITLIST_SWEEP': {
+      return await runWaitlistJob({})
     }
     default:
       return { detail: `Unknown job type ${type}` }

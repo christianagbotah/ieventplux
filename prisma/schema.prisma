@@ -285,6 +285,7 @@ model Event {
   comments     Comment[]
   updates      EventUpdate[]
   campaigns    PromotionCampaign[]
+  waitlistEntries WaitlistEntry[]
 
   @@index([status, visibility, startsAt])
   @@index([orgId, status])
@@ -498,8 +499,29 @@ model TicketType {
   reservations InventoryReservation[]
   orderItems   OrderItem[]
   tickets      Ticket[]
+  waitlistEntries WaitlistEntry[]
 
   @@index([eventId])
+}
+
+model WaitlistEntry {
+  id           String    @id @default(cuid())
+  eventId      String
+  ticketTypeId String?
+  userId       String?
+  name         String
+  contact      String // email or phone; one active entry per event+contact
+  partySize    Int       @default(1)
+  status       String    @default("WAITING") // WAITING | NOTIFIED | CONVERTED | LEFT
+  notifiedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  event      Event       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  ticketType TicketType? @relation(fields: [ticketTypeId], references: [id])
+
+  @@unique([eventId, contact])
+  @@index([eventId, status])
 }
 
 model DiscountCode {
