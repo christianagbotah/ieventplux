@@ -51,15 +51,12 @@ export async function ensureOrgAccounts(orgId: string) {
 
 export async function ensurePlatformAccounts() {
   for (const def of PLATFORM_ACCOUNT_DEFS) {
-    await db.ledgerAccount.upsert({
-      where: { orgId_code: { orgId: null ?? '', code: def.code } },
-      create: { orgId: null, code: def.code, type: def.type, name: def.name },
-      update: {},
-    }).catch(async () => {
-      // SQLite unique index on (orgId, code) treats NULLs as distinct — guard with findFirst.
-      const existing = await db.ledgerAccount.findFirst({ where: { orgId: null, code: def.code } })
-      if (!existing) await db.ledgerAccount.create({ data: { orgId: null, code: def.code, type: def.type, name: def.name } })
-    })
+    const existing = await db.ledgerAccount.findFirst({ where: { orgId: null, code: def.code } })
+    if (!existing) {
+      // Guard against concurrent creation (unique index treats NULLs as distinct in SQLite).
+      const again = await db.ledgerAccount.findFirst({ where: { orgId: null, code: def.code } })
+      if (!again) await db.ledgerAccount.create({ data: { orgId: null, code: def.code, type: def.type, name: def.name } })
+    }
   }
 }
 
@@ -204,7 +201,7 @@ export async function orgFinanceSummary(orgId: string) {
     db.settlementHold.findMany({ where: { orgId, releasedAt: null } }),
     db.payout.groupBy({ by: ['status'], where: { orgId }, _sum: { amountMinor: true } }),
     db.order.groupBy({ by: ['status'], where: { orgId }, _sum: { totalMinor: true, platformFeeMinor: true } }),
-    db.refundCase.groupBy({ by: ['status'], where: { orgId }, _count: true }),
+    db.refundCase.groupBy({ by: ['status'], where: { order: { orgId } }, _count: true }),
   ])
   const holdTotal = holds.reduce((s, h) => s + h.amountMinor, 0)
   const completed = payoutTotals.find((p) => p.status === 'PAID')?._sum.amountMinor ?? 0

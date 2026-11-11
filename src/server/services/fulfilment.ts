@@ -301,7 +301,7 @@ export async function applyProviderOutcome(params: {
       where: { id: attempt.id },
       data: { status: 'SUCCESS', verifiedAt: new Date(), lastStatusAt: new Date(), rawResult: JSON.stringify({ source: params.source }) },
     })
-    return fulfilPaidOrder({ orderId: attempt.orderId, paymentAttemptId: attempt.id, amountMinor: attempt.amountMinor })
+    return fulfilPaidOrder({ orderId: attempt.orderId ?? '', paymentAttemptId: attempt.id, amountMinor: attempt.amountMinor })
   }
 
   if (params.outcome === 'FAILURE') {

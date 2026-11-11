@@ -17,9 +17,7 @@ export async function initiatePaymentForOrder(orderRef: string, userId?: string 
   if (order.userId && userId && order.userId !== userId) throw errors.forbidden('This order belongs to another buyer.')
   if (order.status !== 'PENDING_PAYMENT') throw errors.conflict(`Order is ${order.status.toLowerCase().replace('_', ' ')} — payment is not required or no longer possible.`)
   if (order.expiresAt && order.expiresAt < new Date()) {
-    // Re-arm reservation window if capacity still allows a retry.
-    const reservations = order.reservations ?? []
-    void reservations
+    // Re-arm the hold window if capacity still allows a retry.
     await db.order.update({ where: { id: order.id }, data: { expiresAt: new Date(Date.now() + 5 * 60_000), status: 'PENDING_PAYMENT' } })
   }
   const active = order.payments.filter((p) => ['INITIATED', 'REDIRECTED', 'PENDING'].includes(p.status))
@@ -127,7 +125,7 @@ export async function intakeCallback(payload: Record<string, unknown>) {
   return { acknowledged: true, result: 'STORED' as const }
 }
 
-/** Process one stored provider event (worker). Idempotent. */
+/** Process one stored provider event (worker). Idempotent — supports order AND subscription invoice payments. */
 export async function processProviderEvent(providerEventId: string) {
   const pe = await db.providerEvent.findUnique({ where: { id: providerEventId } })
   if (!pe || pe.status === 'PROCESSED') return { skipped: true }
@@ -145,6 +143,14 @@ export async function processProviderEvent(providerEventId: string) {
   } catch {
     parsed = { outcome: 'UNKNOWN', amountMinor: null }
   }
+
+  // Subscription invoice payments (no order attached).
+  if (!attempt.orderId) {
+    const result = await applySubscriptionPayment({ attemptId: attempt.id, outcome: parsed.outcome, amountMinor: parsed.amountMinor, providerPaymentId: pe.providerPaymentId })
+    await db.providerEvent.update({ where: { id: pe.id }, data: { status: 'PROCESSED', processedAt: new Date() } })
+    return { outcome: result }
+  }
+
   const { applyProviderOutcome } = await import('./fulfilment')
   const outcome = await applyProviderOutcome({
     attemptId: attempt.id,
@@ -155,6 +161,59 @@ export async function processProviderEvent(providerEventId: string) {
   })
   await db.providerEvent.update({ where: { id: pe.id }, data: { status: 'PROCESSED', processedAt: new Date() } })
   return { outcome }
+}
+
+/** Subscription payment fulfilment (idempotent). */
+export async function applySubscriptionPayment(params: {
+  attemptId: string
+  outcome: 'SUCCESS' | 'FAILURE' | 'PENDING' | 'UNKNOWN'
+  amountMinor: number | null
+  providerPaymentId?: string | null
+}): Promise<'ACTIVATED' | 'FAILED' | 'PENDING' | 'REJECTED'> {
+  const attempt = await db.paymentAttempt.findUnique({ where: { id: params.attemptId }, include: { order: true } })
+  if (!attempt?.invoiceId) return 'FAILED'
+  const invoice = await db.invoice.findUnique({ where: { id: attempt.invoiceId }, include: { subscription: true, org: true } })
+  if (!invoice) return 'FAILED'
+
+  if (params.outcome === 'SUCCESS') {
+    if (params.amountMinor !== null && params.amountMinor !== attempt.amountMinor) {
+      await db.paymentAttempt.update({ where: { id: attempt.id }, data: { status: 'UNKNOWN', failureReason: 'Amount mismatch' } })
+      return 'REJECTED'
+    }
+    if (attempt.status === 'SUCCESS') return 'PENDING' // already processed
+    await db.paymentAttempt.update({ where: { id: attempt.id }, data: { status: 'SUCCESS', verifiedAt: new Date(), providerPaymentId: params.providerPaymentId ?? null } })
+    if (invoice.status !== 'PAID') {
+      await db.invoice.update({ where: { id: invoice.id }, data: { status: 'PAID', paidAt: new Date() } })
+      const { activateSubscription } = await import('./subscriptions')
+      await activateSubscription(invoice.orgId, invoice.subscription?.planId ?? '', undefined)
+      const { ensureOrgAccounts, ensurePlatformAccounts, postJournal } = await import('../ledger')
+      await ensureOrgAccounts(invoice.orgId)
+      await ensurePlatformAccounts()
+      await postJournal({
+        idempotencyKey: `subscription-payment:${attempt.id}`,
+        orgId: invoice.orgId,
+        refType: 'SUBSCRIPTION',
+        refId: invoice.id,
+        memo: `Subscription payment ${invoice.number}`,
+        createdBy: 'system:subscription',
+        lines: [
+          { accountCode: 'collections', orgScoped: false, direction: 'DEBIT', amountMinor: attempt.amountMinor },
+          { accountCode: 'subscriptions_revenue', orgScoped: false, direction: 'CREDIT', amountMinor: attempt.amountMinor },
+        ],
+      })
+      const { notifyUser } = await import('./notify')
+      const org = await db.organization.findUnique({ where: { id: invoice.orgId } })
+      if (org) {
+        await notifyUser({ userId: org.ownerId, type: 'SUBSCRIPTION', title: 'Subscription active', body: 'Your plan is now active.', link: '#/organizer?tab=billing' }).catch(() => {})
+      }
+    }
+    return 'ACTIVATED'
+  }
+  if (params.outcome === 'FAILURE') {
+    await db.paymentAttempt.update({ where: { id: attempt.id }, data: { status: 'FAILED', failureReason: 'Provider reported failure' } })
+    return 'FAILED'
+  }
+  return 'PENDING'
 }
 
 /** Reconciliation sweep (documented ≥5-minute status-check rule). */

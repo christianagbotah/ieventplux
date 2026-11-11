@@ -32,7 +32,7 @@ export const PUBLIC_EVENT_WHERE = {
   visibility: 'PUBLIC',
   deletedAt: null,
   status: { in: ['PUBLISHED', 'LIVE', 'POSTPONED', 'ENDED'] },
-} as const
+}
 
 export async function transitionEvent(params: { eventId: string; to: string; actorId: string; reason?: string; publishAt?: Date | null }) {
   const event = await db.event.findUnique({ where: { id: params.eventId } })
@@ -143,7 +143,7 @@ export function buildDiscoveryWhere(filters: DiscoveryFilters, now = new Date())
 export async function sponsoredEvents(limit = 3) {
   const campaigns = await db.promotionCampaign.findMany({
     where: { status: 'RUNNING', startsAt: { lte: new Date() }, endsAt: { gte: new Date() } },
-    include: { event: true },
+    include: { event: { include: { org: { select: { name: true } } } } },
     take: limit * 2,
     orderBy: { spentMinor: 'desc' },
   })

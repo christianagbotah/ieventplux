@@ -41,7 +41,7 @@ export async function requestRefund(params: { orderId: string; requestedBy: stri
 }
 
 export async function processRefund(refundCaseId: string, actorId: string) {
-  const rc = await db.refundCase.findUnique({ where: { id: refundCaseId }, include: { order: true } })
+  const rc = await db.refundCase.findUnique({ where: { id: refundCaseId }, include: { order: { include: { event: { select: { title: true } } } } } })
   if (!rc) throw errors.notFound('Refund case not found.')
   if (rc.status === 'PROCESSED') throw errors.conflict('Refund already processed — repeated refunds are blocked.')
 

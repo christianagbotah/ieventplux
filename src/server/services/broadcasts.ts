@@ -78,24 +78,20 @@ export async function verifyPlayback(broadcastId: string, token: string) {
 export async function resolveEntitlement(broadcast: { id: string; eventId: string; accessPolicy: string; priceMinor: number | null }, userId: string) {
   const direct = await db.viewingEntitlement.findUnique({ where: { userId_broadcastId: { userId, broadcastId: broadcast.id } } })
   if (direct) return direct
-  if (broadcast.accessPolicy === 'TICKET_HOLDERS') {
-    // A ticket grants online access only when its product explicitly includes it.
-    const ticket = await db.ticket.findFirst({
-      where: { userId, eventId: broadcast.eventId, status: 'VALID', ticketType: { includesVirtualAccess: true } },
+  // Ticket-benefit resolution: a ticket grants online access only when its product
+  // explicitly includes it (virtual/hybrid kinds or includesVirtualAccess flag).
+  const ticket = await db.ticket.findFirst({
+    where: {
+      userId,
+      eventId: broadcast.eventId,
+      status: 'VALID',
+      ticketType: { OR: [{ includesVirtualAccess: true }, { kind: { in: ['VIRTUAL', 'HYBRID'] } }] },
+    },
+  })
+  if (ticket && (broadcast.accessPolicy === 'TICKET_HOLDERS' || broadcast.accessPolicy === 'PAID')) {
+    return db.viewingEntitlement.create({
+      data: { userId, broadcastId: broadcast.id, kind: 'TICKET_BENEFIT', status: 'ACTIVE', expiresAt: null },
     })
-    if (ticket) {
-      return db.viewingEntitlement.create({
-        data: { userId, broadcastId: broadcast.id, kind: 'TICKET_BENEFIT', status: 'ACTIVE', expiresAt: null },
-      })
-    }
-    const virtualTicket = await db.ticket.findFirst({
-      where: { userId, eventId: broadcast.eventId, status: 'VALID', ticketType: { kind: { in: ['VIRTUAL', 'HYBRID'] } } },
-    })
-    if (virtualTicket) {
-      return db.viewingEntitlement.create({
-        data: { userId, broadcastId: broadcast.id, kind: 'TICKET_BENEFIT', status: 'ACTIVE', expiresAt: null },
-      })
-    }
   }
   return null
 }

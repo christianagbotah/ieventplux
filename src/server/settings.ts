@@ -36,7 +36,7 @@ export async function getSettings(): Promise<PlatformSettings> {
       if (Number.isFinite(n)) result[key] = n
     }
   }
-  return result as PlatformSettings
+  return result as unknown as PlatformSettings
 }
 
 export async function setSetting(key: string, value: string, updatedBy: string) {

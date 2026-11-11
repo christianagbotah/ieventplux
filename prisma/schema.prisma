@@ -593,7 +593,8 @@ model OrderItem {
 
 model PaymentAttempt {
   id                  String    @id @default(cuid())
-  orderId             String
+  orderId             String? // null when paying a subscription invoice
+  invoiceId           String?
   attemptNo           Int       @default(1)
   provider            String    @default("HUBTEL") // HUBTEL | SIMULATOR
   reference           String    @unique // unique per-attempt reference sent to provider
@@ -613,7 +614,7 @@ model PaymentAttempt {
   lastReconciledAt    DateTime?
   rawResult           String    @default("{}") // redacted provider payload
 
-  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order Order? @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@index([orderId])
   @@index([status, initiatedAt])
