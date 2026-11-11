@@ -17,9 +17,9 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ view: strin
     if (view === 'home') {
       const [featured, upcoming, liveNow, categories, sponsored, stats] = await Promise.all([
         db.event.findMany({ where: { ...PUBLIC_EVENT_WHERE, isFeatured: true, startsAt: { gte: now } }, orderBy: { startsAt: 'asc' }, take: 6,
-          select: { id: true, slug: true, title: true, summary: true, coverImageUrl: true, startsAt: true, city: true, mode: true, categorySlug: true, org: { select: { name: true, slug: true } } } }),
+          select: { id: true, slug: true, title: true, summary: true, coverImageUrl: true, startsAt: true, city: true, mode: true, categorySlug: true, ticketTypes: { select: { priceMinor: true, quota: true, soldCount: true }, where: { active: true } }, org: { select: { name: true, slug: true } } } }),
         db.event.findMany({ where: { ...PUBLIC_EVENT_WHERE, startsAt: { gte: now } }, orderBy: { startsAt: 'asc' }, take: 12,
-          select: { id: true, slug: true, title: true, summary: true, coverImageUrl: true, startsAt: true, city: true, mode: true, categorySlug: true, ticketTypes: { select: { priceMinor: true }, where: { active: true } }, org: { select: { name: true, slug: true } } } }),
+          select: { id: true, slug: true, title: true, summary: true, coverImageUrl: true, startsAt: true, city: true, mode: true, categorySlug: true, status: true, ticketTypes: { select: { priceMinor: true, quota: true, soldCount: true }, where: { active: true } }, org: { select: { name: true, slug: true } } } }),
         db.event.findMany({ where: { ...PUBLIC_EVENT_WHERE, status: 'LIVE' }, take: 6,
           select: { id: true, slug: true, title: true, coverImageUrl: true, mode: true, org: { select: { name: true } }, broadcasts: { select: { id: true, status: true, accessPolicy: true } } } }),
         db.category.findMany({ where: { active: true }, orderBy: { sortOrder: 'asc' } }),
@@ -108,7 +108,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ view: strin
         select: {
           id: true, slug: true, title: true, summary: true, coverImageUrl: true, startsAt: true, endsAt: true, city: true, country: true, mode: true, status: true, categorySlug: true,
           org: { select: { name: true, slug: true, verifiedAt: true } },
-          ticketTypes: { select: { priceMinor: true }, where: { active: true } },
+          ticketTypes: { select: { priceMinor: true, quota: true, soldCount: true }, where: { active: true } },
         },
       })
       const total = await db.event.count({ where })

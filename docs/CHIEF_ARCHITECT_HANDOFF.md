@@ -20,6 +20,8 @@
   - `5962304` UI — complete portal frontend (jQuery transitions, checkout UX, organizer workspace, admin console, Effects Studio, voice concierge, realtime chat)
   - `F-final` — verification fixes (callback casing, check-in FK, jQuery easings, route conflict), mobile scaffold, documentation suite, this handoff
   - `4ca3093` — **post-handoff re-verification round 2:** voice-TTS defect fix (provider rejects `mp3`; route now `wav` + `audio/wav`, full ASR→LLM→TTS round-trip verified), footer iOS safe-area + mobile-nav clearance, `.env` untracked (template → `.env.example`), TEST_REPORT round-2 section. Working tree clean at this commit.
+  - `45e08cb` — remote connected + pushed; `0d19f42`/`98e7181`/`00c0958` — production homepage polish + PWA, lint hygiene, platform-wide zero-error sweep.
+  - AI + UX expansion (round 4): AI smart search (`/ai/search`), AI recommendations (`/ai/recommend`), AI Content Studio (`/ai/studio` + `/#/ai-studio` incl. poster image generation), command palette (⌘K), dark/light theme, confetti + selling-fast signals. Verified in TEST_REPORT round 3.
 - **Branch:** `main` · **Working tree:** clean at handoff.
 
 ## 2. What actually runs (verified)
@@ -124,4 +126,4 @@ This is a **working, end-to-end development build** of the full product surface 
 | Mobile (Expo source) | ⚠️ scaffold, not device-tested |
 | Tests | ⚠️ scripted verification (E1–E14); automated suite deferred |
 | Docs | ✅ full suite incl. traceability, test report, deployment, this handoff |
-| Git | ✅ local commits on `main`; ⛔ no remote configured |
+| Git | ✅ `main` pushed to `github.com/christianagbotah/ieventplux` (PAT outside repo) |

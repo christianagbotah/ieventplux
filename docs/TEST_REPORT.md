@@ -149,6 +149,29 @@ Fresh end-to-end pass after restart; all three services up (:3000 / :3001 / :300
 
 **Defect found & fixed in round 2:** the TTS provider rejects `response_format: 'mp3'` (HTTP 400, code 1214 — isolated SDK test confirmed `wav` works). The AI voice route therefore silently degraded every spoken reply to text-only (`audioBase64: null`). Fixed to `wav` + `audio/wav` in `src/app/api/v1/ai/[mode]/route.ts`; re-verified with a real round-trip (TTS → ASR → LLM → TTS) returning valid 24 kHz audio. Also hardened the portal footer for iOS safe-area + fixed mobile-bottom-nav clearance (`pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0`).
 
+## Re-verification round 3 (2026-11-11, AI + UX expansion)
+
+New feature surface verified with the same honest-evidence rules (browser automation + direct API calls):
+
+| Case | Outcome | Status |
+|---|---|---|
+| AI smart search (`POST /ai/search`) | "free church events in Accra this weekend" → LLM filters `{category: church-service, city: Accra, price: FREE, when: THIS_WEEKEND}` → real DB query → Sunday Celebration Service returned with prices | ✅ |
+| AI search UI (browser) | Example chip → AI summary banner + humanized applied-filter chips + result grid; honest empty state when 0 matches (workshops live in Tema, not Accra — correctly no fabrication) | ✅ |
+| AI recommendations (`POST /ai/recommend`) | ama (has tickets/saves) → 4 personalized picks, LLM reasons per event, `degraded: false`; Maame (no history) → honest "Popular right now" trending rail by real soldCount, `degraded: true` | ✅ |
+| AI Studio — description (browser, as Maame/owner) | Brief (Sunset Jazz on the Rooftop…) → summary + markdown description + tags; copy stayed strictly within provided facts (GHS 80, 120 seats, Skybar 25) | ✅ |
+| AI Studio — captions | WhatsApp / X / Instagram variants generated with per-platform tone + char counts | ✅ |
+| AI Studio — poster (browser + API) | 864×1152 PNG generated with correct headline/date/venue text and chosen palette ("Nights of Grace", "Masquerade Ball Accra"); **Save to library** → real `POST /uploads` → file written to `public/uploads/`, MediaAsset row created; Download works | ✅ |
+| Command palette | Ctrl+K opens; navigates; debounced live event search with cover thumbnails ("gospel" → Accra Gospel Night of Wonders); theme toggle + sign-out actions | ✅ |
+| Dark/light/system theme | next-themes class strategy; hero, cards, AI panels, studio all legible in dark; persisted across navigation | ✅ |
+| Confetti on PAID order | canvas observed firing on `/order/ORD-037044A7A1` (poll found canvas at 0 ms); suppressed under `prefers-reduced-motion`; one-shot per mount | ✅ |
+| Selling-fast / sold-out signals | Real quota/soldCount now in events + discovery payloads; `inventoryState()` renders badges only for quota>0 events at ≥70% / 100% (no seeded event currently ≥70% — logic status-gated, no fake data) | ✅ |
+| Order access control regression | Maame opening Ama's order → "You do not have access to this order" — ownership rule intact | ✅ |
+| Mobile 390×844 | Hero stacks, AI panel usable, footer clears bottom nav, safe-area kept | ✅ |
+| Console / page errors | none after fixes (early HMR race cleared on fresh load) | ✅ |
+| `bun run lint` / `bunx tsc --noEmit` | 0 errors / 0 errors (17 warnings — down from 34 baseline) | ✅ |
+
+**Defects found & fixed in round 3:** (1) confetti hooks were declared after an early return in OrderView (rules-of-hooks lint error) — moved above the guard; (2) mobile hero headline rendered "gathering.Attend" without a space when the `<br>` was hidden — explicit `{' '}` added; (3) raw enum values in AI applied-filter chips (THIS_WEEKEND) — humanized mapping added.
+
 ## Not performed (honest)
 
 - Native Android/iOS builds and device testing (mobile is a source scaffold).

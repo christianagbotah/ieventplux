@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  Search, SlidersHorizontal, Sparkles, Radio, MapPin, TrendingUp, X, ArrowRight,
+  Search, SlidersHorizontal, Sparkles, Radio, MapPin, TrendingUp, X, ArrowRight, Wand2,
   Church, Music, Presentation, Wrench, Code2, Heart, Users, Sparkles as SparklesIcon,
   PartyPopper, Activity, Smartphone, QrCode, CalendarCheck, Building2,
 } from 'lucide-react'
@@ -13,6 +13,8 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/co
 import { api, qs } from '../api'
 import { navigate, type Route } from '../router'
 import { EventCard, EventCardSkeleton, EmptyState, type EventCardData } from '../components/EventCard'
+import { AiSearchPanel } from '../components/AiSearchPanel'
+import { ForYouRail } from '../components/ForYouRail'
 import { usePortal } from '../store'
 
 interface Category {
@@ -54,6 +56,32 @@ const CATEGORY_ICONS: Record<string, React.ComponentType<{ className?: string }>
 
 const EMPTY_FILTERS = { q: '', category: '', city: '', mode: '', price: '', when: '' }
 
+/** Animated number for hero stats (respects prefers-reduced-motion). */
+function useCountUp(target: number | null, durationMs = 900): number {
+  const [value, setValue] = useState(0)
+  useEffect(() => {
+    if (target === null || target === 0) {
+      setValue(target ?? 0)
+      return
+    }
+    if (typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      setValue(target)
+      return
+    }
+    let raf = 0
+    const start = performance.now()
+    const tick = (t: number) => {
+      const p = Math.min(1, (t - start) / durationMs)
+      const eased = 1 - Math.pow(1 - p, 3)
+      setValue(Math.round(target * eased))
+      if (p < 1) raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [target, durationMs])
+  return value
+}
+
 const HOW_IT_WORKS = [
   {
     icon: Search,
@@ -82,6 +110,10 @@ export default function Discover({ route }: { route: Route }) {
   const [browseAll, setBrowseAll] = useState(false)
   const isSearch = route.segments[0] === 'search'
   const searchQuery = route.query.get('q') ?? ''
+
+  const statEvents = useCountUp(home?.stats.upcomingEvents ?? null)
+  const statOrgs = useCountUp(home?.stats.organizers ?? null)
+  const statLive = useCountUp(home?.stats.liveNow ?? null)
 
   const [filters, setFilters] = useState({ ...EMPTY_FILTERS, q: searchQuery })
   const [filtersOpen, setFiltersOpen] = useState(false)
@@ -153,7 +185,8 @@ export default function Discover({ route }: { route: Route }) {
               <Sparkles className="h-3.5 w-3.5" aria-hidden /> Ghana&apos;s events, tickets & live streams — in one place
             </Badge>
             <h1 className="max-w-2xl text-3xl font-extrabold leading-tight tracking-tight sm:text-5xl">
-              Discover your next <span className="ievx-gradient-text">gathering</span>.<br className="hidden sm:block" />
+              Discover your next <span className="ievx-gradient-text">gathering</span>.
+              <br className="hidden sm:block" />{' '}
               Attend in person or live online.
             </h1>
             <p className="mt-4 max-w-xl text-sm text-muted-foreground sm:text-base">
@@ -164,8 +197,11 @@ export default function Discover({ route }: { route: Route }) {
               <Button size="lg" className="rounded-full ievx-press" onClick={() => { setBrowseAll(true); setPage(1) }}>
                 Browse all events <ArrowRight className="ml-1 h-4 w-4" aria-hidden />
               </Button>
+              <Button size="lg" variant="outline" className="rounded-full bg-card/70 ievx-press" onClick={() => document.getElementById('ai-search')?.scrollIntoView({ behavior: 'smooth' })}>
+                <Wand2 className="mr-2 h-4 w-4" aria-hidden /> Ask AI to find events
+              </Button>
               <Button size="lg" variant="outline" className="rounded-full bg-card/70 ievx-press" onClick={() => navigate('/live')}>
-                <Radio className="mr-2 h-4 w-4" /> Watch live now
+                <Radio className="mr-2 h-4 w-4" /> Watch live
               </Button>
             </div>
             {/* Quick links — the fastest paths into the catalogue */}
@@ -188,9 +224,9 @@ export default function Discover({ route }: { route: Route }) {
             </div>
             {home && (
               <div className="mt-8 flex flex-wrap gap-2 text-sm">
-                <span className="rounded-full bg-card/80 px-4 py-2 font-semibold backdrop-blur"><TrendingUp className="mr-1.5 inline h-4 w-4 text-primary" aria-hidden />{home.stats.upcomingEvents} upcoming events</span>
-                <span className="rounded-full bg-card/80 px-4 py-2 font-semibold backdrop-blur"><MapPin className="mr-1.5 inline h-4 w-4 text-primary" aria-hidden />{home.stats.organizers} verified organizers</span>
-                <span className="rounded-full bg-card/80 px-4 py-2 font-semibold backdrop-blur"><Radio className="mr-1.5 inline h-4 w-4 text-destructive" aria-hidden />{home.stats.liveNow} live right now</span>
+                <span className="rounded-full bg-card/80 px-4 py-2 font-semibold backdrop-blur"><TrendingUp className="mr-1.5 inline h-4 w-4 text-primary" aria-hidden />{statEvents} upcoming event{statEvents !== 1 ? 's' : ''}</span>
+                <span className="rounded-full bg-card/80 px-4 py-2 font-semibold backdrop-blur"><MapPin className="mr-1.5 inline h-4 w-4 text-primary" aria-hidden />{statOrgs} verified organizer{statOrgs !== 1 ? 's' : ''}</span>
+                <span className="rounded-full bg-card/80 px-4 py-2 font-semibold backdrop-blur"><Radio className="mr-1.5 inline h-4 w-4 text-destructive" aria-hidden />{statLive} live right now</span>
               </div>
             )}
           </div>
@@ -344,6 +380,11 @@ export default function Discover({ route }: { route: Route }) {
 
       {/* Content */}
       <div className="mx-auto max-w-7xl px-4 py-8">
+        {/* Ask-iEventPlux: natural-language search over the real catalogue */}
+        <div className="mb-10">
+          <AiSearchPanel />
+        </div>
+
         {/* Sponsored placements (labelled) */}
         {!browsing && sponsoredEvents.length > 0 && (
           <section className="mb-10" aria-label="Sponsored events">
@@ -397,6 +438,7 @@ export default function Discover({ route }: { route: Route }) {
           </section>
         ) : (
           <>
+            {user && <ForYouRail />}
             {home?.liveNow && home.liveNow.length > 0 && (
               <section className="mb-10" aria-label="Live now">
                 <div className="mb-4 flex items-center gap-2">

@@ -16,7 +16,7 @@ const eventCardSelect = {
   mode: true, status: true, startsAt: true, endsAt: true, city: true, country: true, timezone: true,
   isFeatured: true, boostedUntil: true, venueId: true,
   org: { select: { id: true, name: true, slug: true, verifiedAt: true } },
-  ticketTypes: { select: { priceMinor: true, active: true }, where: { active: true } },
+  ticketTypes: { select: { priceMinor: true, quota: true, soldCount: true, active: true }, where: { active: true } },
 } as const
 
 export async function GET(req: NextRequest) {

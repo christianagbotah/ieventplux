@@ -1,7 +1,7 @@
 'use client'
 
-import { Suspense, lazy, useCallback, useEffect, useRef } from 'react'
-import { Compass, Radio, Film, Palette, Search, Ticket, LayoutDashboard, ShieldCheck, LogOut, Bell, Menu, Sparkles, UserRound } from 'lucide-react'
+import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react'
+import { Compass, Radio, Film, Palette, Search, Ticket, LayoutDashboard, ShieldCheck, LogOut, Bell, Menu, Sparkles, UserRound, Command as CommandIcon } from 'lucide-react'
 import { io } from 'socket.io-client'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -14,6 +14,8 @@ import { api } from './api'
 import { animateIn, animateOut } from './animate'
 import { initials } from './format'
 import { VoiceAssistant } from './components/VoiceAssistant'
+import { ThemeToggle } from './components/ThemeToggle'
+import { CommandPalette } from './components/CommandPalette'
 import { EventCardSkeleton } from './components/EventCard'
 
 const Discover = lazy(() => import('./views/Discover'))
@@ -30,6 +32,7 @@ const OrganizerWorkspace = lazy(() => import('./views/OrganizerWorkspace'))
 const AdminConsole = lazy(() => import('./views/AdminConsole'))
 const CreateOrg = lazy(() => import('./views/CreateOrg'))
 const ClaimTicket = lazy(() => import('./views/ClaimTicket'))
+const AiStudio = lazy(() => import('./views/AiStudio'))
 
 function ViewFallback() {
   return (
@@ -54,6 +57,7 @@ export default function AppPortal() {
   const { toast } = useToast()
   const viewRef = useRef<HTMLDivElement>(null)
   const prevPathRef = useRef<string>('')
+  const [paletteOpen, setPaletteOpen] = useState(false)
 
   // Session bootstrap.
   useEffect(() => {
@@ -119,6 +123,18 @@ export default function AppPortal() {
     }
   }, [route.path])
 
+  // Global command palette shortcut (⌘K / Ctrl+K).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setPaletteOpen((v) => !v)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
   const doLogout = useCallback(async () => {
     await api.post('/auth/logout').catch(() => {})
     setUser(null)
@@ -157,6 +173,8 @@ export default function AppPortal() {
         return <AdminConsole route={route} />
       case 'create-org':
         return <CreateOrg />
+      case 'ai-studio':
+        return <AiStudio />
       case 'claim':
         return param ? <ClaimTicket token={param} /> : <Discover route={route} />
       case 'search':
@@ -222,7 +240,18 @@ export default function AppPortal() {
             </div>
           </form>
 
-          <div className="ml-auto flex items-center gap-2 lg:ml-0">
+          <div className="ml-auto flex items-center gap-1.5 lg:ml-0">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="rounded-full"
+              aria-label="Open command palette (Ctrl+K)"
+              title="Command palette (Ctrl+K)"
+              onClick={() => setPaletteOpen(true)}
+            >
+              <CommandIcon className="h-5 w-5" aria-hidden />
+            </Button>
+            <ThemeToggle />
             {user ? (
               <>
                 <Button variant="ghost" size="icon" className="relative rounded-full" aria-label={`Notifications${unread ? ` (${unread} unread)` : ''}`} onClick={() => navigate('/me?tab=notifications')}>
@@ -253,6 +282,11 @@ export default function AppPortal() {
                     <DropdownMenuItem onClick={() => navigate('/me?tab=orders')}>
                       <UserRound className="h-4 w-4" /> Orders & Profile
                     </DropdownMenuItem>
+                    {isOrganizer(user, memberships) && (
+                      <DropdownMenuItem onClick={() => navigate('/ai-studio')}>
+                        <Sparkles className="h-4 w-4" /> AI Content Studio
+                      </DropdownMenuItem>
+                    )}
                     {isOrganizer(user, memberships) && (
                       <DropdownMenuItem onClick={() => navigate('/organizer')}>
                         <LayoutDashboard className="h-4 w-4" /> Organizer Workspace
@@ -325,6 +359,12 @@ export default function AppPortal() {
       </nav>
 
       <VoiceAssistant />
+
+      <CommandPalette
+        open={paletteOpen}
+        onOpenChange={setPaletteOpen}
+        onLogout={() => void doLogout()}
+      />
     </div>
   )
 }

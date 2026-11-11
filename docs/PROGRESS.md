@@ -34,6 +34,16 @@ None open. (`bun run lint`: 0 errors / warnings only. `bunx tsc --noEmit`: 0 err
 - **Full authenticated sweep (agent-browser):** guest + attendee (Me tabs, Live, Reels, Effects, purchase ORD-4E157EE0D3 ₵30 → PAID → TKT-36D8153970DFF8) + organizer (8/8 tabs as chapel owner) + admin (12/12 sections) — **zero console errors platform-wide**; responsive checks at 390×844 and 1440×900.
 - Milestone commit `98e7181` pushed to GitHub.
 
+## AI + UX expansion round 4 (2026-11-11, "modern UX/UI + advanced AI" pass)
+
+- **AI smart search ("Ask iEventPlux"):** natural-language query → LLM extracts validated filters (real category slugs/cities only) → real DB results via the shared discovery `where` builder. Labelled AI summary + humanized applied-filter chips + honest empty states. Anonymous-accessible, rate-limited 12/min.
+- **AI recommendations ("Picked for you"):** user history (tickets, saves, follows) → LLM picks 4 with per-event reasons; honest degradation to "Popular right now" (real soldCount ranking) when no history or LLM unavailable — never fake personalization.
+- **AI Content Studio (`/#/ai-studio`, organizer tool):** description writer (summary/markdown/tags JSON contract), social captions (WhatsApp/X/Instagram), and AI **poster generation** (864×1152 PNG via image gen) with Download + Save-to-media-library (real `POST /uploads`). Draft-first framing; facts-only guardrails in prompts.
+- **Command palette (⌘K/Ctrl+K):** navigation, debounced live event search with thumbnails, theme switch, account actions (cmdk).
+- **Dark/light/system theme** (next-themes, class strategy) + toggle in header; verified across hero/cards/studio in dark.
+- **Modern UX polish:** confetti on PAID orders (reduced-motion aware, one-shot), animated count-up hero stats, "Selling fast"/"Sold out" badges from real quota/soldCount, For You rail, evergreen AI example chips, mobile headline spacing fix.
+- Verification: `docs/TEST_REPORT.md` → "Re-verification round 3"; lint 0 errors / 17 warnings; tsc clean; all endpoints + browser flows re-verified.
+
 ## External blockers
 
 Hubtel checkout/Send Money/SMS credentials + merchant agreement; Cloudflare Stream credentials; SMTP relay; Apple/Google store accounts. All truthfully surfaced at `/api/v1/health` and Admin → Integrations. ~~git remote~~ **resolved 2026-11-11:** remote `github.com/christianagbotah/ieventplux` configured and pushed (`main`, upstream tracking set; every verified milestone is now committed and pushed).

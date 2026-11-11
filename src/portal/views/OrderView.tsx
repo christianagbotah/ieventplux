@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { CheckCircle2, Clock, XCircle, AlertTriangle, Ticket, Loader2, ChevronLeft, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -50,6 +50,20 @@ export default function OrderView({ reference }: { reference: string }) {
   const [data, setData] = useState<OrderPayload | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [polling, setPolling] = useState(false)
+
+  // One-shot celebration when the order is confirmed (respects reduced motion).
+  const celebratedRef = useRef(false)
+  const isPaid = data?.order.status === 'PAID'
+  useEffect(() => {
+    if (!isPaid || celebratedRef.current) return
+    celebratedRef.current = true
+    if (typeof window === 'undefined' || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    void import('canvas-confetti').then(({ default: confetti }) => {
+      confetti({ particleCount: 90, spread: 75, origin: { y: 0.65 }, colors: ['#059669', '#f59e0b', '#ffffff'] })
+      window.setTimeout(() => confetti({ particleCount: 55, angle: 60, spread: 60, origin: { x: 0, y: 0.8 } }), 260)
+      window.setTimeout(() => confetti({ particleCount: 55, angle: 120, spread: 60, origin: { x: 1, y: 0.8 } }), 420)
+    })
+  }, [isPaid])
 
   const load = useCallback(async () => {
     try {
@@ -104,7 +118,6 @@ export default function OrderView({ reference }: { reference: string }) {
 
   const { order } = data
   const ticketCount = order.items.reduce((s, i) => s + i.qty, 0)
-  const isPaid = order.status === 'PAID'
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">

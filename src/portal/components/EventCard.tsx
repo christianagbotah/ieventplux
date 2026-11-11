@@ -24,7 +24,24 @@ export interface EventCardData {
   boostedUntil?: string | null
   sponsored?: boolean
   org?: { name: string; slug?: string; verifiedAt?: string | null } | null
-  ticketTypes?: { priceMinor: number }[]
+  ticketTypes?: { priceMinor: number; quota?: number; soldCount?: number }[]
+}
+
+/** Real capacity signal from active ticket types (quota 0 = unlimited). */
+export function inventoryState(event: EventCardData): 'SOLD_OUT' | 'SELLING_FAST' | null {
+  if (event.status && !['PUBLISHED', 'LIVE'].includes(event.status)) return null
+  let quota = 0
+  let sold = 0
+  for (const t of event.ticketTypes ?? []) {
+    if (t.quota && t.quota > 0) {
+      quota += t.quota
+      sold += Math.min(t.soldCount ?? 0, t.quota)
+    }
+  }
+  if (quota === 0) return null
+  if (sold >= quota) return 'SOLD_OUT'
+  if (sold / quota >= 0.7) return 'SELLING_FAST'
+  return null
 }
 
 export function priceLabel(event: EventCardData): string {
@@ -37,9 +54,10 @@ export function priceLabel(event: EventCardData): string {
   return `From ${money(min)}`
 }
 
-export function EventCard({ event, index = 0 }: { event: EventCardData; index?: number }) {
+export function EventCard({ event, index = 0, footer }: { event: EventCardData; index?: number; footer?: React.ReactNode }) {
   const [imgFailed, setImgFailed] = useState(false)
   const isLive = event.status === 'LIVE'
+  const inventory = inventoryState(event)
   return (
     <Card
       role="article"
@@ -74,6 +92,12 @@ export function EventCard({ event, index = 0 }: { event: EventCardData; index?: 
           {event.isFeatured && !event.sponsored && (
             <span className="rounded-full bg-primary px-2.5 py-1 text-[11px] font-semibold text-primary-foreground shadow">Featured</span>
           )}
+          {inventory === 'SELLING_FAST' && (
+            <span className="rounded-full bg-amber-500 px-2.5 py-1 text-[11px] font-semibold text-white shadow">Selling fast</span>
+          )}
+          {inventory === 'SOLD_OUT' && (
+            <span className="rounded-full bg-foreground/80 px-2.5 py-1 text-[11px] font-semibold text-background shadow">Sold out</span>
+          )}
         </div>
         <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 via-black/25 to-transparent p-3 pt-10">
           <div className="flex items-center gap-2 text-[11.5px] font-medium text-white/95">
@@ -98,6 +122,7 @@ export function EventCard({ event, index = 0 }: { event: EventCardData; index?: 
           </Badge>
           <span className="text-sm font-bold text-primary">{priceLabel(event)}</span>
         </div>
+        {footer}
       </div>
     </Card>
   )
