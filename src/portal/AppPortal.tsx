@@ -55,7 +55,7 @@ const NAV = [
 
 export default function AppPortal() {
   const route = useRoute()
-  const { user, memberships, unread, setUser, setMemberships, setUnread, setRealtimeConnected } = usePortal()
+  const { user, memberships, unread, setUser, setMemberships, setUnread, setRealtimeConnected, setBooted } = usePortal()
   const { toast } = useToast()
   const viewRef = useRef<HTMLDivElement>(null)
   const prevPathRef = useRef<string>('')
@@ -74,6 +74,9 @@ export default function AppPortal() {
         if (!cancelled) setUnread(notif.unread ?? 0)
       } catch {
         if (!cancelled) setUser(null)
+      } finally {
+        // The session check has spoken — private views may now act on `user`.
+        if (!cancelled) setBooted(true)
       }
     })()
     return () => {

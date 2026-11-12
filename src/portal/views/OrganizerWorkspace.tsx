@@ -56,17 +56,18 @@ const NAV = [
 ]
 
 export default function OrganizerWorkspace({ route }: { route: Route }) {
-  const { user, memberships, activeOrgId, setActiveOrg } = usePortal()
+  const { user, memberships, activeOrgId, setActiveOrg, booted } = usePortal()
   const [section, setSection] = useState(route.query.get('tab') ?? 'dashboard')
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   useEffect(() => {
+    if (!booted) return // session check still in flight — do not bounce yet
     if (!user) {
       navigate('/signin')
       return
     }
     if (memberships.length === 0) navigate('/create-org')
-  }, [user, memberships])
+  }, [user, memberships, booted])
 
   useEffect(() => {
     const tab = route.query.get('tab')

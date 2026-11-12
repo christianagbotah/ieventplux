@@ -388,6 +388,30 @@ New capability: the **refund lifecycle closed end-to-end** — the buyer's own r
 **Static:** `bun run lint` 0 errors / 17 warnings (baseline); `bunx tsc --noEmit` 0 errors.
 
 
+## Re-verification round 13 (2026-11-12, offline ticket wallet + connection resilience)
+
+New capability: the attendee wallet became genuinely offline. Every ticket the attendee opens is persisted client-side (localStorage: `ievp.tickets.v1` list + `ievp.ticket.{id}` details with the exact QR SVG/payload), so the QR stays scannable when venue connectivity dies — the real gate scenario. A deliberately conservative service worker (`public/sw.js`, v2) adds flaky-network resilience: cache-first only for content-hashed static assets (`/_next/static/`, `/uploads/`, `/images/`, logo, manifest); navigations and identity (`/api/v1/auth/me`) are network-first with a cache fallback used **only on hard network failure — never on slowness**; wallet reads (`/api/v1/tickets*`, `/api/v1/orders*`) carry a 4 s race with cache rescue. `ConnectionStatus` registers the worker and renders an honest amber offline banner under the sticky header (via `useSyncExternalStore` — no effect-body setState, no hydration mismatch). Honest copy throughout: "every ticket you open stays scannable offline", "Offline copy · saved X ago" badges, and a truthful toast when an offline ticket has no saved copy yet.
+
+| Case | Outcome | Status |
+|---|---|---|
+| Service worker | registered at `/sw.js`, controller active; caches `ievp-v2-{shell,assets,api}` all created; 38 static assets cached on first browse | ✅ |
+| API cache contents | exactly `auth/me`, tickets list, opened ticket details — nothing else cached | ✅ |
+| Wallet persistence | opening a ticket writes the detail instantly (`ievp.ticket.*` + list); 30-entry LFS trim guard | ✅ |
+| Online flow | dialog opens from API, **no** offline badge | ✅ |
+| Offline banner | forced `navigator.onLine=false` + `offline` event → amber banner under header (role=status); auto-hides on `online` | ✅ |
+| Dead-network proof | `window.fetch` fully stubbed to reject → cached ticket opens from localStorage, QR renders (`[role=img]`), badge "Offline copy · saved X ago" | ✅ |
+| Offline, no saved copy | uncached ticket with dead network → honest destructive toast: "…you are offline and this ticket has no saved copy yet. Open it once while connected to save it." | ✅ |
+| Offline transfer | Transfer click with dead network → POST attempted (instrumented) → honest "Could not create the transfer." toast | ✅ |
+| Signed-in refresh (pre-existing defect fixed) | hard reload on `/#/me?tab=tickets` bounced to `#/signin` **while the session was alive** (auth/me 200) — private views redirected before the async bootstrap resolved. Fixed with a `booted` flag in the portal store; Me / OrganizerWorkspace / AdminConsole / CreateOrg now gate on `booted` → reload stays on the route with tickets rendered | ✅ |
+| **Service-worker stale-shell defect (found in verification, fixed)** | the first SW draft raced navigations with a 4 s timeout and served the **cached shell on slowness** — during a Turbopack recompile this ran the previous app build (stale HTML + stale chunks): the signed-in-refresh bounce "reappeared" while the new code was live. Strategy reworked (v2): slowness is never a cache trigger, only failure is; cache version bumped so old caches are purged on activate. Re-verified: two consecutive reloads with SW controlling stay on `#/me` with fresh code | ✅ |
+| Mobile 390×844 | `scrollWidth` exactly 390 (zero overflow); last ticket row clears the bottom nav at full scroll (row bottom 521 vs nav top 779); dark mode checked | ✅ |
+| VLM review adjudication | all claims disproven live: "FAB overlaps card" (standard fixed-FAB scroll-under; nothing interactive blocked), "rows clipped behind nav" (clears at scroll), "close × crowds title" (38 px glyph clearance — Range-measured, bounding-box graze only), "banner unreadable in dark" (L*86.4 amber-300 on near-black ≈ 8:1), "Transfer-link toast overlaps header" (phantom — 0 toasts in DOM, screenshot-stitching artifact as in rounds 8–12) | ✅ |
+| Console | zero errors in the browser session through the gateway; dev.log clean (all 200s) | ✅ |
+
+**Honest limitations:** a fully offline cold boot of the app shell is best-effort in development (Turbopack chunk URLs shift between rebuilds) and after any production redeploy until the worker sees the new assets online; the SW never invents offline entitlement verification — check-in validity is still decided by the scanner + server. `docs/DEPLOYMENT.md` unchanged (worker ships as a static file).
+
+**Static:** `bun run lint` 0 errors / 17 warnings (baseline); `bunx tsc --noEmit` 0 errors.
+
 ## Not performed (honest)
 
 - Native Android/iOS builds and device testing (mobile is a source scaffold).

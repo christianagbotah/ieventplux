@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useSyncExternalStore } from 'react'
 import { WifiOff } from 'lucide-react'
 
 /**
@@ -11,47 +11,48 @@ import { WifiOff } from 'lucide-react'
  *    page-reload-on-controllerchange is applied exactly once so an activated
  *    worker takes over cleanly.
  *
- * 2. Renders the offline banner while `navigator.onLine` is false. The banner
- *    tells the truth: saved tickets keep their QR codes offline; anything that
- *    needs the network will simply say so when it fails.
+ * 2. Renders the offline banner while the browser is offline, tracked through
+ *    `useSyncExternalStore` (the React-native way to subscribe to online/offline
+ *    — no effect-body setState, no hydration mismatch). The banner tells the
+ *    truth: saved tickets keep their QR codes offline; anything that needs the
+ *    network will simply say so when it fails.
  */
+
+function subscribeOnline(onChange: () => void) {
+  window.addEventListener('online', onChange)
+  window.addEventListener('offline', onChange)
+  return () => {
+    window.removeEventListener('online', onChange)
+    window.removeEventListener('offline', onChange)
+  }
+}
+
 export function ConnectionStatus() {
-  const [offline, setOffline] = useState(false)
+  const online = useSyncExternalStore(subscribeOnline, () => navigator.onLine, () => true)
+  const offline = !online
 
   useEffect(() => {
-    setOffline(!navigator.onLine)
-    const goOffline = () => setOffline(true)
-    const goOnline = () => setOffline(false)
-    window.addEventListener('offline', goOffline)
-    window.addEventListener('online', goOnline)
-
+    if (!('serviceWorker' in navigator)) return
     let reloaded = false
-    if ('serviceWorker' in navigator) {
-      void navigator.serviceWorker
-        .register('/sw.js', { scope: '/' })
-        .then((reg) => {
-          reg.addEventListener('updatefound', () => {
-            const next = reg.installing
-            next?.addEventListener('statechange', () => {
-              if (next.state === 'installed' && navigator.serviceWorker.controller && !reloaded) {
-                reloaded = true
-                next.postMessage('SKIP_WAITING')
-              }
-            })
+    void navigator.serviceWorker
+      .register('/sw.js', { scope: '/' })
+      .then((reg) => {
+        reg.addEventListener('updatefound', () => {
+          const next = reg.installing
+          next?.addEventListener('statechange', () => {
+            if (next.state === 'installed' && navigator.serviceWorker.controller && !reloaded) {
+              reloaded = true
+              next.postMessage('SKIP_WAITING')
+            }
           })
         })
-        .catch(() => {})
-      navigator.serviceWorker.addEventListener('controllerchange', () => {
-        if (reloaded) return
-        reloaded = true
-        window.location.reload()
       })
-    }
-
-    return () => {
-      window.removeEventListener('offline', goOffline)
-      window.removeEventListener('online', goOnline)
-    }
+      .catch(() => {})
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (reloaded) return
+      reloaded = true
+      window.location.reload()
+    })
   }, [])
 
   if (!offline) return null

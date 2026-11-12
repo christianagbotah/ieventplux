@@ -4,38 +4,38 @@
  * Strategy (see docs/TEST_REPORT.md round 13):
  *  - Static immutable-style assets (`/_next/static/`, `/uploads/`, `/images/`,
  *    `/logo.svg`, manifest): cache-first — instant repeat visits, tolerant of
- *    flaky venue networks.
- *  - Navigations + hot API reads (auth/me, tickets, orders): network-first
- *    with a 4 s race and cache fallback — the app keeps rendering on the last
- *    known data when the network dies mid-session (the real gate scenario).
- *  - Everything else: untouched (default browser behavior). WebSockets are
- *    never intercepted.
+ *    flaky venue networks. Asset URLs are content-hashed, so a cached URL can
+ *    never be logically stale.
+ *  - Navigations + identity reads (`/api/v1/auth/me`): network-first with a
+ *    cache fallback used ONLY on hard network failure — never on slowness.
+ *    Serving a stale shell because the server was slow would run yesterday's
+ *    app today (a real defect found and fixed in round-13 verification).
+ *  - Wallet reads (`/api/v1/tickets*`, `/api/v1/orders*`): network-first with
+ *    a 4 s race and cache fallback — resilience reads where brief staleness
+ *    is harmless (the authoritative offline layer is the localStorage wallet).
+ *  - Everything else: untouched. WebSockets are never intercepted.
  *
- * Dev-mode honesty: Turbopack chunk URLs change on every rebuild, so a fully
- * offline cold boot of the shell is best-effort in development. The offline
- * ticket wallet itself is client-side (localStorage) and does not depend on
- * this worker once the app is open.
+ * Dev-mode honesty: a fully offline cold boot of the shell is best-effort in
+ * development (chunk sets shift between rebuilds). The offline ticket wallet
+ * itself is client-side (localStorage) and does not depend on this worker.
  */
 
-const VERSION = 'ievp-v1'
+const VERSION = 'ievp-v2'
 const SHELL_CACHE = `${VERSION}-shell`
 const ASSET_CACHE = `${VERSION}-assets`
 const API_CACHE = `${VERSION}-api`
 
 const PRECACHE = ['/logo.svg', '/manifest.webmanifest', '/']
 
-const API_CACHEABLE = [
-  '/api/v1/auth/me',
-  '/api/v1/tickets',
-  '/api/v1/orders',
-]
+const WALLET_API = ['/api/v1/tickets', '/api/v1/orders']
+const IDENTITY_API = ['/api/v1/auth/me']
 
-const NETWORK_TIMEOUT_MS = 4000
+function isWalletApi(url) {
+  return WALLET_API.some((p) => url.pathname === p || url.pathname.startsWith(`${p}/`))
+}
 
-function isCacheableApi(url) {
-  const path = url.pathname
-  if (!path.startsWith('/api/v1/')) return false
-  return API_CACHEABLE.some((p) => path === p || path.startsWith(`${p}/`))
+function isIdentityApi(url) {
+  return IDENTITY_API.some((p) => url.pathname === p || url.pathname.startsWith(`${p}/`))
 }
 
 function timeout(ms) {
@@ -51,10 +51,15 @@ async function cacheFirst(request, cacheName) {
   return res
 }
 
-async function networkFirst(request, cacheName, { fallbackUrl = null } = {}) {
+/**
+ * Network-first. Slow-but-alive responses are always honoured; the cache is
+ * consulted only when the network actually fails (or, for `raceMs`, when the
+ * request is still unresolved after the budget expires).
+ */
+async function networkFirst(request, cacheName, { fallbackUrl = null, raceMs = null } = {}) {
   const cache = await caches.open(cacheName)
   try {
-    const res = await Promise.race([fetch(request), timeout(NETWORK_TIMEOUT_MS)])
+    const res = await (raceMs ? Promise.race([fetch(request), timeout(raceMs)]) : fetch(request))
     if (res) {
       if (res.ok) cache.put(request, res.clone()).catch(() => {})
       return res
@@ -114,14 +119,18 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  // App navigations → network-first, fall back to the cached shell.
+  // App navigations + identity → fresh or nothing; cache only rescues failure.
   if (req.mode === 'navigate') {
     event.respondWith(networkFirst(req, SHELL_CACHE, { fallbackUrl: '/' }))
     return
   }
-
-  // Hot identity/wallet reads → network-first with cache fallback.
-  if (isCacheableApi(url)) {
+  if (isIdentityApi(url)) {
     event.respondWith(networkFirst(req, API_CACHE))
+    return
+  }
+
+  // Wallet reads → bounded race, cache rescue on timeout/failure.
+  if (isWalletApi(url)) {
+    event.respondWith(networkFirst(req, API_CACHE, { raceMs: 4000 }))
   }
 })

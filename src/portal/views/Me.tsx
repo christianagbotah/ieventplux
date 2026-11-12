@@ -53,7 +53,7 @@ interface NotificationRow {
 }
 
 export default function Me({ route }: { route: Route }) {
-  const { user, memberships, unread, setUnread } = usePortal()
+  const { user, memberships, unread, setUnread, booted } = usePortal()
   const { toast } = useToast()
   const [tab, setTab] = useState(route.query.get('tab') ?? 'tickets')
   const [tickets, setTickets] = useState<TicketRow[] | null>(null)
@@ -72,13 +72,14 @@ export default function Me({ route }: { route: Route }) {
   const [elevPassword, setElevPassword] = useState('')
 
   useEffect(() => {
+    if (!booted) return // session check still in flight — do not bounce yet
     if (!user) {
       navigate('/signin')
       return
     }
     setProfile({ displayName: user.displayName, phone: user.phone ?? '', city: user.city ?? '', bio: '' })
     setPrefs({ email: true, push: true, sms: Boolean(user.phone), marketing: Boolean(user.notifPrefs?.marketing) })
-  }, [user])
+  }, [user, booted])
 
   const loadTickets = useCallback(async () => {
     const data = await api.get<{ items: TicketRow[] }>('/tickets').catch(() => null)

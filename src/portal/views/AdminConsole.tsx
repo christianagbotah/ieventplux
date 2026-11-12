@@ -33,16 +33,17 @@ const SECTIONS = [
 ]
 
 export default function AdminConsole({ route }: { route: Route }) {
-  const { user } = usePortal()
+  const { user, booted } = usePortal()
   const [section, setSection] = useState(route.query.get('tab') ?? 'overview')
 
   useEffect(() => {
+    if (!booted) return // session check still in flight — do not bounce yet
     if (!user) {
       navigate('/signin')
       return
     }
     if (!isPlatformStaff(user)) navigate('/')
-  }, [user])
+  }, [user, booted])
 
   if (!user || !isPlatformStaff(user)) return null
 

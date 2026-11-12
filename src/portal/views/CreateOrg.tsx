@@ -17,7 +17,7 @@ const ORG_TYPES = [
 
 export default function CreateOrg() {
   const { toast } = useToast()
-  const { user, setMemberships } = usePortal()
+  const { user, setMemberships, booted } = usePortal()
   const [busy, setBusy] = useState(false)
   const [form, setForm] = useState({ name: '', orgType: 'CHURCH', tagline: '', description: '', city: '', contactPhone: '' })
 
@@ -37,6 +37,7 @@ export default function CreateOrg() {
     }
   }
 
+  if (!booted) return null // session check still in flight — do not bounce yet
   if (!user) {
     navigate('/signin')
     return null

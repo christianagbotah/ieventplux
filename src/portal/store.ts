@@ -32,12 +32,16 @@ interface PortalState {
   unread: number
   realtimeConnected: boolean
   assistantOpen: boolean
+  /** True once the first /auth/me bootstrap has resolved — private views must
+   * not redirect to /signin while the session is still being checked. */
+  booted: boolean
   setUser: (user: SessionUser | null) => void
   setMemberships: (m: MembershipInfo[]) => void
   setActiveOrg: (orgId: string | null) => void
   setUnread: (n: number) => void
   setRealtimeConnected: (v: boolean) => void
   setAssistantOpen: (v: boolean) => void
+  setBooted: (v: boolean) => void
 }
 
 export const usePortal = create<PortalState>((set) => ({
@@ -47,7 +51,9 @@ export const usePortal = create<PortalState>((set) => ({
   unread: 0,
   realtimeConnected: false,
   assistantOpen: false,
+  booted: false,
   setUser: (user) => set({ user }),
+  setBooted: (booted) => set({ booted }),
   setMemberships: (memberships) =>
     set((state) => ({
       memberships,
