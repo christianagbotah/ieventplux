@@ -15,6 +15,7 @@ import { navigate } from '../router'
 import { usePortal } from '../store'
 import { money, dateLong, timeRange, relative, initials, humanize } from '../format'
 import { EmptyState } from '../components/EventCard'
+import LiveEngagement from '../components/LiveEngagement'
 
 interface TicketType {
   id: string
@@ -38,6 +39,7 @@ interface EventDetailPayload {
   event: {
     id: string
     title: string
+    slug: string
     summary?: string | null
     description: string
     categorySlug: string
@@ -414,6 +416,9 @@ export default function EventDetail({ slug }: { slug: string }) {
           <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_360px]">
             {/* Left column */}
             <div className="space-y-6">
+              {['LIVE', 'PUBLISHED'].includes(event.status) && (
+                <LiveEngagement eventId={event.id} slug={event.slug} live={event.status === 'LIVE'} />
+              )}
               <Card className="rounded-2xl">
                 <CardContent className="grid gap-4 p-5 sm:grid-cols-2">
                   <div className="flex items-start gap-3">

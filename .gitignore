@@ -55,3 +55,7 @@ server.log
 # env files: runtime .env is NEVER committed; template is tracked
 .env*
 !.env.example
+
+# SQLite transient WAL/SHM artifacts (the .db itself is tracked for demo continuity)
+db/custom.db-shm
+db/custom.db-wal

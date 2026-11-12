@@ -3,6 +3,7 @@ import { handle, jsonOk, requireUser, readJson, errors, rateLimit, jsonList, pag
 import { db } from '@/lib/db'
 import { eventOrgAccess } from '@/server/permissions'
 import { issuePlayback, verifyPlayback, startBroadcast, endBroadcast, rotateStreamKey, resolveEntitlement } from '@/server/services/broadcasts'
+import { realtimeEmit } from '@/server/services/realtime'
 import { env } from '@/server/env'
 
 type RouteContext = { params: Promise<{ id: string; action: string }> }
@@ -108,7 +109,11 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
       const message = await db.chatMessage.create({
         data: { broadcastId: id, userId: user.id, orgId: (await db.event.findUnique({ where: { id: broadcast.eventId }, select: { orgId: true } }))?.orgId ?? null, body: text },
       })
-      return jsonOk({ message: { ...message, user: { id: user.id, displayName: user.displayName } } })
+      const relayed = { ...message, user: { id: user.id, displayName: user.displayName } }
+      // Relay the *confirmed* message to everyone in the broadcast room
+      // (the sender included — clients dedupe by id and also append locally).
+      await realtimeEmit(`broadcast:${id}`, 'chat', relayed)
+      return jsonOk({ message: relayed })
     }
 
     if (action === 'start') {

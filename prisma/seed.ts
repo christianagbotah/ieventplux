@@ -219,6 +219,71 @@ async function main() {
   const masterclassBroadcast = await db.liveBroadcast.create({ data: { eventId: masterclass.id, title: 'Event Financing 101 — Live Masterclass', description: 'Live + 30-day replay included.', accessPolicy: 'PAID', priceMinor: 5000, status: 'LIVE', startedAt: new Date(Date.now() - 10 * 60000), viewerCapacity: 500, createdById: users.director.id } })
   await db.liveBroadcast.create({ data: { eventId: easterPast.id, title: 'Easter Passion Live — Replay', description: 'Full recording of the 2026 production.', accessPolicy: 'TICKET_HOLDERS', status: 'ENDED', startedAt: daysFromNow(-60, 18), endedAt: daysFromNow(-60, 21), recordingStatus: 'AVAILABLE', replayPriceMinor: 2000, createdById: users.mediaLead.id } })
 
+  // ── Live engagement: open poll + closed poll + audience Q&A on the live events ──
+  const worshipPoll = await db.livePoll.create({
+    data: {
+      eventId: worshipLive.id, question: 'Which worship flow should the team lead next?', status: 'OPEN', createdBy: users.mediaLead.id,
+      openedAt: new Date(Date.now() - 20 * 60000),
+      options: { create: [
+        { text: 'Spontaneous free worship', position: 0 },
+        { text: 'Classic hymns medley', position: 1 },
+        { text: 'Gospel Night preview set', position: 2 },
+        { text: 'Soaking / instrumental', position: 3 },
+      ] },
+    },
+    include: { options: true },
+  })
+  await db.livePollVote.createMany({ data: [
+    { pollId: worshipPoll.id, optionId: worshipPoll.options[0].id, userId: users.ama.id },
+    { pollId: worshipPoll.id, optionId: worshipPoll.options[0].id, userId: users.kojo.id },
+    { pollId: worshipPoll.id, optionId: worshipPoll.options[0].id, userId: users.akua.id },
+    { pollId: worshipPoll.id, optionId: worshipPoll.options[1].id, userId: users.pastor.id },
+    { pollId: worshipPoll.id, optionId: worshipPoll.options[2].id, userId: users.usher.id },
+  ] })
+  const worshipPoll2 = await db.livePoll.create({
+    data: {
+      eventId: worshipLive.id, question: 'Replay edit style for tomorrow?', status: 'CLOSED', createdBy: users.mediaLead.id,
+      openedAt: new Date(Date.now() - 40 * 60000), closedAt: new Date(Date.now() - 12 * 60000),
+      options: { create: [
+        { text: 'Full uncut stream', position: 0 },
+        { text: 'Highlights reel first', position: 1 },
+      ] },
+    },
+    include: { options: true },
+  })
+  await db.livePollVote.createMany({ data: [
+    { pollId: worshipPoll2.id, optionId: worshipPoll2.options[1].id, userId: users.ama.id },
+    { pollId: worshipPoll2.id, optionId: worshipPoll2.options[1].id, userId: users.kojo.id },
+    { pollId: worshipPoll2.id, optionId: worshipPoll2.options[0].id, userId: users.akua.id },
+  ] })
+  const mcPoll = await db.livePoll.create({
+    data: {
+      eventId: masterclass.id, question: 'Which financing topic should we go deepest on?', status: 'OPEN', createdBy: users.director.id,
+      openedAt: new Date(Date.now() - 6 * 60000),
+      options: { create: [
+        { text: 'Sponsorship deal structures', position: 0 },
+        { text: 'Refund reserves & float', position: 1 },
+        { text: 'Payout reconciliation', position: 2 },
+      ] },
+    },
+    include: { options: true },
+  })
+  await db.livePollVote.createMany({ data: [
+    { pollId: mcPoll.id, optionId: mcPoll.options[0].id, userId: users.techLead.id },
+    { pollId: mcPoll.id, optionId: mcPoll.options[1].id, userId: users.eventCoOwner.id },
+    { pollId: mcPoll.id, optionId: mcPoll.options[1].id, userId: users.ama.id },
+  ] })
+  const q1 = await db.audienceQuestion.create({ data: { eventId: worshipLive.id, userId: users.ama.id, body: 'Will the replay include the testimony segment too?', pinned: true, createdAt: new Date(Date.now() - 30 * 60000) } })
+  await db.audienceQuestion.create({ data: { eventId: worshipLive.id, userId: users.kojo.id, body: 'Can we request a specific hymn during the free worship flow?', createdAt: new Date(Date.now() - 18 * 60000) } })
+  await db.audienceQuestion.create({ data: { eventId: worshipLive.id, userId: users.akua.id, body: 'Is the Upper Room Auditorium open for in-person attendance tonight?', createdAt: new Date(Date.now() - 9 * 60000) } })
+  await db.audienceQuestion.create({ data: { eventId: worshipLive.id, userId: users.ama.id, body: 'Please confirm the stream will stay free for the whole night?', status: 'ANSWERED', answer: 'Yes — the stream is free all night, and Gospel Night ticket holders also unlock the replay.', answeredById: users.mediaLead.id, answeredAt: new Date(Date.now() - 4 * 60000), createdAt: new Date(Date.now() - 25 * 60000) } })
+  await db.audienceQuestionUpvote.createMany({ data: [
+    { questionId: q1.id, userId: users.kojo.id },
+    { questionId: q1.id, userId: users.akua.id },
+    { questionId: q1.id, userId: users.usher.id },
+  ] })
+
+
   // ── Media (posters as gallery + synthetic clips for reels) ──────────────
   await db.mediaAsset.createMany({ data: [
     { orgId: chapel.id, eventId: gospelNight.id, uploaderId: users.mediaLead.id, kind: 'GALLERY', url: '/images/posters/gospel-concert.png', caption: 'Main stage setup' },

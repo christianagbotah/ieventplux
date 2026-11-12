@@ -275,6 +275,28 @@ New capability: `POST /api/v1/ai/planner` — the last planned advanced-AI featu
 **Static:** `bun run lint` 0 errors / 17 warnings (baseline); `bunx tsc --noEmit` 0 errors.
 
 
+## Re-verification round 8 (2026-11-12, live engagement: realtime polls + audience Q&A + chat relay fix)
+
+New capability: `LivePoll` / `LivePollOption` / `LivePollVote` / `AudienceQuestion` / `AudienceQuestionUpvote` (5 new models; 62 total) + `event:{id}` rooms on the :3003 relay. Polls + moderated Q&A render on the event page (`LiveEngagement` panel, organizer- and attendee-adaptive) and in a new organizer **Live Room** workspace tab. **Pre-existing defect fixed:** the broadcast chat POST never relayed through `/emit` despite its comment claiming it — live chat messages never appeared live; the confirmed message is now relayed to `broadcast:{id}` and the client dedupes by id (local append remains as relay-down fallback).
+
+| Case | Outcome | Status |
+|---|---|---|
+| `GET /events/[id]/polls` (anonymous) | OPEN first then CLOSED, per-option tallies + totalVotes, `isOrg:false`; DRAFTs hidden | ✅ |
+| `GET /events/[id]/questions` (anonymous) | Pinned first, answered last-of-priority, upvote counts; HIDDEN excluded | ✅ |
+| Vote | Fresh user → tallies + myOptionId returned; guest → 401; **re-vote → 409** (unique index, race-safe) | ✅ |
+| Org poll lifecycle | Create (2–6 distinct options validated) → DRAFT; **open requires event LIVE**; opening auto-closes other OPEN polls of the event (`poll:closed-others` broadcast); close finalizes | ✅ |
+| Attendee tries organizer action | `403 Only the event organizers can manage polls.` | ✅ |
+| Q&A | Ask (6–280 chars, rate-limited 10/min); upvote toggle (409 on own question); org answer publishes instantly; hide → removed for guests, still listed for org (moderation) | ✅ |
+| Realtime relay (raw socket.io listener on `event:{id}`) | `poll:vote`, `qa:new`, `qa:update` all received with correct payloads | ✅ |
+| Cross-client (agent-browser ×2 sessions through the :81 gateway) | Organizer pinned a question → attendee tab showed the Pinned badge **without reload**; organizer created + opened a new poll → attendee tab received it live and voted; organizer closed it → attendee tab showed "Closed · Final result · 1 vote · 100%" | ✅ |
+| Defect found & fixed mid-round | `poll:update` broadcasts zeroed tallies (toView never included counts) and client replaces lost `myOptionId`/`myUpvote` markers — broadcasts now carry complete recomputed tallies (`completeView`) and clients preserve per-viewer markers; resilience refetch (30 s while live) added for proxies that strip websockets | ✅ |
+| Live Room workspace tab (as org) | LIVE events listed with engagement stats ("4 polls ready · 1 pending Q · 4 answered") + deep link to the event page; upcoming-within-48h section | ✅ |
+| Mobile 390×844 | Panel usable, tabs reachable, no overflow; footer sticks (bottom ≥ viewport −1); zero console/page errors | ✅ |
+| VLM screenshot review | Header legibility improved (glass 78%→85% opacity + blur 16px); redundant "Leading" badge suppressed when only one option has votes; remaining VLM notes were design-taste items consistent with the established brand system | ✅ |
+
+**Static:** `bun run lint` 0 errors / 17 warnings (baseline); `bunx tsc --noEmit` 0 errors. Repo hygiene: accidental UUID-named commit dropped; `db/custom.db-shm` / `db/custom.db-wal` untracked (transient WAL artifacts; `custom.db` stays tracked for demo continuity).
+
+
 ## Not performed (honest)
 
 - Native Android/iOS builds and device testing (mobile is a source scaffold).

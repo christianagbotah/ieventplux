@@ -67,6 +67,10 @@ model User {
   refundRequests      RefundCase[]           @relation("RefundRequester")
   verifications       ContactVerification[]
   chatMessages        ChatMessage[]
+  livePollVotes       LivePollVote[]
+  questionsAsked      AudienceQuestion[]      @relation("QuestionAuthor")
+  answersGiven        AudienceQuestion[]      @relation("QuestionAnswerer")
+  questionUpvotes     AudienceQuestionUpvote[]
 }
 
 model Session {
@@ -286,6 +290,8 @@ model Event {
   updates      EventUpdate[]
   campaigns    PromotionCampaign[]
   waitlistEntries WaitlistEntry[]
+  livePolls         LivePoll[]
+  audienceQuestions AudienceQuestion[]
 
   @@index([status, visibility, startsAt])
   @@index([orgId, status])
@@ -1172,7 +1178,87 @@ model AiMessage {
   conversationId String
   role           String // USER | ASSISTANT | SYSTEM
   text           String
-  createdAt      DateTime @default(now())
+  createdAt       DateTime @default(now())
 
   conversation AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+}
+
+// ─────────────────────────────── Live engagement (polls + audience Q&A) ───────────────────────────────
+// Realtime rooms are `event:{eventId}` on the :3003 relay; durable state always
+// lives here so a relay outage degrades to refetch, never to data loss.
+
+model LivePoll {
+  id        String    @id @default(cuid())
+  eventId   String
+  question  String
+  status    String    @default("DRAFT") // DRAFT | OPEN | CLOSED
+  createdBy String
+  openedAt  DateTime?
+  closedAt  DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  event   Event            @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  options LivePollOption[]
+  votes   LivePollVote[]
+
+  @@index([eventId, status])
+}
+
+model LivePollOption {
+  id       String @id @default(cuid())
+  pollId   String
+  text     String
+  position Int
+
+  poll  LivePoll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  votes LivePollVote[]
+
+  @@index([pollId, position])
+}
+
+model LivePollVote {
+  id        String   @id @default(cuid())
+  pollId    String
+  optionId  String
+  userId    String
+  createdAt DateTime @default(now())
+
+  poll   LivePoll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  option LivePollOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  user   User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([pollId, userId]) // one vote per person per poll
+}
+
+model AudienceQuestion {
+  id           String    @id @default(cuid())
+  eventId      String
+  userId       String
+  body         String
+  status       String    @default("NEW") // NEW | ANSWERED | HIDDEN
+  answer       String?
+  answeredById String?
+  answeredAt   DateTime?
+  pinned       Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+
+  event    Event                     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  author   User                      @relation("QuestionAuthor", fields: [userId], references: [id], onDelete: Cascade)
+  answerer User?                     @relation("QuestionAnswerer", fields: [answeredById], references: [id], onDelete: SetNull)
+  upvotes  AudienceQuestionUpvote[]
+
+  @@index([eventId, status])
+}
+
+model AudienceQuestionUpvote {
+  id         String   @id @default(cuid())
+  questionId String
+  userId     String
+  createdAt  DateTime @default(now())
+
+  question AudienceQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  user     User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([questionId, userId])
 }

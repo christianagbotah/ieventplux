@@ -2,6 +2,7 @@ import { db } from '../../lib/db'
 import { env } from '../env'
 import { enqueue } from '../outbox'
 import { estimateSegments } from '../hubtel/sms'
+import { realtimeEmit } from './realtime'
 
 /**
  * Notifications + durable message queue (SMS/email/in-app) with deduplication,
@@ -13,16 +14,7 @@ export async function notifyUser(params: { userId: string; type: string; title: 
     data: { userId: params.userId, type: params.type, title: params.title.slice(0, 160), body: params.body.slice(0, 800), link: params.link ?? null },
   })
   // Realtime push (best-effort; the notification remains in the DB either way).
-  try {
-    await fetch(`http://localhost:${env.realtime.port}/emit`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Realtime-Secret': env.realtime.secret },
-      body: JSON.stringify({ room: `user:${params.userId}`, event: 'notification', payload: { id: row.id, type: row.type, title: row.title, body: row.body, link: row.link } }),
-      signal: AbortSignal.timeout(3000),
-    })
-  } catch {
-    // Realtime service down — notification is still durable in the database.
-  }
+  await realtimeEmit(`user:${params.userId}`, 'notification', { id: row.id, type: row.type, title: row.title, body: row.body, link: row.link })
   return row
 }
 

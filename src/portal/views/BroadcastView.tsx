@@ -83,7 +83,9 @@ export default function BroadcastView({ id }: { id: string }) {
     if (!data) return
     const socket = io('/?XTransformPort=3003', { transports: ['websocket', 'polling'], reconnection: true })
     socket.on('connect', () => socket.emit('join', { room: `broadcast:${id}` }))
-    socket.on('chat', (message: ChatRow) => setMessages((prev) => [...prev.slice(-80), message]))
+    socket.on('chat', (message: ChatRow) => {
+      setMessages((prev) => (prev.some((m) => m.id === message.id) ? prev : [...prev.slice(-80), message]))
+    })
     socket.on('presence', (payload: { room: string; viewers: number }) => {
       if (payload.room === `broadcast:${id}`) setViewers(payload.viewers)
     })
@@ -115,10 +117,16 @@ export default function BroadcastView({ id }: { id: string }) {
   const sendChat = async () => {
     if (!user) return navigate('/signin')
     if (draft.trim().length < 1) return
-    // Persistence + authorization via the API; realtime relays the confirmed message.
-    await api.post(`/broadcasts/${id}/chat`, { body: draft }).catch((err) => {
+    // Persistence + authorization via the API; the confirmed message is relayed
+    // through the realtime room. The local append is the fallback when the relay
+    // is unavailable — the socket handler dedupes by id either way.
+    const confirmed = await api.post<{ message: ChatRow }>(`/broadcasts/${id}/chat`, { body: draft }).catch((err) => {
       toast({ description: err instanceof ApiClientError ? err.message : 'Could not send the message.', variant: 'destructive' })
+      return null
     })
+    if (confirmed?.message) {
+      setMessages((prev) => (prev.some((m) => m.id === confirmed.message.id) ? prev : [...prev.slice(-80), confirmed.message]))
+    }
     setDraft('')
   }
 

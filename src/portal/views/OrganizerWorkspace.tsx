@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   LayoutDashboard, CalendarPlus, Users, Ticket, Radio, Megaphone, MessageSquare, Wallet, UserCog, CreditCard, Settings,
-  ChevronLeft, Plus, Loader2, Camera, ScanLine, Search, Play, Square, RefreshCw, KeyRound, Pause, PlayCircle, Trash2, FileText, ShieldAlert, TrendingUp, Repeat,
+  ChevronLeft, Plus, Loader2, Camera, ScanLine, Search, Play, Square, RefreshCw, KeyRound, Pause, PlayCircle, Trash2, FileText, ShieldAlert, TrendingUp, Repeat, Activity, Vote,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -45,6 +45,7 @@ const NAV = [
   { key: 'orders', label: 'Orders', icon: Ticket },
   { key: 'attendees', label: 'Attendees & Check-in', icon: Users },
   { key: 'studio', label: 'Streaming Studio', icon: Radio },
+  { key: 'live', label: 'Live Room', icon: Activity },
   { key: 'promotions', label: 'Promotions', icon: Megaphone },
   { key: 'messages', label: 'Messaging', icon: MessageSquare },
   { key: 'finance', label: 'Finance & Payouts', icon: Wallet },
@@ -127,6 +128,7 @@ export default function OrganizerWorkspace({ route }: { route: Route }) {
           {section === 'orders' && <OrdersView orgId={activeOrg.orgId} />}
           {section === 'attendees' && <AttendeesView orgId={activeOrg.orgId} />}
           {section === 'studio' && <StudioView orgId={activeOrg.orgId} />}
+          {section === 'live' && <LiveRoomView orgId={activeOrg.orgId} />}
           {section === 'promotions' && <PromotionsView orgId={activeOrg.orgId} />}
           {section === 'messages' && <MessagesView orgId={activeOrg.orgId} />}
           {section === 'finance' && <FinanceView orgId={activeOrg.orgId} role={activeOrg.role} />}
@@ -1825,5 +1827,153 @@ function SettingsView({ orgId, role }: { orgId: string; role: string }) {
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+/* ───────────────────────────── Live Room (polls + Q&A control) ───────────────────────────── */
+
+interface EngagementStats {
+  openPollQuestion?: string
+  openPollVotes?: number
+  totalPolls: number
+  pendingQuestions: number
+  answeredQuestions: number
+}
+
+function LiveRoomView({ orgId }: { orgId: string }) {
+  const { toast } = useToast()
+  const [events, setEvents] = useState<OrgEvent[] | null>(null)
+  const [stats, setStats] = useState<Record<string, EngagementStats>>({})
+  const [refreshing, setRefreshing] = useState(false)
+
+  const load = useCallback(async () => {
+    setRefreshing(true)
+    try {
+      const data = await api.get<{ items: OrgEvent[] }>(`/events?mine=1&orgId=${orgId}&pageSize=50`)
+      setEvents(data.items)
+      const now = Date.now()
+      const focus = data.items.filter((e) => e.status === 'LIVE' || (['PUBLISHED', 'LIVE'].includes(e.status) && new Date(e.startsAt).getTime() - now < 48 * 3600_000)).slice(0, 8)
+      const nextStats: Record<string, EngagementStats> = {}
+      await Promise.all(focus.map(async (e) => {
+        const [polls, questions] = await Promise.all([
+          api.get<{ polls: { status: string; question: string; totalVotes: number }[] }>(`/events/${e.id}/polls`).catch(() => ({ polls: [] })),
+          api.get<{ questions: { status: string }[] }>(`/events/${e.id}/questions`).catch(() => ({ questions: [] })),
+        ])
+        const open = polls.polls.find((p) => p.status === 'OPEN')
+        nextStats[e.id] = {
+          openPollQuestion: open?.question,
+          openPollVotes: open?.totalVotes,
+          totalPolls: polls.polls.filter((p) => p.status !== 'DRAFT').length,
+          pendingQuestions: questions.questions.filter((q) => q.status === 'NEW').length,
+          answeredQuestions: questions.questions.filter((q) => q.status === 'ANSWERED').length,
+        }
+      }))
+      setStats(nextStats)
+    } catch {
+      toast({ description: 'Could not load the live room.', variant: 'destructive' })
+    } finally {
+      setRefreshing(false)
+    }
+  }, [orgId, toast])
+
+  useEffect(() => {
+    void load()
+  }, [load])
+
+  if (events === null) return <LoadingBlock />
+
+  const live = events.filter((e) => e.status === 'LIVE')
+  const now = Date.now()
+  const upcoming = events.filter((e) => e.status === 'PUBLISHED' && new Date(e.startsAt).getTime() - now > 0 && new Date(e.startsAt).getTime() - now < 48 * 3600_000)
+
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="efx-animated-gradient-text iefx-headline text-xl font-extrabold">Live Room</h1>
+          <p className="text-sm text-muted-foreground">Run realtime polls and answer audience questions while the room is live.</p>
+        </div>
+        <Button variant="outline" size="sm" className="rounded-full ievx-press" onClick={() => void load()} disabled={refreshing}>
+          {refreshing ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="mr-1.5 h-3.5 w-3.5" />} Refresh
+        </Button>
+      </div>
+
+      <Card className="ievx-glass rounded-2xl">
+        <CardContent className="flex flex-wrap items-center gap-4 p-5">
+          <span className="efx-badge-ping relative inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-destructive/10 text-destructive" aria-hidden>
+            <Activity className="h-5 w-5" />
+            <span className="efx-badge-ping__dot" />
+          </span>
+          <div className="min-w-[240px] flex-1">
+            <p className="text-sm font-bold">Engagement runs on the event page itself</p>
+            <p className="text-xs text-muted-foreground">
+              Open an event below and use the Live engagement panel — create a poll beforehand, open it while live, and answers you publish appear instantly on every attendee&apos;s screen (results update in realtime).
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      {live.length === 0 && upcoming.length === 0 && (
+        <EmptyState
+          title="Nothing live or starting soon"
+          description="Events that are live, or starting within 48 hours, appear here with their engagement controls."
+        />
+      )}
+
+      {live.length > 0 && (
+        <section aria-labelledby="live-now-heading" className="space-y-3">
+          <h2 id="live-now-heading" className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-muted-foreground">
+            <span className="ievx-live-dot" aria-hidden /> Live now ({live.length})
+          </h2>
+          {live.map((e) => (
+            <LiveRoomCard key={e.id} event={e} stats={stats[e.id]} highlight />
+          ))}
+        </section>
+      )}
+
+      {upcoming.length > 0 && (
+        <section aria-labelledby="live-soon-heading" className="space-y-3">
+          <h2 id="live-soon-heading" className="text-sm font-bold uppercase tracking-wide text-muted-foreground">Starting within 48 hours ({upcoming.length})</h2>
+          {upcoming.map((e) => (
+            <LiveRoomCard key={e.id} event={e} stats={stats[e.id]} />
+          ))}
+        </section>
+      )}
+    </div>
+  )
+}
+
+function LiveRoomCard({ event, stats, highlight }: { event: OrgEvent; stats?: EngagementStats; highlight?: boolean }) {
+  const live = event.status === 'LIVE'
+  return (
+    <Card className={`rounded-2xl ievx-card-hover ${highlight ? 'border-destructive/30' : ''}`}>
+      <CardContent className="flex flex-wrap items-center justify-between gap-4 p-5">
+        <div className="min-w-[220px] flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            {live && <Badge className="bg-destructive text-white"><span className="ievx-live-dot" /> Live</Badge>}
+            <p className="text-sm font-bold">{event.title}</p>
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {live ? `Started ${relative(event.startsAt)}` : `Starts ${relative(event.startsAt)}`} · {event.mode === 'VIRTUAL' ? 'Online' : event.city ?? '—'}
+          </p>
+          {stats && (
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+              {stats.openPollQuestion ? (
+                <Badge variant="outline" className="gap-1.5 border-primary/40 text-primary">
+                  <Vote className="h-3 w-3" /> Poll open · {stats.openPollVotes ?? 0} votes
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="gap-1.5">{stats.totalPolls > 0 ? `${stats.totalPolls} poll${stats.totalPolls === 1 ? '' : 's'} ready` : 'No polls yet'}</Badge>
+              )}
+              <Badge variant="outline" className="gap-1.5">{stats.pendingQuestions} pending Q</Badge>
+              {stats.answeredQuestions > 0 && <Badge variant="outline" className="gap-1.5">{stats.answeredQuestions} answered</Badge>}
+            </div>
+          )}
+        </div>
+        <Button size="sm" className="rounded-full efx-shine-sweep-button px-4" onClick={() => navigate(`/event/${event.slug}`)}>
+          <Activity className="mr-1.5 h-3.5 w-3.5" /> Open live room
+        </Button>
+      </CardContent>
+    </Card>
   )
 }

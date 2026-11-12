@@ -317,9 +317,9 @@
 }
 
 .ievx-glass {
-  background: oklch(1 0 0 / 78%);
-  backdrop-filter: blur(14px) saturate(1.4);
-  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  background: oklch(1 0 0 / 85%);
+  backdrop-filter: blur(16px) saturate(1.4);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
 }
 
 .ievx-card-hover {
@@ -365,7 +365,20 @@
   animation: ievx-bar 0.9s ease-in-out infinite;
 }
 
+/* Live-engagement poll fill — leader bar carries a slow specular sheen
+   (derivative of the studio's shine-sweep catalog effect). */
+.ievx-poll-fill { position: relative; overflow: hidden; }
+.ievx-poll-fill--lead::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(100deg, transparent 32%, oklch(1 0 0 / 0.45) 50%, transparent 68%);
+  animation: ievx-sheen 2.6s ease-in-out infinite;
+}
+@keyframes ievx-sheen {
+  0% { transform: translateX(-130%); }
+  55%, 100% { transform: translateX(260%); }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .ievx-view-enter, .ievx-fade, .ievx-scale, .ievx-skeleton, .ievx-live-dot, .ievx-voice-bar { animation: none !important; }
+  .ievx-view-enter, .ievx-fade, .ievx-scale, .ievx-skeleton, .ievx-live-dot, .ievx-voice-bar, .ievx-poll-fill--lead::after { animation: none !important; }
   .ievx-card-hover, .ievx-press { transition: none !important; }
 }
