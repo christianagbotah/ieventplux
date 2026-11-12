@@ -16,6 +16,7 @@ import { navigate, type Route } from '../router'
 import { usePortal } from '../store'
 import { money, dateLong, relative, humanize, statusTone, initials } from '../format'
 import { EmptyState } from '../components/EventCard'
+import { cacheTicketList, cacheTicketDetail, readCachedTicketList, readCachedTicketDetail, type CachedTicketDetail, type CachedTicketRow } from '../lib/ticket-cache'
 
 interface TicketRow {
   id: string
@@ -60,7 +61,8 @@ export default function Me({ route }: { route: Route }) {
   const [saved, setSaved] = useState<SavedRow[] | null>(null)
   const [following, setFollowing] = useState<{ orgId: string; org: { name: string; slug: string } }[] | null>(null)
   const [notifications, setNotifications] = useState<NotificationRow[] | null>(null)
-  const [selectedTicket, setSelectedTicket] = useState<{ row: TicketRow; qrSvg: string; qrPayload: string } | null>(null)
+  const [selectedTicket, setSelectedTicket] = useState<{ row: TicketRow; qrSvg: string; qrPayload: string; offlineCopy?: boolean; savedAt?: string } | null>(null)
+  const [ticketsOffline, setTicketsOffline] = useState(false)
   const [transferUrl, setTransferUrl] = useState<string | null>(null)
   const [copiedCode, setCopiedCode] = useState(false)
   const [profile, setProfile] = useState({ displayName: '', phone: '', city: '', bio: '' })
@@ -79,8 +81,23 @@ export default function Me({ route }: { route: Route }) {
   }, [user])
 
   const loadTickets = useCallback(async () => {
-    const data = await api.get<{ items: TicketRow[] }>('/tickets').catch(() => ({ items: [] }))
-    setTickets(data.items)
+    const data = await api.get<{ items: TicketRow[] }>('/tickets').catch(() => null)
+    if (data) {
+      setTickets(data.items)
+      setTicketsOffline(false)
+      // Persist the wallet list — the offline baseline for My Tickets.
+      cacheTicketList(data.items as unknown as CachedTicketRow[])
+      return
+    }
+    // Network failed: fall back honestly to the last saved wallet.
+    const cached = readCachedTicketList()
+    if (cached && cached.rows.length > 0) {
+      setTickets(cached.rows as unknown as TicketRow[])
+      setTicketsOffline(true)
+    } else {
+      setTickets([])
+      setTicketsOffline(false)
+    }
   }, [])
 
   const loadOrders = useCallback(async () => {
@@ -109,11 +126,21 @@ export default function Me({ route }: { route: Route }) {
   const openTicket = async (row: TicketRow) => {
     try {
       const detail = await api.get<{ ticket: TicketRow & { qrSvg: string; qrPayload: string } }>(`/tickets/${row.id}`)
-      setSelectedTicket({ row: detail.ticket, qrSvg: detail.ticket.qrSvg, qrPayload: detail.ticket.qrPayload })
+      setSelectedTicket({ row: detail.ticket, qrSvg: detail.ticket.qrSvg, qrPayload: detail.ticket.qrPayload, offlineCopy: false })
       setTransferUrl(null)
       setCopiedCode(false)
-    } catch (err) {
-      toast({ description: err instanceof ApiClientError ? err.message : 'Could not load the ticket.', variant: 'destructive' })
+      // Saved the moment it is seen — this exact QR stays scannable offline.
+      cacheTicketDetail({ row: detail.ticket as unknown as CachedTicketRow, qrSvg: detail.ticket.qrSvg, qrPayload: detail.ticket.qrPayload })
+    } catch {
+      // Offline (or the API died): serve the saved copy if this ticket was opened before.
+      const cached: CachedTicketDetail | null = readCachedTicketDetail(row.id)
+      if (cached) {
+        setSelectedTicket({ row: cached.row as TicketRow, qrSvg: cached.qrSvg, qrPayload: cached.qrPayload, offlineCopy: true, savedAt: cached.savedAt })
+        setTransferUrl(null)
+        setCopiedCode(false)
+        return
+      }
+      toast({ description: 'Could not load the ticket — you are offline and this ticket has no saved copy yet. Open it once while connected to save it.', variant: 'destructive' })
     }
   }
 
@@ -196,9 +223,14 @@ export default function Me({ route }: { route: Route }) {
         {/* Tickets */}
         <TabsContent value="tickets" className="space-y-3">
           <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">Your QR tickets — cached for offline use when opened.</p>
+            <p className="text-sm text-muted-foreground">Your QR tickets — every ticket you open stays scannable offline.</p>
             <Button variant="outline" size="sm" className="rounded-full" onClick={() => void loadTickets()}><RefreshCw className="mr-1 h-3.5 w-3.5" /> Refresh</Button>
           </div>
+          {ticketsOffline && (
+            <p role="status" className="flex items-center gap-1.5 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs font-medium text-amber-800 dark:text-amber-300">
+              Offline — showing your saved tickets.
+            </p>
+          )}
           {tickets === null ? (
             Array.from({ length: 3 }).map((_, i) => <div key={i} className="ievx-skeleton h-24 rounded-2xl" />)
           ) : tickets.length === 0 ? (
@@ -394,6 +426,11 @@ export default function Me({ route }: { route: Route }) {
               <DialogHeader>
                 <DialogTitle className="text-center">{selectedTicket.row.event.title}</DialogTitle>
               </DialogHeader>
+              {selectedTicket.offlineCopy && (
+                <p role="status" className="mx-auto flex w-fit items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-[11px] font-semibold text-amber-800 dark:text-amber-300">
+                  Offline copy{selectedTicket.savedAt ? ` · saved ${relative(selectedTicket.savedAt)}` : ''}
+                </p>
+              )}
               <div className="flex flex-col items-center gap-3 text-center">
                 <div className="rounded-2xl border-8 border-white bg-white shadow-lg" dangerouslySetInnerHTML={{ __html: selectedTicket.qrSvg }} aria-label="Ticket QR code" role="img" />
                 <div>

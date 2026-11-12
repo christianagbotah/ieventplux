@@ -14,6 +14,7 @@ import { api } from './api'
 import { animateIn, animateOut } from './animate'
 import { initials } from './format'
 import { VoiceAssistant } from './components/VoiceAssistant'
+import { ConnectionStatus } from './components/ConnectionStatus'
 import { ThemeToggle } from './components/ThemeToggle'
 import { CommandPalette } from './components/CommandPalette'
 import { EffectsRuntime } from './components/EffectsRuntime'
@@ -326,6 +327,8 @@ export default function AppPortal() {
             )}
           </div>
         </div>
+        {/* Offline banner + service-worker registration — sticks under the glass bar. */}
+        <ConnectionStatus />
       </header>
 
       <main id="main" ref={viewRef} className="flex-1 pb-24 md:pb-10">
