@@ -95,6 +95,14 @@ None open. (`bun run lint`: 0 errors / warnings only. `bunx tsc --noEmit`: 0 err
 - **Defects found & fixed mid-round:** (1) reviews GET passed the raw slug as eventId → empty listings via slug; (2) hidden reviews vanished from their author's own query; (3) section anchor scrolls landed under the sticky glass header → `scroll-margin-top: 84px`. Ops: corrupted Turbopack cache (from killed processes) diagnosed + wiped; stale zombie server cleaned.
 - Verification: `docs/TEST_REPORT.md` → "Re-verification round 9" (API eligibility/moderation matrix + browser flows guest/author/organizer incl. live aggregate recompute + mobile); lint 0 errors / 17 warnings; tsc 0 errors.
 
+## Round 10 — Organizer insights: real analytics (2026-11-12)
+
+- **`GET /orgs/[id]/insights` + Insights workspace tab (TrendingUp nav):** analytics derived ONLY from real transactional rows — settled orders, issued tickets, admission scans, VISIBLE reviews, active waitlists. Nothing invented: no page-view or "engagement" numbers (the honesty contract is in the service header).
+- **Surfaces:** 4 glass stat cards (tickets sold w/ window delta, settled gross, check-in rate with scan math, avg rating); a 14-day SVG chart (smoothed line for tickets + bars for settled gross, hover tooltip with real per-day values, Accra-local day keys, edge-safe labels); top-events table (tickets/gross/checked-in/rating, click-through); ticket-mix bars using **discount-aware** `OrderItem.lineTotalMinor` sums; honest waitlist-demand callout when > 0.
+- **Seed realism:** 5 additional real orders (createOrder + paid-fulfilment) backdated across the fortnight; existing orders settled onto the window; Easter orders pre-date their event; 4 of 5 Easter tickets checked in with real `AdmissionScan` rows (25% org check-in rate).
+- **Defects found & fixed mid-round:** mobile overflow (grid `min-width:auto` vs table min-w → `min-w-0` + scroll box → 0px verified); amber rating-stat contrast (→ amber-700/400); chart edge-label clipping (PAD_L/R + start/end anchors). VLM "sidebar overlap" claim disproven live (screenshot stitching artifact).
+- Verification: `docs/TEST_REPORT.md` → "Re-verification round 10" (API payload matrix + browser incl. hover tooltip + mobile/dark + VLM); lint 0 errors / 17 warnings; tsc 0 errors.
+
 ## External blockers
 
 Hubtel checkout/Send Money/SMS credentials + merchant agreement; Cloudflare Stream credentials; SMTP relay; Apple/Google store accounts. All truthfully surfaced at `/api/v1/health` and Admin → Integrations. ~~git remote~~ **resolved 2026-11-11:** remote `github.com/christianagbotah/ieventplux` configured and pushed (`main`, upstream tracking set; every verified milestone is now committed and pushed).

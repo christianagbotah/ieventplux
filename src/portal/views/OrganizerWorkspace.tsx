@@ -41,6 +41,7 @@ interface OrgEvent {
 
 const NAV = [
   { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { key: 'insights', label: 'Insights', icon: TrendingUp },
   { key: 'events', label: 'Events', icon: CalendarPlus },
   { key: 'orders', label: 'Orders', icon: Ticket },
   { key: 'attendees', label: 'Attendees & Check-in', icon: Users },
@@ -124,6 +125,7 @@ export default function OrganizerWorkspace({ route }: { route: Route }) {
         </Button>
         <div key={section} className="ievx-view-enter">
           {section === 'dashboard' && <Dashboard orgId={activeOrg.orgId} />}
+          {section === 'insights' && <InsightsView orgId={activeOrg.orgId} />}
           {section === 'events' && <EventsManager orgId={activeOrg.orgId} role={activeOrg.role} />}
           {section === 'orders' && <OrdersView orgId={activeOrg.orgId} />}
           {section === 'attendees' && <AttendeesView orgId={activeOrg.orgId} />}
@@ -1975,5 +1977,255 @@ function LiveRoomCard({ event, stats, highlight }: { event: OrgEvent; stats?: En
         </Button>
       </CardContent>
     </Card>
+  )
+}
+
+/* ───────────────────────────── Insights (real analytics) ───────────────────────────── */
+
+interface InsightsDay {
+  date: string
+  tickets: number
+  grossMinor: number
+}
+
+interface InsightsEventRow {
+  id: string
+  title: string
+  slug: string
+  startsAt: string
+  status: string
+  tickets: number
+  grossMinor: number
+  checkedIn: number
+  ratingAvg: number | null
+  reviewCount: number
+}
+
+interface InsightsPayload {
+  windowDays: number
+  totals: {
+    eventsHeld: number
+    eventsUpcoming: number
+    liveNow: number
+    ticketsSold: number
+    grossMinor: number
+    windowTickets: number
+    windowGrossMinor: number
+    checkedIn: number
+    checkInRate: number
+    avgRating: number | null
+    waitlistDemand: number
+  }
+  trend: InsightsDay[]
+  topEvents: InsightsEventRow[]
+  ticketMix: { name: string; eventId: string; tickets: number; revenueMinor: number }[]
+}
+
+function InsightsView({ orgId }: { orgId: string }) {
+  const [data, setData] = useState<InsightsPayload | null>(null)
+  const [hover, setHover] = useState<number | null>(null)
+
+  useEffect(() => {
+    void api.get<InsightsPayload>(`/orgs/${orgId}/insights`).then(setData).catch(() => setData(null))
+  }, [orgId])
+
+  if (!data) return <LoadingBlock />
+
+  const t = data.totals
+  const maxTickets = Math.max(1, ...data.trend.map((d) => d.tickets))
+  const maxGross = Math.max(1, ...data.trend.map((d) => d.grossMinor))
+  const W = 560
+  const H = 170
+  const PAD_L = 26
+  const PAD_R = 26
+  const PAD_B = 22
+  const step = data.trend.length > 1 ? (W - PAD_L - PAD_R) / (data.trend.length - 1) : W
+  const points = data.trend.map((d, i) => ({
+    x: PAD_L + i * step,
+    y: H - PAD_B - (d.tickets / maxTickets) * (H - PAD_B - 14),
+  }))
+
+  // Smooth path (quadratic through midpoints) — straight line for 1–2 points.
+  const linePath =
+    points.length < 2
+      ? ''
+      : points.reduce((acc, p, i) => {
+          if (i === 0) return `M ${p.x} ${p.y}`
+          const prev = points[i - 1]
+          const mx = (prev.x + p.x) / 2
+          return `${acc} Q ${mx} ${prev.y} ${mx} ${(prev.y + p.y) / 2} T ${p.x} ${p.y}`
+        }, '')
+  const areaPath = linePath ? `${linePath} L ${points[points.length - 1].x} ${H - PAD_B} L ${points[0].x} ${H - PAD_B} Z` : ''
+
+  const stats = [
+    { label: 'Tickets sold', value: String(t.ticketsSold), sub: `${t.windowTickets} in the last ${data.windowDays} days`, tone: 'text-primary' },
+    { label: 'Gross (settled)', value: money(t.grossMinor), sub: `${money(t.windowGrossMinor)} in the last ${data.windowDays} days`, tone: 'text-foreground' },
+    { label: 'Check-in rate', value: `${Math.round(t.checkInRate * 100)}%`, sub: `${t.checkedIn} of ${t.ticketsSold} tickets scanned`, tone: 'text-emerald-600 dark:text-emerald-400' },
+    { label: 'Attendee rating', value: t.avgRating ? `${t.avgRating} / 5` : '—', sub: 'VISIBLE reviews across your events', tone: 'text-amber-700 dark:text-amber-400' },
+  ]
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <h1 className="efx-animated-gradient-text iefx-headline text-xl font-extrabold">Insights</h1>
+        <p className="text-sm text-muted-foreground">Computed from settled orders, issued tickets, scans and reviews — nothing invented. {t.liveNow > 0 ? `${t.liveNow} event${t.liveNow === 1 ? '' : 's'} live right now.` : `${t.eventsUpcoming} upcoming · ${t.eventsHeld} held.`}</p>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {stats.map((s) => (
+          <Card key={s.label} className="ievx-glass rounded-2xl">
+            <CardContent className="p-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{s.label}</p>
+              <p className={`mt-1 text-2xl font-extrabold tabular-nums ${s.tone}`}>{s.value}</p>
+              <p className="mt-1 text-xs text-muted-foreground">{s.sub}</p>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      <Card className="rounded-2xl">
+        <CardHeader className="pb-2">
+          <CardTitle className="flex flex-wrap items-center justify-between gap-2 text-base">
+            <span className="flex items-center gap-2"><TrendingUp className="h-4 w-4 text-primary" /> Sales — last {data.windowDays} days</span>
+            <span className="text-xs font-normal text-muted-foreground">line: tickets · bars: settled gross</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="relative" role="img" aria-label={`Daily tickets and gross for the last ${data.windowDays} days`}>
+            {hover !== null && (
+              <div
+                className="pointer-events-none absolute z-10 -translate-x-1/2 rounded-xl border border-border bg-popover px-3 py-2 text-xs shadow-lg"
+                style={{ left: `${(points[hover].x / W) * 100}%`, top: 0 }}
+              >
+                <p className="font-bold">{data.trend[hover].date}</p>
+                <p className="text-muted-foreground">{data.trend[hover].tickets} ticket{data.trend[hover].tickets === 1 ? '' : 's'} · {money(data.trend[hover].grossMinor)}</p>
+              </div>
+            )}
+            <svg viewBox={`0 0 ${W} ${H}`} className="w-full" aria-hidden>
+              <defs>
+                <linearGradient id="insights-area" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="oklch(0.55 0.13 160 / 0.30)" />
+                  <stop offset="100%" stopColor="oklch(0.55 0.13 160 / 0.02)" />
+                </linearGradient>
+              </defs>
+              {/* Gross bars */}
+              {data.trend.map((d, i) => {
+                const barW = Math.max(4, step * 0.32)
+                const h = (d.grossMinor / maxGross) * (H - PAD_B - 14) * 0.55
+                return (
+                  <rect
+                    key={`bar-${d.date}`}
+                    x={points[i].x - barW / 2}
+                    y={H - PAD_B - h}
+                    width={barW}
+                    height={h}
+                    rx={2}
+                    className="fill-accent/25"
+                  />
+                )
+              })}
+              {areaPath && <path d={areaPath} fill="url(#insights-area)" />}
+              {linePath && <path d={linePath} fill="none" stroke="oklch(0.55 0.13 160)" strokeWidth="2.5" strokeLinecap="round" />}
+              {points.map((p, i) => (
+                <g key={`dot-${data.trend[i].date}`}>
+                  <circle cx={p.x} cy={p.y} r={hover === i ? 5 : 3} className={hover === i ? 'fill-primary' : 'fill-primary/70'} />
+                  <rect
+                    x={Math.max(0, p.x - step / 2)}
+                    y={0}
+                    width={step || W}
+                    height={H - PAD_B}
+                    fill="transparent"
+                    onMouseEnter={() => setHover(i)}
+                    onMouseLeave={() => setHover(null)}
+                  />
+                </g>
+              ))}
+              {data.trend.map((d, i) =>
+                i % 2 === 0 || i === data.trend.length - 1 ? (
+                  <text
+                    key={`lbl-${d.date}`}
+                    x={i === 0 ? points[i].x - 10 : i === data.trend.length - 1 ? points[i].x + 10 : points[i].x}
+                    y={H - 6}
+                    textAnchor={i === 0 ? 'start' : i === data.trend.length - 1 ? 'end' : 'middle'}
+                    className="fill-muted-foreground text-[9px]"
+                  >
+                    {d.date.slice(5)}
+                  </text>
+                ) : null,
+              )}
+            </svg>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
+        <Card className="min-w-0 rounded-2xl">
+          <CardHeader className="pb-2"><CardTitle className="text-base">Top events by tickets sold</CardTitle></CardHeader>
+          <CardContent>
+            {data.topEvents.length === 0 ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">No ticket sales yet — your best sellers will rank here.</p>
+            ) : (
+              <div className="overflow-x-auto ievx-scrollbar">
+              <table className="w-full min-w-[560px] text-sm">
+                <thead>
+                  <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
+                    <th className="py-2 pr-2 font-medium">Event</th>
+                    <th className="py-2 pr-2 text-right font-medium">Tickets</th>
+                    <th className="py-2 pr-2 text-right font-medium">Gross</th>
+                    <th className="py-2 pr-2 text-right font-medium">Checked in</th>
+                    <th className="py-2 text-right font-medium">Rating</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.topEvents.map((e) => (
+                    <tr key={e.id} className="border-b border-border/50 last:border-0">
+                      <td className="py-2.5 pr-2">
+                        <button type="button" className="text-left font-medium hover:text-primary" onClick={() => navigate(`/event/${e.slug}`)}>{e.title}</button>
+                        <p className="text-xs text-muted-foreground">{dateLong(e.startsAt)} · {humanize(e.status)}</p>
+                      </td>
+                      <td className="py-2.5 pr-2 text-right font-bold tabular-nums">{e.tickets}</td>
+                      <td className="py-2.5 pr-2 text-right tabular-nums">{e.grossMinor > 0 ? money(e.grossMinor) : '—'}</td>
+                      <td className="py-2.5 pr-2 text-right tabular-nums">{e.checkedIn}</td>
+                      <td className="py-2.5 text-right tabular-nums">{e.ratingAvg ? `${e.ratingAvg} (${e.reviewCount})` : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="rounded-2xl">
+          <CardHeader className="pb-2"><CardTitle className="text-base">Ticket mix (settled revenue)</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            {data.ticketMix.length === 0 ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">No settled orders yet.</p>
+            ) : (
+              data.ticketMix.map((row) => {
+                const max = Math.max(...data.ticketMix.map((m) => m.revenueMinor), 1)
+                const pct = Math.round((row.revenueMinor / max) * 100)
+                return (
+                  <div key={`${row.eventId}-${row.name}`}>
+                    <div className="flex items-baseline justify-between gap-2 text-sm">
+                      <span className="truncate font-medium">{row.name}</span>
+                      <span className="shrink-0 tabular-nums text-muted-foreground">{row.tickets} · {money(row.revenueMinor)}</span>
+                    </div>
+                    <div className="mt-1 h-2 overflow-hidden rounded-full bg-muted" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label={`${row.name}: ${pct}% of mix`}>
+                      <div className="ievx-poll-fill h-full rounded-full bg-gradient-to-r from-primary to-emerald-500" style={{ width: `${Math.max(pct, 3)}%` }} />
+                    </div>
+                  </div>
+                )
+              })
+            )}
+            {t.waitlistDemand > 0 && (
+              <p className="rounded-xl bg-accent/10 px-3 py-2 text-xs text-accent-foreground">
+                <strong>{t.waitlistDemand}</strong> fan{t.waitlistDemand === 1 ? '' : 's'} on waitlists right now — raise capacity or wait for refunds to notify them.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
   )
 }

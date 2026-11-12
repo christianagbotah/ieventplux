@@ -318,6 +318,24 @@ New capability: `EventReview` (63rd model) — social proof with honest gating. 
 **Static:** `bun run lint` 0 errors / 17 warnings (baseline); `bunx tsc --noEmit` 0 errors.
 
 
+## Re-verification round 10 (2026-11-12, organizer insights — real analytics)
+
+New capability: `GET /api/v1/orgs/[id]/insights` + an **Insights** workspace tab. The honesty contract is in the service header: analytics derive ONLY from real transactional rows (settled orders, issued tickets, admission scans, VISIBLE reviews, active waitlists) — no page-view or "engagement" numbers are invented. Seed gains a realistic sales fortnight (5 extra real orders through `createOrder` + paid-fulfilment, all backdated; existing orders settled onto the window; Easter orders pre-date their 60-day-old event; ushers scanned 4 of 5 Easter tickets with real `AdmissionScan` rows).
+
+| Case | Outcome | Status |
+|---|---|---|
+| API payload (chapel, as pastor) | totals: 16 tickets · ₵1,840 gross · 25% check-in (4/16) · 4.7 avg rating; 11 tickets + ₵1,440 inside the 14-day window | ✅ |
+| Trend | zero-filled 14-day series (Africa/Accra day keys), sales on 7 of 14 days (1–2 tickets, ₵80–400/day) — matches the seeded order dates exactly | ✅ |
+| Top events | Gospel Night (9 tickets, ₵1,440) > Easter (5, ₵400, 4.7★, 4 checked in) > Sunday (2, free) — click-through to event pages works | ✅ |
+| Ticket mix | discount-aware (real `OrderItem.lineTotalMinor` sums, not price×qty): VIP ₵1,200 / archived ₵400 / Regular ₵240 / free 2 | ✅ |
+| Browser (insights tab) | 4 glass stat cards; SVG line (tickets) + bars (gross) chart with hover tooltip showing real per-day values ("2026-11-07 · 2 tickets · ₵400.00"); top-events table (min-w 560 in a scroll box); ticket-mix bars reusing the poll-fill gradient | ✅ |
+| Defects found & fixed mid-round | (1) mobile horizontal overflow 18px → table wrapped in `overflow-x-auto`; then 236px (grid `min-width:auto`) → `min-w-0` on the grid child → **0px overflow live-verified**; (2) VLM-flagged amber contrast on the rating stat → `text-amber-700/dark:amber-400`; (3) chart edge labels clipped → `PAD_L/R 26` + start/end anchors on first/last labels (live: first@16, last@544 in viewBox 560) | ✅ |
+| VLM false-positive check | "sidebar overlaps header" claim disproven live (element at h1 rect = the h1 itself) — full-page screenshot stitching artifact, as with rounds 8–9 | ✅ |
+| Mobile 390×844 + dark mode | Zero overflow, chart/table/mix all usable; zero console/page errors across light/dark reloads | ✅ |
+
+**Static:** `bun run lint` 0 errors / 17 warnings (baseline); `bunx tsc --noEmit` 0 errors.
+
+
 ## Not performed (honest)
 
 - Native Android/iOS builds and device testing (mobile is a source scaffold).

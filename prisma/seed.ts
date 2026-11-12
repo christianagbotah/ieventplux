@@ -336,7 +336,18 @@ async function main() {
     { eventId: easterPast.id, userId: users.kojo.id, rating: 4, body: 'Moving production. Parking near the cathedral was the only struggle — arrive an hour early.' },
     { eventId: easterPast.id, userId: users.akua.id, rating: 5, body: 'We brought our youth group and they are still talking about it. Ushers were wonderful with the children.' },
   ] })
-  // The archived production is ENDED — orders above are historical (paid) sales.
+  // The archived production is ENDED — orders above are historical (paid) sales,
+  // settled a few days before the 60-day-old event.
+  await backdateOrder(easterOrderAma.orderReference, 63, 12)
+  await backdateOrder(easterOrderKojo.orderReference, 62, 17)
+  await backdateOrder(easterOrderAkua.orderReference, 61, 9)
+  // The house was full — ushers scanned most of those tickets in (real scan rows).
+  const easterTickets = await db.ticket.findMany({ where: { event: { id: easterPast.id }, order: { status: 'PAID' } }, orderBy: { issuedAt: 'asc' } })
+  for (const [index, ticket] of easterTickets.slice(0, Math.max(1, easterTickets.length - 1)).entries()) {
+    const scannedAt = daysFromNow(-60, 17 + Math.floor(index / 2), (index * 7) % 60)
+    await db.admissionScan.create({ data: { ticketId: ticket.id, eventId: easterPast.id, scannerId: users.usher.id, scannedAt, result: 'ADMITTED', source: 'ONLINE', clientScanId: `seed-scan-${ticket.id}` } })
+    await db.ticket.update({ where: { id: ticket.id }, data: { status: 'CHECKED_IN', checkedInAt: scannedAt, checkedInBy: users.usher.id } })
+  }
   await db.event.update({ where: { id: easterPast.id }, data: { status: 'ENDED' } })
 
   // ── Invitation (private dinner) ─────────────────────────────────────────
@@ -367,6 +378,25 @@ async function main() {
   if (order5Row) {
     await db.paymentAttempt.create({ data: { orderId: order5Row.id, attemptNo: 1, provider: 'SIMULATOR', reference: paymentReference(order5.orderReference, 1), status: 'REDIRECTED', amountMinor: order5Row.totalMinor, checkoutUrl: `/api/v1/payments/simulator/${paymentReference(order5.orderReference, 1)}` } })
   }
+
+  // ── Sales fortnight for organizer insights (real orders, realistic timing) ──
+  const vipRow = await db.ticketType.findFirst({ where: { eventId: gospelNight.id, name: { contains: 'VIP' } } })
+  const regularRow = (await db.ticketType.findFirst({ where: { eventId: gospelNight.id, priceMinor: 8000 } })) ?? (await db.ticketType.findFirst({ where: { eventId: gospelNight.id } }))
+  if (vipRow && regularRow) {
+    const mk = async (userId: string, name: string, email: string, phone: string, items: { ticketTypeId: string; qty: number }[], daysAgo: number, hour: number) => {
+      const o = await createOrder({ eventId: gospelNight.id, userId, buyerName: name, buyerEmail: email, buyerPhone: phone, items })
+      await seedPaidOrder(o.orderReference, userId)
+      await backdateOrder(o.orderReference, daysAgo, hour)
+    }
+    await mk(users.akua.id, 'Akua Frimpong', 'akua@example.dev', '+233240000012', [{ ticketTypeId: vipRow.id, qty: 1 }], 11, 9)
+    await mk(users.usher.id, 'Abena Asante', 'usher@lightworld.dev', '+233240000006', [{ ticketTypeId: regularRow.id, qty: 2 }], 8, 18)
+    await mk(users.pastor.id, 'Pastor Samuel Adjei', 'pastor@lightworld.dev', '+233240000003', [{ ticketTypeId: vipRow.id, qty: 2 }], 5, 11)
+    await mk(users.kojo.id, 'Kojo Owusu', 'kojo@example.dev', '+233240000011', [{ ticketTypeId: regularRow.id, qty: 1 }], 3, 20)
+    await mk(users.ama.id, 'Ama Darko', 'ama@example.dev', '+233240000010', [{ ticketTypeId: vipRow.id, qty: 1 }], 1, 12)
+  }
+  // Existing orders settle onto the fortnight too; easter sales pre-date their (60d-old) event.
+  await backdateOrder(order1.orderReference, 9, 15)
+  await backdateOrder(order4.orderReference, 0, 10)
 
   // ── Refund case + payout demo ───────────────────────────────────────────
   const order2Row = await db.order.findUnique({ where: { reference: order2.orderReference } })
@@ -428,6 +458,14 @@ async function seedPaidOrder(orderRef: string, _userId: string) {
   })
   await processProviderEvent(pe.id)
   await db.paymentAttempt.update({ where: { id: attempt.id }, data: { status: 'SUCCESS', verifiedAt: new Date() } })
+}
+
+/** Dev-seed realism: backdate a settled order (and its issued tickets) so the
+ *  organizer insights trend reflects a plausible sales fortnight. */
+async function backdateOrder(orderRef: string, daysAgo: number, hour = 14) {
+  const when = daysFromNow(-daysAgo, hour, 22)
+  await db.order.update({ where: { reference: orderRef }, data: { createdAt: when, paidAt: when } })
+  await db.ticket.updateMany({ where: { order: { reference: orderRef } }, data: { issuedAt: when } })
 }
 
 main()

@@ -87,6 +87,13 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
       })
     }
 
+    if (action === 'insights') {
+      // Analytics derived only from real transactional rows — see the service
+      // header for the honesty contract (no invented page-view metrics).
+      const { orgInsights } = await import('@/server/services/insights')
+      return jsonOk(await orgInsights(id))
+    }
+
     throw errors.notFound('Unknown organization endpoint.')
   })
 }
