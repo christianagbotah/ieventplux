@@ -358,6 +358,9 @@
 }
 .ievx-reel-snap > * { scroll-snap-align: start; }
 
+/* Anchor/section scrolling clears the sticky glass header (65px + breathing room). */
+section[id], #live-engagement, #reviews, #discussion { scroll-margin-top: 84px; }
+
 .ievx-voice-bar {
   display: inline-block; width: 4px; border-radius: 999px;
   background: oklch(0.55 0.13 160);

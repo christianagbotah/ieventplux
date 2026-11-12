@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { CalendarDays, MapPin, Monitor, Users, Radio, Ticket } from 'lucide-react'
+import { CalendarDays, MapPin, Monitor, Users, Radio, Ticket, Star } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { navigate } from '../router'
@@ -23,6 +23,8 @@ export interface EventCardData {
   isFeatured?: boolean
   boostedUntil?: string | null
   sponsored?: boolean
+  ratingAvg?: number
+  ratingCount?: number
   org?: { name: string; slug?: string; verifiedAt?: string | null } | null
   ticketTypes?: { priceMinor: number; quota?: number; soldCount?: number }[]
 }
@@ -118,6 +120,13 @@ export function EventCard({ event, index = 0, footer }: { event: EventCardData; 
       <div className="space-y-2 p-4">
         <h3 className="line-clamp-2 min-h-[2.6em] font-semibold leading-snug group-hover:text-primary">{event.title}</h3>
         {event.org?.name && <p className="text-xs text-muted-foreground">{event.org.name}{event.org.verifiedAt ? ' · Verified' : ''}</p>}
+        {typeof event.ratingAvg === 'number' && event.ratingCount && event.ratingCount > 0 && (
+          <p className="flex items-center gap-1 text-xs font-medium" aria-label={`Rated ${event.ratingAvg} out of 5 by ${event.ratingCount} attendees`}>
+            <Star className="h-3.5 w-3.5 fill-accent text-accent" aria-hidden />
+            <span className="font-bold">{event.ratingAvg}</span>
+            <span className="text-muted-foreground">({event.ratingCount} review{event.ratingCount === 1 ? '' : 's'})</span>
+          </p>
+        )}
         <div className="flex items-center justify-between pt-1">
           <Badge variant="outline" className="gap-1 text-[11px] capitalize">
             {event.mode === 'VIRTUAL' ? <Monitor className="h-3 w-3" /> : event.mode === 'HYBRID' ? <Radio className="h-3 w-3" /> : <MapPin className="h-3 w-3" />}

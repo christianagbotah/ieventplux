@@ -17,9 +17,9 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ view: strin
     if (view === 'home') {
       const [featured, upcoming, liveNow, categories, sponsored, stats, cityRows] = await Promise.all([
         db.event.findMany({ where: { ...PUBLIC_EVENT_WHERE, isFeatured: true, startsAt: { gte: now } }, orderBy: { startsAt: 'asc' }, take: 6,
-          select: { id: true, slug: true, title: true, summary: true, coverImageUrl: true, startsAt: true, city: true, mode: true, categorySlug: true, ticketTypes: { select: { priceMinor: true, quota: true, soldCount: true }, where: { active: true } }, org: { select: { name: true, slug: true } } } }),
+          select: { id: true, slug: true, title: true, summary: true, coverImageUrl: true, startsAt: true, city: true, mode: true, categorySlug: true, ticketTypes: { select: { priceMinor: true, quota: true, soldCount: true }, where: { active: true } }, reviews: { select: { rating: true }, where: { status: 'VISIBLE' } }, org: { select: { name: true, slug: true } } } }),
         db.event.findMany({ where: { ...PUBLIC_EVENT_WHERE, startsAt: { gte: now } }, orderBy: { startsAt: 'asc' }, take: 12,
-          select: { id: true, slug: true, title: true, summary: true, coverImageUrl: true, startsAt: true, city: true, mode: true, categorySlug: true, status: true, ticketTypes: { select: { priceMinor: true, quota: true, soldCount: true }, where: { active: true } }, org: { select: { name: true, slug: true } } } }),
+          select: { id: true, slug: true, title: true, summary: true, coverImageUrl: true, startsAt: true, city: true, mode: true, categorySlug: true, status: true, ticketTypes: { select: { priceMinor: true, quota: true, soldCount: true }, where: { active: true } }, reviews: { select: { rating: true }, where: { status: 'VISIBLE' } }, org: { select: { name: true, slug: true } } } }),
         db.event.findMany({ where: { ...PUBLIC_EVENT_WHERE, status: 'LIVE' }, take: 6,
           select: { id: true, slug: true, title: true, coverImageUrl: true, mode: true, org: { select: { name: true } }, broadcasts: { select: { id: true, status: true, accessPolicy: true } } } }),
         db.category.findMany({ where: { active: true }, orderBy: { sortOrder: 'asc' } }),
@@ -32,8 +32,8 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ view: strin
         db.event.findMany({ where: { ...PUBLIC_EVENT_WHERE, startsAt: { gte: now }, city: { not: null } }, distinct: ['city'], select: { city: true }, take: 20 }),
       ])
       return jsonOk({
-        featured,
-        upcoming,
+        featured: featured.map((e) => withRating(e)),
+        upcoming: upcoming.map((e) => withRating(e)),
         liveNow,
         categories,
         cities: cityRows.map((c) => c.city).filter((c): c is string => Boolean(c)),
@@ -111,12 +111,21 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ view: strin
           id: true, slug: true, title: true, summary: true, coverImageUrl: true, startsAt: true, endsAt: true, city: true, country: true, mode: true, status: true, categorySlug: true,
           org: { select: { name: true, slug: true, verifiedAt: true } },
           ticketTypes: { select: { priceMinor: true, quota: true, soldCount: true }, where: { active: true } },
+          reviews: { select: { rating: true }, where: { status: 'VISIBLE' } },
         },
       })
       const total = await db.event.count({ where })
-      return jsonList(items, total, page, pageSize)
+      return jsonList(items.map((e) => withRating(e)), total, page, pageSize)
     }
 
     throw errors.notFound('Unknown discovery view.')
   })
+}
+
+/** Attach an honest rating aggregate (VISIBLE reviews only) to a listing row. */
+function withRating<T extends { reviews: { rating: number }[] }>(event: T): Omit<T, 'reviews'> & { ratingAvg: number; ratingCount: number } {
+  const count = event.reviews.length
+  const avg = count > 0 ? Math.round((event.reviews.reduce((sum, r) => sum + r.rating, 0) / count) * 10) / 10 : 0
+  const { reviews: _reviews, ...rest } = event
+  return { ...rest, ratingAvg: avg, ratingCount: count }
 }

@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { CalendarDays, CalendarPlus, Clock, MapPin, Monitor, Share2, Heart, Bookmark, Flag, Users, ChevronLeft, Info, ExternalLink, Accessibility, Ticket, ShieldCheck, Church, Hourglass, Repeat } from 'lucide-react'
+import { CalendarDays, CalendarPlus, Clock, MapPin, Monitor, Share2, Heart, Bookmark, Flag, Users, ChevronLeft, Info, ExternalLink, Accessibility, Ticket, ShieldCheck, Church, Hourglass, Repeat, Star } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -16,6 +16,7 @@ import { usePortal } from '../store'
 import { money, dateLong, timeRange, relative, initials, humanize } from '../format'
 import { EmptyState } from '../components/EventCard'
 import LiveEngagement from '../components/LiveEngagement'
+import ReviewsPanel from '../components/ReviewsPanel'
 
 interface TicketType {
   id: string
@@ -69,7 +70,7 @@ interface EventDetailPayload {
     org: { id: string; name: string; slug: string; tagline?: string | null; verifiedAt?: string | null; orgType: string }
     seriesId?: string | null
   }
-  stats: { followers: number; going: number; comments: number }
+  stats: { followers: number; going: number; comments: number; ratingAvg: number; ratingCount: number }
   mine: { saved: boolean; going: boolean; following: boolean }
   canManage: boolean
 }
@@ -456,6 +457,23 @@ export default function EventDetail({ slug }: { slug: string }) {
                       {event.ageGuidance && <p className="text-sm text-muted-foreground">{event.ageGuidance}</p>}
                     </div>
                   </div>
+                  {data.stats.ratingCount > 0 && (
+                    <div className="flex items-start gap-3">
+                      <Star className="mt-0.5 h-5 w-5 fill-accent text-accent" aria-hidden />
+                      <div>
+                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Attendee rating</p>
+                        <p className="flex items-center gap-1.5 font-semibold">
+                          {data.stats.ratingAvg}
+                          <span className="flex text-accent" aria-hidden>
+                            {Array.from({ length: 5 }).map((_, i) => (
+                              <Star key={i} className={`h-3.5 w-3.5 ${i < Math.round(data.stats.ratingAvg) ? 'fill-accent text-accent' : 'text-muted-foreground/40'}`} />
+                            ))}
+                          </span>
+                          <span className="text-sm font-normal text-muted-foreground">· {data.stats.ratingCount} review{data.stats.ratingCount === 1 ? '' : 's'}</span>
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 
@@ -574,6 +592,8 @@ export default function EventDetail({ slug }: { slug: string }) {
                   )}
                 </CardContent>
               </Card>
+
+              <ReviewsPanel eventId={event.id} />
             </div>
 
             {/* Right column: tickets */}

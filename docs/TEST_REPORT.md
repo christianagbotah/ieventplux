@@ -297,6 +297,27 @@ New capability: `LivePoll` / `LivePollOption` / `LivePollVote` / `AudienceQuesti
 **Static:** `bun run lint` 0 errors / 17 warnings (baseline); `bunx tsc --noEmit` 0 errors. Repo hygiene: accidental UUID-named commit dropped; `db/custom.db-shm` / `db/custom.db-wal` untracked (transient WAL artifacts; `custom.db` stays tracked for demo continuity).
 
 
+## Re-verification round 9 (2026-11-12, post-event ratings & reviews)
+
+New capability: `EventReview` (63rd model) — social proof with honest gating. Aggregates (average, count, 5→1 distribution) count VISIBLE reviews only; composing requires a **fulfilled ticket on an ENDED event** (paid or free-fulfilled orders both land at `PAID`); one editable review per attendee (`@@unique(eventId,userId)` — re-POST **edits**, never duplicates); organizer hide/restore moderation with audit; authors keep visibility of their own hidden reviews. Ratings surface on the event page (hero "Attendee rating" stat + full Reviews panel) and ride along discovery listings (`withRating` server-side aggregate — no N+1, included in the same query). Dev seed: 3 fulfilled historical orders + 3 reviews (5/4/5) on the ENDED Easter production.
+
+| Case | Outcome | Status |
+|---|---|---|
+| `GET /events/[slug]/reviews` (guest) | avg 4.7 · 3 reviews · dist [5:2, 4:1] + items with "Verified attendee" badges; `eligibility:null` | ✅ |
+| Eligibility | ama/kojo (tickets) → ELIGIBLE (+`mine`); usher (no ticket) → NOT_TICKET_HOLDER; **LIVE event → 409 "Reviews open once the event has ended."** | ✅ |
+| Non-holder POST | 409 "Only attendees with fulfilled tickets can review this event." | ✅ |
+| Upsert | First POST `created:true`; second POST **edits** (`created:false`, "Review updated."); rating 9 → 400 | ✅ |
+| Moderation | Org hide → guest aggregate drops (5·2) and item disappears; org still sees all 3; author still sees own hidden review + `mine`; attendee moderation → 403; restore → back | ✅ |
+| Browser (agent-browser, gateway origin) | Guest panel: 4.7 headline + distribution bars + review cards; kojo: edit form prefilled (4/5, counter 91/600) — changed to 5 stars + body → aggregate recomputed live to 5·3 (API-confirmed); org: moderation buttons + honest "Only attendees with fulfilled tickets can review this event." note; hide/restore exercised via UI | ✅ |
+| Surfacing | Event-detail hero stat "Attendee rating 5 · 3 reviews" (uppercase label); `discovery/search` rows carry `ratingAvg`/`ratingCount`; EventCard renders the star chip when present | ✅ |
+| Defects found & fixed mid-round | (1) GET route passed the raw slug as `eventId` to the service → always-empty listings via slug (fixed: resolve `event.id` first, slug-or-id like the detail route); (2) hidden reviews were excluded from the author's own query before the author check → authors lost sight of their reviews (fixed: fetch all rows, filter visibility in JS); (3) anchor/section scrolls landed under the sticky glass header → `scroll-margin-top: 84px` for section ids (live-verified: reviewsTop 84 ≥ headerBottom 65) | ✅ |
+| Ops notes | Corrupted Turbopack cache (killed-process write) diagnosed via `turbo-persistence` panic → `.next` wiped + clean restart; stale zombie next-server (stale DB inode) fully cleaned; all three services restarted and re-verified | ✅ |
+| Mobile 390×844 | Reviews panel renders (panel width 358), composer reachable, no console/page errors | ✅ |
+| VLM review | Full-page screenshots show sticky-header stitching artifacts (expected for full-page captures); live rect checks confirm no overlap at rest; actionable fix (scroll-margin) applied | ✅ |
+
+**Static:** `bun run lint` 0 errors / 17 warnings (baseline); `bunx tsc --noEmit` 0 errors.
+
+
 ## Not performed (honest)
 
 - Native Android/iOS builds and device testing (mobile is a source scaffold).

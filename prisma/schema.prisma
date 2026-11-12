@@ -71,6 +71,7 @@ model User {
   questionsAsked      AudienceQuestion[]      @relation("QuestionAuthor")
   answersGiven        AudienceQuestion[]      @relation("QuestionAnswerer")
   questionUpvotes     AudienceQuestionUpvote[]
+  reviews             EventReview[]
 }
 
 model Session {
@@ -292,6 +293,7 @@ model Event {
   waitlistEntries WaitlistEntry[]
   livePolls         LivePoll[]
   audienceQuestions AudienceQuestion[]
+  reviews           EventReview[]
 
   @@index([status, visibility, startsAt])
   @@index([orgId, status])
@@ -1261,4 +1263,25 @@ model AudienceQuestionUpvote {
   user     User             @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([questionId, userId])
+}
+
+// ─────────────────────────────── Post-event reviews ───────────────────────────────
+// Social proof with honest gating: only fulfilled ticket holders of an ENDED
+// event may review; one review per attendee (editable); orgs moderate.
+
+model EventReview {
+  id        String   @id @default(cuid())
+  eventId  String
+  userId   String
+  rating    Int // 1–5
+  body      String?
+  status    String   @default("VISIBLE") // VISIBLE | HIDDEN
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId]) // one editable review per attendee
+  @@index([eventId, status])
 }

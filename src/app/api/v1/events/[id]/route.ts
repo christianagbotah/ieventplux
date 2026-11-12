@@ -34,6 +34,8 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
     const followStats = await db.follow.count({ where: { orgId: event.orgId } })
     const interested = await db.eventInterest.count({ where: { eventId: event.id, kind: 'GOING' } })
     const comments = await db.comment.count({ where: { eventId: event.id, status: 'VISIBLE' } })
+    const reviews = await db.eventReview.aggregate({ where: { eventId: event.id, status: 'VISIBLE' }, _avg: { rating: true }, _count: true })
+    const ratingAvg = reviews._avg.rating ? Math.round(reviews._avg.rating * 10) / 10 : 0
 
     const mine = session
       ? {
@@ -60,7 +62,7 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
         venue: venueSafe,
         feeNote: event.ticketTypes.some((t) => t.priceMinor > 0) ? 'Platform commission is borne by the organizer.' : null,
       },
-      stats: { followers: followStats, going: interested, comments },
+      stats: { followers: followStats, going: interested, comments, ratingAvg, ratingCount: reviews._count },
       mine,
       canManage: Boolean(isOrgMember),
     })
