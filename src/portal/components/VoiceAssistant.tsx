@@ -144,15 +144,39 @@ export function VoiceAssistant() {
 
   useEffect(() => () => stopAudio(), [stopAudio])
 
+  // Mobile ergonomics (verified live at 390px): the floating button sat in the
+  // same bottom-right band where form inputs place their right edge — a corner
+  // graze over the field. While any input is focused on small screens (keyboard
+  // open) the button steps aside; it returns on blur. Pointer/keyboard users on
+  // desktop never see this because md+ placement clears form columns.
+  const [inputFocused, setInputFocused] = useState(false)
+  useEffect(() => {
+    const onFocusIn = (e: FocusEvent) => {
+      const t = e.target as HTMLElement | null
+      if (t && ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName)) setInputFocused(true)
+    }
+    const onFocusOut = (e: FocusEvent) => {
+      const t = e.target as HTMLElement | null
+      if (t && ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName)) setInputFocused(false)
+    }
+    document.addEventListener('focusin', onFocusIn)
+    document.addEventListener('focusout', onFocusOut)
+    return () => {
+      document.removeEventListener('focusin', onFocusIn)
+      document.removeEventListener('focusout', onFocusOut)
+    }
+  }, [])
+
   if (!assistantOpen) {
     return (
       <button
         aria-label="Open AI voice concierge"
         onClick={() => setAssistantOpen(true)}
-        className="fixed bottom-20 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/30 transition-transform hover:scale-105 ievx-press md:bottom-6"
+        className={`fixed bottom-20 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/30 transition-[transform,opacity] duration-200 hover:scale-105 ievx-press md:bottom-6 md:opacity-100 ${inputFocused ? 'pointer-events-none scale-75 opacity-0' : 'opacity-100'}`}
+        tabIndex={inputFocused ? -1 : 0}
       >
         <Sparkles className="h-6 w-6" aria-hidden />
-        <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4">
+        <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4" aria-hidden>
           <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-75" />
           <span className="relative inline-flex h-4 w-4 rounded-full bg-accent border-2 border-card" />
         </span>

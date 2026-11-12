@@ -43,7 +43,12 @@ export async function requestRefund(params: { orderId: string; requestedBy: stri
 export async function processRefund(refundCaseId: string, actorId: string) {
   const rc = await db.refundCase.findUnique({ where: { id: refundCaseId }, include: { order: { include: { event: { select: { title: true } } } } } })
   if (!rc) throw errors.notFound('Refund case not found.')
-  if (rc.status === 'PROCESSED') throw errors.conflict('Refund already processed — repeated refunds are blocked.')
+  // Only live cases can execute. REJECTED is a closed decision, PROCESSED/FAILED
+  // are terminal, and MANUAL_TRACKED means the provider path is unavailable —
+  // executing any of those would be fake or double money movement.
+  if (!['REQUESTED', 'APPROVED'].includes(rc.status)) {
+    throw errors.conflict(`This refund case is ${rc.status} — it can no longer be processed.`)
+  }
 
   // Provider submission for full-order refunds (Hubtel mobile-money refunds).
   // The dev simulator executes the reversal journal; the real adapter path is
@@ -116,6 +121,60 @@ export async function processRefund(refundCaseId: string, actorId: string) {
     }).catch(() => {})
   }
   return { status: 'PROCESSED' as const, journalId }
+}
+
+/**
+ * Organizer decision: agree to refund a buyer-requested (or org-opened) case.
+ * The platform still executes the money reversal (two-party money governance):
+ * APPROVED means the org has signed off, not that the money has moved.
+ */
+export async function approveRefund(refundCaseId: string, actorId: string) {
+  const rc = await db.refundCase.findUnique({ where: { id: refundCaseId }, include: { order: { include: { event: { select: { title: true } } } } } })
+  if (!rc) throw errors.notFound('Refund case not found.')
+  if (rc.status !== 'REQUESTED') throw errors.conflict(`Only requested cases can be approved — this one is ${rc.status}.`)
+  await db.refundCase.update({ where: { id: rc.id }, data: { status: 'APPROVED' } })
+  if (rc.order.userId) {
+    await notifyUser({
+      userId: rc.order.userId,
+      type: 'REFUND_APPROVED',
+      title: 'Refund approved',
+      body: `Your refund for ${rc.order.event?.title ?? rc.order.reference} was approved by the organizer. The platform is processing the money reversal.`,
+      link: `#/order/${rc.order.reference}`,
+    }).catch(() => {})
+  }
+  return { approved: true, refundCaseId: rc.id }
+}
+
+/**
+ * Organizer decision: decline a refund. The case closes with the truthful note
+ * (shown to the buyer), and the order returns to its pre-request state —
+ * PAID, or PARTIALLY_REFUNDED when earlier partial refunds exist.
+ */
+export async function rejectRefund(refundCaseId: string, actorId: string, note: string) {
+  const cleanNote = note.trim().slice(0, 300)
+  if (cleanNote.length < 10) throw errors.badRequest('Give the buyer a truthful reason (at least 10 characters).')
+  const rc = await db.refundCase.findUnique({ where: { id: refundCaseId }, include: { order: { include: { event: { select: { title: true } } } } } })
+  if (!rc) throw errors.notFound('Refund case not found.')
+  if (!['REQUESTED', 'APPROVED'].includes(rc.status)) throw errors.conflict(`This refund case is already closed (${rc.status}).`)
+  await db.refundCase.update({ where: { id: rc.id }, data: { status: 'REJECTED', resolutionNote: cleanNote } })
+
+  const refundedSoFar = await db.refundCase.aggregate({
+    where: { orderId: rc.orderId, status: 'PROCESSED' },
+    _sum: { amountMinor: true },
+  })
+  const restoreStatus = (refundedSoFar._sum.amountMinor ?? 0) > 0 ? 'PARTIALLY_REFUNDED' : 'PAID'
+  await db.order.update({ where: { id: rc.orderId }, data: { status: restoreStatus } })
+
+  if (rc.order.userId) {
+    await notifyUser({
+      userId: rc.order.userId,
+      type: 'REFUND_REJECTED',
+      title: 'Refund declined',
+      body: `Your refund request for ${rc.order.event?.title ?? rc.order.reference} was declined: ${cleanNote}`,
+      link: `#/order/${rc.order.reference}`,
+    }).catch(() => {})
+  }
+  return { rejected: true, orderStatus: restoreStatus, refundCaseId: rc.id }
 }
 
 // ── Payouts ────────────────────────────────────────────────────────────────

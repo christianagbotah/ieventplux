@@ -10,6 +10,7 @@ import { createOrder } from '../src/server/services/ordering'
 import { fulfilFreeOrder, fulfilPaidOrder } from '../src/server/services/fulfilment'
 import { ensureOrgAccounts, ensurePlatformAccounts, postJournal } from '../src/server/ledger'
 import { paymentReference } from '../src/server/ids'
+import { requestRefund, rejectRefund } from '../src/server/services/refunds'
 import { cssEffects } from '../src/data/css-effects'
 
 const DEV_PASSWORD = 'Dev@12345'
@@ -389,13 +390,15 @@ async function main() {
   // ── Sales fortnight for organizer insights (real orders, realistic timing) ──
   const vipRow = await db.ticketType.findFirst({ where: { eventId: gospelNight.id, name: { contains: 'VIP' } } })
   const regularRow = (await db.ticketType.findFirst({ where: { eventId: gospelNight.id, priceMinor: 8000 } })) ?? (await db.ticketType.findFirst({ where: { eventId: gospelNight.id } }))
+  let akuaOrderRef: string | null = null
   if (vipRow && regularRow) {
     const mk = async (userId: string, name: string, email: string, phone: string, items: { ticketTypeId: string; qty: number }[], daysAgo: number, hour: number) => {
       const o = await createOrder({ eventId: gospelNight.id, userId, buyerName: name, buyerEmail: email, buyerPhone: phone, items })
       await seedPaidOrder(o.orderReference, userId)
       await backdateOrder(o.orderReference, daysAgo, hour)
+      return o.orderReference
     }
-    await mk(users.akua.id, 'Akua Frimpong', 'akua@example.dev', '+233240000012', [{ ticketTypeId: vipRow.id, qty: 1 }], 11, 9)
+    akuaOrderRef = await mk(users.akua.id, 'Akua Frimpong', 'akua@example.dev', '+233240000012', [{ ticketTypeId: vipRow.id, qty: 1 }], 11, 9)
     await mk(users.usher.id, 'Abena Asante', 'usher@lightworld.dev', '+233240000006', [{ ticketTypeId: regularRow.id, qty: 2 }], 8, 18)
     await mk(users.pastor.id, 'Pastor Samuel Adjei', 'pastor@lightworld.dev', '+233240000003', [{ ticketTypeId: vipRow.id, qty: 2 }], 5, 11)
     await mk(users.kojo.id, 'Kojo Owusu', 'kojo@example.dev', '+233240000011', [{ ticketTypeId: regularRow.id, qty: 1 }], 3, 20)
@@ -405,10 +408,22 @@ async function main() {
   await backdateOrder(order1.orderReference, 9, 15)
   await backdateOrder(order4.orderReference, 0, 10)
 
+  // ── Refund lifecycle demo: a real buyer request, really declined ──────────
+  // Akua requested a refund on her own VIP order (backdated 11 days); Grace
+  // declined it with a truthful policy note — the order is PAID again and the
+  // case carries the decision trail for the org Finance inbox + buyer page.
+  const akuaVipOrder = akuaOrderRef ? await db.order.findUnique({ where: { reference: akuaOrderRef } }) : null
+  if (akuaVipOrder) {
+    const rcAkua = await requestRefund({ orderId: akuaVipOrder.id, requestedBy: users.akua.id, reason: 'I have a work rotation that weekend and cannot attend after all.' })
+    await rejectRefund(rcAkua.id, users.mediaLead.id, 'Refund window closed 48 hours before doors — we can transfer your ticket to another service instead.')
+  }
+
   // ── Refund case + payout demo ───────────────────────────────────────────
+  // Buyer-requested case still awaiting the organizer's decision (Kojo on his
+  // own virtual pass — travel conflict), plus a payout request for review.
   const order2Row = await db.order.findUnique({ where: { reference: order2.orderReference } })
   if (order2Row) {
-    await db.refundCase.create({ data: { orderId: order2Row.id, requestedBy: users.director.id, type: 'FULL', amountMinor: order2Row.totalMinor, status: 'REQUESTED', reason: 'Buyer cannot attend the virtual sessions (travel conflict).' } })
+    await db.refundCase.create({ data: { orderId: order2Row.id, requestedBy: users.kojo.id, type: 'FULL', amountMinor: order2Row.totalMinor, status: 'REQUESTED', reason: 'My travel plans changed and I cannot join the virtual sessions.' } })
     await db.order.update({ where: { id: order2Row.id }, data: { status: 'REFUND_PENDING' } })
   }
   await db.payout.create({ data: { orgId: chapel.id, requestedBy: users.orgFinance.id, amountMinor: 10000, status: 'REQUESTED', destination: JSON.stringify({ momoNumber: '+233240000005', recipientName: 'Lightworld Chapel International' }) } })

@@ -19,6 +19,8 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
         items: { include: { ticketType: { select: { name: true, kind: true } } } },
         tickets: { select: { id: true, code: true, status: true, ticketTypeId: true } },
         payments: true,
+        // Refund lifecycle visible to the buyer/org staff (both already gated above).
+        refundCases: { orderBy: { createdAt: 'asc' }, select: { id: true, status: true, type: true, amountMinor: true, reason: true, resolutionNote: true, createdAt: true, processedAt: true } },
       },
     })
     if (!order) throw errors.notFound('Order not found.')

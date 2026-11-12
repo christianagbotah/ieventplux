@@ -1,21 +1,35 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { CheckCircle2, Clock, XCircle, AlertTriangle, Ticket, ChevronLeft, RefreshCw, CalendarPlus } from 'lucide-react'
+import { CheckCircle2, Clock, XCircle, AlertTriangle, Ticket, ChevronLeft, RefreshCw, CalendarPlus, RotateCw, HandCoins } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/hooks/use-toast'
 import { api, ApiClientError } from '../api'
 import { navigate } from '../router'
-import { money, dateLong, humanize, statusTone } from '../format'
+import { usePortal } from '../store'
+import { money, dateLong, humanize, statusTone, relative } from '../format'
 import { EmptyState } from '../components/EventCard'
+
+interface RefundCaseRow {
+  id: string
+  status: string
+  type: string
+  amountMinor: number
+  reason: string
+  resolutionNote?: string | null
+  createdAt: string
+  processedAt?: string | null
+}
 
 interface OrderPayload {
   order: {
     reference: string
     status: string
     kind: string
+    userId?: string | null
     buyerName: string
     buyerEmail: string
     subtotalMinor: number
@@ -30,6 +44,7 @@ interface OrderPayload {
     items: { id: string; qty: number; unitPriceMinor: number; lineTotalMinor: number; ticketType: { name: string; kind: string } }[]
     tickets: { id: string; code: string; status: string; ticketTypeId: string }[]
     payments: { id: string; status: string; provider: string; attemptNo: number; reference: string }[]
+    refundCases: RefundCaseRow[]
     exceptionReason?: string | null
   }
 }
@@ -47,9 +62,12 @@ const STATUS_ICONS: Record<string, React.ReactNode> = {
 
 export default function OrderView({ reference }: { reference: string }) {
   const { toast } = useToast()
+  const { user } = usePortal()
   const [data, setData] = useState<OrderPayload | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [polling, setPolling] = useState(false)
+  const [refundReason, setRefundReason] = useState('')
+  const [refundBusy, setRefundBusy] = useState(false)
   // Mirrors the copy-success-checkmark animation; the real clipboard write happens in copyReference.
   const [refCopied, setRefCopied] = useState(false)
 
@@ -115,6 +133,20 @@ export default function OrderView({ reference }: { reference: string }) {
     }
   }
 
+  const requestRefund = async () => {
+    setRefundBusy(true)
+    try {
+      await api.post(`/orders/${reference}/refund-request`, { reason: refundReason })
+      toast({ title: 'Refund requested', description: 'The organizer has been notified and can now review your request.' })
+      setRefundReason('')
+      await load()
+    } catch (err) {
+      toast({ title: 'Request not sent', description: err instanceof ApiClientError ? err.message : 'Please try again.', variant: 'destructive' })
+    } finally {
+      setRefundBusy(false)
+    }
+  }
+
   if (error) {
     return <div className="mx-auto max-w-3xl px-4 py-16"><EmptyState title="Order unavailable" description={error} action={<Button className="rounded-full" onClick={() => navigate('/me?tab=orders')}>My orders</Button>} /></div>
   }
@@ -130,6 +162,12 @@ export default function OrderView({ reference }: { reference: string }) {
 
   const { order } = data
   const ticketCount = order.items.reduce((s, i) => s + i.qty, 0)
+  // Refund self-service rails: the signed-in buyer of an upcoming event, with
+  // no case already open (one open case per order, server-enforced too).
+  const isBuyer = Boolean(user && order.userId && user.id === order.userId)
+  const eventEnded = Boolean(order.event.endsAt && new Date(order.event.endsAt) <= new Date())
+  const openCase = order.refundCases.find((c) => ['REQUESTED', 'APPROVED'].includes(c.status))
+  const canRequestRefund = isBuyer && !eventEnded && !openCase && ['PAID', 'EXCEPTION_REVIEW', 'PARTIALLY_REFUNDED'].includes(order.status)
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
@@ -254,6 +292,98 @@ export default function OrderView({ reference }: { reference: string }) {
                 <Button className="mt-3 rounded-full ievx-press" onClick={() => navigate('/me?tab=tickets')}>View tickets & QR codes</Button>
               </div>
             </div>
+          )}
+
+          {/* Refund lifecycle: buyer self-service request + honest decision timeline. */}
+          {(canRequestRefund || openCase || order.refundCases.some((c) => ['REJECTED', 'PROCESSED', 'MANUAL_TRACKED', 'FAILED'].includes(c.status))) && (
+            <Card className="rounded-2xl">
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <HandCoins className="h-4 w-4 text-primary" aria-hidden /> Refund
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {canRequestRefund && (
+                  <div className="space-y-3">
+                    <div className="space-y-1.5">
+                      <label htmlFor="refund-reason" className="text-sm font-medium">Something changed? Tell the organizer.</label>
+                      <Textarea
+                        id="refund-reason"
+                        value={refundReason}
+                        onChange={(e) => setRefundReason(e.target.value)}
+                        rows={3}
+                        maxLength={500}
+                        placeholder="e.g. I have a work rotation that weekend and cannot attend…"
+                        aria-describedby="refund-reason-hint"
+                      />
+                      <p id="refund-reason-hint" className="text-[11px] text-muted-foreground">
+                        The organizer reviews every request and can decline with a reason. Declined tickets stay valid — you keep your seats.
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <Button
+                        variant="outline"
+                        className="rounded-full ievx-press"
+                        disabled={refundBusy || refundReason.trim().length < 10}
+                        onClick={() => void requestRefund()}
+                      >
+                        {refundBusy ? <span className="efx-dual-ring-loader" aria-hidden="true" style={{ width: 18, height: 18, margin: 0, borderWidth: 2 }} /> : <RotateCw className="mr-1.5 h-4 w-4" aria-hidden />}
+                        Request refund · {money(order.totalMinor)}
+                      </Button>
+                      {refundBusy && (
+                        <span className="flex items-center gap-2 text-sm text-muted-foreground" role="status" aria-live="polite">Sending request…</span>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {openCase && (
+                  <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+                        {openCase.status === 'APPROVED' ? 'Refund approved — money reversal in progress' : 'Refund review in progress'}
+                      </p>
+                      <Badge variant="secondary" className="capitalize text-[9px]">{humanize(openCase.status)}</Badge>
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Requested {relative(openCase.createdAt)} · {money(openCase.amountMinor)} — “{openCase.reason}”
+                    </p>
+                    {openCase.status === 'APPROVED' && (
+                      <p className="mt-1.5 text-xs text-amber-700 dark:text-amber-400">
+                        The organizer approved this refund. The platform finance desk executes the mobile-money reversal — your tickets are held meanwhile.
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {order.refundCases.filter((c) => c !== openCase).length > 0 && (
+                  <div className="space-y-1.5">
+                    <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Refund history</p>
+                    {order.refundCases.filter((c) => c !== openCase).map((c) => (
+                      <div key={c.id} className={`rounded-lg border px-3 py-2 text-xs ${c.status === 'REJECTED' ? 'border-border bg-secondary/40' : 'border-primary/20 bg-primary/5'}`}>
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="font-semibold">{money(c.amountMinor)} · {humanize(c.type)}</span>
+                          <span className="flex items-center gap-2">
+                            {c.status === 'PROCESSED' && <CheckCircle2 className="h-3.5 w-3.5 text-primary" aria-hidden />}
+                            {c.status === 'REJECTED' && <XCircle className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />}
+                            <Badge variant={statusTone(c.status) === 'success' ? 'default' : 'secondary'} className="capitalize text-[9px]">{humanize(c.status)}</Badge>
+                          </span>
+                        </div>
+                        <p className="mt-1 text-muted-foreground">“{c.reason}” · {relative(c.createdAt)}</p>
+                        {c.resolutionNote && (
+                          <p className={`mt-1 ${c.status === 'REJECTED' ? 'text-amber-700 dark:text-amber-400' : 'text-muted-foreground'}`}>
+                            Organizer: “{c.resolutionNote}”
+                          </p>
+                        )}
+                        {c.status === 'MANUAL_TRACKED' && (
+                          <p className="mt-1 text-[11px] text-muted-foreground">Provider refund endpoint pending sandbox verification — tracked with evidence, never faked.</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           )}
 
           {order.payments.length > 0 && (

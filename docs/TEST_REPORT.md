@@ -359,6 +359,34 @@ New capability: organizer **updates** became the event's operational voice with 
 
 **Ops note:** dev server startup hardened — Next.js must bind dual-stack (`-H ::`) or the Caddy gateway's `localhost` (IPv6-first) dial returns 502; and services must be launched inside `(cd … && setsid nohup bun run dev … & disown)` subshells or they die at the tool-invocation boundary.
 
+## Re-verification round 12 (2026-11-12, attendee refund requests + org decisions)
+
+New capability: the **refund lifecycle closed end-to-end** — the buyer's own request path (`POST /orders/[ref]/refund-request`), organizer decisions (`POST /orgs/[id]/refund-approve` and `refund-reject` with a truthful note), and a hardened `processRefund` (only `REQUESTED|APPROVED` may execute — previously a `REJECTED` case could still be processed: a real double-spend defect, now a 409). Governance is two-party: **the org decides, the platform executes money** (admin console, elevated + audited, unchanged); `GET /orders/[ref]` now carries the buyer-visible case trail, and the org Finance inbox shows buyer vs staff-opened cases with requester identity, event title, awaiting-decision badge, approve/decline-with-note controls.
+
+| Case | Outcome | Status |
+|---|---|---|
+| Auth guards | anon POST → 401; kojo requesting ama's order → 403 "Only the signed-in buyer of this order can request a refund. Guest orders are handled by the organizer directly." | ✅ |
+| Validation | reason < 10 chars → 400 with the minimum stated; `sanitizeText` 500 cap | ✅ |
+| Ended-event honesty | ama's ENDED Easter order → 409 "This event has already ended — refunds are handled by the organizer directly." | ✅ |
+| Happy path | ama on Gospel Night VIP×2 → 200 `{status:REQUESTED, amountMinor:40000}`; order → REFUND_PENDING; org finance bells (OWNER+FINANCE only) each got `REFUND_REQUESTED` | ✅ |
+| Duplicate guard | second POST → 409 (service-level, "Only paid orders…" — the status check fires first) | ✅ |
+| Buyer-visible trail | GET /orders/[ref] returns full case history with reason, resolutionNote, timestamps | ✅ |
+| Org scope check | `refund-approve/reject` resolve the case and verify `order.orgId === :id` — a foreign org's caseId → 404 (URL id is a scope, never an authorization) | ✅ |
+| Role gate | usher (CHECKIN_STAFF) → 403 "Refund decisions require a finance role." | ✅ |
+| Reject flow | Daniel (chapel FINANCE) declines with a note → case `REJECTED` + note stored, order restored **PAID** (PARTIALLY_REFUNDED-aware), buyer notified with the verbatim note | ✅ |
+| Approve → process | Daniel approves (→ `APPROVED`, buyer notified) → admin elevates (`POST /auth/elevate`) and processes → `PROCESSED` + reversal journal `REFUND/ORD-0061CFA41C` **balanced 20000 = 20000**, tickets → `REFUNDED`, buyer notified | ✅ |
+| Audit trail | `order.refund_request → refund.approve → refund.process` rows recorded | ✅ |
+| Browser: buyer request (ama, :81) | order page Refund card → composer (button disabled until ≥10 chars) → submit → hero "Refund in progress", amber review card with amount/reason/time | ✅ |
+| Browser: org decision (director@lwministries.dev, second session) | Finance inbox: "2 awaiting decision" badge, "Buyer request · Ama Darko — reason", decline editor (≥10 chars enforced) → toast "Refund declined", case shows the note | ✅ |
+| Browser: buyer outcome | reload: order back to "Payment successful", REFUND HISTORY with "Organizer: '…'" verbatim, notification bell "Refund declined … just now"; approve button also exercised (Kojo's case → APPROVED) | ✅ |
+| Seed realism | Akua's buyer-requested case created through the **real** `requestRefund` → `rejectRefund` services (REJECTED + note, order PAID); Kojo's stays REQUESTED for the inbox demo | ✅ |
+| Defect found & fixed mid-round (VLM-adjudicated) | voice-concierge FAB corner-grazed the Recipient input's top-right (31×15 px, live-rect-confirmed at 390×844) → FAB now steps aside while any input is focused (`opacity 1→0→1`, `pointer-events:none`, `tabIndex −1`, md+ unaffected) — async-verified live | ✅ |
+| VLM false-positive check | "headings clipped by header" (mid-scroll glass effect, clears at rest: lastElBottom 553 vs nav top 779), "toast truncates paragraph" (DOM text intact, `clipped:false`), "bottom nav overlaps button" (zero offenders at full scroll), confetti/copy-circle rest states — all disproven live; only the FAB graze was real | ✅ |
+| Mobile 390×844 | `scrollWidth` exactly 390 on order page + finance inbox; dark mode checked | ✅ |
+| Console | Zero errors in both browser sessions through the gateway | ✅ |
+
+**Static:** `bun run lint` 0 errors / 17 warnings (baseline); `bunx tsc --noEmit` 0 errors.
+
 
 ## Not performed (honest)
 

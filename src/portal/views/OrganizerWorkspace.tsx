@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   LayoutDashboard, CalendarPlus, Users, Ticket, Radio, Megaphone, MessageSquare, Wallet, UserCog, CreditCard, Settings,
-  ChevronLeft, Plus, Loader2, Camera, ScanLine, Search, Play, Square, RefreshCw, KeyRound, Pause, PlayCircle, Trash2, FileText, ShieldAlert, TrendingUp, Repeat, Activity, Vote,
+  ChevronLeft, Plus, Loader2, Camera, ScanLine, Search, Play, Square, RefreshCw, KeyRound, Pause, PlayCircle, Trash2, FileText, ShieldAlert, TrendingUp, Repeat, Activity, Vote, HandCoins,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -1413,11 +1413,14 @@ function FinanceView({ orgId, role }: { orgId: string; role: string }) {
   const [data, setData] = useState<{
     summary: { grossSalesMinor: number; platformFeesMinor: number; netSalesMinor: number; pendingSettlementMinor: number; settlementHoldsMinor: number; availablePayoutMinor: number; payoutsInFlightMinor: number; payoutsCompletedMinor: number }
     journals: { id: string; memo: string; refType: string; createdAt: string; entries: { direction: string; amountMinor: number; account: { code: string; type: string; orgId?: string | null } }[] }[]
-    refundCases: { id: string; type: string; status: string; amountMinor: number; reason: string; order: { reference: string } }[]
+    refundCases: { id: string; type: string; status: string; amountMinor: number; reason: string; resolutionNote?: string | null; createdAt: string; requesterIsStaff: boolean; order: { reference: string; status: string; event: { title: string } }; requester: { id: string; displayName: string; email: string } }[]
   } | null>(null)
   const [payouts, setPayouts] = useState<{ id: string; amountMinor: number; status: string; createdAt: string; failureReason?: string | null }[] | null>(null)
   const [payoutForm, setPayoutForm] = useState({ amount: '', momo: '', name: '' })
   const [requesting, setRequesting] = useState(false)
+  const [rejectFor, setRejectFor] = useState<string | null>(null)
+  const [rejectNote, setRejectNote] = useState('')
+  const [busyCase, setBusyCase] = useState<string | null>(null)
   const canPayout = ['OWNER', 'ADMIN', 'FINANCE'].includes(role)
 
   const load = useCallback(async () => {
@@ -1456,6 +1459,26 @@ function FinanceView({ orgId, role }: { orgId: string; role: string }) {
       toast({ title: 'Refund case opened' })
     } catch (err) {
       toast({ description: err instanceof ApiClientError ? err.message : 'Could not open the refund case.', variant: 'destructive' })
+    }
+  }
+
+  const decideRefund = async (caseId: string, decision: 'approve' | 'reject') => {
+    setBusyCase(caseId)
+    try {
+      if (decision === 'approve') {
+        const res = await api.post<{ note?: string }>(`/orgs/${orgId}/refund-approve`, { caseId })
+        toast({ title: 'Refund approved', description: res.note ?? 'The platform executes the money reversal.' })
+      } else {
+        const res = await api.post<{ orderStatus: string }>(`/orgs/${orgId}/refund-reject`, { caseId, note: rejectNote })
+        toast({ title: 'Refund declined', description: `The buyer was notified and the order is ${humanize(res.orderStatus)} again.` })
+      }
+      setRejectFor(null)
+      setRejectNote('')
+      await load()
+    } catch (err) {
+      toast({ title: 'Decision not saved', description: err instanceof ApiClientError ? err.message : 'Please try again.', variant: 'destructive' })
+    } finally {
+      setBusyCase(null)
     }
   }
 
@@ -1535,22 +1558,88 @@ function FinanceView({ orgId, role }: { orgId: string; role: string }) {
         </Card>
 
         <Card className="rounded-2xl">
-          <CardHeader className="pb-2"><CardTitle className="text-base">Refund cases</CardTitle></CardHeader>
-          <CardContent className="space-y-2">
-            {data.refundCases.length === 0 && <p className="text-sm text-muted-foreground">No refund cases.</p>}
-            {data.refundCases.map((rc) => (
-              <div key={rc.id} className="rounded-lg bg-secondary/50 p-3 text-xs">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-mono">{rc.order.reference}</span>
-                  <Badge variant={statusTone(rc.status) === 'success' ? 'default' : 'secondary'} className="capitalize text-[9px]">{humanize(rc.status)}</Badge>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <HandCoins className="h-4 w-4 text-primary" aria-hidden /> Refund cases
+              {data.refundCases.some((rc) => rc.status === 'REQUESTED') && (
+                <Badge className="text-[9px]">{data.refundCases.filter((rc) => rc.status === 'REQUESTED').length} awaiting decision</Badge>
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2.5">
+            {data.refundCases.length === 0 && <p className="text-sm text-muted-foreground">No refund cases. Buyers can request refunds from their order page — they land here.</p>}
+            {data.refundCases.map((rc) => {
+              const decidable = rc.status === 'REQUESTED'
+              return (
+                <div key={rc.id} className={`rounded-xl border p-3 text-xs ${rc.status === 'REQUESTED' ? 'border-amber-500/40 bg-amber-500/5' : 'border-border/70 bg-secondary/40'}`}>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="min-w-0 truncate font-semibold">{rc.order.event.title}</span>
+                    <Badge variant={statusTone(rc.status) === 'success' ? 'default' : 'secondary'} className="capitalize text-[9px]">{humanize(rc.status)}</Badge>
+                  </div>
+                  <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-muted-foreground">
+                    <span className="font-mono">{rc.order.reference}</span> · {money(rc.amountMinor)} · {relative(rc.createdAt)}
+                  </p>
+                  <p className="mt-1">
+                    <span className="font-medium">{rc.requesterIsStaff ? 'Opened by staff' : 'Buyer request'}</span> · {rc.requester.displayName} — “{rc.reason}”
+                  </p>
+                  {rc.status === 'APPROVED' && <p className="mt-1 text-primary">Approved — the platform finance desk executes the money reversal.</p>}
+                  {rc.status === 'REJECTED' && rc.resolutionNote && <p className="mt-1 text-amber-700 dark:text-amber-400">Declined: “{rc.resolutionNote}”</p>}
+                  {rc.status === 'MANUAL_TRACKED' && <p className="mt-1 text-muted-foreground">Provider endpoint pending sandbox verification — tracked with evidence, never faked.</p>}
+
+                  {canPayout && decidable && (
+                    <div className="mt-2.5 space-y-2">
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          size="sm"
+                          className="rounded-full ievx-press h-8"
+                          disabled={busyCase === rc.id}
+                          onClick={() => void decideRefund(rc.id, 'approve')}
+                        >
+                          {busyCase === rc.id ? <span className="efx-dual-ring-loader" aria-hidden="true" style={{ width: 16, height: 16, margin: 0, borderWidth: 2 }} /> : null}
+                          {rc.status === 'APPROVED' ? 'Approved' : 'Approve refund'}
+                        </Button>
+                        {rejectFor !== rc.id && (
+                          <Button size="sm" variant="outline" className="rounded-full h-8" disabled={busyCase === rc.id} onClick={() => { setRejectFor(rc.id); setRejectNote('') }}>
+                            Decline…
+                          </Button>
+                        )}
+                      </div>
+                      {rejectFor === rc.id && (
+                        <div className="space-y-1.5 rounded-lg border border-border bg-background/60 p-2.5">
+                          <label htmlFor={`reject-note-${rc.id}`} className="text-[11px] font-semibold">Truthful reason shown to the buyer</label>
+                          <Textarea
+                            id={`reject-note-${rc.id}`}
+                            value={rejectNote}
+                            onChange={(e) => setRejectNote(e.target.value)}
+                            rows={2}
+                            maxLength={300}
+                            placeholder="e.g. Refund window closed 48h before doors — we can transfer your ticket instead."
+                          />
+                          <div className="flex flex-wrap gap-2">
+                            <Button size="sm" variant="outline" className="rounded-full h-8" disabled={busyCase === rc.id || rejectNote.trim().length < 10} onClick={() => void decideRefund(rc.id, 'reject')}>
+                              Send decline
+                            </Button>
+                            <Button size="sm" variant="ghost" className="rounded-full h-8" onClick={() => { setRejectFor(null); setRejectNote('') }}>
+                              Cancel
+                            </Button>
+                          </div>
+                          <p className="text-[10px] text-muted-foreground">Declining keeps the tickets valid — the buyer is notified with this reason.</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
-                <p className="mt-1">{money(rc.amountMinor)} · {rc.reason}</p>
+              )
+            })}
+            {canPayout && (
+              <div className="flex gap-2 pt-1">
+                <Input placeholder="Order ref to refund…" aria-label="Order reference for refund" onKeyDown={(e) => { if (e.key === 'Enter') void requestRefund((e.target as HTMLInputElement).value) }} />
               </div>
-            ))}
-            <div className="flex gap-2 pt-1">
-              <Input placeholder="Order ref to refund…" aria-label="Order reference for refund" onKeyDown={(e) => { if (e.key === 'Enter') void requestRefund((e.target as HTMLInputElement).value) }} />
-            </div>
-            <p className="text-[11px] text-muted-foreground">Full-order mobile-money refunds follow the provider contract; unsupported/partial requests are tracked as MANUAL cases — never fake money movement.</p>
+            )}
+            <p className="text-[11px] text-muted-foreground">
+              Buyer requests land here for your decision; approving hands the money reversal to the platform finance desk (two-party money governance).
+              Full-order mobile-money refunds follow the provider contract; unsupported/partial requests are tracked as MANUAL cases — never fake money movement.
+            </p>
           </CardContent>
         </Card>
       </div>

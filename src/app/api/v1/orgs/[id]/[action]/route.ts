@@ -31,8 +31,24 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
       const summary = await orgFinanceSummary(id)
       const journals = await db.ledgerJournal.findMany({ where: { orgId: id }, orderBy: { createdAt: 'desc' }, take: 25, include: { entries: { include: { account: true } } } })
       const invoices = await db.invoice.findMany({ where: { orgId: id }, orderBy: { issuedAt: 'desc' }, take: 25 })
-      const refundCases = await db.refundCase.findMany({ where: { order: { orgId: id } }, orderBy: { createdAt: 'desc' }, take: 25, include: { order: { select: { reference: true } } } })
-      return jsonOk({ summary, journals, invoices, refundCases })
+      const refundCases = await db.refundCase.findMany({
+        where: { order: { orgId: id } },
+        orderBy: { createdAt: 'desc' },
+        take: 25,
+        include: {
+          order: { select: { reference: true, status: true, event: { select: { title: true } } } },
+          requester: { select: { id: true, displayName: true, email: true } },
+        },
+      })
+      // Buyer-requested vs org-opened: a requester who holds a membership in THIS
+      // org opened the case on the buyer's behalf (or as goodwill) — computed once,
+      // in the same round trip, instead of guessing on the client.
+      const requesterIds = refundCases.map((rc) => rc.requester.id).filter((rid, i, arr) => arr.indexOf(rid) === i)
+      const staffRequesters = requesterIds.length
+        ? await db.membership.findMany({ where: { orgId: id, userId: { in: requesterIds } }, select: { userId: true } })
+        : []
+      const staffIds = new Set(staffRequesters.map((m) => m.userId))
+      return jsonOk({ summary, journals, invoices, refundCases: refundCases.map((rc) => ({ ...rc, requesterIsStaff: staffIds.has(rc.requester.id) })) })
     }
 
     if (action === 'payouts') {
@@ -146,6 +162,27 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
       const { requestRefund } = await import('@/server/services/refunds')
       const rc = await requestRefund({ orderId: String(body.orderId ?? ''), requestedBy: user.id, reason: String(body.reason ?? '') })
       return jsonOk({ refundCase: rc })
+    }
+
+    if (action === 'refund-approve' || action === 'refund-reject') {
+      if (!orgCan(membership.role, 'refund:request')) throw errors.forbidden('Refund decisions require a finance role.')
+      const caseId = String(body.caseId ?? '')
+      // Scope check: the case must belong to THIS org's order — the URL id is a
+      // scope, never an authorization to act on another org's money.
+      const rc = await db.refundCase.findUnique({ where: { id: caseId }, select: { id: true, orderId: true, order: { select: { orgId: true, reference: true } } } })
+      if (!rc || rc.order.orgId !== id) throw errors.notFound('Refund case not found for this organization.')
+      const { audit } = await import('@/server/audit')
+      if (action === 'refund-approve') {
+        const { approveRefund } = await import('@/server/services/refunds')
+        const result = await approveRefund(caseId, user.id)
+        await audit({ actorUserId: user.id, actorLabel: user.email, action: 'refund.approve', entityType: 'RefundCase', entityId: caseId, after: result })
+        return jsonOk({ ...result, note: 'Approved — the platform finance desk executes the money reversal.' })
+      }
+      const note = sanitizeText(body.note, 300)
+      const { rejectRefund } = await import('@/server/services/refunds')
+      const result = await rejectRefund(caseId, user.id, note)
+      await audit({ actorUserId: user.id, actorLabel: user.email, action: 'refund.reject', entityType: 'RefundCase', entityId: caseId, after: { rejected: true, note } })
+      return jsonOk(result)
     }
 
     if (action === 'verification-submit') {
