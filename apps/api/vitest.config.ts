@@ -1,0 +1,3 @@
+import swc from 'unplugin-swc';
+import { defineConfig } from 'vitest/config';
+export default defineConfig({ test: { globals: false, include: ['test/**/*.test.ts'], fileParallelism: false, testTimeout: 30000, hookTimeout: 60000 }, plugins: [swc.vite({ jsc: { transform: { decoratorMetadata: true, legacyDecorator: true } }, module: { type: 'es6' } })] });

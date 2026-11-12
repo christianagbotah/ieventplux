@@ -1,7 +1,5 @@
 {
   "extends": "../../tsconfig.json",
-  "compilerOptions": {
-    "outDir": "dist"
-  },
-  "include": ["src/**/*.ts"]
+  "compilerOptions": { "outDir": "dist", "experimentalDecorators": true, "emitDecoratorMetadata": true, "strictPropertyInitialization": false, "useDefineForClassFields": false },
+  "include": ["src/**/*.ts", "test/**/*.ts"]
 }

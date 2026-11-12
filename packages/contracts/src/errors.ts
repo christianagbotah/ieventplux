@@ -1,0 +1,7 @@
+export const ERROR_CODES = {
+  VALIDATION_FAILED: 400, BAD_REQUEST: 400, UNAUTHENTICATED: 401, ELEVATION_REQUIRED: 401, CSRF_FAILED: 403,
+  FORBIDDEN: 403, NOT_FOUND: 404, CONFLICT: 409, STATE_CONFLICT: 409, SOLD_OUT: 409, RATE_LIMITED: 429,
+  PROVIDER_UNAVAILABLE: 503, INTERNAL: 500, IDEMPOTENCY_MISMATCH: 422, PAYLOAD_TOO_LARGE: 413, UNSUPPORTED_MEDIA: 415,
+} as const;
+export type ErrorCode = keyof typeof ERROR_CODES;
+export interface ApiErrorBody { error: { code: ErrorCode; message: string; details?: unknown; correlationId: string } }
