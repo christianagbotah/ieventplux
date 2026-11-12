@@ -1,84 +1,108 @@
 # iEventPlux
 
-**Events discovery, ticketing, social & broadcasting platform for Ghana.**
-Built for Lightworld Technologies Ltd. — Accra, Ghana. Prices in Ghana cedis (₵).
+Events discovery, ticketing and broadcasting for Lightworld Technologies Ltd.
+Stage A foundation: pnpm/TypeScript monorepo, local infrastructure and PostgreSQL
+data model. The old Next.js/SQLite prototype has been removed from this branch.
 
-> Discover an event → connect with its organizer → attend physically or virtually.
+## Requirements and local setup
 
----
+- Node.js 22+ (Node 24 supported), Corepack, pnpm **9.15.9**, Docker Compose.
+- `corepack enable` then `corepack prepare pnpm@9.15.9 --activate`.
+- Optionally copy `.env.example` to `.env` for overrides. Development defaults
+  work without an env file; provider credentials are deliberately empty.
 
-## What is running here
-
-| Surface | Location | Notes |
-|---|---|---|
-| Web portal (single page) | `/` | Hash-routed SPA: Discover, Live Now, Reels, Effects Studio, event pages, checkout, My Tickets, organizer workspace, admin console |
-| REST API v1 | `/api/v1/*` | Versioned, OpenAPI at `/api/v1/openapi`, health at `/api/v1/health` |
-| Background worker | `:3001` | Durable outbox queue: payment reconciliation, reservations expiry, reminders, lifecycle, SMS delivery polling |
-| Realtime service | `:3003` | socket.io: live chat, viewer presence, notification push |
-| Mobile (source scaffold) | `mobile/` | Expo/React Native — **not device-tested**; see `mobile/README.md` |
-| Database | SQLite via Prisma | 56 models, integer minor-unit money, portable schema |
-
-**Important integration status (honest):** Hubtel Checkout + SMS adapters are implemented against the documented v1 contracts but **not sandbox-verified** (no credentials were supplied). Without credentials the platform runs an **isolated development payment/SMS simulator** — every order, callback, reconciliation, ticket, ledger journal and delivery state is real against the database; only the provider boundary is simulated and clearly labelled. Payouts (Hubtel Send Money) and live video (Cloudflare Stream) are **externally blocked** — recorded and tracked, never faked. See `docs/PROVIDER_CAPABILITIES.md`.
-
-## Quick start (development)
-
-```bash
-bun install
-bun run db:push          # create schema
-bun run db:seed          # deterministic dev data (synthetic identities + media)
-bun run dev              # web + API on :3000
-
-# separate terminals (mini-services):
-cd mini-services/worker   && bun run dev    # :3001
-cd mini-services/realtime && bun install && bun run dev   # :3003
+```sh
+docker compose up -d --wait
+pnpm install --frozen-lockfile
+pnpm db:migrate                  # prisma migrate deploy, not db push
+pnpm db:seed
+pnpm --filter @ieventplux/db test
+pnpm lint
+pnpm typecheck
+pnpm build
 ```
 
-Copy `.env.example` → `.env`. Every variable is documented; typed startup validation lives in `src/server/env.ts` and surfaces at `GET /api/v1/health` + Admin → Integrations.
+PostgreSQL 16 (`5432`), Redis 7 (`6379`), Mailpit SMTP (`1025`) and Mailpit UI
+(`http://localhost:8025`) are the only services running at this stage. All four
+apps are TypeScript placeholders: `pnpm dev` watches them but does **not** serve
+the product UI, an API, worker queues or an Expo application yet. Framework
+initialization and provider adapters are subsequent handoffs.
 
-### Demo accounts (DEVELOPMENT ONLY — password `Dev@12345`)
+## Workspace
 
-| Account | Role | What to try |
-|---|---|---|
-| `ama@example.dev` | Attendee | Buy tickets → simulator checkout → My Tickets QR → voice concierge |
-| `pastor@lightworld.dev` | Chapel OWNER | Organizer workspace: dashboard, events, check-in scanner, studio, finance ledger |
-| `media@lightworld.dev` | Event manager | Event editing, promotions, messaging |
-| `usher@lightworld.dev` | Check-in staff | Scan tickets (duplicate detection) |
-| `accra@eventco.dev` | Unverified organizer | Sees the verification gate on paid sales |
-| `admin@ieventplux.dev` | SUPER_ADMIN | Admin console: verify orgs, payments, refunds, payouts, sweeps, integrations |
-| `finance@ieventplux.dev` | FINANCE_ADMIN | Refund processing (requires password re-confirmation) |
+| Path                                                 | Responsibility                                                                        |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `apps/web`, `apps/api`, `apps/worker`, `apps/mobile` | Web/API/worker/mobile placeholders                                                    |
+| `packages/contracts`, `packages/sdk`                 | Shared contracts and SDK placeholders                                                 |
+| `packages/config`                                    | Zod environment validation and development-operation guards                           |
+| `packages/design-tokens`                             | Starter TypeScript colors and CSS variables                                           |
+| `packages/integrations`                              | Provider adapter placeholder                                                          |
+| `packages/db`                                        | PrismaClient export, schema, migrations, deterministic seed and real-PostgreSQL tests |
 
-## Demo journeys (verified end-to-end)
+## Database conventions
 
-1. **Paid ticket purchase** — Open *Accra Gospel Night of Wonders* → Get tickets → select 2 VIP (₵400) → Checkout → the **Hubtel dev simulator** page opens → *Approve payment* → the callback is stored durably, the worker fulfils idempotently → order PAID, 2 tickets + QR issued, balanced ledger posted (DR collections ₵400 / CR fees ₵20 / CR organizer payable ₵380), SMS receipt queued. Try the simulator's *forged amount*, *duplicate callback*, *pay late* and *walk away* buttons to see the documented protection paths.
-2. **Free RSVP** — Sunday Celebration Service → Free RSVP → tickets issued without payment.
-3. **Check-in** — Organizer workspace → Attendees & Check-in → Scan (camera where supported, or paste `TKT-…`) → ADMITTED; scan again → DUPLICATE; forged QR → INVALID.
-4. **Organizer verification gate** — `accra@eventco.dev` cannot publish paid tickets until an admin approves the org (Admin → Organizations → Approve).
-5. **Refund with privileged re-auth** — Admin → Refunds → Approve → Process (prompts for password elevation) → tickets revoked + reversal journal.
-6. **Live broadcast entitlements** — Watch the free *Worship Without Limits* stream; the paid masterclass requires a virtual ticket (a physical-only ticket never unlocks it).
-7. **AI concierge** — Floating spark button → text or hold the mic: answers with **real** upcoming events/prices from the database (LLM + ASR + TTS via the z-ai SDK, backend-only).
-8. **CSS Effects Studio** — 38 live, copy-ready effects with live demos and one-tap CSS/HTML copy (`#/effects`).
+- PostgreSQL enums, JSONB, UTC `timestamptz`, IANA event timezone, `char(3)`
+  currencies. Monetary amounts use integer minor units (GHS pesewas); ledger
+  entries and stream usage use BigInt.
+- Legacy `Event` represents an **event occurrence**, optionally belonging to an
+  `EventSeries`. Profile fields remain on `User`. Organization roles are the
+  `MembershipRole` enum; permission policy belongs in shared contracts rather
+  than editable database permission grants. These are the existing equivalents
+  of the brief's EventOccurrence, Profile and Role/Permission concepts.
+- `CSSEffect`, `AiConversation`, `AiMessage` are not retained. Added models include
+  EventStaff, SettingChange, PayoutDestination, Country, NotificationTemplate,
+  IdempotencyKey, StreamUsage, ConsentSuppression and Settlement. Scan conflicts
+  remain represented by `AdmissionScan.result = CONFLICT`.
+- The initial migration is Prisma-generated. The second migration owns inventory
+  and promotion CHECK constraints, ledger append-only and balance triggers,
+  the platform-account partial unique index, and financial-history delete guards.
+  These SQL invariants are not fully represented by Prisma schema introspection;
+  do not replace migrations with `db push`.
+- Write a journal and **all** its entries in the same database transaction.
+  Balance is checked at commit, including rejection of empty journals; account
+  and journal currencies must match. Entries cannot be added to committed
+  journals. Corrections use new reversal journals, never updates/deletes.
+- Main money records cannot be deleted or truncated. `pnpm db:reset` explicitly
+  drops/recreates the development schema and does not reseed automatically. It
+  and the seed refuse staging/production, including `NODE_ENV=production`.
 
-## Repo map
+## Seed and media
 
-```
-prisma/schema.prisma     56-model data model        src/server/           domain services + Hubtel adapters + jobs
-prisma/seed.ts           deterministic dev seed     src/portal/           single-page frontend (jQuery transitions)
-src/app/api/v1/          REST API routes            mini-services/        worker (:3001) + realtime (:3003)
-src/data/css-effects.ts  38-effect CSS library      mobile/               Expo source scaffold
-docs/                    full documentation suite   docs-assets/          verification screenshots
-```
+The seed ports the legacy Ghana catalog, identities, organizations, memberships,
+plans, fees, categories, series, free/paid/hybrid/private/unlisted events, ticket
+types, broadcasts and social examples. It adds countries, assigned event staff,
+notification templates, balanced sample paid/free orders and tickets, and manual
+refund/payout/promotion examples. All data and credentials are synthetic.
 
-## Documentation
+- Fixed fixture epoch: `2026-11-12T00:00:00Z`; explicit stable IDs; UTC scheduling.
+- One transaction plus an advisory lock; repeat runs detect `dev-seed-v1` and
+  leave existing data unchanged. Reset before changing the fixture dataset.
+- Password: **`Dev@12345`**, Argon2id via `@node-rs/argon2`. The fixed salt is only
+  for deterministic development fixtures, never for production password hashing.
+- Admin: `admin@ieventplux.dev`; finance: `finance@ieventplux.dev`;
+  organizer: `pastor@lightworld.dev`; event staff: `usher@lightworld.dev`;
+  attendees: `ama@example.dev`, `kojo@example.dev`, `akua@example.dev`.
+- Ghana is organizer/payout-enabled. GB and US are view-only.
+- `apps/web/public/images/posters/*.png` are copied legacy synthetic posters;
+  the legacy README explicitly describes its seed as synthetic identities and
+  media. No external stock or scraped media was added.
+- Seeded QR values are synthetic fixtures, not a production admission protocol.
 
-`ARCHITECTURE` · `DATA_MODEL` · `PERMISSIONS` · `PAYMENTS_AND_SETTLEMENTS` · `IMPLEMENTATION_PLAN` · `PROVIDER_CAPABILITIES` · `SECURITY_REVIEW` · `OPERATIONS` · `COST_MODEL` · `PRODUCT_SPEC` (in `docs/`), plus `REQUIREMENTS_TRACEABILITY`, `TEST_REPORT`, `DEPLOYMENT` and `CHIEF_ARCHITECT_HANDOFF`.
+## Environment and tests
 
-## Scripts
+Every loader variable is documented in `.env.example`. Production requires
+explicit database/Redis, storage, public URL, Hubtel per-API, SMS, Cloudflare and
+SMTP settings; simulator mode is forbidden. SMTP auth and Expo access tokens are
+optional where the provider/relay permits unauthenticated use. AI is optional.
+Environment error messages identify variable names without printing secrets.
 
-| Command | Purpose |
-|---|---|
-| `bun run dev` | Next.js app on :3000 (auto-reload) |
-| `bun run lint` | ESLint (clean; warnings only) |
-| `bun run db:push` / `db:seed` | Schema push / dev seed |
-| `bunx tsc --noEmit` | Type check (clean) |
+Database tests use **only** `TEST_DATABASE_URL` (separate database ending in
+`_test`), deploy both migrations, then run Vitest against real PostgreSQL. The
+Compose initialization script creates `ieventplux_test` on first volume startup.
+If reusing a preexisting volume that lacks it, create that database explicitly
+before running tests. Tests add isolated synthetic fixtures and never touch the
+development catalog. Keep the database test suite sequential per database.
 
-© Lightworld Technologies Ltd. — iEventPlux is a working development build, **not** a production-ready claim. See `docs/CHIEF_ARCHITECT_HANDOFF.md` for the honest completion assessment.
+`pnpm test` runs all workspace tests; `pnpm --filter @ieventplux/config test`
+runs environment safety unit tests independently. Root `dev`, `build`, `lint`,
+`typecheck`, `test` use Turborepo. No external provider calls or deployment occur.
