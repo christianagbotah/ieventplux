@@ -62,3 +62,6 @@ db/custom.db-wal
 
 # Read-tool scratch outputs
 tool-results/
+
+# User-uploaded files (session input, not product assets)
+/upload/

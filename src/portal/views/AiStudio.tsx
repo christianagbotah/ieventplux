@@ -148,7 +148,7 @@ export default function AiStudio() {
             <Sparkles className="h-6 w-6" aria-hidden />
           </span>
           <div>
-            <h1 className="efx-animated-gradient-text iefx-headline text-2xl font-extrabold tracking-tight">AI Content Studio</h1>
+            <h1 className="efx-animated-gradient-text iefx-page-title iefx-page-title-lg font-extrabold">AI Content Studio</h1>
             <p className="text-sm text-muted-foreground">
               Drafting for <span className="font-semibold text-foreground">{org.orgName}</span> — everything here is an editable draft.
             </p>

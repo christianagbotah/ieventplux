@@ -86,7 +86,7 @@ export default function OrganizerWorkspace({ route }: { route: Route }) {
         </button>
         <p className="mb-1 px-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Workspace</p>
         <Select value={activeOrg.orgId} onValueChange={(v) => setActiveOrg(v)}>
-          <SelectTrigger className="mb-3 rounded-xl" aria-label="Active organization"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="mb-3 w-full rounded-xl" aria-label="Active organization"><SelectValue /></SelectTrigger>
           <SelectContent>
             {memberships.map((m) => (
               <SelectItem key={m.orgId} value={m.orgId}>{m.orgName} · {humanize(m.role)}</SelectItem>
@@ -170,7 +170,7 @@ function Dashboard({ orgId }: { orgId: string }) {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="efx-animated-gradient-text iefx-headline text-xl font-extrabold">Dashboard</h1>
+          <h1 className="efx-animated-gradient-text iefx-page-title font-extrabold">Dashboard</h1>
           <p className="text-sm text-muted-foreground">{data.counts.published} published · {data.counts.draft} drafts · {data.counts.live} live now</p>
         </div>
       </div>
@@ -306,7 +306,7 @@ function EventsManager({ orgId, role }: { orgId: string; role: string }) {
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="efx-animated-gradient-text iefx-headline text-xl font-extrabold">Events</h1>
+          <h1 className="efx-animated-gradient-text iefx-page-title font-extrabold">Events</h1>
           <p className="text-sm text-muted-foreground">{events?.length ?? '…'} events · series occurrences tracked separately</p>
         </div>
         {canPublish && <Button className="rounded-full ievx-press" onClick={() => void openEditor(null)}><Plus className="mr-1 h-4 w-4" /> New event</Button>}
@@ -721,7 +721,7 @@ function OrdersView({ orgId }: { orgId: string }) {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="efx-animated-gradient-text iefx-headline text-xl font-extrabold">Orders</h1>
+        <h1 className="efx-animated-gradient-text iefx-page-title font-extrabold">Orders</h1>
         <Select value={eventId} onValueChange={setEventId}>
           <SelectTrigger className="w-64 rounded-xl" aria-label="Select event"><SelectValue placeholder="Select event" /></SelectTrigger>
           <SelectContent>
@@ -884,7 +884,7 @@ function AttendeesView({ orgId }: { orgId: string }) {
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="efx-animated-gradient-text iefx-headline text-xl font-extrabold">Attendees & Check-in</h1>
+          <h1 className="efx-animated-gradient-text iefx-page-title font-extrabold">Attendees & Check-in</h1>
           {stats && <p className="text-sm text-muted-foreground">{stats.admitted}/{stats.ticketsIssued} admitted · {stats.anomalies} anomalies</p>}
         </div>
         <div className="flex gap-2">
@@ -1066,7 +1066,7 @@ function StudioView({ orgId }: { orgId: string }) {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="efx-animated-gradient-text iefx-headline text-xl font-extrabold">Streaming Studio</h1>
+        <h1 className="efx-animated-gradient-text iefx-page-title font-extrabold">Streaming Studio</h1>
         <p className="text-sm text-muted-foreground">Phone camera or OBS/vMix ingest · entitlement-protected playback.</p>
       </div>
 
@@ -1219,7 +1219,7 @@ function PromotionsView({ orgId }: { orgId: string }) {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="efx-animated-gradient-text iefx-headline text-xl font-extrabold">Promotions</h1>
+        <h1 className="efx-animated-gradient-text iefx-page-title font-extrabold">Promotions</h1>
         <p className="text-sm text-muted-foreground">Internal sponsored placements in discovery — clearly labelled, budget-capped.</p>
       </div>
 
@@ -1338,7 +1338,7 @@ function MessagesView({ orgId }: { orgId: string }) {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="efx-animated-gradient-text iefx-headline text-xl font-extrabold">Messaging (Hubtel SMS)</h1>
+        <h1 className="efx-animated-gradient-text iefx-page-title font-extrabold">Messaging (Hubtel SMS)</h1>
         <p className="text-sm text-muted-foreground">Transactional updates or consented marketing · quiet hours & quotas enforced.</p>
       </div>
 
@@ -1496,7 +1496,7 @@ function FinanceView({ orgId, role }: { orgId: string; role: string }) {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="efx-animated-gradient-text iefx-headline text-xl font-extrabold">Finance & Payouts</h1>
+        <h1 className="efx-animated-gradient-text iefx-page-title font-extrabold">Finance & Payouts</h1>
         <p className="text-sm text-muted-foreground">Balanced ledger · settlement holds · payout requests</p>
       </div>
 
@@ -1706,7 +1706,7 @@ function TeamView({ orgId, role }: { orgId: string; role: string }) {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="efx-animated-gradient-text iefx-headline text-xl font-extrabold">Team</h1>
+        <h1 className="efx-animated-gradient-text iefx-page-title font-extrabold">Team</h1>
         <p className="text-sm text-muted-foreground">Roles: Owner · Admin · Event Manager · Finance · Check-in Staff · Analyst</p>
       </div>
       {canManage && (
@@ -1789,7 +1789,7 @@ function BillingView({ orgId }: { orgId: string }) {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="efx-animated-gradient-text iefx-headline text-xl font-extrabold">Subscription</h1>
+        <h1 className="efx-animated-gradient-text iefx-page-title font-extrabold">Subscription</h1>
         <p className="text-sm text-muted-foreground">Entitlements are enforced on the backend; expiry never invalidates attendee tickets.</p>
       </div>
 
@@ -1884,7 +1884,7 @@ function SettingsView({ orgId, role }: { orgId: string; role: string }) {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="efx-animated-gradient-text iefx-headline text-xl font-extrabold">Settings</h1>
+        <h1 className="efx-animated-gradient-text iefx-page-title font-extrabold">Settings</h1>
         <p className="text-sm text-muted-foreground">Public profile, contacts and payout destination.</p>
       </div>
 
@@ -1989,7 +1989,7 @@ function LiveRoomView({ orgId }: { orgId: string }) {
     <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="efx-animated-gradient-text iefx-headline text-xl font-extrabold">Live Room</h1>
+          <h1 className="efx-animated-gradient-text iefx-page-title font-extrabold">Live Room</h1>
           <p className="text-sm text-muted-foreground">Run realtime polls and answer audience questions while the room is live.</p>
         </div>
         <Button variant="outline" size="sm" className="rounded-full ievx-press" onClick={() => void load()} disabled={refreshing}>
@@ -2302,7 +2302,7 @@ function InsightsView({ orgId }: { orgId: string }) {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="efx-animated-gradient-text iefx-headline text-xl font-extrabold">Insights</h1>
+        <h1 className="efx-animated-gradient-text iefx-page-title font-extrabold">Insights</h1>
         <p className="text-sm text-muted-foreground">Computed from settled orders, issued tickets, scans and reviews — nothing invented. {t.liveNow > 0 ? `${t.liveNow} event${t.liveNow === 1 ? '' : 's'} live right now.` : `${t.eventsUpcoming} upcoming · ${t.eventsHeld} held.`}</p>
       </div>
 

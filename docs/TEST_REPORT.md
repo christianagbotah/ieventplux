@@ -455,6 +455,25 @@ New capabilities: (1) **Payout status polling** — `PAYOUT_STATUS_POLL` worker 
 
 **Static:** `bun run lint` 0 errors / 17 warnings (baseline); `bunx tsc --noEmit` 0 errors.
 
+## Re-verification round 16 (2026-11-13, user-reported organizer overlap + SW dev-staleness root cause)
+
+Trigger: user-submitted screenshot of the organizer workspace header showing overlapping elements. Diagnosis combined VLM image analysis (original + 3x/4x zoomed crops) with DOM-measured geometry; two real defects were confirmed and fixed, plus the service-worker root cause that made the UI stale in the first place.
+
+| Case | Outcome | Status |
+|---|---|---|
+| Heading/subtitle glyph collision (reported) | "Dashboard" h1 rendered 33.6px/40.32px line box (hero `clamp` overriding `text-xl`); subtitle "7 published · 0 drafts · 0 live now" sat directly under the spilled glyphs. After fix: **20px font / 27px line-height / 4px margin gap** (total visual clearance ≈ 7.5px) | ✅ live (DOM-measured before/after) |
+| Org selector overflowing sidebar card | `w-fit` + `whitespace-nowrap` trigger with long org label overflowed the 240px sidebar by **+106px** (chevron crossing the card border); after `w-full`: width 206px, overflow **−17px**, value ellipsized, full name intact in dropdown | ✅ live (DOM-measured) |
+| All section headings consistent | 13 OrganizerWorkspace headings + AiStudio on `.iefx-page-title` (`--lg` 1.5rem there); Finance & Payouts and Messaging tabs spot-checked live at 20px/27px | ✅ live |
+| Desktop 1440×900 visual pass | VLM verdict on screenshot: heading/subtitle clear spacing, dropdown fully inside card, "no unintended element overlaps anywhere" | ✅ VLM-verified |
+| Mobile 390×844 | No overlaps, no horizontal clipping, cards stack cleanly. A VLM-flagged "avatar over Discover label" in the bottom nav was **disproven by DOM geometry** (icon→label gap = 5px; compass icon misread at zoom) | ✅ DOM-verified |
+| SW v3 dev-staleness fix | v2 cached all `/_next/static/` cache-first (dev chunk URLs are stable module ids served `no-store`) → after any recompile the SW served yesterday's CSS/JS (the user's screenshot itself was a stale render). v3 `cacheFirstImmutable` caches only responses declaring `immutable` (prod content-hashed chunks). Live inspection: SW `ievp-v3` active; `ievp-v3-assets` contains only images / content-hashed woff2 / logo / manifest — **no dev CSS/JS chunks** | ✅ live (cache inspected) |
+| Recompile freshness regression | Server-side CSS rule edit + reload → new rule present in served chunk and applied (round-13's stale-shell class of defect structurally closed for dev) | ✅ live |
+| Console / logs | no browser console errors; dev.log clean; lint 0 errors / 17 warnings (baseline); tsc 0 errors; secret scan clean | ✅ |
+
+**Honest limitations:** production `immutable` chunk headers could not be exercised here (dev serves `no-store` by design); the production offline behaviour of `cacheFirstImmutable` rests on Next.js serving `/_next/static/` with `Cache-Control: immutable` in built deployments (standard behaviour, asserted not measured this round).
+
+**Static:** `bun run lint` 0 errors / 17 warnings (baseline); `bunx tsc --noEmit` 0 errors.
+
 ## Not performed (honest)
 
 - Native Android/iOS builds and device testing (mobile is a source scaffold).

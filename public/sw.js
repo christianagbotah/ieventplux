@@ -1,11 +1,16 @@
 /*
  * iEventPlux service worker — deliberately conservative.
  *
- * Strategy (see docs/TEST_REPORT.md round 13):
- *  - Static immutable-style assets (`/_next/static/`, `/uploads/`, `/images/`,
- *    `/logo.svg`, manifest): cache-first — instant repeat visits, tolerant of
- *    flaky venue networks. Asset URLs are content-hashed, so a cached URL can
- *    never be logically stale.
+ * Strategy (see docs/TEST_REPORT.md rounds 13–14):
+ *  - Next build assets (`/_next/static/`): cache-first ONLY for responses the
+ *    server declares `Cache-Control: immutable` (production chunks are
+ *    content-hashed). Dev chunk URLs are stable module ids served with
+ *    `no-store`; caching those would run yesterday's compile today — a real
+ *    defect found and fixed in round-14 verification (stale CSS/JS after
+ *    recompiles). Non-immutable responses pass through uncached.
+ *  - App-owned static content (`/uploads/`, `/images/`, `/logo.svg`,
+ *    manifest): cache-first — UUID-named or brand-stable, tolerant of flaky
+ *    venue networks.
  *  - Navigations + identity reads (`/api/v1/auth/me`): network-first with a
  *    cache fallback used ONLY on hard network failure — never on slowness.
  *    Serving a stale shell because the server was slow would run yesterday's
@@ -16,11 +21,12 @@
  *  - Everything else: untouched. WebSockets are never intercepted.
  *
  * Dev-mode honesty: a fully offline cold boot of the shell is best-effort in
- * development (chunk sets shift between rebuilds). The offline ticket wallet
- * itself is client-side (localStorage) and does not depend on this worker.
+ * development (chunk sets shift between rebuilds and dev chunks are never
+ * cached). The offline ticket wallet itself is client-side (localStorage)
+ * and does not depend on this worker.
  */
 
-const VERSION = 'ievp-v2'
+const VERSION = 'ievp-v3'
 const SHELL_CACHE = `${VERSION}-shell`
 const ASSET_CACHE = `${VERSION}-assets`
 const API_CACHE = `${VERSION}-api`
@@ -40,6 +46,25 @@ function isIdentityApi(url) {
 
 function timeout(ms) {
   return new Promise((resolve) => setTimeout(() => resolve(undefined), ms))
+}
+
+/**
+ * Cache-first, but only ever *stores* responses the server itself declared
+ * `Cache-Control: immutable`. Dev-mode `/_next/static/` responses are
+ * `no-store` (stable URLs, content shifts on every recompile) — they are
+ * served straight from the network and never cached, so a recompile is
+ * always picked up on the next load.
+ */
+async function cacheFirstImmutable(request, cacheName) {
+  const cache = await caches.open(cacheName)
+  const hit = await cache.match(request)
+  if (hit) return hit
+  const res = await fetch(request)
+  if (res && res.ok) {
+    const cc = (res.headers.get('cache-control') || '').toLowerCase()
+    if (cc.includes('immutable')) cache.put(request, res.clone()).catch(() => {})
+  }
+  return res
 }
 
 async function cacheFirst(request, cacheName) {
@@ -113,8 +138,15 @@ self.addEventListener('fetch', (event) => {
   }
   if (url.origin !== self.location.origin) return
 
-  // Immutable-style static assets → cache-first.
-  if (url.pathname.startsWith('/_next/static/') || url.pathname.startsWith('/uploads/') || url.pathname.startsWith('/images/') || url.pathname === '/logo.svg' || url.pathname === '/manifest.webmanifest') {
+  // Next build assets → cache-first only when the server vouches immutable.
+  if (url.pathname.startsWith('/_next/static/')) {
+    event.respondWith(cacheFirstImmutable(req, ASSET_CACHE))
+    return
+  }
+
+  // App-owned static content (UUID-named uploads, bundled images, brand
+  // assets) → cache-first.
+  if (url.pathname.startsWith('/uploads/') || url.pathname.startsWith('/images/') || url.pathname === '/logo.svg' || url.pathname === '/manifest.webmanifest') {
     event.respondWith(cacheFirst(req, ASSET_CACHE))
     return
   }

@@ -140,6 +140,22 @@
   line-height: 1.35;
 }
 
+/* Portal page title — compact variant for in-app section headers.
+   The hero clamp above is sized for public landing heroes; on portal
+   pages it ballooned titles past their text-xl/text-2xl intent, and the
+   tight 1.12 line box let glyph descenders spill into the subtitle line
+   beneath (reported overlap). This variant pins a compact size, a roomy
+   line box and a touch of bottom breathing room. */
+.iefx-page-title.efx-animated-gradient-text {
+  margin: 0;
+  margin-bottom: 0.25rem;
+  font-size: 1.25rem; /* = text-xl (portal page-title intent) */
+  line-height: 1.35;  /* roomy line box — no glyph spill onto siblings */
+}
+.iefx-page-title.iefx-page-title-lg.efx-animated-gradient-text {
+  font-size: 1.5rem; /* = text-2xl (studio page title) */
+}
+
 /* Full-bleed hero stage — catalog demos ship fixed radius/min-height. */
 .iefx-stage.efx-aurora-bg {
   border-radius: 1.25rem;
