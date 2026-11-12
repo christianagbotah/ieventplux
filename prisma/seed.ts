@@ -283,6 +283,13 @@ async function main() {
     { questionId: q1.id, userId: users.usher.id },
   ] })
 
+  // ── Organizer updates (operational voice; seeded as plain state, no fan-out) ──
+  await db.eventUpdate.createMany({ data: [
+    { eventId: worshipLive.id, orgId: chapel.id, title: 'Stream link changed — refresh your page', body: 'The stream has moved to our main channel for better stability. If your player stalled, reload the event page — the new link is live and the replay will follow the same URL.', important: true, createdAt: new Date(Date.now() - 12 * 60000) },
+    { eventId: worshipLive.id, orgId: chapel.id, title: 'Low-bandwidth stream for rural viewers', body: 'Joining on a modest connection? The audio-only feed is now available from the player menu — the same worship flow, a quarter of the data.', createdAt: new Date(Date.now() - 3 * 60000) },
+    { eventId: masterclass.id, orgId: ministries.id, title: 'Slides + replay codes after the session', body: 'Slide decks and replay access codes will land in ticket-holder inboxes within 30 minutes of the session ending. Check spam folders before writing support.', createdAt: new Date(Date.now() - 6 * 60000) },
+  ] })
+
 
   // ── Media (posters as gallery + synthetic clips for reels) ──────────────
   await db.mediaAsset.createMany({ data: [

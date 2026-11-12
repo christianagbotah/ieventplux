@@ -336,6 +336,30 @@ New capability: `GET /api/v1/orgs/[id]/insights` + an **Insights** workspace tab
 **Static:** `bun run lint` 0 errors / 17 warnings (baseline); `bunx tsc --noEmit` 0 errors.
 
 
+## Re-verification round 11 (2026-11-12, organizer updates & audience reach)
+
+New capability: organizer **updates** became the event's operational voice with real reach. The previously orphaned `EventUpdate` model (basic inline POST, holders-only notify) was upgraded to a full service: `src/server/services/updates.ts` + `GET/POST /events/[id]/updates` + `DELETE /events/[id]/updates/[updateId]`. Reach contract (service header): audience = ticket holders ∪ fulfilled-order buyers ∪ org followers, dedup by user, author excluded; in-app notifications always; SMS reserved for `important` updates (TRANSACTIONAL, durable MessageDelivery + retry, dedup per update+target, guests-with-phone included); open pages get it over the :3003 relay instantly; API remains source of truth. Schema gained `EventUpdate.important`. UI: a live `UpdatesPanel` on the event page (inline org composer with important toggle, important cards carry a red badge + `border-l`, delete controls, socket `update:new`/`update:removed`, 30s resilience refetch).
+
+| Case | Outcome | Status |
+|---|---|---|
+| Public listing | seeded 2 updates on worship LIVE event, one flagged `important: true` | ✅ |
+| Auth guards | anon POST → 401; attendee POST → 403 "You do not have permission to post updates."; attendee DELETE → 403 | ✅ |
+| Post (org, important) | 200 in 125 ms with reach `{audience:3, notified:3, smsQueued:3}`; audit row `event.update.post` | ✅ |
+| Notification fan-out | ama (follower, no ticket) received `EVENT_CHANGE` "Important update — Stage 2 is live…"; bell shows 1 unread | ✅ |
+| Durable SMS | 3 rows `event_update_important` via SIMULATOR → worker processed → all `DELIVERED`, dedupKeys `evupd:{updateId}:{phone}` | ✅ |
+| Rate guard | 6-in-a-window posts OK → 7th returns 409 "Update limit reached (6/hour)…" | ✅ |
+| Cross-client live (two sessions, :81) | Grace (media@lightworld.dev) posted from the composer on her event page → ama's already-open tab received the card instantly (`update:new`, "just now", Important badge) with NO reload; bell +1 | ✅ |
+| Live delete | Grace removed her test post → it vanished from ama's open tab in the same breath (`update:removed`) | ✅ |
+| Defects found & fixed mid-round | (1) mobile 390px horizontal overflow 15 px — the event page's main layout uses bare `grid gap-6 lg:grid-cols-[1fr_360px]` with no base `grid-cols-1`, so the implicit track sized to content min-content (computed `grid-template-columns: 388.734px` inside a 358px grid) → added `grid-cols-1` there + the info card, plus a scoped global guard `.grid:not([class*="grid-cols"]) > * { min-width: 0 }` for every other bare grid → **scrollWidth 390 live-verified** on event/discover/org/me pages; (2) VLM found the composer CTA painted gold — the `efx-shine-sweep-button` catalog class hardcodes an amber gradient that overrode the theme primary → class dropped from the button (now standard emerald primary, live-verified `background-image: none`, 125px sm size) | ✅ |
+| VLM false-positive check | "toggle misalignment", "button flush-right padding", "description clipped behind header" claims disproven live (switchY=btnY=426 rowDiff 0; btnRight=inputRight=710; first paragraph top=568 vs headerBottom=50 at rest) — full-page screenshot stitching artifacts, as with rounds 8–10 | ✅ |
+| Mobile 390×844 | Zero horizontal overflow; composer/cards/badge wrap cleanly (clean VLM pass after dismissing my own theme menu left open by the toggle test); dark mode checked | ✅ |
+| Console | Zero errors in both browser sessions through the gateway | ✅ |
+
+**Static:** `bun run lint` 0 errors / 17 warnings (baseline); `bunx tsc --noEmit` 0 errors.
+
+**Ops note:** dev server startup hardened — Next.js must bind dual-stack (`-H ::`) or the Caddy gateway's `localhost` (IPv6-first) dial returns 502; and services must be launched inside `(cd … && setsid nohup bun run dev … & disown)` subshells or they die at the tool-invocation boundary.
+
+
 ## Not performed (honest)
 
 - Native Android/iOS builds and device testing (mobile is a source scaffold).

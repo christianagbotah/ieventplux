@@ -117,8 +117,8 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
     }
 
     if (action === 'updates') {
-      const items = await db.eventUpdate.findMany({ where: { eventId: id }, orderBy: { createdAt: 'desc' }, take: 30 })
-      return jsonOk({ items })
+      const { listUpdates } = await import('@/server/services/updates')
+      return jsonOk({ items: await listUpdates(id) })
     }
 
     if (action === 'attendees') {
@@ -353,21 +353,16 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
 
     // ── Organizer updates (posts) ─────────────────────────────────────────
     if (action === 'updates') {
-      const access = await eventOrgAccess(user.id, id, 'event:edit')
-      if (!access.event) throw errors.notFound('Event not found.')
-      if (!access.allowed) throw errors.forbidden('You do not have permission to post updates.')
-      const title = sanitizeText(body.title, 160)
-      const bodyText = sanitizeText(body.body, 2000)
-      if (!title || !bodyText) throw errors.badRequest('Title and body are required.')
-      const update = await db.eventUpdate.create({ data: { eventId: id, orgId: access.event.orgId, title, body: bodyText } })
-      // Notify ticket holders + followers.
-      const { notifyUser } = await import('@/server/services/notify')
-      const holders = await db.ticket.findMany({ where: { eventId: id, status: 'VALID' }, select: { userId: true }, distinct: ['userId'] })
-      for (const h of holders.slice(0, 500)) {
-        if (!h.userId) continue
-        await notifyUser({ userId: h.userId, type: 'EVENT_CHANGE', title, body: bodyText.slice(0, 200), link: `#/event/${id}` }).catch(() => {})
-      }
-      return jsonOk({ update })
+      const { postUpdate } = await import('@/server/services/updates')
+      const result = await postUpdate({
+        eventId: id,
+        userId: user.id,
+        actorLabel: user.email,
+        title: String(body.title ?? ''),
+        body: String(body.body ?? ''),
+        important: Boolean(body.important),
+      })
+      return jsonOk(result)
     }
 
     // ── Comments (discussion/Q&A) ─────────────────────────────────────────

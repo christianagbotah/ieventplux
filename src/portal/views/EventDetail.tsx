@@ -17,6 +17,7 @@ import { money, dateLong, timeRange, relative, initials, humanize } from '../for
 import { EmptyState } from '../components/EventCard'
 import LiveEngagement from '../components/LiveEngagement'
 import ReviewsPanel from '../components/ReviewsPanel'
+import UpdatesPanel from '../components/UpdatesPanel'
 
 interface TicketType {
   id: string
@@ -64,7 +65,7 @@ interface EventDetailPayload {
     directionsUrl?: string | null
     agenda: { id: string; title: string; startsAt: string; endsAt?: string | null; speaker?: string | null; description?: string | null }[]
     ticketTypes: TicketType[]
-    updates: { id: string; title: string; body: string; createdAt: string }[]
+    updates: { id: string; title: string; body: string; important: boolean; createdAt: string }[]
     broadcasts: { id: string; title: string; status: string; accessPolicy: string; recordingStatus: string }[]
     venue?: { name: string; address?: string | null; city?: string | null; mapsUrl?: string | null; accessibilityInfo?: string | null } | null
     org: { id: string; name: string; slug: string; tagline?: string | null; verifiedAt?: string | null; orgType: string }
@@ -414,14 +415,14 @@ export default function EventDetail({ slug }: { slug: string }) {
             </div>
           </div>
 
-          <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_360px]">
+          <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[1fr_360px]">
             {/* Left column */}
             <div className="space-y-6">
               {['LIVE', 'PUBLISHED'].includes(event.status) && (
                 <LiveEngagement eventId={event.id} slug={event.slug} live={event.status === 'LIVE'} />
               )}
               <Card className="rounded-2xl">
-                <CardContent className="grid gap-4 p-5 sm:grid-cols-2">
+                <CardContent className="grid grid-cols-1 gap-4 p-5 sm:grid-cols-2">
                   <div className="flex items-start gap-3">
                     <CalendarDays className="mt-0.5 h-5 w-5 text-primary" aria-hidden />
                     <div>
@@ -535,21 +536,8 @@ export default function EventDetail({ slug }: { slug: string }) {
                 </Card>
               )}
 
-              {event.updates.length > 0 && (
-                <Card className="rounded-2xl">
-                  <CardHeader className="pb-2"><CardTitle className="text-base">Organizer updates</CardTitle></CardHeader>
-                  <CardContent className="space-y-4">
-                    {event.updates.map((u) => (
-                      <article key={u.id} className="rounded-xl bg-secondary/50 p-4">
-                        <div className="flex items-baseline justify-between gap-2">
-                          <p className="font-semibold">{u.title}</p>
-                          <span className="text-xs text-muted-foreground">{relative(u.createdAt)}</span>
-                        </div>
-                        <p className="mt-1 text-sm text-foreground/85">{u.body}</p>
-                      </article>
-                    ))}
-                  </CardContent>
-                </Card>
+              {['PUBLISHED', 'SCHEDULED', 'LIVE', 'POSTPONED'].includes(event.status) && (
+                <UpdatesPanel eventId={event.id} canManage={data.canManage} orgName={event.org.name} initial={event.updates} />
               )}
 
               {/* Discussion */}

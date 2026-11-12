@@ -346,6 +346,7 @@ model EventUpdate {
   orgId        String
   title        String
   body         String
+  important    Boolean  @default(false) // major change (time/venue/safety) — also reaches phones, not just in-app
   mediaAssetId String?
   createdAt    DateTime @default(now())
 

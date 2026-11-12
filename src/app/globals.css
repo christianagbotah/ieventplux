@@ -361,6 +361,14 @@
 /* Anchor/section scrolling clears the sticky glass header (65px + breathing room). */
 section[id], #live-engagement, #reviews, #discussion { scroll-margin-top: 84px; }
 
+/* Bare utility grids (`grid gap-*` with no explicit grid-cols template) size
+   their implicit tracks to content min-content, which can exceed the container
+   and create phantom horizontal scroll on narrow viewports (verified live on
+   the event page at 390px). Explicit templates use minmax(0,1fr) already and
+   are deliberately untouched — this guard only makes the BARE-grid children
+   shrinkable so implicit tracks resolve within the container. */
+.grid:not([class*="grid-cols"]) > * { min-width: 0; }
+
 .ievx-voice-bar {
   display: inline-block; width: 4px; border-radius: 999px;
   background: oklch(0.55 0.13 160);
