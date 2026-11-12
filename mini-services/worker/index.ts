@@ -92,6 +92,7 @@ const SWEEPS = [
   { type: 'REMINDER_SWEEP', everyMs: 300_000 },
   { type: 'RECONCILE_PAYMENT', everyMs: 60_000 },
   { type: 'SMS_STATUS_POLL', everyMs: 30_000 },
+  { type: 'PAYOUT_STATUS_POLL', everyMs: 120_000 },
   { type: 'PLAYBACK_CLEANUP', everyMs: 120_000 },
   { type: 'WAITLIST_SWEEP', everyMs: 60_000 },
 ] as const

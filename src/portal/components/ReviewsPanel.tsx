@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { Star, Loader2, ShieldCheck, EyeOff, Eye, Pencil, BadgeCheck, MessageSquareQuote } from 'lucide-react'
+import { Star, Loader2, ShieldCheck, EyeOff, Eye, Pencil, BadgeCheck, MessageSquareQuote, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -37,6 +37,13 @@ interface ReviewsPayload {
   items: ReviewItem[]
 }
 
+interface ReviewDigestPayload {
+  available: boolean
+  summary: string | null
+  source: 'AI' | 'STATS' | null
+  generatedAt: string | null
+}
+
 const STARS = [1, 2, 3, 4, 5]
 
 export function StarRow({ value, size = 'md' }: { value: number; size?: 'sm' | 'md' }) {
@@ -57,6 +64,7 @@ export default function ReviewsPanel({ eventId }: { eventId: string }) {
   const { user } = usePortal()
   const { toast } = useToast()
   const [data, setData] = useState<ReviewsPayload | null>(null)
+  const [digest, setDigest] = useState<ReviewDigestPayload | null>(null)
   const [rating, setRating] = useState(0)
   const [hoverRating, setHoverRating] = useState(0)
   const [draft, setDraft] = useState('')
@@ -69,6 +77,8 @@ export default function ReviewsPanel({ eventId }: { eventId: string }) {
       setRating(payload.mine.rating)
       setDraft(payload.mine.body ?? '')
     }
+    const dg = await api.get<ReviewDigestPayload>(`/events/${eventId}/review-digest`).catch(() => null)
+    setDigest(dg)
   }, [eventId])
 
   useEffect(() => {
@@ -137,6 +147,19 @@ export default function ReviewsPanel({ eventId }: { eventId: string }) {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* Round 15: AI digest — "What attendees say", source-labelled, honest fallback. */}
+        {digest?.available && digest.summary && (
+          <div className="rounded-2xl border border-primary/25 bg-primary/5 p-4" role="region" aria-label="Summary of attendee feedback">
+            <p className="flex items-center gap-2 text-sm font-semibold">
+              <Sparkles className="h-4 w-4 text-primary" aria-hidden />
+              What attendees say
+              <Badge variant="outline" className="border-primary/40 text-[10px] text-primary">
+                {digest.source === 'AI' ? 'AI · grounded in the reviews below' : 'Stats summary'}
+              </Badge>
+            </p>
+            <p className="mt-2 text-sm leading-relaxed text-foreground/90">{digest.summary}</p>
+          </div>
+        )}
         {aggregate.count > 0 && (
           <div className="grid gap-4 rounded-2xl border border-border/60 bg-muted/30 p-4 sm:grid-cols-[140px_1fr]">
             <div className="flex flex-col items-center justify-center gap-1 text-center">

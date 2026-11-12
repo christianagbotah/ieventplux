@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { CalendarDays, CalendarPlus, Clock, MapPin, Monitor, Share2, Heart, Bookmark, Flag, Users, ChevronLeft, Info, ExternalLink, Accessibility, Ticket, ShieldCheck, Church, Hourglass, Repeat, Star } from 'lucide-react'
+import { CalendarDays, CalendarPlus, Clock, MapPin, Monitor, Share2, Heart, Bookmark, Flag, Users, ChevronLeft, Info, ExternalLink, Accessibility, Ticket, ShieldCheck, Church, Hourglass, Repeat, Star, Bell, BellRing, ScanSearch, TriangleAlert, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -87,6 +87,20 @@ interface WaitlistStatus {
   entries?: { id: string; name: string; contact: string; partySize: number; status: string; ticketType: string | null; joinedAt: string; notifiedAt: string | null }[] | null
 }
 
+interface ReminderState {
+  active: boolean
+  holdingTicket: boolean
+  upcoming: boolean
+}
+
+interface TriageResult {
+  source: 'AI' | 'UNAVAILABLE'
+  scanned: number
+  flagged: number
+  items: { id: string; kind: string; verdict: string; reason: string; excerpt: string }[]
+  note?: string
+}
+
 interface CommentNode {
   id: string
   body: string
@@ -117,6 +131,10 @@ export default function EventDetail({ slug }: { slug: string }) {
   const [wlType, setWlType] = useState('')
   const [wlForm, setWlForm] = useState({ name: '', contact: '', partySize: 1 })
   const [wlBusy, setWlBusy] = useState(false)
+  const [reminder, setReminder] = useState<ReminderState | null>(null)
+  const [reminderBusy, setReminderBusy] = useState(false)
+  const [triage, setTriage] = useState<TriageResult | null>(null)
+  const [triageBusy, setTriageBusy] = useState(false)
 
   const load = useCallback(async () => {
     try {
@@ -127,6 +145,8 @@ export default function EventDetail({ slug }: { slug: string }) {
       setComments(commentsPayload.items)
       const wl = await api.get<WaitlistStatus>(`/events/${payload.event.id}/waitlist`).catch(() => null)
       setWaitlist(wl)
+      const rem = await api.get<ReminderState>(`/events/${payload.event.id}/reminder`).catch(() => null)
+      setReminder(rem)
       if (payload.event.seriesId) {
         const si = await api.get<SeriesInfo>(`/events/${payload.event.id}/series`).catch(() => null)
         setSeriesInfo(si)
@@ -255,6 +275,50 @@ export default function EventDetail({ slug }: { slug: string }) {
       void load()
     } catch (err) {
       toast({ description: err instanceof ApiClientError ? err.message : 'Could not leave the waitlist.', variant: 'destructive' })
+    }
+  }
+
+  // Round 15: "Remind me" opt-in — signed-in fans without a ticket get an
+  // in-app alert ~24 h before the event. Guests are sent to sign-in first.
+  const toggleReminder = async () => {
+    if (!event) return
+    if (!user) return navigate('/signin')
+    if (reminderBusy) return
+    setReminderBusy(true)
+    try {
+      if (reminder?.active) {
+        await api.post(`/events/${event.id}/reminder-cancel`, {})
+        setReminder({ ...(reminder ?? { active: false, holdingTicket: false, upcoming: true }), active: false })
+        toast({ title: 'Reminder removed', description: 'You will not be notified about this event.' })
+      } else {
+        await api.post(`/events/${event.id}/reminder`, {})
+        setReminder({ ...(reminder ?? { active: false, holdingTicket: false, upcoming: true }), active: true })
+        toast({ title: 'We will remind you', description: 'Expect an alert about 24 hours before the event starts.' })
+      }
+    } catch (err) {
+      toast({ description: err instanceof ApiClientError ? err.message : 'Could not update the reminder.', variant: 'destructive' })
+    } finally {
+      setReminderBusy(false)
+    }
+  }
+
+  // Round 15: AI moderation triage — advisory flags only; the organizer
+  // decides using the hide/delete controls in the panels below.
+  const runTriage = async () => {
+    if (!event || triageBusy) return
+    setTriageBusy(true)
+    try {
+      const result = await api.post<TriageResult>(`/events/${event.id}/moderation-triage`, {})
+      setTriage(result)
+      if (result.source === 'AI') {
+        toast({ title: result.flagged > 0 ? `${result.flagged} item${result.flagged === 1 ? '' : 's'} flagged for review` : 'Nothing suspicious found', description: `${result.scanned} items scanned · flags are advisory — nothing was hidden.` })
+      } else {
+        toast({ description: result.note ?? 'AI triage unavailable right now.', variant: 'destructive' })
+      }
+    } catch (err) {
+      toast({ description: err instanceof ApiClientError ? err.message : 'Could not run the AI triage.', variant: 'destructive' })
+    } finally {
+      setTriageBusy(false)
     }
   }
 
@@ -406,6 +470,19 @@ export default function EventDetail({ slug }: { slug: string }) {
                   <CalendarPlus className="h-4 w-4" />
                 </a>
               </Button>
+              {reminder?.upcoming && !reminder.holdingTicket && (
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="rounded-full"
+                  aria-label={reminder.active ? 'Remove reminder' : 'Remind me 24 hours before this event'}
+                  aria-pressed={reminder.active}
+                  disabled={reminderBusy}
+                  onClick={() => void toggleReminder()}
+                >
+                  {reminder.active ? <BellRing className="h-4 w-4 text-primary" /> : <Bell className="h-4 w-4" />}
+                </Button>
+              )}
               <Button variant="outline" size="icon" className="rounded-full" aria-label="Share event" onClick={() => void share()}>
                 <Share2 className="h-4 w-4" />
               </Button>
@@ -542,8 +619,50 @@ export default function EventDetail({ slug }: { slug: string }) {
 
               {/* Discussion */}
               <Card className="rounded-2xl" id="discussion">
-                <CardHeader className="pb-2"><CardTitle className="text-base">Discussion ({data.stats.comments})</CardTitle></CardHeader>
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex flex-wrap items-center gap-2 text-base">
+                    Discussion ({data.stats.comments})
+                    {data.canManage && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="ml-auto rounded-full"
+                        disabled={triageBusy}
+                        onClick={() => void runTriage()}
+                        aria-label="Run AI moderation triage over comments, questions and reviews"
+                      >
+                        {triageBusy ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <ScanSearch className="mr-1.5 h-3.5 w-3.5" />}
+                        AI triage
+                      </Button>
+                    )}
+                  </CardTitle>
+                </CardHeader>
                 <CardContent className="space-y-4">
+                  {data.canManage && triage && triage.source === 'AI' && (
+                    <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4" role="region" aria-label="AI moderation triage results">
+                      <p className="flex items-center gap-2 text-sm font-semibold">
+                        <TriangleAlert className="h-4 w-4 text-amber-600 dark:text-amber-400" aria-hidden />
+                        AI triage — {triage.flagged} of {triage.scanned} item{triage.scanned === 1 ? '' : 's'} flagged
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Advisory only — nothing was hidden or removed. Moderate with the controls below and in Reviews.
+                      </p>
+                      {triage.items.length > 0 && (
+                        <ul className="mt-3 space-y-2">
+                          {triage.items.map((item) => (
+                            <li key={item.id} className="rounded-xl border border-border/60 bg-card p-3">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <Badge variant="outline" className="text-[10px]">{humanize(item.kind)}</Badge>
+                                <Badge variant="outline" className="border-amber-500/50 text-[10px] text-amber-700 dark:text-amber-400">{humanize(item.verdict)}</Badge>
+                                <span className="text-xs text-muted-foreground">{item.reason}</span>
+                              </div>
+                              <p className="mt-1.5 line-clamp-2 text-sm text-foreground/80">“{item.excerpt}”</p>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  )}
                   {user ? (
                     <div className="flex gap-3">
                       <Avatar><AvatarFallback className="bg-primary/15 text-xs font-bold text-primary">{initials(user.displayName)}</AvatarFallback></Avatar>

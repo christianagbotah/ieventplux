@@ -399,7 +399,9 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
 
     if (root === 'sweeps' && id) {
       if (!platformCan(user.role, 'admin:console')) throw errors.forbidden('Staff role required.')
-      const kind = ['reconcile', 'reservations', 'reminders', 'lifecycle', 'sms'].includes(id) ? (id as 'reconcile' | 'reservations' | 'reminders' | 'lifecycle' | 'sms') : null
+      const kind = ['reconcile', 'reservations', 'reminders', 'lifecycle', 'sms', 'payouts'].includes(id)
+        ? (id as 'reconcile' | 'reservations' | 'reminders' | 'lifecycle' | 'sms' | 'payouts')
+        : null
       if (!kind) throw errors.badRequest('Unknown sweep.')
       const result = await sweepOnce(kind)
       return jsonOk({ sweep: kind, result })

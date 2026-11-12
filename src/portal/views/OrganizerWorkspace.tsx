@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   LayoutDashboard, CalendarPlus, Users, Ticket, Radio, Megaphone, MessageSquare, Wallet, UserCog, CreditCard, Settings,
-  ChevronLeft, Plus, Loader2, Camera, ScanLine, Search, Play, Square, RefreshCw, KeyRound, Pause, PlayCircle, Trash2, FileText, ShieldAlert, TrendingUp, Repeat, Activity, Vote, HandCoins, Sparkles,
+  ChevronLeft, Plus, Loader2, Camera, ScanLine, Search, Play, Square, RefreshCw, KeyRound, Pause, PlayCircle, Trash2, FileText, ShieldAlert, TrendingUp, Repeat, Activity, Vote, HandCoins, Sparkles, Download,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -892,6 +892,13 @@ function AttendeesView({ orgId }: { orgId: string }) {
             <SelectTrigger className="w-56 rounded-xl" aria-label="Select event"><SelectValue /></SelectTrigger>
             <SelectContent>{events.map((e) => <SelectItem key={e.id} value={e.id}>{e.title}</SelectItem>)}</SelectContent>
           </Select>
+          {eventId && (
+            <Button variant="outline" className="rounded-full" asChild aria-label="Export attendees as CSV (audited)">
+              <a href={`/api/v1/events/${eventId}/export`} download>
+                <Download className="mr-1.5 h-4 w-4" /> CSV
+              </a>
+            </Button>
+          )}
           <Button variant={scanMode ? 'default' : 'outline'} className="rounded-full" onClick={() => setScanMode((s) => !s)}>
             <ScanLine className="mr-1.5 h-4 w-4" /> {scanMode ? 'Close scanner' : 'Scan tickets'}
           </Button>

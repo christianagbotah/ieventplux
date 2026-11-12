@@ -20,10 +20,25 @@ export async function initiatePaymentForOrder(orderRef: string, userId?: string 
     // Re-arm the hold window if capacity still allows a retry.
     await db.order.update({ where: { id: order.id }, data: { expiresAt: new Date(Date.now() + 5 * 60_000), status: 'PENDING_PAYMENT' } })
   }
+  // Round 15: an in-flight checkout session is only reusable while it can still
+  // be live at the provider. Attempts left REDIRECTED/PENDING beyond the stale
+  // window (provider sessions expire; the buyer may have cancelled there) are
+  // marked EXPIRED and a FRESH attempt is created — retrying a dead checkout URL
+  // would strand the buyer. A late SUCCESS callback still fulfils normally:
+  // applyProviderOutcome never gates on attempt status.
+  const STALE_ATTEMPT_MS = 30 * 60_000
   const active = order.payments.filter((p) => ['INITIATED', 'REDIRECTED', 'PENDING'].includes(p.status))
   if (active.length > 0) {
     const latest = active.sort((a, b) => b.attemptNo - a.attemptNo)[0]
-    if (latest.checkoutUrl) return { attemptId: latest.id, checkoutUrl: latest.checkoutUrl, provider: latest.provider, existing: true }
+    const stamp = latest.redirectedAt ?? latest.initiatedAt
+    const stale = stamp ? Date.now() - stamp.getTime() > STALE_ATTEMPT_MS : false
+    if (latest.checkoutUrl && !stale) return { attemptId: latest.id, checkoutUrl: latest.checkoutUrl, provider: latest.provider, existing: true }
+    if (stale) {
+      await db.paymentAttempt.update({
+        where: { id: latest.id },
+        data: { status: 'EXPIRED', failureReason: 'Checkout session stale — buyer restarted payment' },
+      })
+    }
   }
 
   const attemptNo = order.payments.length + 1

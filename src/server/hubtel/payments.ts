@@ -191,6 +191,12 @@ export interface PayoutSubmission {
 
 export async function submitPayout(params: { reference: string; amountMinor: number; momoNumber: string; recipientName: string; currency: string }, creds?: ResolvedHubtelCreds): Promise<PayoutSubmission> {
   const resolved = creds ?? (await resolveHubtelCreds())
+  if (paymentsSimulatorActive(resolved)) {
+    // Dev simulator (round 15): the transfer "leaves" instantly and the payout
+    // status poll job transitions SUBMITTED → PAID after a short synthetic
+    // delay, so the whole payout lifecycle is exercisable without credentials.
+    return { ok: true, providerRef: `SIM-${params.reference}` }
+  }
   const configured = Boolean(resolved.sendMoney.clientId && resolved.sendMoney.clientSecret && resolved.sendMoney.accountId)
   if (!configured) {
     return { ok: false, error: 'PAYOUTS_BLOCKED: Hubtel Send Money credentials/merchant agreement not configured. The payout is recorded and queued for manual provider submission.' }
@@ -216,6 +222,55 @@ export async function submitPayout(params: { reference: string; amountMinor: num
     return { ok: true, providerRef: String(body.transactionId ?? body.TransactionId ?? params.reference) }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : 'Network error submitting payout.' }
+  }
+}
+
+/**
+ * Round 15: Send Money transfer status probe used by the PAYOUT_STATUS_POLL
+ * worker sweep. The transaction-status endpoint is NOT sandbox-verified (the
+ * docs portal sits behind a login this environment cannot complete), so the
+ * parser stays tolerant and a 404/405 NEVER produces a verdict — it records
+ * STATUS_ENDPOINT_UNVERIFIED and the payout stays SUBMITTED for manual
+ * confirmation. Guessing a verdict here could fake money movement.
+ */
+export interface SendMoneyStatusResult {
+  ok: boolean
+  outcome: 'SUCCESS' | 'FAILED' | 'PENDING' | 'UNKNOWN'
+  httpStatus: number | null
+  detail?: string
+}
+
+export async function checkSendMoneyStatus(providerRef: string, creds?: ResolvedHubtelCreds): Promise<SendMoneyStatusResult> {
+  const resolved = creds ?? (await resolveHubtelCreds())
+  if (providerRef.startsWith('SIM-')) {
+    // Simulator: synthetic completion delay mirrors the SMS simulator behaviour.
+    return { ok: true, outcome: 'SUCCESS', httpStatus: null, detail: 'Simulated transfer completion (dev simulator)' }
+  }
+  if (!resolved.sendMoney.clientId || !resolved.sendMoney.clientSecret || !resolved.sendMoney.accountId) {
+    return { ok: false, outcome: 'UNKNOWN', httpStatus: null, detail: 'Send Money credentials not configured.' }
+  }
+  try {
+    const res = await fetch(`${resolved.sendMoney.base}/api/v1/merchants/${resolved.sendMoney.accountId}/transactions/${encodeURIComponent(providerRef)}`, {
+      headers: { Accept: 'application/json', Authorization: basicAuthHeader(resolved.sendMoney.clientId, resolved.sendMoney.clientSecret) },
+      signal: AbortSignal.timeout(15000),
+    })
+    const body = (await res.json().catch(() => ({}))) as Record<string, unknown>
+    if (res.status === 404 || res.status === 405) {
+      return { ok: false, outcome: 'UNKNOWN', httpStatus: res.status, detail: 'STATUS_ENDPOINT_UNVERIFIED: no transaction resource at this path — status polling needs calibration; manual confirmation remains available.' }
+    }
+    if (!res.ok) return { ok: false, outcome: 'UNKNOWN', httpStatus: res.status, detail: `Status check HTTP ${res.status}` }
+    const raw = JSON.stringify(body).slice(0, 400)
+    const status = String(body.status ?? body.Status ?? body.transactionStatus ?? body.TransactionStatus ?? '').toUpperCase()
+    const responseCode = String(body.responseCode ?? body.ResponseCode ?? '')
+    if (status.includes('SUCCESS') || status === 'COMPLETED' || status === 'PAID' || responseCode === '0000') {
+      return { ok: true, outcome: 'SUCCESS', httpStatus: res.status, detail: raw }
+    }
+    if (status.includes('FAIL') || status.includes('REVERS') || ['0001', '0002', '0003', '0004', '0005'].includes(responseCode)) {
+      return { ok: true, outcome: 'FAILED', httpStatus: res.status, detail: raw }
+    }
+    return { ok: true, outcome: 'PENDING', httpStatus: res.status, detail: raw }
+  } catch (err) {
+    return { ok: false, outcome: 'UNKNOWN', httpStatus: null, detail: err instanceof Error ? err.message : 'Network error checking payout status.' }
   }
 }
 

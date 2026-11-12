@@ -78,6 +78,8 @@ Verification evidence keys: `TEST_REPORT.md` sections E1–E14 (scripted browser
 | Explainable ranking (follows/interests/geo/date); no fake AI label | deterministic ordering + featured/sponsored labels | DONE | E1 |
 | Optional AI descriptions/translations with real provider | AI concierge with real provider (nonessential) | PARTIAL | E6 |
 | Round 14: organizer AI advisor grounded in the org's real sales data; honest fallback, advisory only | `POST /orgs/{id}/ai-advisor` — pricing (validated vs real ticket types + bounds) + digest; labelled `AI` vs `heuristic fallback` | DONE | R14 |
+| Round 15: AI review digest ("What attendees say") grounded in visible reviews only, cached by fingerprint, source-labelled | `GET /events/{id}/review-digest` + `aiDigest.ts` — AI summary vs in-code stats fallback, regenerated when reviews change | DONE | R15 |
+| Round 15: AI moderation triage as decision support — ids validated, advisory only, never auto-hides | `POST /events/{id}/moderation-triage` + `aiTriage.ts` — org-gated, 6/min, hallucinated ids dropped, honest UNAVAILABLE state | DONE | R15 |
 
 ## §8 Ticket inventory, orders, admission
 
@@ -93,6 +95,9 @@ Verification evidence keys: `TEST_REPORT.md` sections E1–E14 (scripted browser
 | Distinct entry/online/replay entitlements; physical ≠ virtual unlock | ticketType.includesVirtualAccess + entitlement resolution | DONE | E6 |
 | Ticket only after authoritative payment / valid free RSVP; replay-safe | fulfilment idempotency + ProviderEvent dedup | DONE | E2, E7 |
 | Late success vs expired inventory: fulfil if capacity else explicit exception/refund | `fulfilPaidOrder` re-reservation or RefundCase routing | DONE | E14 |
+| Round 15: retrying payment after provider-side expiry/cancel starts a FRESH checkout session, never replays a dead URL | stale REDIRECTED/PENDING attempts (>30 min) → EXPIRED + new attempt; `?cancelled=1` return marks the attempt; late SUCCESS callback still fulfils (status never gates) | DONE | R15 |
+| Round 15: "Remind me" opt-in for fans without tickets (in-app alert ~24 h before) | `EventReminder` model + `POST/POST /events/{id}/reminder(-cancel)` + reminder sweep opt-in pass (ticket holders excluded, per-event dedup marker) | DONE | R15 |
+| Round 15: attendee CSV export (org-only, audited PII egress) | `GET /events/{id}/export` — text/csv attachment, `event.export-attendees` audit row, foreign-org 403 | DONE | R15 |
 
 ## §9 Hubtel payment integration
 
@@ -100,6 +105,8 @@ Verification evidence keys: `TEST_REPORT.md` sections E1–E14 (scripted browser
 |---|---|---|---|
 | Hosted checkout flow; card data never enters app | adapter + simulator page (real flow blocked on credentials) | PARTIAL | PROVIDER_CAPABILITIES |
 | Round 14: connect real credentials without redeploy; empirical contract calibration | admin-console credential storage (DB over env, masked, audited) + one-click GHS 1.00 connection probe with persisted verdict/snippet | DONE (path ready — live verdict fires when keys are saved) | PROVIDER_CAPABILITIES, R14 |
+| Round 15: payout submission closes automatically when the provider is reachable | `PAYOUT_STATUS_POLL` worker sweep — Send Money status probe (`checkSendMoneyStatus`): SUCCESS → PAID + hold released + owner notified; FAILED → reversal journal + hold released; 404/unreachable NEVER produces a verdict (STATUS_ENDPOINT_UNVERIFIED note, manual confirm stays); bounded 20 checks | DONE (simulator live; real verdict fires when Send Money keys exist) | R15 |
+| Round 15: payout lifecycle exercisable without credentials (dev) | simulator branch in `submitPayout` (`SIM-` refs) + synthetic completion via the same poll | DONE | R15 |
 | Unique references per attempt; persisted before async | paymentReference + immediate persistence | DONE | E2 |
 | Callbacks stored durably, acked promptly, idempotent effects | intakeCallback + worker + dedup keys | DONE | E2, E7 |
 | No invented HMAC; server-to-server verification | documented + status-check adapter | DONE | E14 |

@@ -53,6 +53,7 @@ model User {
   reactions           Reaction[]
   notifications       Notification[]
   messageDeliveries   MessageDelivery[]
+  eventReminders      EventReminder[]
   blocksMade          UserBlock[]            @relation("Blocker")
   blocksReceived      UserBlock[]            @relation("Blocked")
   mutesMade           UserMute[]             @relation("Muter")
@@ -294,6 +295,7 @@ model Event {
   livePolls         LivePoll[]
   audienceQuestions AudienceQuestion[]
   reviews           EventReview[]
+  reminders         EventReminder[]
 
   @@index([status, visibility, startsAt])
   @@index([orgId, status])
@@ -837,6 +839,8 @@ model Payout {
   failureReason  String?
   journalId      String?
   reversalJournalId String?
+  statusCheckCount  Int       @default(0) // Send Money status poll bookkeeping (round 15)
+  lastStatusCheckAt DateTime?
   createdAt      DateTime  @default(now())
 
   org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
@@ -1285,4 +1289,22 @@ model EventReview {
 
   @@unique([eventId, userId]) // one editable review per attendee
   @@index([eventId, status])
+}
+
+// ─────────────────────────────── Opt-in event reminders ──────────────────────
+// Round 15: any signed-in fan can ask to be reminded about an upcoming event
+// even without a ticket. The 24 h reminder sweep notifies ticket holders
+// automatically AND these explicit opt-ins (deduplicated per event+user).
+
+model EventReminder {
+  id        String   @id @default(cuid())
+  eventId   String
+  userId    String
+  createdAt DateTime @default(now())
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@index([eventId])
 }

@@ -254,6 +254,26 @@ export async function markPayoutPaid(payoutId: string) {
   await db.settlementHold.updateMany({ where: { orgId: payout.orgId, reason: `Payout ${payout.id} in flight`, releasedAt: null }, data: { releasedAt: new Date() } })
 }
 
+/**
+ * Round 15: organizer-facing notification for automatic payout transitions
+ * (status poll). Used by the worker so the org owner learns the transfer
+ * landed or failed without watching the finance tab.
+ */
+export async function notifyOrgOwnerPayout(payoutId: string, outcome: 'paid' | 'failed') {
+  const payout = await db.payout.findUnique({ where: { id: payoutId }, include: { org: { select: { ownerId: true, name: true } } } })
+  if (!payout?.org) return
+  await notifyUser({
+    userId: payout.org.ownerId,
+    type: outcome === 'paid' ? 'PAYOUT_PAID' : 'PAYOUT_FAILED',
+    title: outcome === 'paid' ? 'Payout landed' : 'Payout failed',
+    body:
+      outcome === 'paid'
+        ? `Your payout of ${(payout.amountMinor / 100).toFixed(2)} ${payout.currency} has been sent to your mobile money wallet.`
+        : `Your payout of ${(payout.amountMinor / 100).toFixed(2)} ${payout.currency} failed at the provider${payout.failureReason ? `: ${payout.failureReason}` : '.'} The funds are back in your available balance — Finance can retry.`,
+    link: '#/organizer?tab=finance',
+  })
+}
+
 export async function failPayout(payoutId: string, reason: string) {
   const payout = await db.payout.findUnique({ where: { id: payoutId } })
   if (!payout || !['SUBMITTED'].includes(payout.status)) throw errors.conflict('Payout is not submitted.')

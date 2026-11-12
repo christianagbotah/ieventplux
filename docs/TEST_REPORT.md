@@ -432,6 +432,29 @@ New capabilities: (1) **Hubtel live-connect path** — platform admins can now s
 
 **Static:** `bun run lint` 0 errors / 17 warnings (baseline); `bunx tsc --noEmit` 0 errors.
 
+## Re-verification round 15 (2026-11-12, payout loop closure + AI trust layer + organizer ops)
+
+New capabilities: (1) **Payout status polling** — `PAYOUT_STATUS_POLL` worker sweep (every 2 min) drives SUBMITTED payouts to a real conclusion through `checkSendMoneyStatus`: SUCCESS marks PAID (hold released, `Payout landed` notification to the org owner), FAILED posts the reversal journal and releases the hold, and a 404/unreachable provider endpoint NEVER produces a verdict — the payout stays SUBMITTED with a `STATUS_ENDPOINT_UNVERIFIED` note and manual confirmation remains available (bounded to 20 checks). The Send Money transaction-status endpoint remains unverified against live docs (re-attempted this round: `developers.hubtel.com/docs/*` redirects to the marketing homepage; the docs portal is behind a login this environment cannot complete), so the parser is deliberately tolerant and the endpoint joins the round-14 one-click probe as the calibration path. The payments simulator now also simulates Send Money (`SIM-` provider refs) so the entire payout lifecycle is exercisable without credentials. (2) **Checkout retry hardening** — stale (>30 min) REDIRECTED/PENDING attempts are marked EXPIRED and re-initiation creates a FRESH attempt instead of replaying a dead checkout URL; the `?cancelled=1` browser return marks the attempt EXPIRED; a late SUCCESS callback still fulfils because `applyProviderOutcome` never gates on attempt status. (3) **AI review digest** — `GET /events/{id}/review-digest` grounded ONLY in VISIBLE reviews, fingerprint-cached (count + average + newest edit) in PlatformSetting, source-labelled (`AI · grounded in the reviews below` vs in-code `Stats summary` fallback when <2 written reviews or LLM down). (4) **AI moderation triage** — `POST /events/{id}/moderation-triage` (org `event:edit`, 6/min): returns verdict chips for recent comments/reviews/questions; every id is validated against fetched rows, verdicts are advisory (nothing auto-hidden), LLM-down yields an honest UNAVAILABLE note. (5) **"Remind me"** — `EventReminder` (65th model) + reminder sweep opt-in pass (ticket holders excluded, per-event dedup marker). (6) **Attendee CSV export** — `GET /events/{id}/export` with audited PII-egress record.
+
+| Case | Outcome | Status |
+|---|---|---|
+| Payout lifecycle (auto close) | admin approve → submit (simulator `SIM-…` ref, SUBMITTED) → wait 45 s → Sweeps/payouts → `paid=1 failed=0` → payout PAID, hold released (`releasedAt` set), org owner received `PAYOUT_PAID` "Payout landed" | ✅ live |
+| Status poll honesty | `checkSendMoneyStatus` 404/405 → `STATUS_ENDPOINT_UNVERIFIED` note, payout stays SUBMITTED (code-verified guard; no verdict invented) | ✅ code-verified |
+| Stale attempt retry | order initiated (attempt 1) → backdate 31 min → re-initiate → attempt 1 EXPIRED ("Checkout session stale — buyer restarted payment"), attempt 2 fresh checkout URL | ✅ live (ORD-71FC09CFE6) |
+| Golden path regression | attempt 2 paid via real callback intake → worker processed → order PAID → 1 VALID ticket issued | ✅ live |
+| Cancelled-return marking | `GET /payments/return/{ref}?cancelled=1` marks REDIRECTED attempt EXPIRED; late SUCCESS callback would still fulfil (applyProviderOutcome has no status gate) | ✅ code-verified |
+| AI review digest | Easter event (3 reviews): summary cites finale/orchestra praise + parking dissent — matches the visible reviews exactly; card labelled `AI · grounded in the reviews below`; regenerates on fingerprint change | ✅ live |
+| AI moderation triage | pastor on LIVE event: "0 of 3 items flagged" — the 3 benign comments correctly NOT flagged; amber advisory card ("nothing was hidden or removed") + toast; LLM-down → honest UNAVAILABLE note | ✅ live |
+| Remind me (attendee) | bell on upcoming event for fan without ticket → click → toast "We will remind you", `EventReminder` row created; second click → "Reminder removed", row gone; ticket holders see no bell | ✅ live (akua) |
+| Attendee CSV export | pastor → Organizer → Attendees → CSV → `sunday-celebration-service-2026-11-15-attendees.csv` with header + real ticket/buyer rows; `event.export-attendees` audit row (`{"rows":2}`); foreign-org event → 403 | ✅ live |
+| Reminder sweep | `REMINDER_SWEEP` detail now reports `reminders=N optins=M`; opt-in pass excludes ticket holders, shares the per-event dedup marker (no double notifications) | ✅ code-verified |
+| Mobile 390×844 + dark | event hero action row (bookmark/heart/calendar/bell/share/flag) wraps cleanly, no overflow; dark mode contrast fine on bell + digest card | ✅ |
+| Console / logs | no runtime errors; reminder/digest/triage/export/payout API calls 200 in dev.log; tsc 0 errors; secret scan clean | ✅ |
+
+**Honest limitations:** the Send Money status endpoint and refund provider path remain unverified against the live provider (docs portal requires login) — both keep honest blocked/manual states until the round-14 probe-style calibration runs with real keys. The payouts verified here ran through the explicitly-labelled dev simulator; no real money moved.
+
+**Static:** `bun run lint` 0 errors / 17 warnings (baseline); `bunx tsc --noEmit` 0 errors.
+
 ## Not performed (honest)
 
 - Native Android/iOS builds and device testing (mobile is a source scaffold).

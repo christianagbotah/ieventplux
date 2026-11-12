@@ -1,10 +1,12 @@
 import { db } from '../../lib/db'
 import { env } from '../env'
 import { sendSms, checkSmsDelivery } from '../hubtel/sms'
+import { checkSendMoneyStatus } from '../hubtel/payments'
 import { processProviderEvent, reconcilePayments } from '../services/payments'
 import { releaseExpiredReservations } from '../services/ordering'
 import { notifyUser } from '../services/notify'
 import { runWaitlistJob } from '../services/waitlist'
+import { markPayoutPaid, failPayout } from '../services/refunds'
 
 /**
  * Background job handlers — executed by the worker mini-service (:3001).
@@ -35,6 +37,9 @@ export async function runJob(type: string, payload: JobPayload): Promise<{ detai
     }
     case 'REMINDER_SWEEP': {
       return { detail: await handleReminders() }
+    }
+    case 'PAYOUT_STATUS_POLL': {
+      return { detail: await handlePayoutStatusPoll() }
     }
     case 'EVENT_LIFECYCLE': {
       return { detail: await handleEventLifecycle() }
@@ -159,9 +164,10 @@ async function handleReminders(): Promise<string> {
   const soon = new Date(now.getTime() + 24 * 3600_000)
   const events = await db.event.findMany({
     where: { status: 'PUBLISHED', startsAt: { gte: now, lte: soon }, deletedAt: null },
-    select: { id: true, title: true, startsAt: true },
+    select: { id: true, title: true, startsAt: true, slug: true },
   })
   let sent = 0
+  let optins = 0
   for (const event of events) {
     const key = `reminder:${event.id}:${event.startsAt.toISOString().slice(0, 10)}`
     const marker = await db.platformSetting.findUnique({ where: { key: `reminder:${key}` } })
@@ -172,9 +178,74 @@ async function handleReminders(): Promise<string> {
       await notifyUser({ userId: t.userId, type: 'REMINDER', title: `Coming up: ${event.title}`, body: 'Your event starts within 24 hours.', link: '#/me?tab=tickets' }).catch(() => {})
       sent += 1
     }
+    // Round 15: explicit "Remind me" opt-ins who do NOT hold a ticket for this
+    // event. Ticket holders were just notified above, so they are excluded here.
+    const holderIds = new Set(tickets.map((t) => t.userId).filter(Boolean) as string[])
+    const optInRows = await db.eventReminder.findMany({ where: { eventId: event.id }, select: { userId: true }, take: 2000 })
+    for (const row of optInRows) {
+      if (holderIds.has(row.userId)) continue
+      await notifyUser({
+        userId: row.userId,
+        type: 'REMINDER',
+        title: `Starting soon: ${event.title}`,
+        body: 'This event starts within 24 hours — grab a ticket while some are left.',
+        link: `#/event/${event.slug}`,
+      }).catch(() => {})
+      optins += 1
+    }
     await db.platformSetting.create({ data: { key: `reminder:${key}`, value: '1' } }).catch(() => {})
   }
-  return `reminders=${sent}`
+  return `reminders=${sent} optins=${optins}`
+}
+
+/**
+ * Round 15: Send Money payout status poll. SUBMITTED payouts are polled
+ * against the provider; SUCCESS marks PAID (hold released), FAILED reverses
+ * the journal and releases the hold, and an unverified/unreachable endpoint
+ * NEVER produces a verdict — the payout stays SUBMITTED with the poll note for
+ * manual confirmation. Bounded to 20 checks per payout, then it stops polling
+ * and stays awaiting manual action (honest, not fake-final).
+ */
+async function handlePayoutStatusPoll(): Promise<string> {
+  const candidates = await db.payout.findMany({
+    where: {
+      status: 'SUBMITTED',
+      providerRef: { not: null },
+      statusCheckCount: { lt: 20 },
+      submittedAt: { lt: new Date(Date.now() - 45_000) },
+    },
+    take: 25,
+  })
+  let paid = 0
+  let failed = 0
+  let pending = 0
+  let blocked = 0
+  for (const payout of candidates) {
+    const ref = payout.providerRef as string
+    const result = await checkSendMoneyStatus(ref)
+    await db.payout.update({
+      where: { id: payout.id },
+      data: { statusCheckCount: { increment: 1 }, lastStatusCheckAt: new Date() },
+    })
+    if (result.ok && result.outcome === 'SUCCESS') {
+      await markPayoutPaid(payout.id)
+      const { notifyOrgOwnerPayout } = await import('../services/refunds')
+      await notifyOrgOwnerPayout(payout.id, 'paid').catch(() => {})
+      paid += 1
+    } else if (result.ok && result.outcome === 'FAILED') {
+      await failPayout(payout.id, result.detail?.slice(0, 300) ?? 'Provider reported transfer failure')
+      const { notifyOrgOwnerPayout } = await import('../services/refunds')
+      await notifyOrgOwnerPayout(payout.id, 'failed').catch(() => {})
+      failed += 1
+    } else if (result.ok) {
+      pending += 1
+    } else {
+      // Unknown — record the poll note but never a verdict; manual confirm remains.
+      await db.payout.update({ where: { id: payout.id }, data: { failureReason: result.detail?.slice(0, 300) } })
+      blocked += 1
+    }
+  }
+  return `checked=${candidates.length} paid=${paid} failed=${failed} pending=${pending} blocked=${blocked}`
 }
 
 async function handleEventLifecycle(): Promise<string> {
@@ -204,7 +275,7 @@ async function handleEventLifecycle(): Promise<string> {
 }
 
 /** Direct invocation helper for admin "run now" controls. */
-export async function sweepOnce(sweep: 'reconcile' | 'reservations' | 'reminders' | 'lifecycle' | 'sms') {
+export async function sweepOnce(sweep: 'reconcile' | 'reservations' | 'reminders' | 'lifecycle' | 'sms' | 'payouts') {
   switch (sweep) {
     case 'reconcile':
       return reconcilePayments()
@@ -216,5 +287,7 @@ export async function sweepOnce(sweep: 'reconcile' | 'reservations' | 'reminders
       return { detail: await handleEventLifecycle() }
     case 'sms':
       return { detail: await handleSmsStatusPoll() }
+    case 'payouts':
+      return { detail: await handlePayoutStatusPoll() }
   }
 }

@@ -13,6 +13,16 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ reference: 
   const { reference } = await ctx.params
   const cancelled = new URL(req.url).searchParams.get('cancelled') === '1'
   const attempt = await db.paymentAttempt.findUnique({ where: { reference }, include: { order: true } }).catch(() => null)
+  if (attempt && cancelled && ['REDIRECTED', 'INITIATED', 'PENDING'].includes(attempt.status)) {
+    // Round 15: the buyer explicitly abandoned checkout at the provider. The
+    // attempt is marked EXPIRED so a later "Try payment again" starts a FRESH
+    // session instead of replaying the dead URL. This is still informational
+    // for money: a late SUCCESS callback fulfils normally (applyProviderOutcome
+    // never gates on attempt status), so a mis-tapped cancel cannot lose a payment.
+    await db.paymentAttempt
+      .update({ where: { id: attempt.id }, data: { status: 'EXPIRED', failureReason: 'Buyer cancelled checkout at the provider' } })
+      .catch(() => {})
+  }
   const target = attempt?.order
     ? `/#/order/${attempt.order.reference}?payment=return&cancelled=${cancelled ? '1' : '0'}`
     : `/#/me?tab=orders&payment=return&unknown=1`

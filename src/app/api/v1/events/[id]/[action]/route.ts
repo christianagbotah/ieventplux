@@ -56,6 +56,23 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
       return jsonOk({ ...status, entries })
     }
 
+    // ── Round 15: "Remind me" opt-in state (signed-in fans without a ticket) ─
+    if (action === 'reminder') {
+      const event = await db.event.findUnique({ where: { id } })
+      if (!event || event.deletedAt) throw errors.notFound('Event not found.')
+      const session = await (await import('@/server/auth')).getSession()
+      if (!session) return jsonOk({ active: false, holdingTicket: false, upcoming: event.startsAt > new Date() && !['CANCELLED', 'ENDED', 'POSTPONED'].includes(event.status) })
+      const [row, ticket] = await Promise.all([
+        db.eventReminder.findUnique({ where: { eventId_userId: { eventId: event.id, userId: session.user.id } } }),
+        db.ticket.findFirst({ where: { userId: session.user.id, eventId: event.id, status: { in: ['VALID', 'CHECKED_IN'] } }, select: { id: true } }),
+      ])
+      return jsonOk({
+        active: Boolean(row),
+        holdingTicket: Boolean(ticket),
+        upcoming: event.startsAt > new Date() && !['CANCELLED', 'ENDED', 'POSTPONED'].includes(event.status),
+      })
+    }
+
     if (action === 'ics') {
       const event = await db.event.findUnique({ where: { id }, include: { venue: true, org: { select: { name: true } } } })
       if (!event || event.deletedAt) throw errors.notFound('Event not found.')
@@ -201,6 +218,55 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
       return jsonOk({ items })
     }
 
+    // ── Round 15: attendee CSV export (org-only, audited PII egress) ────────
+    if (action === 'export') {
+      const user = await requireUser()
+      const access = await eventOrgAccess(user.id, id, 'attendees:view')
+      if (!access.event) throw errors.notFound('Event not found.')
+      if (!access.allowed) throw errors.forbidden('Attendee exports are restricted to the event organization.')
+      const eventRow = await db.event.findUnique({ where: { id }, select: { slug: true } })
+      const tickets = await db.ticket.findMany({
+        where: { eventId: id },
+        include: {
+          ticketType: { select: { name: true } },
+          order: { select: { reference: true, status: true, buyerName: true, buyerEmail: true, buyerPhone: true, totalMinor: true, currency: true, createdAt: true } },
+        },
+        orderBy: { issuedAt: 'asc' },
+        take: 5000,
+      })
+      const esc = (v: unknown) => {
+        const s = v === null || v === undefined ? '' : String(v)
+        return /[",\n;]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+      }
+      const header = ['ticket_code', 'holder_name', 'ticket_type', 'ticket_status', 'checked_in_at', 'issued_at', 'order_reference', 'order_status', 'buyer_name', 'buyer_email', 'buyer_phone', 'order_total_minor', 'currency', 'order_placed_at']
+      const lines = [header.join(',')]
+      for (const t of tickets) {
+        const o = t.order
+        lines.push([
+          t.code, t.holderName, t.ticketType.name, t.status, t.checkedInAt?.toISOString() ?? '', t.issuedAt.toISOString(),
+          o?.reference ?? '', o?.status ?? '', o?.buyerName ?? '', o?.buyerEmail ?? '', o?.buyerPhone ?? '',
+          o?.totalMinor ?? '', o?.currency ?? '', o?.createdAt.toISOString() ?? '',
+        ].map(esc).join(','))
+      }
+      const { audit } = await import('@/server/audit')
+      await audit({ actorUserId: user.id, actorLabel: user.email, action: 'event.export-attendees', entityType: 'Event', entityId: id, after: { rows: tickets.length } })
+      return new NextResponse(lines.join('\r\n'), {
+        headers: {
+          'Content-Type': 'text/csv; charset=utf-8',
+          'Content-Disposition': `attachment; filename="${eventRow?.slug ?? 'event'}-attendees.csv"`,
+          'Cache-Control': 'no-store',
+        },
+      })
+    }
+
+    // ── Round 15: AI review digest (public, DB-cached, honest fallback) ────
+    if (action === 'review-digest') {
+      const event = await db.event.findUnique({ where: { id }, select: { id: true, deletedAt: true } })
+      if (!event || event.deletedAt) throw errors.notFound('Event not found.')
+      const { reviewDigest } = await import('@/server/services/aiDigest')
+      return jsonOk(await reviewDigest(id))
+    }
+
     void url
     throw errors.notFound(`Unknown event sub-resource '${action}'.`)
   })
@@ -232,6 +298,40 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
       const { leaveWaitlist } = await import('@/server/services/waitlist')
       await leaveWaitlist(id, { userId: session?.user.id ?? null, contact: body.contact ? String(body.contact) : undefined })
       return jsonOk({ left: true })
+    }
+
+    // ── Round 15: AI moderation triage (organizer decision support) ─────────
+    if (action === 'moderation-triage') {
+      rateLimit(req, 'moderation-triage', 6, 60_000)
+      const user = await requireUser()
+      const access = await eventOrgAccess(user.id, id, 'event:edit')
+      if (!access.event) throw errors.notFound('Event not found.')
+      if (!access.allowed) throw errors.forbidden('Moderation tools are restricted to the event organization.')
+      const { moderationTriage } = await import('@/server/services/aiTriage')
+      return jsonOk(await moderationTriage(id))
+    }
+
+    // ── Round 15: "Remind me" set / cancel ─────────────────────────────────
+    if (action === 'reminder') {
+      rateLimit(req, 'reminder-set', 20, 60_000)
+      const user = await requireUser()
+      const event = await db.event.findUnique({ where: { id } })
+      if (!event || event.deletedAt) throw errors.notFound('Event not found.')
+      if (['CANCELLED', 'ENDED', 'POSTPONED'].includes(event.status) || event.startsAt <= new Date()) {
+        throw errors.conflict('Reminders are only available for upcoming events.')
+      }
+      await db.eventReminder.upsert({
+        where: { eventId_userId: { eventId: event.id, userId: user.id } },
+        update: {},
+        create: { eventId: event.id, userId: user.id },
+      })
+      return jsonOk({ active: true })
+    }
+
+    if (action === 'reminder-cancel') {
+      const user = await requireUser()
+      await db.eventReminder.deleteMany({ where: { eventId: id, userId: user.id } })
+      return jsonOk({ active: false })
     }
 
     const user = await requireUser()
