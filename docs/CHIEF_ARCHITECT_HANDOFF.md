@@ -139,5 +139,6 @@ This is a **working, end-to-end development build** of the full product surface 
 | Live video (Cloudflare Stream) | ✅ entitlements · ⛔ delivery blocked → labelled synthetic |
 | Mobile (Expo source) | ⚠️ scaffold, not device-tested |
 | Tests | ⚠️ scripted verification (E1–E14); automated suite deferred |
+| Offline ticket wallet + service worker | ✅ opened tickets scannable offline (localStorage + conservative SW v2, round 13); full offline shell boot best-effort |
 | Docs | ✅ full suite incl. traceability, test report, deployment, this handoff |
 | Git | ✅ `main` pushed to `github.com/christianagbotah/ieventplux` (PAT outside repo) |
