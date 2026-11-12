@@ -15,6 +15,7 @@ import { navigate, type Route } from '../router'
 import { EventCard, EventCardSkeleton, EmptyState, type EventCardData } from '../components/EventCard'
 import { AiSearchPanel } from '../components/AiSearchPanel'
 import { ForYouRail } from '../components/ForYouRail'
+import { PlannerPanel } from '../components/PlannerPanel'
 import { usePortal } from '../store'
 
 interface Category {
@@ -29,6 +30,7 @@ interface HomePayload {
   upcoming: EventCardData[]
   liveNow: EventCardData[]
   categories: Category[]
+  cities: string[]
   sponsored: { campaignId: string; event: EventCardData; sponsored: boolean }[]
   stats: { upcomingEvents: number; organizers: number; liveNow: number }
 }
@@ -117,6 +119,7 @@ export default function Discover({ route }: { route: Route }) {
 
   const [filters, setFilters] = useState({ ...EMPTY_FILTERS, q: searchQuery })
   const [filtersOpen, setFiltersOpen] = useState(false)
+  const [plannerOpen, setPlannerOpen] = useState(false)
 
   useEffect(() => {
     setFilters((f) => ({ ...f, q: searchQuery }))
@@ -216,6 +219,9 @@ export default function Discover({ route }: { route: Route }) {
                     {primaryEvent ? 'View featured event' : 'Browse all events'}
                     <ArrowRight className="h-4 w-4" aria-hidden />
                   </button>
+                  <Button size="lg" variant="outline" className="rounded-full bg-card/70 ievx-press" onClick={() => setPlannerOpen(true)}>
+                    <CalendarCheck className="mr-2 h-4 w-4" aria-hidden /> Plan my weekend
+                  </Button>
                   <Button size="lg" variant="outline" className="rounded-full bg-card/70 ievx-press" onClick={() => document.getElementById('ai-search')?.scrollIntoView({ behavior: 'smooth' })}>
                     <Wand2 className="mr-2 h-4 w-4" aria-hidden /> Ask AI to find events
                   </Button>
@@ -580,6 +586,14 @@ export default function Discover({ route }: { route: Route }) {
           </>
         )}
       </div>
+
+      {/* AI weekend planner — day-by-day itinerary from the live catalogue */}
+      <PlannerPanel
+        open={plannerOpen}
+        onOpenChange={setPlannerOpen}
+        cities={home?.cities ?? []}
+        categories={(home?.categories ?? []).map((c) => ({ slug: c.slug, name: c.name }))}
+      />
     </div>
   )
 }

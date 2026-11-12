@@ -249,6 +249,32 @@ Every portal view was re-skinned using the studio's own `efx-*` catalog (38 effe
 | `bun run lint` / `bunx tsc --noEmit` | 0 errors / 0 errors (16 warnings — down from 34 baseline) | ✅ |
 
 
+## Re-verification round 7 (2026-11-12, AI weekend planner)
+
+New capability: `POST /api/v1/ai/planner` — the last planned advanced-AI feature. A window + city + party size + budget + interests becomes a day-by-day itinerary built **only** from real catalogue events (every LLM pick is validated against the database and re-bucketed onto the event's true date; the LLM's claimed dates are never trusted). Anonymous-accessible, rate-limited 8/min, honest degradation to a demand-ranked schedule if the LLM fails.
+
+| Case | Outcome | Status |
+|---|---|---|
+| `POST /ai/planner {window: NEXT_7_DAYS, partySize: 2, budgetMinor: 30000}` | 3-day plan (Sun 15 / Mon 16 / Wed 18 Nov) of real seeded events with per-pick reasons, real times/prices; summary honest ("A spiritual and creative journey through Accra and Tema…") | ✅ |
+| City filter (`city: Tema`) | Only Tema events returned (Youth Creative Arts Workshop) — filter applies server-side on the real where-clause | ✅ |
+| Budget respect | With ₵300 budget the LLM picked free/cheap events (est total ₵0–4); with an absurd ₵1 budget/4 people → honest note "Estimated ₵4.00 for 4 — above your ₵1.00 budget. Swap a pick or trim the party." | ✅ |
+| Sold-out honesty | Sold-out pick carries a "Sold out · waitlist" chip + the LLM was instructed (and observed) to mention the waitlist in its reason | ✅ |
+| Empty catalogue (city: Kumasi) | `{empty: true, days: []}` + honest summary "No events are on the catalogue for this weekend in Kumasi yet." — no fabricated events | ✅ |
+| Rate limit | 9 rapid calls → first N=8 `200`, then `429` (in-memory per-IP, 60s window) | ✅ |
+| Budget math integrity | `estPerPersonMinor` = Σ cheapest live ticket per pick; `estTotalMinor` = × partySize — computed server-side from real ticketTypes, never from LLM output | ✅ |
+
+**Browser evidence (agent-browser):**
+- Discover hero: new "Plan my weekend" CTA (between the featured-event CTA and "Ask AI to find events").
+- Planner sheet (desktop 1280×800 + mobile 390×844): aurora hero + animated-gradient headline, window chips, city select fed by new `GET /discovery/home` → `cities: [Accra, Tema]`, party stepper, floating-label budget input, interest chips (10 real categories), shine-sweep "Build my plan" CTA.
+- Full build run (desktop): Next 7 days + party 3 + ₵50 budget + music/ministry interests → summary callout, striped budget bar "Est. ₵3.00 for 3 people · Budget ₵50.00" (within budget, emerald; amber variant + note when over), day groups with gradient day labels, pick cards with time range/city/price/AI reason, "Sold out · waitlist" chip, click-through navigates to the real event page (`#/event/sunday-celebration-service-2026-11-15`).
+- "Download plan (.ics)" → client-side RFC-5545 VCALENDAR from the real event times (escaping verified by code inspection) + toast "Calendar file ready"; no page errors.
+- Loading state: dual-ring loader with labelled status; result region `aria-live="polite"`.
+- VLM screenshot review (mobile + desktop): "clean and professional… no overlapping elements and no cut-off text… elegant" — two fixable nits found and fixed during the pass (hero kicker wrapped at 390px → shortened; hard aurora edge against the sheet body → soft gradient transition; low-contrast close over dark hero → glass pill styling).
+- Zero console errors; `prefers-reduced-motion` respected (catalog effects ship fallbacks; count-up/aurora already guarded).
+
+**Static:** `bun run lint` 0 errors / 17 warnings (baseline); `bunx tsc --noEmit` 0 errors.
+
+
 ## Not performed (honest)
 
 - Native Android/iOS builds and device testing (mobile is a source scaffold).

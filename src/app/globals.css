@@ -175,6 +175,27 @@
 }
 .dark .efx-floating-label-input__label { color: oklch(0.68 0.01 170); }
 
+.dark .efx-progress-stripes-loader__track {
+  background: oklch(0.28 0.01 170);
+  box-shadow: inset 0 1px 3px oklch(0 0 0 / 30%);
+}
+.dark .efx-progress-stripes-loader__meta { color: oklch(0.72 0.01 170); }
+
+/* Planner sheet: the built-in close button floats over the dark aurora hero — keep it legible. */
+.planner-sheet > button {
+  z-index: 5;
+  padding: 0.5rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: rgba(3, 26, 21, 0.5);
+  color: #ffffff;
+  backdrop-filter: blur(4px);
+}
+.planner-sheet > button:hover {
+  background: rgba(3, 26, 21, 0.72);
+  opacity: 1;
+}
+
 .dark .efx-underline-slide-link { color: oklch(0.9 0.01 170); }
 .dark .efx-underline-slide-link:hover { color: #34d399; }
 

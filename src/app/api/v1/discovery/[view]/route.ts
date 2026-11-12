@@ -15,7 +15,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ view: strin
     const now = new Date()
 
     if (view === 'home') {
-      const [featured, upcoming, liveNow, categories, sponsored, stats] = await Promise.all([
+      const [featured, upcoming, liveNow, categories, sponsored, stats, cityRows] = await Promise.all([
         db.event.findMany({ where: { ...PUBLIC_EVENT_WHERE, isFeatured: true, startsAt: { gte: now } }, orderBy: { startsAt: 'asc' }, take: 6,
           select: { id: true, slug: true, title: true, summary: true, coverImageUrl: true, startsAt: true, city: true, mode: true, categorySlug: true, ticketTypes: { select: { priceMinor: true, quota: true, soldCount: true }, where: { active: true } }, org: { select: { name: true, slug: true } } } }),
         db.event.findMany({ where: { ...PUBLIC_EVENT_WHERE, startsAt: { gte: now } }, orderBy: { startsAt: 'asc' }, take: 12,
@@ -29,12 +29,14 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ view: strin
           db.organization.count({ where: { status: 'ACTIVE', deletedAt: null } }),
           db.event.count({ where: { ...PUBLIC_EVENT_WHERE, status: 'LIVE' } }),
         ]),
+        db.event.findMany({ where: { ...PUBLIC_EVENT_WHERE, startsAt: { gte: now }, city: { not: null } }, distinct: ['city'], select: { city: true }, take: 20 }),
       ])
       return jsonOk({
         featured,
         upcoming,
         liveNow,
         categories,
+        cities: cityRows.map((c) => c.city).filter((c): c is string => Boolean(c)),
         sponsored: sponsored.map((s) => ({
           campaignId: s.campaignId,
           event: { id: s.event.id, slug: s.event.slug, title: s.event.title, summary: s.event.summary, coverImageUrl: s.event.coverImageUrl, startsAt: s.event.startsAt, city: s.event.city, org: { name: s.event.org.name } },

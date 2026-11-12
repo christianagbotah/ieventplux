@@ -10,6 +10,7 @@ import { PUBLIC_EVENT_WHERE, buildDiscoveryWhere } from '@/server/services/event
  *  POST /api/v1/ai/chat        { message, conversationId? }        → concierge reply with REAL event context
  *  POST /api/v1/ai/voice       (multipart: audio)                  → ASR → LLM (DB context) → TTS turn
  *  POST /api/v1/ai/search      { query }                           → natural language → validated filters → REAL DB results
+ *  POST /api/v1/ai/planner     { window, city?, budgetMinor?, partySize?, interests?[] } → day-by-day itinerary from REAL events + honest budget math
  *  POST /api/v1/ai/recommend   {}                                  → history-based picks (LLM) with honest trending fallback
  *  POST /api/v1/ai/studio      { kind, ... }                       → organizer copywriting + poster image generation
  * The z-ai-web-dev-sdk runs server-side only. No fabricated catalogue data: every filter is
@@ -287,6 +288,157 @@ async function runRecommendations(userId: string) {
   }
 }
 
+// ── AI planner: day-by-day itinerary from REAL catalogue events ──────────────
+
+interface PlannerWindow { start: Date; end: Date; label: string }
+
+function plannerWindow(kind: string, now: Date): PlannerWindow {
+  if (kind === 'NEXT_7_DAYS') {
+    return { start: now, end: new Date(now.getTime() + 7 * 86400_000), label: 'The next 7 days' }
+  }
+  const sat = new Date(now)
+  const daysToSat = (6 - sat.getDay() + 7) % 7
+  sat.setDate(sat.getDate() + daysToSat)
+  sat.setHours(0, 0, 0, 0)
+  if (kind === 'NEXT_WEEKEND') sat.setDate(sat.getDate() + 7)
+  return { start: sat, end: new Date(sat.getTime() + 2 * 86400_000), label: kind === 'NEXT_WEEKEND' ? 'Next weekend' : 'This weekend' }
+}
+
+function dayKey(d: Date): string {
+  return d.toISOString().slice(0, 10)
+}
+
+async function runPlanner(body: Record<string, unknown>) {
+  const now = new Date()
+  const kind = ['THIS_WEEKEND', 'NEXT_WEEKEND', 'NEXT_7_DAYS'].includes(String(body.window)) ? String(body.window) : 'THIS_WEEKEND'
+  const win = plannerWindow(kind, now)
+  const city = typeof body.city === 'string' && body.city.trim() ? sanitizeText(body.city, 60) : undefined
+  const rawBudget = Number(body.budgetMinor)
+  const budgetMinor = Number.isFinite(rawBudget) && rawBudget > 0 ? Math.min(Math.round(rawBudget), 100_000_00) : null
+  const rawParty = Number(body.partySize)
+  const partySize = Number.isFinite(rawParty) && rawParty >= 1 ? Math.min(Math.round(rawParty), 12) : 1
+  const interests = Array.isArray(body.interests)
+    ? body.interests.filter((i) => typeof i === 'string').map((i) => sanitizeText(i as string, 40)).filter(Boolean).slice(0, 4)
+    : []
+
+  const where: Record<string, unknown> = {
+    ...PUBLIC_EVENT_WHERE,
+    status: { in: ['PUBLISHED', 'LIVE'] },
+    startsAt: { gte: new Date(Math.max(now.getTime(), win.start.getTime())), lte: win.end },
+  }
+  if (city) where.city = { contains: city }
+
+  const candidates = await db.event.findMany({ where, orderBy: { startsAt: 'asc' }, take: 40, select: eventCardSelect })
+  if (candidates.length === 0) {
+    return {
+      summary: `No events are on the catalogue for ${win.label.toLowerCase()}${city ? ` in ${city}` : ''} yet.`,
+      degraded: false, note: null, budgetNote: null,
+      window: { kind, label: win.label, start: win.start.toISOString(), end: win.end.toISOString() },
+      partySize, budgetMinor, estPerPersonMinor: 0, estTotalMinor: 0, days: [], empty: true,
+    }
+  }
+
+  // Per-candidate real signals: cheapest active ticket + honest availability.
+  const info = candidates.map((e) => {
+    const prices = e.ticketTypes.map((t) => t.priceMinor)
+    const estMinor = prices.length ? Math.min(...prices) : 0
+    let quota = 0
+    let sold = 0
+    for (const t of e.ticketTypes) {
+      if (t.quota && t.quota > 0) {
+        quota += t.quota
+        sold += Math.min(t.soldCount ?? 0, t.quota)
+      }
+    }
+    return { e, estMinor, soldOut: quota > 0 && sold >= quota, soldTotal: sold }
+  })
+
+  interface PlanPick { event: (typeof candidates)[number]; reason: string; estMinor: number; soldOut: boolean }
+  const byId = new Map(info.map((i) => [i.e.id, i]))
+  const days = new Map<string, PlanPick[]>()
+  const seen = new Set<string>()
+  const addPick = (item: { e: (typeof candidates)[number]; estMinor: number; soldOut: boolean }, reason: string) => {
+    if (seen.has(item.e.id)) return
+    seen.add(item.e.id)
+    const key = dayKey(item.e.startsAt)
+    const list = days.get(key) ?? []
+    list.push({ event: item.e, reason, estMinor: item.estMinor, soldOut: item.soldOut })
+    days.set(key, list)
+  }
+
+  let summary = ''
+  let degraded = false
+  let note: string | null = null
+
+  try {
+    const system = [
+      'You are the iEventPlux planner for events in Ghana (currency: Ghana cedis, ₵). Build a day-by-day itinerary using ONLY the listed events.',
+      `Today is ${now.toUTCString()}. The plan covers ${win.label} (${win.start.toUTCString()} to ${win.end.toUTCString()}).`,
+      'Respond with ONLY JSON: {"summary": string, "days": [{"date": "YYYY-MM-DD", "picks": [{"id": string, "reason": string}]}]}',
+      'Rules: 1-3 picks per day (a day may be skipped if nothing fits). Picks must be chronological within each day. reason = max 100 chars, warm and specific to that event.',
+      'Prefer events matching the stated interests and city. Prefer events with availability; only plan a sold-out event if it is the clear best fit and mention its waitlist in the reason.',
+      budgetMinor
+        ? `Total ticket cost (listed price x ${partySize} ${partySize === 1 ? 'person' : 'people'}) must stay within ${formatMoney(budgetMinor)} when possible.`
+        : `Party size: ${partySize} ${partySize === 1 ? 'person' : 'people'}.`,
+      interests.length ? `Stated interests: ${interests.join(', ')}.` : '',
+      'summary = one friendly sentence (max 140 chars) framing the plan. Never invent events, prices or ids.',
+    ].filter(Boolean).join('\n')
+
+    const candidateLines = info.map((i) => {
+      const priceLine = i.e.ticketTypes.length === 0 ? 'no ticket info' : i.estMinor === 0 ? 'Free' : `costs ${formatMoney(i.estMinor)} each`
+      const availability = i.soldOut ? 'SOLD OUT (waitlist open)' : 'tickets available'
+      return `- id=${i.e.id} | "${i.e.title}" | cat=${i.e.categorySlug} | ${i.e.city ?? 'online'} | ${i.e.mode.toLowerCase()} | ${i.e.startsAt.toUTCString()} | ${priceLine} | ${availability}`
+    })
+    const parsed = await llmJson<{ summary?: string; days?: { date?: string; picks?: { id?: string; reason?: string }[] }[] }>(system, candidateLines.join('\n'))
+    summary = String(parsed.summary ?? '').slice(0, 160)
+    for (const day of parsed.days ?? []) {
+      for (const pick of (day.picks ?? []).slice(0, 4)) {
+        const match = typeof pick.id === 'string' ? byId.get(pick.id) : undefined
+        if (!match) continue
+        addPick(match, String(pick.reason ?? '').slice(0, 120))
+      }
+    }
+  } catch {
+    degraded = true
+    note = 'AI planning was unavailable — this is a demand-ranked schedule straight from the live catalogue.'
+  }
+
+  // Honest fallback: popularity (real soldCount) ranking, never fake personalization.
+  if (days.size === 0) {
+    degraded = true
+    note = note ?? 'Demand-ranked schedule from the live catalogue.'
+    const ranked = [...info].sort((a, b) => b.soldTotal - a.soldTotal || a.e.startsAt.getTime() - b.e.startsAt.getTime())
+    for (const item of ranked) {
+      const key = dayKey(item.e.startsAt)
+      const list = days.get(key) ?? []
+      if (list.length >= 2) continue
+      list.push({ event: item.e, reason: item.soldTotal > 0 ? 'Highest-demand pick for this day.' : 'A solid pick for this day.', estMinor: item.estMinor, soldOut: item.soldOut })
+      days.set(key, list)
+    }
+  }
+  if (!summary) summary = `A ${win.label.toLowerCase()} plan from ${candidates.length} live event${candidates.length !== 1 ? 's' : ''}${city ? ` in ${city}` : ''}.`
+
+  // Cap picks per day (LLM may over-fill) and order chronologically.
+  const dayList = [...days.entries()]
+    .map(([date, picks]) => ({ date, picks: picks.slice(0, 3).sort((a, b) => new Date(a.event.startsAt).getTime() - new Date(b.event.startsAt).getTime()) }))
+    .sort((a, b) => (a.date < b.date ? -1 : 1))
+
+  const allPicks = dayList.flatMap((d) => d.picks)
+  const estPerPersonMinor = allPicks.reduce((s, p) => s + p.estMinor, 0)
+  const estTotalMinor = estPerPersonMinor * partySize
+  let budgetNote: string | null = null
+  if (budgetMinor && estTotalMinor > budgetMinor) {
+    budgetNote = `Estimated ${formatMoney(estTotalMinor)} for ${partySize} — above your ${formatMoney(budgetMinor)} budget. Swap a pick or trim the party.`
+  }
+
+  return {
+    summary, degraded, note, budgetNote,
+    window: { kind, label: win.label, start: win.start.toISOString(), end: win.end.toISOString() },
+    partySize, budgetMinor, estPerPersonMinor, estTotalMinor,
+    days: dayList, empty: dayList.length === 0,
+  }
+}
+
 // ── AI studio: organizer copywriting + poster generation ─────────────────────
 
 async function runStudio(userId: string, body: Record<string, unknown>) {
@@ -376,6 +528,13 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
       const query = sanitizeText(body.query, 300)
       if (query.length < 3) throw errors.badRequest('Describe what you are looking for (at least 3 characters).')
       const result = await runSmartSearch(query)
+      return jsonOk(result)
+    }
+
+    if (mode === 'planner') {
+      rateLimit(req, 'ai-planner', 8, 60_000)
+      const body = await readJson<Record<string, unknown>>(req)
+      const result = await runPlanner(body)
       return jsonOk(result)
     }
 

@@ -69,6 +69,15 @@ None open. (`bun run lint`: 0 errors / warnings only. `bunx tsc --noEmit`: 0 err
 - **Defects fixed:** (1) the "New event" button could never open the editor (render gate bug, pre-existing); (2) hash-router hydration mismatch on every deep-link load — `useRoute()` now hydrates at `/` and resolves the real hash post-mount, eliminating the console error and double-render platform-wide.
 - Verification: `docs/TEST_REPORT.md` → "Re-verification round 6"; lint 0 errors / 17 warnings (intentional mount-sync); tsc 0 errors.
 
+## Round 7 — AI weekend planner (2026-11-12)
+
+- **`POST /api/v1/ai/planner` (anonymous, 8/min):** window (this weekend / next weekend / next 7 days) + city + party size (1–12) + budget + up to 3 interests → day-by-day itinerary. Candidates come from the real public catalogue (`PUBLISHED|LIVE`, window-clipped, optional city filter, take 40); every LLM pick is validated against the DB and **re-bucketed onto the event's true date** — the model's claimed dates are never trusted, invalid ids are dropped, ids deduped, picks capped at 3/day, ordered chronologically.
+- **Honest budget math (server-side, never LLM):** per-pick estimate = cheapest active ticket; total = Σ × partySize. Over-budget plans survive with an explicit note ("swap a pick or trim the party"). Sold-out picks keep a "Sold out · waitlist" chip — waitlist-first honesty carried into the planner.
+- **Honest degradation:** LLM failure/invalid JSON → demand-ranked fallback (real soldCount) with a labelled amber note; empty windows/cities return `{empty:true}` with a truthful summary — zero fabricated events anywhere.
+- **Planner UI (Discover hero "Plan my weekend" CTA → sheet):** aurora stage + gradient headline + new short kicker, window chips, city select fed by `GET /discovery/home` (now also returns real `cities`), party stepper, floating-label budget input, interest chips from live categories, shine-sweep CTA; result renders summary callout, striped budget bar (emerald within / amber over budget), gradient day labels, pick cards (time range, city, real price, AI reason, waitlist chip) that navigate to the real event, and a **client-side RFC-5545 .ics download** of the whole plan with escaped text + real DTSTART/DTEND.
+- **Polish loop via VLM screenshot review:** fixed hero kicker wrap at 390px, hard aurora-to-body edge (soft gradient transition), low-contrast close button over the dark hero (glass pill, themed for both modes).
+- Verification: `docs/TEST_REPORT.md` → "Re-verification round 7" (API matrix + budget/city/rate-limit/empty cases + desktop & mobile browser runs + VLM design review); lint 0 errors / 17 warnings; tsc 0 errors.
+
 ## External blockers
 
 Hubtel checkout/Send Money/SMS credentials + merchant agreement; Cloudflare Stream credentials; SMTP relay; Apple/Google store accounts. All truthfully surfaced at `/api/v1/health` and Admin → Integrations. ~~git remote~~ **resolved 2026-11-11:** remote `github.com/christianagbotah/ieventplux` configured and pushed (`main`, upstream tracking set; every verified milestone is now committed and pushed).
