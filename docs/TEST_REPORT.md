@@ -474,6 +474,26 @@ Trigger: user-submitted screenshot of the organizer workspace header showing ove
 
 **Static:** `bun run lint` 0 errors / 17 warnings (baseline); `bunx tsc --noEmit` 0 errors.
 
+## Re-verification round 17 (2026-11-13, user-reported hydration mismatch)
+
+Trigger: user-submitted console error — React 19 hydration attribute mismatch on radix `useId` values (`radix-_R_18jatplb_` vs `radix-_R_52eatplb_` on the theme-toggle trigger; `radix-_R_8atplbH1_` vs `radix-_R_12atplbH1_` on the command-palette `DialogTitle`), with a browser-extension frame in the stack. Diagnosis was evidence-first: the reported server-side ids were compared against the current SSR HTML before any code was touched.
+
+| Case | Outcome | Status |
+|---|---|---|
+| Clean-browser reproduction (no extensions, fresh SW) | Zero console errors, zero hydration warnings; live DOM radix ids byte-identical to fresh SSR HTML (`radix-_R_52eatplb_`) — the current build hydrates correctly; the reported error does not reproduce in the current state | ✅ live |
+| Root cause of the user's report | Reported server ids (`52eatplb`, `12atplbH1/H2`) match today's SSR output exactly; the reported client ids (`18jatplb`, `8atplbH1`) are a different tree = previous-build chunks. Mechanism: the SW **v2→v3 handoff load** — v2 still controlled and served its cache-first dev chunks (the round-16 defect class) against fresh HTML from the new build → attribute-only `useId` mismatch. v3 activation purges v2 caches; after one reload the browser is on v3 (dev chunks never cached) | ✅ evidence-pinned |
+| Takeover self-healing (future handoffs) | `controllerchange` listener moved to module scope in `ConnectionStatus` (attaches when the chunk evaluates — before hydration completes; the previous effect-attached listener could miss a fast `skipWaiting()` takeover and strand the mismatched load); exactly one reload, gated on `hadController` so a first install in a fresh browser is a no-op | ✅ code + live no-spurious-reload |
+| Hydration surface | `CommandDialog` sr-only title/description moved inside `DialogContent` (shadcn placement); closed-dialog SSR HTML now emits **one** radix id (was three) — curl-diff verified; palette opens with the title inside the content (a11y tree: heading level 2) | ✅ live |
+| Command palette round-trip | ⌘K opens; "Live now" command navigates to `#/live`; dialog closes on select | ✅ live |
+| Theme round-trip | Dropdown → Dark (`dark` class applied) → Light (removed); reload after the round-trip hydrates clean (zero errors, zero mismatch lines) | ✅ live |
+| `allowedDevOrigins` | Asset request with `Origin: https://preview-chat-….space-z.ai` → HTTP 200, no cross-origin warning logged (previously every such request warned) | ✅ live |
+| SW state | Single `activated` controller; caches exactly `ievp-v3-shell \| ievp-v3-assets \| ievp-v3-api` — no v2 leftovers | ✅ live |
+| Mobile 390×844 | No horizontal overflow, no console errors; screenshot archived (`docs-assets/round17-mobile.png`) | ✅ live |
+
+**Honest limitations:** the v2→v3 handoff load itself cannot be retro-fixed for a browser already holding v2 — the old (v2-cached) chunk code is what runs during that load; such a browser needs one manual reload, after which v3 guarantees chunk freshness. The browser extension visible in the user's stack cannot recompute React `useId` values and was ruled out as the cause (extensions can only add DOM noise, which React reports separately). The `hadController`-gated reload was verified by code review plus live no-reload-loop behaviour across the session; an actual simulated v3→v4 handoff was not executed this round. The user was advised to regenerate the GitHub PAT (shared in plaintext chat) even though it is stored outside the repo and no tracked file contains it.
+
+**Static:** `bun run lint` 0 errors / 17 warnings (baseline); `bunx tsc --noEmit` 0 errors; secret scan clean.
+
 ## Not performed (honest)
 
 - Native Android/iOS builds and device testing (mobile is a source scaffold).

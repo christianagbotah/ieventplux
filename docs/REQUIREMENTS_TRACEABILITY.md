@@ -200,7 +200,7 @@ Verification evidence keys: `TEST_REPORT.md` sections E1–E14 (scripted browser
 | Offline roster (minimized), device/session identity, durable local queue, reconcile | roster endpoint + clientScanId queue + sync | DONE | E8 |
 | Offline conflicts surfaced, never discarded | CONFLICT result preserved | DONE | E8 |
 | Single-device mode when stricter guarantees needed | documented | DONE | OPERATIONS |
-| Cached tickets, online/offline status | Offline ticket wallet (localStorage QR, opened-ticket persistence) + conservative service worker (v3: `/_next/static/` cached only when response declares `immutable` — prod content-hashed chunks; dev chunks never cached, killing the stale-after-recompile class) + honest offline banner | PARTIAL — improved: opened tickets scannable offline; full offline shell boot best-effort | E8, R13, R16 |
+| Cached tickets, online/offline status | Offline ticket wallet (localStorage QR, opened-ticket persistence) + conservative service worker (v3: `/_next/static/` cached only when response declares `immutable` — prod content-hashed chunks; dev chunks never cached, killing the stale-after-recompile class) + honest offline banner; v3 takeover is self-healing (module-scope `controllerchange` listener with `hadController`-gated single reload — round 17) | PARTIAL — improved: opened tickets scannable offline; full offline shell boot best-effort | E8, R13, R16, R17 |
 | No offline entitlement verification pretense | documented | DONE | docs |
 
 ## §17 Administration, moderation, trust
