@@ -1,0 +1,32 @@
+name: ieventplux
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ieventplux
+      POSTGRES_PASSWORD: ieventplux_dev
+      POSTGRES_DB: ieventplux
+    ports: ['127.0.0.1:5432:5432']
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/postgres/init-test-db.sql:/docker-entrypoint-initdb.d/01-test.sql:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ieventplux -d ieventplux']
+      interval: 2s
+      timeout: 5s
+      retries: 30
+  redis:
+    image: redis:7
+    ports: ['127.0.0.1:6379:6379']
+    volumes: ['redis_data:/data']
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 2s
+      timeout: 5s
+      retries: 30
+  mailpit:
+    image: axllent/mailpit:v1.27.10
+    ports: ['127.0.0.1:8025:8025', '127.0.0.1:1025:1025']
+volumes:
+  postgres_data:
+  redis_data:
