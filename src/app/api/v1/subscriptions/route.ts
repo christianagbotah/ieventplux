@@ -39,20 +39,26 @@ export async function POST(req: NextRequest) {
       },
     })
     const reference = paymentReference(invoice.number.replace(/[^A-Z0-9]/g, ''), 1)
-    const provider = env.paymentsSimulator ? 'SIMULATOR' : 'HUBTEL'
+    // Round 14: dynamic simulator gate — admin-saved credentials activate real checkout live.
+    const { resolveHubtelCreds, paymentsSimulatorActive } = await import('@/server/hubtel/credentials')
+    const creds = await resolveHubtelCreds()
+    const provider = paymentsSimulatorActive(creds) ? 'SIMULATOR' : 'HUBTEL'
     const attempt = await db.paymentAttempt.create({
       data: { invoiceId: invoice.id, attemptNo: 1, provider, reference, status: 'INITIATED', amountMinor: plan.priceMinor, currency: plan.currency },
     })
-    const result = await initiateCheckout({
-      reference,
-      description: `iEventPlux ${plan.name} subscription`,
-      amountMinor: plan.priceMinor,
-      currency: plan.currency,
-      callbackUrl: `${env.appUrl}/api/v1/payments/callback`,
-      returnUrl: `${env.appUrl}/api/v1/payments/return/${reference}`,
-      cancellationUrl: `${env.appUrl}/api/v1/payments/return/${reference}?cancelled=1`,
-      buyerEmail: user.email,
-    })
+    const result = await initiateCheckout(
+      {
+        reference,
+        description: `iEventPlux ${plan.name} subscription`,
+        amountMinor: plan.priceMinor,
+        currency: plan.currency,
+        callbackUrl: `${env.appUrl}/api/v1/payments/callback`,
+        returnUrl: `${env.appUrl}/api/v1/payments/return/${reference}`,
+        cancellationUrl: `${env.appUrl}/api/v1/payments/return/${reference}?cancelled=1`,
+        buyerEmail: user.email,
+      },
+      creds,
+    )
     if (!result.ok) {
       await db.paymentAttempt.update({ where: { id: attempt.id }, data: { status: 'FAILED', failureReason: result.error } })
       throw errors.unavailable('PAYMENT_INITIATION_FAILED', `Could not start checkout: ${result.error}`)

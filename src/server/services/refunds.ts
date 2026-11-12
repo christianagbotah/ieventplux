@@ -53,9 +53,9 @@ export async function processRefund(refundCaseId: string, actorId: string) {
   // Provider submission for full-order refunds (Hubtel mobile-money refunds).
   // The dev simulator executes the reversal journal; the real adapter path is
   // documented and requires sandbox verification before live use.
-  const { env } = await import('../env')
+  const { resolveSimulatorModes } = await import('../hubtel/credentials')
   let providerRefundId: string | null = null
-  if (env.paymentsSimulator) {
+  if ((await resolveSimulatorModes()).paymentsSimulator) {
     providerRefundId = `SIMRF-${Date.now()}`
   } else {
     // Hubtel refunds are initiated from the merchant dashboard/API per the refunds guide.

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   LayoutDashboard, CalendarPlus, Users, Ticket, Radio, Megaphone, MessageSquare, Wallet, UserCog, CreditCard, Settings,
-  ChevronLeft, Plus, Loader2, Camera, ScanLine, Search, Play, Square, RefreshCw, KeyRound, Pause, PlayCircle, Trash2, FileText, ShieldAlert, TrendingUp, Repeat, Activity, Vote, HandCoins,
+  ChevronLeft, Plus, Loader2, Camera, ScanLine, Search, Play, Square, RefreshCw, KeyRound, Pause, PlayCircle, Trash2, FileText, ShieldAlert, TrendingUp, Repeat, Activity, Vote, HandCoins, Sparkles,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -2111,6 +2111,144 @@ interface InsightsPayload {
   ticketMix: { name: string; eventId: string; tickets: number; revenueMinor: number }[]
 }
 
+interface PricingAssessment {
+  eventId: string
+  eventTitle: string
+  ticketTypeId: string
+  ticketTypeName: string
+  currentPriceMinor: number
+  suggestedPriceMinor: number | null
+  verdict: 'RAISE' | 'HOLD' | 'LOWER' | 'SOLD_OUT'
+  rationale: string
+  pctSold: number
+  daysOut: number
+  waitlist: number
+}
+
+interface AdvisorPayload {
+  kind: 'pricing' | 'digest'
+  source: 'ai' | 'heuristic'
+  note: string | null
+  assessments?: PricingAssessment[]
+  headline?: string
+  paragraphs?: string[]
+  actions?: string[]
+}
+
+const VERDICT_STYLES: Record<PricingAssessment['verdict'], string> = {
+  RAISE: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30',
+  LOWER: 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30',
+  HOLD: 'bg-secondary text-secondary-foreground border-border',
+  SOLD_OUT: 'bg-accent/10 text-accent-foreground border-accent/30',
+}
+
+function AiAdvisorCard({ orgId }: { orgId: string }) {
+  const { toast } = useToast()
+  const [mode, setMode] = useState<'pricing' | 'digest'>('pricing')
+  const [busy, setBusy] = useState(false)
+  const [result, setResult] = useState<AdvisorPayload | null>(null)
+
+  const run = async (kind: 'pricing' | 'digest') => {
+    setMode(kind)
+    setBusy(true)
+    try {
+      const res = await api.post<AdvisorPayload>(`/orgs/${orgId}/ai-advisor`, { kind })
+      setResult(res)
+    } catch (err) {
+      toast({ description: err instanceof ApiClientError ? err.message : 'The advisor is unavailable right now.', variant: 'destructive' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Card className="rounded-2xl">
+      <CardHeader className="pb-2">
+        <CardTitle className="flex flex-wrap items-center justify-between gap-2 text-base">
+          <span className="flex items-center gap-2"><Sparkles className="h-4 w-4 text-primary" /> AI advisor</span>
+          <span className="flex gap-1.5">
+            <Button size="sm" variant={mode === 'pricing' ? 'default' : 'outline'} className="rounded-full" onClick={() => void run('pricing')} disabled={busy}>
+              {busy && mode === 'pricing' ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : null}
+              Pricing advisor
+            </Button>
+            <Button size="sm" variant={mode === 'digest' ? 'default' : 'outline'} className="rounded-full" onClick={() => void run('digest')} disabled={busy}>
+              {busy && mode === 'digest' ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : null}
+              Weekly digest
+            </Button>
+          </span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {busy && <p className="py-6 text-center text-sm text-muted-foreground"><Loader2 className="mr-2 inline h-4 w-4 animate-spin" aria-hidden />Reading your real sales data…</p>}
+        {!busy && !result && (
+          <p className="py-2 text-sm text-muted-foreground">
+            Grounded only in your organization's real rows — sold pace, sell-through, waitlist pressure and comparable category pricing.
+            Suggestions are advisory: nothing changes until you edit ticket prices yourself.
+          </p>
+        )}
+        {!busy && result && (
+          <div className="space-y-3">
+            {result.note && <p className="rounded-xl bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-400">{result.note}</p>}
+            <div className="flex items-center gap-2">
+              <Badge variant={result.source === 'ai' ? 'default' : 'secondary'}>{result.source === 'ai' ? 'AI · validated against your data' : 'Heuristic fallback · real data'}</Badge>
+              {result.kind === 'pricing' && <span className="text-xs text-muted-foreground">{result.assessments?.length ?? 0} ticket types reviewed</span>}
+            </div>
+
+            {result.kind === 'pricing' && (result.assessments?.length ?? 0) > 0 && (
+              <div className="ievx-scrollbar max-h-96 space-y-2 overflow-y-auto pr-1">
+                {result.assessments!.map((a) => (
+                  <div key={a.ticketTypeId} className="rounded-xl border border-border/60 p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold">{a.ticketTypeName}</p>
+                        <p className="truncate text-xs text-muted-foreground">{a.eventTitle} · {a.daysOut > 0 ? `${a.daysOut} day${a.daysOut === 1 ? '' : 's'} out` : a.daysOut === 0 ? 'today' : 'past'}</p>
+                      </div>
+                      <span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-bold ${VERDICT_STYLES[a.verdict]}`}>{a.verdict}</span>
+                    </div>
+                    <p className="mt-2 text-sm tabular-nums">
+                      {a.currentPriceMinor > 0 ? money(a.currentPriceMinor) : 'Free'}
+                      {a.suggestedPriceMinor !== null && a.suggestedPriceMinor !== a.currentPriceMinor && (
+                        <>
+                          <span className="mx-1.5 text-muted-foreground">→</span>
+                          <span className="font-bold text-primary">{money(a.suggestedPriceMinor)}</span>
+                        </>
+                      )}
+                      {a.pctSold >= 0 && <span className="ml-2 text-xs text-muted-foreground">{Math.round(a.pctSold * 100)}% sold{a.waitlist > 0 ? ` · ${a.waitlist} waitlisted` : ''}</span>}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">{a.rationale}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+            {result.kind === 'pricing' && (result.assessments?.length ?? 0) === 0 && (
+              <p className="py-4 text-center text-sm text-muted-foreground">No active ticket types to review yet.</p>
+            )}
+
+            {result.kind === 'digest' && (
+              <div className="space-y-2">
+                <p className="text-sm font-bold">{result.headline}</p>
+                {result.paragraphs?.map((p, i) => <p key={i} className="text-sm text-muted-foreground">{p}</p>)}
+                {result.actions && result.actions.length > 0 && (
+                  <div className="rounded-xl bg-secondary/60 p-3">
+                    <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">This week's moves</p>
+                    <ul className="mt-1.5 list-disc space-y-1 pl-4 text-sm">
+                      {result.actions.map((a, i) => <li key={i}>{a}</li>)}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <p className="text-[11px] text-muted-foreground">
+              Advisory only — nothing changes until you edit ticket prices in Events. Prices and stats shown come from real settled orders and issued tickets.
+            </p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
 function InsightsView({ orgId }: { orgId: string }) {
   const [data, setData] = useState<InsightsPayload | null>(null)
   const [hover, setHover] = useState<number | null>(null)
@@ -2247,6 +2385,8 @@ function InsightsView({ orgId }: { orgId: string }) {
           </div>
         </CardContent>
       </Card>
+
+      <AiAdvisorCard orgId={orgId} />
 
       <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
         <Card className="min-w-0 rounded-2xl">

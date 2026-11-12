@@ -77,6 +77,7 @@ Verification evidence keys: `TEST_REPORT.md` sections E1–E14 (scripted browser
 | Cancelled events excluded from purchase recommendations | discovery filters | DONE | E10 |
 | Explainable ranking (follows/interests/geo/date); no fake AI label | deterministic ordering + featured/sponsored labels | DONE | E1 |
 | Optional AI descriptions/translations with real provider | AI concierge with real provider (nonessential) | PARTIAL | E6 |
+| Round 14: organizer AI advisor grounded in the org's real sales data; honest fallback, advisory only | `POST /orgs/{id}/ai-advisor` — pricing (validated vs real ticket types + bounds) + digest; labelled `AI` vs `heuristic fallback` | DONE | R14 |
 
 ## §8 Ticket inventory, orders, admission
 
@@ -98,6 +99,7 @@ Verification evidence keys: `TEST_REPORT.md` sections E1–E14 (scripted browser
 | Requirement | Where | Status | Evidence |
 |---|---|---|---|
 | Hosted checkout flow; card data never enters app | adapter + simulator page (real flow blocked on credentials) | PARTIAL | PROVIDER_CAPABILITIES |
+| Round 14: connect real credentials without redeploy; empirical contract calibration | admin-console credential storage (DB over env, masked, audited) + one-click GHS 1.00 connection probe with persisted verdict/snippet | DONE (path ready — live verdict fires when keys are saved) | PROVIDER_CAPABILITIES, R14 |
 | Unique references per attempt; persisted before async | paymentReference + immediate persistence | DONE | E2 |
 | Callbacks stored durably, acked promptly, idempotent effects | intakeCallback + worker + dedup keys | DONE | E2, E7 |
 | No invented HMAC; server-to-server verification | documented + status-check adapter | DONE | E14 |

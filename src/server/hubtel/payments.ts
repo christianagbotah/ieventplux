@@ -1,4 +1,5 @@
 import { env } from '../env'
+import { paymentsSimulatorActive, resolveHubtelCreds, type ProbeResult, type ResolvedHubtelCreds } from './credentials'
 
 /**
  * Hubtel Online Checkout adapter (collections).
@@ -8,7 +9,10 @@ import { env } from '../env'
  * JSON callback with ResponseCode "0000" = success, documented 5-minute status
  * check requirement). NOT sandbox-verified — credentials were not supplied with
  * this assignment. Endpoint/field names must be re-verified against
- * https://code.hubtel.com/docs/guides/online-checkout before live use.
+ * https://developers.hubtel.com/docs/business/getting_started/authentication
+ * before live use. The round-14 connection probe (probeCheckoutConnection)
+ * performs a real GHS 1.00 initiate so the HTTP verdict gives empirical
+ * evidence about auth + endpoint shape the moment credentials exist.
  *
  * Contract rules implemented here (from the build brief §9):
  *  - Checkout creation / browser return NEVER marks an order paid.
@@ -17,6 +21,10 @@ import { env } from '../env'
  *  - No HMAC verification is invented: v1 callback contract has no production
  *    signature — ingress is controlled and final state comes from authenticated
  *    server-to-server verification.
+ *
+ * Round 14: credentials resolve per-request (admin console DB values override
+ * env), and the simulator gate is dynamic — connecting Hubtel in Admin →
+ * Integrations switches checkout to the real provider without a redeploy.
  */
 
 export interface InitiateCheckoutInput {
@@ -43,18 +51,19 @@ function basicAuthHeader(clientId: string, clientSecret: string): string {
   return `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`
 }
 
-export async function initiateCheckout(input: InitiateCheckoutInput): Promise<InitiateCheckoutResult> {
-  if (env.paymentsSimulator) {
+export async function initiateCheckout(input: InitiateCheckoutInput, creds?: ResolvedHubtelCreds): Promise<InitiateCheckoutResult> {
+  const resolved = creds ?? (await resolveHubtelCreds())
+  if (paymentsSimulatorActive(resolved)) {
     // Isolated development simulator: same DB-level workflow, provider boundary simulated.
     return { ok: true, provider: 'SIMULATOR', token: input.reference }
   }
   try {
-    const res = await fetch(`${env.hubtel.checkoutBase}/items/initiate`, {
+    const res = await fetch(`${resolved.checkout.base}/items/initiate`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Accept: 'application/json',
-        Authorization: basicAuthHeader(env.hubtel.checkoutClientId, env.hubtel.checkoutClientSecret),
+        Authorization: basicAuthHeader(resolved.checkout.clientId, resolved.checkout.clientSecret),
       },
       body: JSON.stringify({
         token: input.reference,
@@ -139,16 +148,17 @@ export interface StatusCheckResult {
 }
 
 /** Authenticated server-to-server status check for reconciliation (documented ≥5 min rule). */
-export async function checkTransactionStatus(reference: string, token?: string | null): Promise<StatusCheckResult> {
-  if (env.paymentsSimulator) {
+export async function checkTransactionStatus(reference: string, token?: string | null, creds?: ResolvedHubtelCreds): Promise<StatusCheckResult> {
+  const resolved = creds ?? (await resolveHubtelCreds())
+  if (paymentsSimulatorActive(resolved)) {
     // Simulator: unresolved attempts stay PENDING until the operator resolves them
     // via the simulator panel (or reconciliation marks them UNKNOWN after max checks).
     return { ok: true, outcome: 'PENDING', amountMinor: null, providerPaymentId: null }
   }
   try {
     const path = token ?? reference
-    const res = await fetch(`${env.hubtel.checkoutBase}/items/${encodeURIComponent(path)}`, {
-      headers: { Accept: 'application/json', Authorization: basicAuthHeader(env.hubtel.checkoutClientId, env.hubtel.checkoutClientSecret) },
+    const res = await fetch(`${resolved.checkout.base}/items/${encodeURIComponent(path)}`, {
+      headers: { Accept: 'application/json', Authorization: basicAuthHeader(resolved.checkout.clientId, resolved.checkout.clientSecret) },
       signal: AbortSignal.timeout(15000),
     })
     const body = (await res.json().catch(() => ({}))) as Record<string, unknown>
@@ -179,18 +189,19 @@ export interface PayoutSubmission {
   error?: string
 }
 
-export async function submitPayout(params: { reference: string; amountMinor: number; momoNumber: string; recipientName: string; currency: string }): Promise<PayoutSubmission> {
-  const configured = Boolean(env.hubtel.sendMoneyClientId && env.hubtel.sendMoneyClientSecret && env.hubtel.sendMoneyAccountId)
+export async function submitPayout(params: { reference: string; amountMinor: number; momoNumber: string; recipientName: string; currency: string }, creds?: ResolvedHubtelCreds): Promise<PayoutSubmission> {
+  const resolved = creds ?? (await resolveHubtelCreds())
+  const configured = Boolean(resolved.sendMoney.clientId && resolved.sendMoney.clientSecret && resolved.sendMoney.accountId)
   if (!configured) {
     return { ok: false, error: 'PAYOUTS_BLOCKED: Hubtel Send Money credentials/merchant agreement not configured. The payout is recorded and queued for manual provider submission.' }
   }
   try {
-    const res = await fetch(`${env.hubtel.sendMoneyBase}/api/v1/merchants/${env.hubtel.sendMoneyAccountId}/sendsmsmoney`, {
+    const res = await fetch(`${resolved.sendMoney.base}/api/v1/merchants/${resolved.sendMoney.accountId}/sendsmsmoney`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Accept: 'application/json',
-        Authorization: basicAuthHeader(env.hubtel.sendMoneyClientId, env.hubtel.sendMoneyClientSecret),
+        Authorization: basicAuthHeader(resolved.sendMoney.clientId, resolved.sendMoney.clientSecret),
       },
       body: JSON.stringify({
         CustomerName: params.recipientName.slice(0, 100),
@@ -205,5 +216,71 @@ export async function submitPayout(params: { reference: string; amountMinor: num
     return { ok: true, providerRef: String(body.transactionId ?? body.TransactionId ?? params.reference) }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : 'Network error submitting payout.' }
+  }
+}
+
+/**
+ * Round-14 connection probe: performs ONE real checkout initiate for GHS 1.00
+ * ("iEventPlux connectivity test"). Unpaid checkout sessions simply expire at
+ * the provider, so the probe leaves no live charge. The verdict is empirical:
+ * auth accepted/rejected, endpoint found/missing, contract shape known/unknown.
+ * Used by Admin → Integrations "Test connection".
+ */
+export async function probeCheckoutConnection(appUrl: string, creds?: ResolvedHubtelCreds): Promise<ProbeResult> {
+  const resolved = creds ?? (await resolveHubtelCreds())
+  const reference = `probe-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+  if (!resolved.checkout.clientId || !resolved.checkout.clientSecret) {
+    return { at: new Date().toISOString(), ok: false, verdict: 'NOT_CONFIGURED', httpStatus: null, detail: 'No client ID / secret saved yet.', snippet: '' }
+  }
+  try {
+    const res = await fetch(`${resolved.checkout.base}/items/initiate`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        Authorization: basicAuthHeader(resolved.checkout.clientId, resolved.checkout.clientSecret),
+      },
+      body: JSON.stringify({
+        token: reference,
+        description: 'iEventPlux connectivity test',
+        callbackUrl: `${appUrl}/api/v1/payments/callback`,
+        returnUrl: `${appUrl}/api/v1/payments/return/${reference}`,
+        cancellationUrl: `${appUrl}/`,
+        amount: '1.00',
+        generateInvoice: true,
+      }),
+      signal: AbortSignal.timeout(15000),
+    })
+    const bodyText = (await res.text().catch(() => '')) || ''
+    let snippet = bodyText.slice(0, 400)
+    let body: Record<string, unknown> = {}
+    try {
+      body = JSON.parse(bodyText) as Record<string, unknown>
+    } catch {
+      /* non-JSON response — snippet is shown raw for calibration */
+    }
+    const checkoutUrl = (body.checkoutUrl ?? body.url ?? (body.data as Record<string, unknown> | undefined)?.url) as string | undefined
+    if (res.status === 401 || res.status === 403) {
+      return { at: new Date().toISOString(), ok: false, verdict: 'AUTH_REJECTED', httpStatus: res.status, detail: 'Hubtel rejected the credentials. Re-check the client ID and client secret.', snippet }
+    }
+    if (res.ok && checkoutUrl) {
+      return { at: new Date().toISOString(), ok: true, verdict: 'AUTH_OK_CONTRACT_OK', httpStatus: res.status, detail: 'Hubtel authenticated and returned a checkout URL — the documented v1 contract matches.', snippet }
+    }
+    if (res.ok) {
+      return { at: new Date().toISOString(), ok: false, verdict: 'AUTH_OK_SHAPE_DIFFERS', httpStatus: res.status, detail: 'Authenticated, but the response has no recognizable checkout URL — the endpoint contract differs from the implemented v1 shape. Calibrate from the snippet.', snippet }
+    }
+    if (res.status === 404 || res.status === 405) {
+      return { at: new Date().toISOString(), ok: false, verdict: 'ENDPOINT_NOT_FOUND', httpStatus: res.status, detail: 'Credentials were not rejected, but this endpoint path does not exist on the provider — the base URL or path needs calibration.', snippet }
+    }
+    return { at: new Date().toISOString(), ok: false, verdict: `HTTP_${res.status}`, httpStatus: res.status, detail: 'Unexpected provider response — inspect the snippet.', snippet }
+  } catch (err) {
+    return {
+      at: new Date().toISOString(),
+      ok: false,
+      verdict: 'UNREACHABLE',
+      httpStatus: null,
+      detail: err instanceof Error ? err.message : 'Network error contacting Hubtel.',
+      snippet: '',
+    }
   }
 }

@@ -10,13 +10,16 @@ export async function POST(req: NextRequest) {
     const user = await requireUser()
     const body = await readJson<{ orderReference?: string }>(req)
     const result = await initiatePaymentForOrder(String(body.orderReference ?? ''), user.id)
+    // Round 14: provider mode reflects the dynamic simulator gate (env or admin-saved creds).
+    const { resolveSimulatorModes } = await import('@/server/hubtel/credentials')
+    const modes = await resolveSimulatorModes()
     return jsonOk({
       ...result,
       simulatorNotice:
         result.provider === 'SIMULATOR'
-          ? 'DEVELOPMENT SIMULATOR — no real money moves. Real Hubtel checkout activates when HUBTEL_CHECKOUT_CLIENT_ID/SECRET are configured.'
+          ? 'DEVELOPMENT SIMULATOR — no real money moves. Save Hubtel keys in Admin → Integrations (or set HUBTEL_CHECKOUT_CLIENT_ID/SECRET) to activate real checkout.'
           : null,
-      providerMode: env.paymentsSimulator ? 'simulated' : 'real',
+      providerMode: modes.paymentsSimulator ? 'simulated' : 'real',
     })
   })
 }

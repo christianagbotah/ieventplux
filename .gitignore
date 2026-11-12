@@ -59,3 +59,6 @@ server.log
 # SQLite transient WAL/SHM artifacts (the .db itself is tracked for demo continuity)
 db/custom.db-shm
 db/custom.db-wal
+
+# Read-tool scratch outputs
+tool-results/

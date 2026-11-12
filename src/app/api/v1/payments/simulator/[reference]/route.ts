@@ -27,7 +27,8 @@ function escapeHtml(s: string): string {
 
 export async function GET(req: NextRequest, ctx: { params: Promise<{ reference: string }> }) {
   const { reference } = await ctx.params
-  if (!env.paymentsSimulator) {
+  const { resolveHubtelCreds, paymentsSimulatorActive } = await import('@/server/hubtel/credentials')
+  if (!paymentsSimulatorActive(await resolveHubtelCreds())) {
     return new NextResponse('The payment simulator is disabled because real Hubtel credentials are configured.', { status: 403 })
   }
   const attempt = await db.paymentAttempt.findUnique({ where: { reference }, include: { order: { include: { event: true } } } })

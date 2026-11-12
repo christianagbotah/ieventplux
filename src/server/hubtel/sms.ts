@@ -1,5 +1,3 @@
-import { env } from '../env'
-
 /**
  * Hubtel SMS adapter.
  *
@@ -23,19 +21,23 @@ export interface SmsSendResult {
 }
 
 export async function sendSms(params: { to: string; body: string; purpose: string }): Promise<SmsSendResult> {
-  if (env.smsSimulator) {
+  // Round 14: dynamic simulator gate + per-request credential resolution
+  // (admin-saved keys override env without a redeploy).
+  const { resolveHubtelCreds, smsSimulatorActive } = await import('./credentials')
+  const creds = await resolveHubtelCreds()
+  if (smsSimulatorActive(creds)) {
     return { ok: true, provider: 'SIMULATOR', messageId: `SIM-${Date.now()}-${Math.random().toString(36).slice(2, 8)}` }
   }
   try {
-    const res = await fetch(`${env.hubtel.smsBase}/v1/messages/send`, {
+    const res = await fetch(`${creds.sms.base}/v1/messages/send`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Accept: 'application/json',
-        Authorization: `Basic ${Buffer.from(`${env.hubtel.smsClientId}:${env.hubtel.smsClientSecret}`).toString('base64')}`,
+        Authorization: `Basic ${Buffer.from(`${creds.sms.clientId}:${creds.sms.clientSecret}`).toString('base64')}`,
       },
       body: JSON.stringify({
-        From: env.hubtel.smsSenderId,
+        From: creds.sms.senderId,
         To: [params.to],
         Content: params.body.slice(0, 1600),
         RegisteredDelivery: true,
@@ -57,15 +59,17 @@ export async function sendSms(params: { to: string; body: string; purpose: strin
 export type SmsDeliveryState = 'ACCEPTED' | 'DELIVERED' | 'FAILED' | 'UNKNOWN'
 
 export async function checkSmsDelivery(messageId: string): Promise<{ ok: boolean; state: SmsDeliveryState; detail?: string }> {
-  if (env.smsSimulator) {
+  const { resolveHubtelCreds, smsSimulatorActive } = await import('./credentials')
+  const creds = await resolveHubtelCreds()
+  if (smsSimulatorActive(creds)) {
     // Dev simulator: acceptance then simulated handset delivery (explicitly not a real delivery report).
     return { ok: true, state: 'ACCEPTED' }
   }
   try {
-    const res = await fetch(`${env.hubtel.smsBase}/v1/messages/${encodeURIComponent(messageId)}`, {
+    const res = await fetch(`${creds.sms.base}/v1/messages/${encodeURIComponent(messageId)}`, {
       headers: {
         Accept: 'application/json',
-        Authorization: `Basic ${Buffer.from(`${env.hubtel.smsClientId}:${env.hubtel.smsClientSecret}`).toString('base64')}`,
+        Authorization: `Basic ${Buffer.from(`${creds.sms.clientId}:${creds.sms.clientSecret}`).toString('base64')}`,
       },
       signal: AbortSignal.timeout(15000),
     })

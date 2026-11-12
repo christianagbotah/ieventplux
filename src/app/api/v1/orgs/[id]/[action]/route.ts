@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { handle, jsonOk, requireUser, readJson, errors, jsonList, pagination, sanitizeText } from '@/server/api'
+import { handle, jsonOk, requireUser, readJson, errors, jsonList, pagination, sanitizeText, rateLimit } from '@/server/api'
 import { db } from '@/lib/db'
 import { membershipFor, orgCan, ORG_ROLES } from '@/server/permissions'
 
@@ -221,6 +221,18 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
       if (!sub) throw errors.notFound('No active subscription.')
       await db.subscription.update({ where: { orgId: id }, data: { status: 'CANCELLED', cancelledAt: new Date(), autoRenew: false } })
       return jsonOk({ cancelled: true, note: 'Plan cancelled. Existing attendee tickets remain valid.' })
+    }
+
+    if (action === 'ai-advisor') {
+      // Round 14: org-scoped AI advisor (pricing suggestions / weekly digest).
+      // Read-only advisory — nothing is auto-applied to real prices.
+      if (!orgCan(membership.role, 'org:view_finance')) throw errors.forbidden('The AI advisor requires a finance role.')
+      rateLimit(req, 'ai-advisor', 8, 60_000)
+      const { orgPricingAdvisor, orgDigestAdvisor } = await import('@/server/services/aiAdvisor')
+      const kind = String(body.kind ?? 'pricing')
+      if (kind === 'digest') return jsonOk(await orgDigestAdvisor(id))
+      if (kind === 'pricing') return jsonOk(await orgPricingAdvisor(id))
+      throw errors.badRequest('kind must be pricing or digest.')
     }
 
     throw errors.notFound('Unknown organization action.')

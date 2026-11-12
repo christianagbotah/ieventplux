@@ -13,6 +13,17 @@ import { usePortal } from '../store'
 import { money, dateLong, humanize, statusTone, relative } from '../format'
 import { EmptyState } from '../components/EventCard'
 
+interface SuggestionItem {
+  slug: string
+  title: string
+  startsAt: string
+  city: string | null
+  mode: string
+  orgName: string
+  fromLabel: string
+  reason: string
+}
+
 interface RefundCaseRow {
   id: string
   status: string
@@ -68,6 +79,8 @@ export default function OrderView({ reference }: { reference: string }) {
   const [polling, setPolling] = useState(false)
   const [refundReason, setRefundReason] = useState('')
   const [refundBusy, setRefundBusy] = useState(false)
+  // Round 14: DB-driven cross-sell shown once the order is settled.
+  const [suggestions, setSuggestions] = useState<SuggestionItem[] | null>(null)
   // Mirrors the copy-success-checkmark animation; the real clipboard write happens in copyReference.
   const [refCopied, setRefCopied] = useState(false)
 
@@ -84,6 +97,22 @@ export default function OrderView({ reference }: { reference: string }) {
       window.setTimeout(() => confetti({ particleCount: 55, angle: 120, spread: 60, origin: { x: 1, y: 0.8 } }), 420)
     })
   }, [isPaid])
+
+  useEffect(() => {
+    if (!isPaid) return
+    let alive = true
+    void api
+      .get<{ items: SuggestionItem[] }>(`/orders/${reference}/suggestions`)
+      .then((res) => {
+        if (alive) setSuggestions(res.items)
+      })
+      .catch(() => {
+        if (alive) setSuggestions([])
+      })
+    return () => {
+      alive = false
+    }
+  }, [isPaid, reference])
 
   const load = useCallback(async () => {
     try {
@@ -292,6 +321,38 @@ export default function OrderView({ reference }: { reference: string }) {
                 <Button className="mt-3 rounded-full ievx-press" onClick={() => navigate('/me?tab=tickets')}>View tickets & QR codes</Button>
               </div>
             </div>
+          )}
+
+          {/* Round 14: honest cross-sell — real upcoming events, same category or city first. */}
+          {isPaid && suggestions && suggestions.length > 0 && (
+            <Card className="rounded-2xl">
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <CalendarPlus className="h-4 w-4 text-primary" aria-hidden /> Because you're attending {order.event.title}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid gap-2 sm:grid-cols-3">
+                  {suggestions.map((s) => (
+                    <button
+                      key={s.slug}
+                      type="button"
+                      onClick={() => navigate(`/event/${s.slug}`)}
+                      className="group rounded-xl border border-border/70 p-3 text-left transition-colors hover:border-primary/40 hover:bg-primary/5"
+                    >
+                      <p className="line-clamp-2 text-sm font-semibold group-hover:text-primary">{s.title}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">{dateLong(s.startsAt)}</p>
+                      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                        <Badge variant="secondary" className="text-[10px]">{s.fromLabel}</Badge>
+                        {s.city && <Badge variant="outline" className="text-[10px]">{s.city}</Badge>}
+                      </div>
+                      <p className="mt-1.5 text-[11px] text-muted-foreground">{s.reason}</p>
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-2 text-[11px] text-muted-foreground">Real upcoming events matched on category and city — no paid placement, no invented picks.</p>
+              </CardContent>
+            </Card>
           )}
 
           {/* Refund lifecycle: buyer self-service request + honest decision timeline. */}

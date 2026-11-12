@@ -116,36 +116,41 @@ export function envValidation() {
   return { errors, warnings }
 }
 
-export function integrationStatuses(): IntegrationStatus[] {
+export async function integrationStatuses(): Promise<IntegrationStatus[]> {
+  const { resolveHubtelCreds, hubtelCredentialsView, paymentsSimulatorActive, smsSimulatorActive } = await import('./hubtel/credentials')
+  const creds = await resolveHubtelCreds()
+  const view = hubtelCredentialsView(creds)
+  const checkoutSim = paymentsSimulatorActive(creds)
+  const smsSim = smsSimulatorActive(creds)
   return [
     {
       key: 'hubtel-checkout',
       name: 'Hubtel Online Checkout (collections)',
       stage: 'implemented',
-      configured: checkoutConfigured,
-      mode: env.paymentsSimulator ? 'simulated' : 'real',
-      detail: checkoutConfigured
-        ? 'Real adapter active (initiate/callback/reconciliation paths). Sandbox verification with provider credentials still pending.'
-        : 'Credentials absent — isolated dev simulator active. Orders, callbacks, reconciliation and ledger all run for real against the database; only the provider boundary is simulated.',
+      configured: view.checkout.configured,
+      mode: checkoutSim ? 'simulated' : 'real',
+      detail: view.checkout.configured
+        ? `Real adapter active (initiate/callback/reconciliation paths) · credentials source: ${view.checkout.source}. Sandbox verification with the connection probe still pending.`
+        : 'Credentials absent — isolated dev simulator active. Orders, callbacks, reconciliation and ledger all run for real against the database; only the provider boundary is simulated. Save Hubtel keys in Admin → Integrations to switch.',
     },
     {
       key: 'hubtel-sendmoney',
       name: 'Hubtel Send Money (payouts)',
       stage: 'externally-blocked',
-      configured: sendMoneyConfigured,
-      mode: sendMoneyConfigured ? 'real' : 'unavailable',
-      detail: sendMoneyConfigured
-        ? 'Adapter configured; provider submission requires sandbox verification before live payouts.'
+      configured: view.sendMoney.configured,
+      mode: view.sendMoney.configured ? 'real' : 'unavailable',
+      detail: view.sendMoney.configured
+        ? `Adapter configured (credentials source: ${view.sendMoney.source}); provider submission requires sandbox verification before live payouts.`
         : 'Credentials + merchant agreement required. Payout requests/approvals/journals work; provider submission is blocked and clearly labelled.',
     },
     {
       key: 'hubtel-sms',
       name: 'Hubtel SMS',
       stage: 'implemented',
-      configured: smsConfigured,
-      mode: env.smsSimulator ? 'simulated' : 'real',
-      detail: smsConfigured
-        ? 'Real adapter active (send + delivery status). Verify the approved sender ID with the provider before live sends.'
+      configured: view.sms.configured,
+      mode: smsSim ? 'simulated' : 'real',
+      detail: view.sms.configured
+        ? `Real adapter active (send + delivery status) · credentials source: ${view.sms.source}. Verify the approved sender ID with the provider before live sends.`
         : 'Credentials absent — dev simulator marks messages ACCEPTED→DELIVERED locally. API acceptance is never shown as confirmed handset delivery.',
     },
     {

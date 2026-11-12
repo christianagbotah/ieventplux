@@ -540,6 +540,129 @@ function FeesPlans() {
   )
 }
 
+interface HubtelProbe {
+  at: string
+  ok: boolean
+  verdict: string
+  httpStatus: number | null
+  detail: string
+  snippet: string
+}
+
+function HubtelConnection() {
+  const { toast } = useToast()
+  const [data, reload, loading] = useAdmin<{ credentials: {
+    checkout: { clientIdMasked: string; clientSecretMasked: string; base: string; source: string; configured: boolean }
+    sendMoney: { clientIdMasked: string; clientSecretMasked: string; accountIdMasked: string; source: string; configured: boolean }
+    sms: { clientIdMasked: string; clientSecretMasked: string; senderIdMasked: string; source: string; configured: boolean }
+    paymentsMode: string
+  }; lastProbe: HubtelProbe | null }>('/admin/hubtel')
+  const [form, setForm] = useState({ clientId: '', clientSecret: '', accountId: '', smsSenderId: '', checkoutBase: '' })
+  const [busy, setBusy] = useState<'save' | 'probe' | null>(null)
+
+  const save = async () => {
+    setBusy('save')
+    try {
+      const res = await api.post<{ saved: number; note: string }>('/admin/hubtel/credentials', form)
+      toast({ title: 'Hubtel credentials saved', description: res.note })
+      setForm({ clientId: '', clientSecret: '', accountId: '', smsSenderId: '', checkoutBase: '' })
+      reload()
+    } catch (err) {
+      toast({ description: err instanceof ApiClientError ? err.message : 'Failed to save credentials.', variant: 'destructive' })
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const probe = async () => {
+    setBusy('probe')
+    try {
+      const res = await api.post<{ probe: HubtelProbe }>('/admin/hubtel/probe', {})
+      toast({
+        title: res.probe.ok ? 'Connection verified' : `Probe verdict: ${res.probe.verdict}`,
+        description: res.probe.detail,
+        variant: res.probe.ok ? 'default' : 'destructive',
+      })
+      reload()
+    } catch (err) {
+      toast({ description: err instanceof ApiClientError ? err.message : 'Probe failed.', variant: 'destructive' })
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  if (loading) return <AdminLoader label="Loading Hubtel connection…" />
+  if (!data) return <EmptyState title="Hubtel connection unavailable" />
+  const c = data.credentials
+
+  return (
+    <Card className="rounded-2xl">
+      <CardHeader className="pb-2">
+        <CardTitle className="flex flex-wrap items-center justify-between gap-2 text-base">
+          <span className="flex items-center gap-2"><CreditCard className="h-4 w-4 text-primary" /> Hubtel connection</span>
+          <Badge variant={c.paymentsMode === 'REAL' ? 'default' : 'secondary'}>
+            {c.paymentsMode === 'REAL' && (
+              <span aria-hidden="true" className="efx-badge-ping__ping" style={{ position: 'static', width: 7, height: 7, background: 'rgba(16, 185, 129, 0.55)', flex: 'none' }} />
+            )}
+            {c.paymentsMode === 'REAL' ? 'REAL checkout live' : 'simulator active'}
+          </Badge>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <p className="text-xs text-muted-foreground">
+          Hubtel issues one API client per business account — the saved pair feeds Checkout, Send Money and SMS. Keys are stored server-side and shown masked only.
+          Saved keys take effect immediately (no redeploy). Checkout base: <code className="rounded bg-secondary/60 px-1">{c.checkout.base}</code> (source: {c.checkout.source}).
+        </p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label htmlFor="hubtel-client-id">Client ID {c.checkout.clientIdMasked && <span className="text-xs text-muted-foreground">(saved: {c.checkout.clientIdMasked})</span>}</Label>
+            <Input id="hubtel-client-id" value={form.clientId} onChange={(e) => setForm((f) => ({ ...f, clientId: e.target.value }))} placeholder="Paste from the Hubtel console" autoComplete="off" />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="hubtel-client-secret">Client secret {c.checkout.clientSecretMasked && <span className="text-xs text-muted-foreground">(saved: {c.checkout.clientSecretMasked})</span>}</Label>
+            <Input id="hubtel-client-secret" type="password" value={form.clientSecret} onChange={(e) => setForm((f) => ({ ...f, clientSecret: e.target.value }))} placeholder="Leave blank to keep the saved secret" autoComplete="new-password" />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="hubtel-account">Merchant account number {c.sendMoney.accountIdMasked && <span className="text-xs text-muted-foreground">(saved: {c.sendMoney.accountIdMasked})</span>}</Label>
+            <Input id="hubtel-account" value={form.accountId} onChange={(e) => setForm((f) => ({ ...f, accountId: e.target.value }))} placeholder="Required for Send Money payouts" autoComplete="off" />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="hubtel-sender">Approved SMS sender ID {c.sms.senderIdMasked && <span className="text-xs text-muted-foreground">(saved: {c.sms.senderIdMasked})</span>}</Label>
+            <Input id="hubtel-sender" value={form.smsSenderId} onChange={(e) => setForm((f) => ({ ...f, smsSenderId: e.target.value }))} placeholder="e.g. IEVENTPLUX" autoComplete="off" />
+          </div>
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label htmlFor="hubtel-base">Checkout base URL (advanced — leave default unless the provider documents a change)</Label>
+            <Input id="hubtel-base" value={form.checkoutBase} onChange={(e) => setForm((f) => ({ ...f, checkoutBase: e.target.value }))} placeholder={`Default: ${c.checkout.base}`} autoComplete="off" />
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button className="rounded-full" onClick={() => void save()} disabled={busy !== null}>
+            {busy === 'save' ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
+            Save credentials
+          </Button>
+          <Button variant="outline" className="rounded-full" onClick={() => void probe()} disabled={busy !== null}>
+            {busy === 'probe' ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Play className="h-4 w-4" aria-hidden />}
+            Test connection
+          </Button>
+          <p className="text-[11px] text-muted-foreground">Test performs one real GHS 1.00 checkout initiate (unpaid test sessions expire — nothing is charged).</p>
+        </div>
+        {data.lastProbe && (
+          <div className={`rounded-xl border px-3 py-2.5 text-xs ${data.lastProbe.ok ? 'border-emerald-500/30 bg-emerald-500/5 text-emerald-800' : 'border-amber-500/30 bg-amber-500/5 text-amber-800'}`}>
+            <p className="font-bold">Last probe: {data.lastProbe.verdict}{data.lastProbe.httpStatus !== null ? ` (HTTP ${data.lastProbe.httpStatus})` : ''} · {relative(data.lastProbe.at)}</p>
+            <p className="mt-0.5">{data.lastProbe.detail}</p>
+            {data.lastProbe.snippet && (
+              <details className="mt-1">
+                <summary className="cursor-pointer select-none font-medium">Provider response snippet</summary>
+                <pre className="ievx-scrollbar mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-all rounded bg-background/70 p-2 text-[10px] leading-relaxed">{data.lastProbe.snippet}</pre>
+              </details>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
 function Integrations() {
   const [data, , loading] = useAdmin<{ integrations: { key: string; name: string; stage: string; configured: boolean; mode: string; detail: string }[]; validation: { errors: string[]; warnings: string[] } }>('/admin/integrations')
 
@@ -547,6 +670,7 @@ function Integrations() {
   if (!data) return <EmptyState title="Integration health unavailable" />
   return (
     <div className="space-y-4">
+      <HubtelConnection />
       {data.validation.warnings.length > 0 && (
         <Card className="rounded-2xl border-amber-500/30 bg-amber-500/5">
           <CardContent className="p-4 text-xs text-amber-800">

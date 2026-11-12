@@ -21,13 +21,14 @@
 
 | | |
 |---|---|
-| Adapter | `src/server/hubtel/payments.ts` (`initiateCheckout`, `parseCallback`, `checkTransactionStatus`) |
+| Adapter | `src/server/hubtel/payments.ts` (`initiateCheckout`, `parseCallback`, `checkTransactionStatus`, round 14: `probeCheckoutConnection`) + `src/server/hubtel/credentials.ts` (per-request credential resolution: admin-saved DB values override env) |
 | Endpoints used | `POST {HUBTEL_CHECKOUT_BASE}/items/initiate` (Basic auth, JSON: token, description, callbackUrl, returnUrl, cancellationUrl, amount, generateInvoice) · `GET {HUBTEL_CHECKOUT_BASE}/items/{token}` (status check) · callback receiver `POST /api/v1/payments/callback` (our side) |
 | Base URL default | `https://pay.hubtel.com` (env-overridable) |
 | Contract rules honoured | ResponseCode `0000` = success; failure codes `0001`–`0005`; 5-minute reconciliation rule; **no signature in the v1 callback contract — none invented**; final state via authenticated server-to-server verification + amount comparison; case-tolerant field parsing (PascalCase/camelCase) |
-| Credentials needed | `HUBTEL_CHECKOUT_CLIENT_ID`, `HUBTEL_CHECKOUT_CLIENT_SECRET` (separate per-API credentials, per the provider's keys model) |
-| Dev behaviour without credentials | Isolated simulator at `/api/v1/payments/simulator/{reference}` (6 scenarios); simulator cannot be forced on in production (env.ts throws) |
-| Remaining to verify | Field names in the initiate response (`checkoutUrl`/`url`/`data.url` all accepted — confirm which is canonical), status-check path shape, failure-code table, callback field casing |
+| Credentials needed | Env: `HUBTEL_CHECKOUT_CLIENT_ID`, `HUBTEL_CHECKOUT_CLIENT_SECRET` — **or** (round 14) saved by a super admin in Admin → Integrations → Hubtel connection (stored in `PlatformSetting`, write-only through the API, returned masked only). Hubtel issues ONE API client per business account, so the admin form feeds Checkout, Send Money and SMS together |
+| Dev behaviour without credentials | Isolated simulator at `/api/v1/payments/simulator/{reference}` (6 scenarios); simulator cannot be forced on in production (env.ts throws). **Round 14: the simulator gate is dynamic** — saving complete checkout keys in the admin console switches checkout to the real provider immediately, no redeploy |
+| Round-14 connection probe | `POST /api/v1/admin/hubtel/probe` performs ONE real GHS 1.00 initiate (`probe-{ts}` reference, unpaid sessions expire at the provider — nothing is charged). Verdicts are empirical and persisted: `AUTH_OK_CONTRACT_OK` (2xx + recognized checkoutUrl) · `AUTH_OK_SHAPE_DIFFERS` (authenticated but response shape unknown — calibrate from the persisted snippet) · `AUTH_REJECTED` (401/403) · `ENDPOINT_NOT_FOUND` (404/405 — path/base needs calibration) · `HTTP_{n}` / `UNREACHABLE` / `NOT_CONFIGURED` |
+| Remaining to verify | Field names in the initiate response (`checkoutUrl`/`url`/`data.url` all accepted — confirm which is canonical), status-check path shape, failure-code table, callback field casing — the probe's persisted snippet gives the evidence the moment credentials exist |
 
 ## 2. Hubtel Send Money (payouts) — `externally-blocked`
 

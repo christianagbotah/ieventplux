@@ -35,9 +35,11 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
       })
     }
     if (action === 'status') {
+      const { resolveSimulatorModes } = await import('@/server/hubtel/credentials')
+      const modes = await resolveSimulatorModes()
       return jsonOk({
-        smsMode: env.smsSimulator ? 'simulated' : 'real',
-        simulatorNote: env.smsSimulator ? 'Hubtel SMS credentials absent — messages are accepted by the dev simulator and marked DELIVERED locally. API acceptance is never real handset delivery.' : 'Real Hubtel SMS active.',
+        smsMode: modes.smsSimulator ? 'simulated' : 'real',
+        simulatorNote: modes.smsSimulator ? 'Hubtel SMS credentials absent — messages are accepted by the dev simulator and marked DELIVERED locally. API acceptance is never real handset delivery. Save keys in Admin → Integrations to go live.' : 'Real Hubtel SMS active.',
       })
     }
     throw errors.notFound('Unknown messages endpoint.')
@@ -109,13 +111,15 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
       }
       const { audit } = await import('@/server/audit')
       await audit({ actorUserId: user.id, actorLabel: user.email, action: 'messages.send', entityType: 'Organization', entityId: orgId, after: { queued, suppressed, purpose } })
+      const { resolveSimulatorModes } = await import('@/server/hubtel/credentials')
+      const smsSimulator = (await resolveSimulatorModes()).smsSimulator
       return jsonOk({
         queued,
         suppressed,
         segmentsPerMessage: est.segments,
         estimatedCostMinor: queued * est.segments * 5,
-        providerMode: env.smsSimulator ? 'simulated' : 'real',
-        note: env.smsSimulator ? 'Dev simulator active — no live messages are sent to real handsets.' : 'Queued for Hubtel delivery.',
+        providerMode: smsSimulator ? 'simulated' : 'real',
+        note: smsSimulator ? 'Dev simulator active — no live messages are sent to real handsets.' : 'Queued for Hubtel delivery.',
       })
     }
 

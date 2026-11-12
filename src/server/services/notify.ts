@@ -38,8 +38,14 @@ export async function queueMessage(input: QueueMessageInput): Promise<string | n
     if (existing) return null
   }
   const segments = input.channel === 'SMS' ? estimateSegments(input.body).segments : null
+  // Round 14: SMS simulator gate is dynamic (admin-saved credentials switch it off live).
+  let smsSimulator = false
+  if (input.channel === 'SMS') {
+    const { resolveHubtelCreds, smsSimulatorActive } = await import('../hubtel/credentials')
+    smsSimulator = smsSimulatorActive(await resolveHubtelCreds())
+  }
   const provider =
-    input.channel === 'INAPP' ? 'INAPP' : input.channel === 'SMS' ? (env.smsSimulator ? 'SIMULATOR' : 'HUBTEL') : env.smtp.host ? 'SMTP' : 'SMTP'
+    input.channel === 'INAPP' ? 'INAPP' : input.channel === 'SMS' ? (smsSimulator ? 'SIMULATOR' : 'HUBTEL') : env.smtp.host ? 'SMTP' : 'SMTP'
   const row = await db.messageDelivery.create({
     data: {
       channel: input.channel,

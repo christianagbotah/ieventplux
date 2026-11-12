@@ -28,7 +28,11 @@ export async function initiatePaymentForOrder(orderRef: string, userId?: string 
 
   const attemptNo = order.payments.length + 1
   const reference = paymentReference(order.reference, attemptNo)
-  const provider = env.paymentsSimulator ? 'SIMULATOR' : 'HUBTEL'
+  // Round 14: the simulator gate is dynamic — admin-saved Hubtel credentials
+  // (DB) activate the real provider immediately, no redeploy needed.
+  const { resolveHubtelCreds, paymentsSimulatorActive } = await import('../hubtel/credentials')
+  const creds = await resolveHubtelCreds()
+  const provider = paymentsSimulatorActive(creds) ? 'SIMULATOR' : 'HUBTEL'
 
   const callbackUrl = `${env.appUrl}/api/v1/payments/callback`
   const returnUrl = `${env.appUrl}/api/v1/payments/return/${reference}`
@@ -46,17 +50,20 @@ export async function initiatePaymentForOrder(orderRef: string, userId?: string 
     },
   })
 
-  const result = await initiateCheckout({
-    reference,
-    description: `iEventPlux — ${order.event.title}`,
-    amountMinor: order.totalMinor,
-    currency: order.currency,
-    callbackUrl,
-    returnUrl,
-    cancellationUrl,
-    buyerPhone: order.buyerPhone,
-    buyerEmail: order.buyerEmail,
-  })
+  const result = await initiateCheckout(
+    {
+      reference,
+      description: `iEventPlux — ${order.event.title}`,
+      amountMinor: order.totalMinor,
+      currency: order.currency,
+      callbackUrl,
+      returnUrl,
+      cancellationUrl,
+      buyerPhone: order.buyerPhone,
+      buyerEmail: order.buyerEmail,
+    },
+    creds,
+  )
 
   if (!result.ok) {
     await db.paymentAttempt.update({ where: { id: attempt.id }, data: { status: 'FAILED', failureReason: result.error } })

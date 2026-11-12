@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
       database = 'down'
     }
     const validation = envValidation()
-    const integrations = integrationStatuses()
+    const integrations = await integrationStatuses()
     return jsonOk({
       status: database === 'up' && validation.errors.length === 0 ? 'healthy' : 'degraded',
       service: 'ieventplux-api',

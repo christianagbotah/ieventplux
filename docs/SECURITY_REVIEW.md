@@ -120,6 +120,7 @@ Excess → HTTP 429 `RATE_LIMITED`. Buckets are opportunistically garbage-collec
 - Logs: provider errors log status codes + redacted bodies (never Authorization headers); `rawResult` stores redacted JSON only; payout destinations and callback PII are not logged.
 - Dev defaults for worker/realtime secrets exist **only** for local development and are flagged in `.env.example` for replacement.
 - Ticket QR signatures derive from `APP_SECRET` (`{secret}:ticket` domain separation).
+- **Round 14 — admin-saved Hubtel credentials:** platform super admins can store Hubtel keys in `PlatformSetting` (Admin → Integrations → Hubtel connection) so the real provider activates without a redeploy. Handling: write-only through the API (`POST /admin/hubtel/credentials`, super-admin + audited with keys-not-values); every read path returns masked previews only (`maskSecret`); secrets never reach logs, the client bundle, or the audit trail. They live in the database by design — the same trust boundary that already holds session data; protect the DB file/backups accordingly.
 
 ## 9. Known limitations (stated plainly)
 

@@ -112,8 +112,9 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
     }
 
     if (root === 'sms') {
+      const { smsSimulatorActive, resolveHubtelCreds } = await import('@/server/hubtel/credentials')
       const items = await db.messageDelivery.findMany({ orderBy: { createdAt: 'desc' }, take: 100 })
-      return jsonOk({ items, mode: env.smsSimulator ? 'simulated' : 'real' })
+      return jsonOk({ items, mode: smsSimulatorActive(await resolveHubtelCreds()) ? 'simulated' : 'real' })
     }
 
     if (root === 'audit') {
@@ -122,7 +123,14 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
     }
 
     if (root === 'integrations') {
-      return jsonOk({ integrations: integrationStatuses(), validation: envValidation() })
+      return jsonOk({ integrations: await integrationStatuses(), validation: envValidation() })
+    }
+
+    if (root === 'hubtel') {
+      // Masked credential view + last connection probe (secrets never leave the server).
+      const { resolveHubtelCreds, hubtelCredentialsView, readLastProbe } = await import('@/server/hubtel/credentials')
+      const creds = await resolveHubtelCreds()
+      return jsonOk({ credentials: hubtelCredentialsView(creds), lastProbe: await readLastProbe() })
     }
 
     if (root === 'outbox') {
@@ -317,6 +325,64 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
         return jsonOk(result)
       }
       throw errors.badRequest('Invalid refund operation.')
+    }
+
+    if (root === 'hubtel' && id === 'credentials') {
+      // Round 14: platform admins can connect Hubtel without a redeploy.
+      // Hubtel issues ONE API client per business account — the saved pair
+      // feeds Checkout, Send Money and SMS. Secrets are write-only here.
+      if (!platformCan(user.role, 'admin:settings')) throw errors.forbidden('Super administrator role required.')
+      rateLimit(req, 'hubtel-creds', 10, 60_000)
+      const { HUBTEL_SETTING_KEYS } = await import('@/server/hubtel/credentials')
+      const { setSetting } = await import('@/server/settings')
+      const str = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '')
+      const clientId = str(body.clientId, 200)
+      const clientSecret = str(body.clientSecret, 300)
+      const accountId = str(body.accountId, 100)
+      const smsSenderId = str(body.smsSenderId, 40)
+      const baseUrl = str(body.checkoutBase, 200)
+      if (!clientId && !clientSecret && !accountId && !smsSenderId && !baseUrl) throw errors.badRequest('Nothing to save — provide at least one field.')
+      const updates: { key: string; value: string }[] = []
+      if (clientId) {
+        updates.push({ key: HUBTEL_SETTING_KEYS.checkoutClientId, value: clientId })
+        updates.push({ key: HUBTEL_SETTING_KEYS.sendMoneyClientId, value: clientId })
+        updates.push({ key: HUBTEL_SETTING_KEYS.smsClientId, value: clientId })
+      }
+      if (clientSecret) {
+        updates.push({ key: HUBTEL_SETTING_KEYS.checkoutClientSecret, value: clientSecret })
+        updates.push({ key: HUBTEL_SETTING_KEYS.sendMoneyClientSecret, value: clientSecret })
+        updates.push({ key: HUBTEL_SETTING_KEYS.smsClientSecret, value: clientSecret })
+      }
+      if (accountId) updates.push({ key: HUBTEL_SETTING_KEYS.sendMoneyAccountId, value: accountId })
+      if (smsSenderId) updates.push({ key: HUBTEL_SETTING_KEYS.smsSenderId, value: smsSenderId })
+      if (baseUrl && /^https:\/\//.test(baseUrl)) updates.push({ key: HUBTEL_SETTING_KEYS.checkoutBase, value: baseUrl.replace(/\/$/, '') })
+      for (const u of updates) await setSetting(u.key, u.value, user.id)
+      const { audit } = await import('@/server/audit')
+      await audit({
+        actorUserId: user.id,
+        actorLabel: user.email,
+        action: 'hubtel.credentials.update',
+        entityType: 'PlatformSetting',
+        entityId: 'hubtel.*',
+        after: { keys: updates.map((u) => u.key) },
+      })
+      return jsonOk({ saved: updates.length, note: 'Credentials stored. The payments simulator switches off automatically if the checkout keys are complete.' })
+    }
+
+    if (root === 'hubtel' && id === 'probe') {
+      // Round 14: empirical connection test — ONE real GHS 1.00 checkout initiate
+      // (unpaid sessions expire at the provider; no live charge is possible).
+      if (!platformCan(user.role, 'admin:settings')) throw errors.forbidden('Super administrator role required.')
+      rateLimit(req, 'hubtel-probe', 6, 60_000)
+      const { resolveHubtelCreds, HUBTEL_SETTING_KEYS, paymentsSimulatorActive } = await import('@/server/hubtel/credentials')
+      const { probeCheckoutConnection } = await import('@/server/hubtel/payments')
+      const { setSetting } = await import('@/server/settings')
+      const creds = await resolveHubtelCreds()
+      const probe = await probeCheckoutConnection(env.appUrl, creds)
+      await setSetting(HUBTEL_SETTING_KEYS.probeResult, JSON.stringify(probe), user.id)
+      const { audit } = await import('@/server/audit')
+      await audit({ actorUserId: user.id, actorLabel: user.email, action: 'hubtel.probe', entityType: 'PlatformSetting', entityId: HUBTEL_SETTING_KEYS.probeResult, after: { verdict: probe.verdict, httpStatus: probe.httpStatus } })
+      return jsonOk({ probe, paymentsMode: paymentsSimulatorActive(creds) ? 'SIMULATOR' : 'REAL' })
     }
 
     if (root === 'settings' && !id) {

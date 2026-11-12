@@ -318,6 +318,7 @@ export async function applyProviderOutcome(params: {
   return { outcome: 'PENDING', detail: 'Outcome still unresolved.' }
 }
 
-export function paymentsConfigured(): boolean {
-  return !env.paymentsSimulator
+export async function paymentsConfigured(): Promise<boolean> {
+  const { resolveSimulatorModes } = await import('../hubtel/credentials')
+  return !(await resolveSimulatorModes()).paymentsSimulator
 }

@@ -412,6 +412,26 @@ New capability: the attendee wallet became genuinely offline. Every ticket the a
 
 **Static:** `bun run lint` 0 errors / 17 warnings (baseline); `bunx tsc --noEmit` 0 errors.
 
+## Re-verification round 14 (2026-11-12, Hubtel live-connect + organizer AI advisor)
+
+New capabilities: (1) **Hubtel live-connect path** — platform admins can now supply real Hubtel credentials without a redeploy: Admin → Integrations → Hubtel connection saves the client ID/secret (one API client feeds Checkout + Send Money + SMS, per the provider's single-key model), merchant account number and approved SMS sender ID into `PlatformSetting` (write-only API, masked display). The payments/SMS simulator gates became **dynamic** (`src/server/hubtel/credentials.ts`): an explicit env override still wins in development, otherwise "auto" switches to the real provider the moment checkout credentials exist from either source. The LLM plumbing was extracted to `src/server/ai/llm.ts` so every AI surface shares one pipeline. (2) **Organizer AI advisor** (`POST /api/v1/orgs/{id}/ai-advisor`, finance-role gated, 8/min): `pricing` — grounded only in the org's real rows (sell-through, 14-day pace, waitlist pressure, same-category/city comparable medians from other organizers); the LLM's picks are validated against the org's actual ticket types, price bounded (≥0, ≤₵5,000, ≤5× current), never auto-applied (advisory only, labelled `AI · validated against your data`), with a clearly-labelled deterministic `heuristic fallback` computed in code when the LLM is unavailable; `digest` — a weekly narrative over real insights numbers with the same honest fallback. (3) **Order cross-sell** (`GET /api/v1/orders/{ref}/suggestions`) — DB-only ("Because you're attending X"), same-category → same-city → upcoming, each card stating the real reason it appeared; no LLM, no paid placement, nothing invented. (4) The docs authentication page (developers.hubtel.com) requires phone-OTP login that this environment cannot complete — the connection probe is the honest substitute: it performs ONE real GHS 1.00 checkout initiate (unpaid sessions expire; nothing is charged) and records the empirical verdict for calibration.
+
+| Case | Outcome | Status |
+|---|---|---|
+| Admin Hubtel card | Admin → Integrations renders the Hubtel connection card (masked saved keys, source `none|db|env`, base URL, mode badge `simulator active` / `REAL checkout live`); fields + Save + Test connection | ✅ |
+| Probe honesty without creds | Test connection with nothing saved → `NOT_CONFIGURED · "No client ID / secret saved yet."` persisted and shown with timestamp | ✅ |
+| Credentials API | `POST /admin/hubtel/credentials` (super-admin only, audited `hubtel.credentials.update` with keys-not-values; secrets never returned) | ✅ code-verified |
+| Dynamic simulator gate | `resolveHubtelCreds()` → `paymentsSimulatorActive()` wired through initiate (order + subscription), status checks, refunds, fulfilment reconcile flag, notify SMS, simulator page, admin SMS log, integration statuses (now async, detail states the credential source) | ✅ code-verified |
+| AI pricing advisor (organizer) | pastor@lightworld.dev → Insights → AI advisor → "Pricing advisor": badge `AI · validated against your data`, 8 ticket types reviewed, HOLD verdicts grounded in real numbers ("Free event with low sales but no urgency to change pricing."); invalid ticket-type picks dropped server-side | ✅ live |
+| AI weekly digest | same session: headline + 3 grounded paragraphs (16 tickets, ₵1,640, 25% check-in, 4.7/5) + "This week's moves" actions | ✅ live |
+| Order cross-sell | ama@example.dev → paid order ORD-D5750B74CF → "Because you're attending Accra Gospel Night of Wonders": Carols by Candlelight Night (same concert category, From ₵20) + Sunday Celebration Service (same city, Free) with honest reason lines | ✅ live |
+| Mobile 390×844 | order page and organizer insights both exactly 390px `scrollWidth` (zero overflow); advisor card buttons wrap cleanly | ✅ |
+| Console / logs | no runtime errors; all AI/admin/orders API calls 200 in dev.log; tsc 0 errors | ✅ |
+
+**Honest limitations:** no real Hubtel credentials exist in this environment, so the probe has only exercised its `NOT_CONFIGURED` path live — `AUTH_OK_CONTRACT_OK` and friends activate the moment the admin pastes real keys, and the v1 contract calibration then follows from the persisted snippet. Secrets live in the platform database by design (documented in SECURITY_REVIEW); the admin API never echoes them.
+
+**Static:** `bun run lint` 0 errors / 17 warnings (baseline); `bunx tsc --noEmit` 0 errors.
+
 ## Not performed (honest)
 
 - Native Android/iOS builds and device testing (mobile is a source scaffold).
