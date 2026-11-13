@@ -3,13 +3,10 @@
 Source scaffold for the iEventPlux attendee + check-in app. Talks to the same
 v1 REST API as the web app (`/api/v1` on the iEventPlux Next.js deployment).
 
-> **Honest status — read before using**
-> This directory is a **source-only scaffold**. It has **NOT been compiled,
-> bundled, or device-tested** in the environment that produced it: no
-> `node_modules`, no lockfile, and no native builds were produced here.
-> TypeScript was reviewed by inspection, not by `tsc`. First install will
-> surface whatever dependency drift exists between now and Expo SDK 52's
-> current patch set — run `npx expo install --fix` to realign.
+> **Honest status — updated 2026-11-13 (round 25 audit)**
+> **Verified statically:** full dependency install (lockfile committed), `tsc --noEmit` passes with **0 errors** against the real Expo SDK 52 / RN 0.76 dependency tree, and `expo export` produces production **Hermes bytecode bundles for both iOS (2.95 MB) and Android (2.96 MB)** — every import resolves, the Metro/Babel pipeline compiles, native-module codegen (expo-camera, expo-secure-store, react-native-svg) passes.
+> **NOT verified here:** on-device runtime, EAS/native `.ipa`/`.apk` builds, store submission + billing, and real Hubtel checkout on a phone — this sandbox has no device/emulator and no store accounts (documented in the repo docs as external blockers). The AsyncStorage offline check-in queue in `CheckinScreen` remains a stub by design.
+> Dependency-drift lesson proven this round: a bare `bun install` resolved `react-native-svg` to 15.16.x, which breaks Expo SDK 52 codegen at bundle time — `npx expo install --fix` realigned it to 15.8.0 (recorded in the lockfile now, so a fresh install is reproducible).
 
 ## What the scaffold covers
 

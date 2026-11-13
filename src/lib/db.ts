@@ -6,6 +6,9 @@ const globalForPrisma = globalThis as unknown as {
 
 // SQLite in this deployment is shared by the Next.js API and the worker/realtime
 // mini-services. WAL mode is required for safe concurrent readers/writer.
+// Under PostgreSQL the equivalent guarantees come from the server itself
+// (MVCC, per-connection timeouts) — these PRAGMAs are SQLite-only and MUST NOT
+// be sent to a Postgres connection (they are a syntax error there).
 async function configureSQLite(prisma: PrismaClient) {
   try {
     // PRAGMAs that return values (journal_mode, busy_timeout) must use queryRaw.
@@ -17,6 +20,12 @@ async function configureSQLite(prisma: PrismaClient) {
   }
 }
 
+/** SQLite is only in play when the URL is a file: (or bare) path — never for postgres://. */
+function isSqliteUrl(url: string): boolean {
+  const u = url.trim().toLowerCase()
+  return u.startsWith('file:') || u === '' || (!u.includes('://') && !u.startsWith('postgres'))
+}
+
 export const db =
   globalForPrisma.prisma ??
   new PrismaClient({
@@ -25,5 +34,7 @@ export const db =
 
 if (!globalForPrisma.prisma) {
   globalForPrisma.prisma = db
-  void configureSQLite(db)
+  if (isSqliteUrl(process.env.DATABASE_URL ?? 'file:./db/custom.db')) {
+    void configureSQLite(db)
+  }
 }

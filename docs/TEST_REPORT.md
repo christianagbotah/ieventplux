@@ -740,3 +740,26 @@ Trigger: "go on" continuation — after the staff surfaces (R20–22) and organi
 - The countdown chip refreshes at minute resolution; verifying an actual label change would require waiting out the next coarser bucket (e.g. "7d 2h" → "7d 1h" ≈ 2 h) — mechanism verified by code review only (standard interval + derived labels).
 - `pastonly@example.dev` + its ticket remain in the dev DB as seed data documenting the only-past wallet state (same convention as the round-23 QA orgs).
 - GitHub push still blocked (PAT credential store gone from the sandbox home) — round 23 (`b548a6a`) and this round are verified + committed locally; re-providing the PAT unblocks both.
+
+## Re-verification round 25 (2026-11-13, PostgreSQL readiness + mobile compile verification)
+
+Trigger: user asked "this should be built with postgresql — is the mobile version architecture fully laid and built?". Two threads: (a) verify real PostgreSQL readiness without a daemon, (b) give the mobile scaffold its first compile-level proof.
+
+### PostgreSQL readiness (verified statically — no daemon can run here)
+- **Environment honestly probed:** no `psql`/`postgres`/`pg_ctl`/`pg_isready` binaries, `/usr/lib/postgresql` absent, `sudo apt-get install postgresql` requires a password this sandbox does not have. A live Postgres cutover is impossible in this environment; the deliverable is verified readiness instead.
+- **Schema validates under Postgres semantics:** provider swapped (`sqlite` → `postgresql`) in a temp schema → `bunx prisma validate` → "The schema is valid 🚀". Zero enums by design (string fields + zod), cuid/now() defaults, JSON-as-string — all portable types; no `dbgenerated`/SQLite dialect anywhere in the schema.
+- **Real deployment DDL generated and committed:** `bunx prisma migrate diff --from-empty --to-schema-datamodel <postgres schema> --script` → `db/postgres-init.sql`: 1,657 lines, **65 CREATE TABLE, 89 CREATE INDEX/UNIQUE INDEX**, complete FK constraints with ON DELETE/UPDATE CASCADE — an applyable artifact for a real Postgres instance.
+- **SQLite-specific code audit:** `queryRaw|executeRaw|PRAGMA` sweep across `src` + `prisma` found exactly ONE site — `src/lib/db.ts`'s WAL/busy_timeout/foreign_keys PRAGMAs. Fixed: they are now guarded on the URL scheme (`isSqliteUrl`: file:/bare/absent → configure; `postgres://` → skip, since those PRAGMAs are a syntax error on Postgres). The `health` route's ``$queryRaw`SELECT 1` `` probe is provider-neutral. All three processes (Next API, worker :3001, realtime :3003) import this one `db.ts`, so the guard covers everything.
+- **Regression under SQLite (the live config):** `/api/v1/health` → `{"database":"up"}`; signed-in agent-browser session renders the R24 wallet (NEXT UP + PAST sections, zero page errors) — the PRAGMAs still fire for `file:` URLs.
+- **Cutover instructions documented:** `.env.example` (step-by-step provider swap + commented `postgresql://` URL line) and `docs/ARCHITECTURE.md` §6 deviation row now point at the DDL artifact and the verified steps. Honest caveat kept: unique-index NULL semantics should be smoke-tested on real Postgres before cutover (see `ledger.ts` note).
+
+### Mobile scaffold — first compile-level verification (was source-only by its own README's admission)
+- **Install:** `bun install` in `mobile/` → 819 packages, lockfile created (now committed for reproducibility).
+- **Typecheck:** `bunx tsc --noEmit` → **0 errors** against the real Expo SDK 52 / RN 0.76 / react-navigation 7 / expo-camera / expo-secure-store / react-native-qrcode-svg dependency tree (previously "reviewed by inspection, not by tsc").
+- **Dependency drift found & fixed exactly as the README predicted:** bare `bun install` resolved `react-native-svg` to 15.16.1 (from `^15.8.0`); first `expo export` failed INSIDE react-native-svg's fabric codegen ("Unknown prop type for opacity") — i.e. drift between registry-latest and SDK-52's expected patch set. `bunx expo install --fix` realigned (`react-native-svg@15.8.0`, `react-native@0.76.9`, `async-storage@1.23.1`, `safe-area-context@4.12.0`).
+- **Production bundles (strongest static proof available here):** `EXPO_PUBLIC_API_BASE_URL=http://localhost:3000 bunx expo export` → **iOS Hermes bytecode 2.95 MB (`index-ec920bdb942e9e13ba294174d86a6bb8.hbc`) and Android Hermes bytecode 2.96 MB (`index-fbfa44b82fc20a46db6e992d56a16a92.hbc`)** — every import resolves, the Metro/Babel pipeline compiles the whole app, native-module codegen passes. Post-fix tsc still 0 errors.
+- **Honest boundaries (restated in `mobile/README.md`'s updated status block):** NOT verified — on-device runtime, EAS/native builds, store submission/billing, real Hubtel checkout on a phone, native broadcast ingest; the CheckinScreen AsyncStorage offline queue is a documented stub. No device or store accounts exist in this sandbox.
+- **Main app regression:** tsc 0 errors; lint 0 errors / 17 warnings (baseline held); health `database: up`; browser wallet golden path green.
+
+### Static checks
+- `bun run lint` (main app): 0 errors / 17 warnings. `bunx tsc --noEmit` (main app): 0 errors. `bunx tsc --noEmit` (mobile/): 0 errors.
