@@ -613,6 +613,26 @@ Cookies cleared before the guest pass; viewports 1280×800 (desktop) and 390×84
 
 **Static:** `bun run lint` 0 errors / 17 warnings (baseline); `bunx tsc --noEmit` 0 errors.
 
+## Re-verification round 21 (2026-11-13, one-click demo personas on the sign-in page)
+
+Trigger: user report — "add the demo users button to the login page for easy loin."
+
+Cookies cleared before the pass; viewports 1280×800 (desktop) and 390×844 (mobile). Screenshots: `docs-assets/round21-signin-desktop.png`, `round21-signin-mobile.png`.
+
+| Case | Outcome | Status |
+|---|---|---|
+| Panel + chips render (signin) | "Demo accounts — one-click sign-in (dev seed)" panel with exactly 6 persona chips (aria-labels enumerated: Super Admin / Finance Admin / Moderator / Support / Organizer / Attendee) below the staff hint | ✅ live |
+| Register-mode exclusion | `#/register`: 0 demo chips, no staff hint — the panel is signin-only by design | ✅ live |
+| One-click golden path — Super Admin | Click chip → fields visibly fill (email `admin@ieventplux.dev`, password 9 chars in-DOM) → auto-submits → in-DOM toast "Welcome back, Kwabena / Super Admin signed in — opening the platform admin console." → URL `#/admin`, "Platform Administration" + role line render | ✅ live |
+| One-click golden path — Finance Admin | Click chip → URL `#/admin`, "Platform Administration" renders, console role line "Finance Admin" — the round-20 staff routing composes with the chips | ✅ live |
+| One-click golden path — Attendee | Click chip → toast "Welcome back" → URL `#/` Discover, account initials "AD" (Ama Darko) — non-staff landing unchanged | ✅ live |
+| In-flight affordance | Chips disable while `busy`; the active persona's chip shows a Loader2 spinner (`busy && form.email === a.email`) | ✅ live (code + fill evidence) |
+| Mobile layout (390×844) | 6 chips wrap 2+3+1 rows (rects enumerated), `scrollWidth == 390` — zero horizontal overflow | ✅ live |
+| Hydration / console / errors | Zero console errors, zero page errors across all three persona sign-ins, sign-outs, both viewports and both modes | ✅ live |
+| Toast-container interplay (honest limitation) | The sonner toast container (`ol.fixed.top-0`) can cover a chip for the ~4s a toast is displayed — a click attempt during that window is rejected by the cover check; toasts auto-dismiss and the chips then remain clickable. Not fixed (toast placement is app-wide); documented | ⚠️ known |
+
+**Static:** `bun run lint` 0 errors / 17 warnings (baseline); `bunx tsc --noEmit` 0 errors.
+
 ## Not performed (honest)
 
 - Native Android/iOS builds and device testing (mobile is a source scaffold).

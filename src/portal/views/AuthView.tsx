@@ -22,6 +22,38 @@ export default function AuthView({ mode }: { mode: 'signin' | 'register' }) {
   const [newPassword, setNewPassword] = useState('')
   const [form, setForm] = useState({ email: '', password: '', displayName: '', phone: '', marketingSms: false })
 
+  // R21: one-click demo personas — every seeded account shares the dev-only seed
+  // password (prisma/seed.ts DEV_PASSWORD); chips fill the form AND submit, so a
+  // single tap signs straight into that persona's post-login destination (staff
+  // roles land in the admin console via finishAuth, everyone else on Discover).
+  const DEV_DEMO_PASSWORD = 'Dev@12345'
+  const DEMO_ACCOUNTS = [
+    { email: 'admin@ieventplux.dev', label: 'Super Admin' },
+    { email: 'finance@ieventplux.dev', label: 'Finance Admin' },
+    { email: 'moderator@ieventplux.dev', label: 'Moderator' },
+    { email: 'support@ieventplux.dev', label: 'Support' },
+    { email: 'pastor@lightworld.dev', label: 'Organizer' },
+    { email: 'ama@example.dev', label: 'Attendee' },
+  ]
+
+  const doSignIn = async (email: string, password: string) => {
+    await api.post('/auth/login', { email, password })
+    await finishAuth()
+  }
+
+  const quickSignIn = async (account: { email: string; label: string }) => {
+    if (busy) return
+    setBusy(true)
+    setForm((f) => ({ ...f, email: account.email, password: DEV_DEMO_PASSWORD }))
+    try {
+      await doSignIn(account.email, DEV_DEMO_PASSWORD)
+    } catch (err) {
+      toast({ title: 'Demo sign-in failed', description: err instanceof ApiClientError ? err.message : 'Please try again.', variant: 'destructive' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const finishAuth = async () => {
     const me = await api.get<{ user: Parameters<typeof setUser>[0]; memberships: Parameters<typeof setMemberships>[0] }>('/auth/me')
     if (!me.user) return
@@ -47,8 +79,7 @@ export default function AuthView({ mode }: { mode: 'signin' | 'register' }) {
     setBusy(true)
     try {
       if (mode === 'signin') {
-        await api.post('/auth/login', { email: form.email, password: form.password })
-        await finishAuth()
+        await doSignIn(form.email, form.password)
       } else {
         const result = await api.post<{ devVerificationCode: string | null }>('/auth/register', {
           email: form.email,
@@ -227,6 +258,27 @@ export default function AuthView({ mode }: { mode: 'signin' | 'register' }) {
             <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-primary/70" aria-hidden />
             Platform staff: sign in with your staff email — you will land straight in the admin console.
           </p>
+        )}
+        {mode === 'signin' && (
+          <div className="mt-5 rounded-xl border border-border/70 bg-secondary/40 p-3.5">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Demo accounts — one-click sign-in (dev seed)</p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {DEMO_ACCOUNTS.map((a) => (
+                <button
+                  key={a.email}
+                  type="button"
+                  onClick={() => void quickSignIn(a)}
+                  disabled={busy}
+                  aria-label={`Sign in as demo ${a.label}`}
+                  className="flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/60 hover:text-primary disabled:opacity-50 ievx-press"
+                >
+                  {busy && form.email === a.email ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden /> : null}
+                  {a.label}
+                </button>
+              ))}
+            </div>
+            <p className="mt-2 text-[10.5px] text-muted-foreground/80">All demo personas share the seed password Dev@12345 — review without hunting for credentials.</p>
+          </div>
         )}
       </div>
 
