@@ -16,8 +16,11 @@ interface BroadcastRow {
   description?: string | null
   accessPolicy: string
   priceMinor?: number | null
+  replayPriceMinor?: number | null
   status: string
   startedAt?: string | null
+  endedAt?: string | null
+  minutesUsed?: number | null
   viewerCapacity: number
   event: { id: string; title: string; slug: string; coverImageUrl?: string | null; org: { name: string; slug: string } }
 }
@@ -123,7 +126,15 @@ export default function LiveNow() {
                 <div className="p-3.5">
                   <p className="truncate text-sm font-semibold">{b.title}</p>
                   <p className="truncate text-xs text-muted-foreground">{b.event.org.name}</p>
-                  <Badge variant="outline" className="mt-2 text-[10px]">{humanize(b.accessPolicy)}</Badge>
+                  <p className="mt-1 truncate text-[11px] text-muted-foreground">
+                    {b.endedAt ? dateLong(b.endedAt) : ''}{b.minutesUsed ? ` · ${Math.round(b.minutesUsed)} min` : ''}
+                  </p>
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                    <Badge variant="outline" className="text-[10px]">{accessLabel(b)}</Badge>
+                    {b.replayPriceMinor !== null && b.replayPriceMinor !== undefined && b.replayPriceMinor > 0 ? (
+                      <Badge variant="secondary" className="text-[10px]">Replay {money(b.replayPriceMinor)}</Badge>
+                    ) : null}
+                  </div>
                 </div>
               </button>
             ))}

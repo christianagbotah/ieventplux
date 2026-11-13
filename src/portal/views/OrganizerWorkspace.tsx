@@ -1,9 +1,10 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { io } from 'socket.io-client'
 import {
   LayoutDashboard, CalendarPlus, Users, Ticket, Radio, Megaphone, MessageSquare, Wallet, UserCog, CreditCard, Settings,
-  ChevronLeft, ChevronRight, ChevronDown, Plus, Loader2, Camera, ScanLine, Search, Play, Square, RefreshCw, KeyRound, Pause, PlayCircle, Trash2, FileText, ShieldAlert, TrendingUp, Repeat, Activity, Vote, HandCoins, Sparkles, Download, Upload, CheckCircle2,
+  ChevronLeft, ChevronRight, ChevronDown, Plus, Loader2, Camera, ScanLine, Search, Play, Square, RefreshCw, KeyRound, Pause, PlayCircle, Trash2, FileText, ShieldAlert, TrendingUp, Repeat, Activity, Vote, HandCoins, Sparkles, Download, Upload, CheckCircle2, Eye, EyeOff, Flag, History,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -14,11 +15,12 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Switch } from '@/components/ui/switch'
+import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { useToast } from '@/hooks/use-toast'
 import { api, ApiClientError } from '../api'
 import { navigate, type Route } from '../router'
 import { usePortal } from '../store'
-import { money, dateLong, timeRange, humanize, statusTone, relative, moneyToInputValue, moneyFromCedis } from '../format'
+import { money, dateLong, timeRange, humanize, statusTone, relative, moneyToInputValue, moneyFromCedis, initials } from '../format'
 import { PlayerSim } from '../components/PlayerSim'
 import { EmptyState } from '../components/EventCard'
 import { flash } from '../animate'
@@ -1227,10 +1229,11 @@ function StudioView({ orgId }: { orgId: string }) {
   const { toast } = useToast()
   const [broadcasts, setBroadcasts] = useState<{ id: string; title: string; status: string; accessPolicy: string; accessLabel?: string; event: { title: string } }[] | null>(null)
   const [events, setEvents] = useState<OrgEvent[]>([])
-  const [newB, setNewB] = useState({ eventId: '', title: '', accessPolicy: 'FREE', price: '50.00' })
+  const [newB, setNewB] = useState({ eventId: '', title: '', accessPolicy: 'FREE', price: '50.00', replayPrice: '', capacity: '500' })
   const [ingest, setIngest] = useState<{ url: string; key: string } | null>(null)
   const [cameraOn, setCameraOn] = useState(false)
   const [health, setHealth] = useState<{ resolution?: string; fps?: number; label?: string } | null>(null)
+  const [moderatingId, setModeratingId] = useState<string | null>(null)
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
 
@@ -1277,6 +1280,9 @@ function StudioView({ orgId }: { orgId: string }) {
         title: newB.title,
         accessPolicy: newB.accessPolicy,
         priceMinor: newB.accessPolicy === 'PAID' ? moneyFromCedis(Number(newB.price)) : undefined,
+        replayPriceMinor:
+          newB.accessPolicy === 'PAID' && newB.replayPrice.trim() !== '' ? moneyFromCedis(Number(newB.replayPrice)) : undefined,
+        viewerCapacity: Math.max(50, Math.min(20000, Math.round(Number(newB.capacity) || 500))),
       })
       toast({ title: 'Broadcast scheduled' })
       await load()
@@ -1298,7 +1304,8 @@ function StudioView({ orgId }: { orgId: string }) {
 
   const endLive = async (id: string) => {
     await api.post(`/broadcasts/${id}/end`).catch(() => {})
-    toast({ title: 'Broadcast ended', description: 'Replay preparation started (when recording is enabled).' })
+    toast({ title: 'Broadcast ended', description: 'The replay is available immediately for entitled viewers.' })
+    setModeratingId((m) => (m === id ? null : m))
     await load()
   }
 
@@ -1367,7 +1374,7 @@ function StudioView({ orgId }: { orgId: string }) {
 
       <Card className="rounded-2xl">
         <CardHeader className="pb-2"><CardTitle className="text-base">Schedule a broadcast</CardTitle></CardHeader>
-        <CardContent className="grid gap-2 sm:grid-cols-[1fr_1fr_150px_100px_auto]">
+        <CardContent className="grid gap-2 md:grid-cols-[1fr_1fr_130px_100px_110px_auto]">
           <Select value={newB.eventId} onValueChange={(v) => setNewB((s) => ({ ...s, eventId: v }))}>
             <SelectTrigger aria-label="Event"><SelectValue placeholder="Event" /></SelectTrigger>
             <SelectContent>{events.map((e) => <SelectItem key={e.id} value={e.id}>{e.title}</SelectItem>)}</SelectContent>
@@ -1382,8 +1389,15 @@ function StudioView({ orgId }: { orgId: string }) {
             </SelectContent>
           </Select>
           {newB.accessPolicy === 'PAID' && <Input value={newB.price} onChange={(e) => setNewB((s) => ({ ...s, price: e.target.value }))} placeholder="₵" inputMode="decimal" aria-label="Pass price" />}
+          {newB.accessPolicy === 'PAID' && (
+            <Input value={newB.replayPrice} onChange={(e) => setNewB((s) => ({ ...s, replayPrice: e.target.value }))} placeholder="Replay ₵" inputMode="decimal" aria-label="Replay price (blank = same as pass)" />
+          )}
+          <Input value={newB.capacity} onChange={(e) => setNewB((s) => ({ ...s, capacity: e.target.value }))} placeholder="500" inputMode="numeric" aria-label="Viewer capacity (50–20000)" className="md:col-span-2" />
           <Button className="rounded-full" disabled={!newB.eventId || !newB.title.trim()} onClick={() => void createBroadcast()}>Schedule</Button>
         </CardContent>
+        <p className="px-6 pb-4 text-[11px] text-muted-foreground">
+          Capacity enforces distinct live viewers (heartbeat-fresh sessions); replays are on-demand and uncapped. A blank replay price means the replay follows the same pass/ticket rules as the live room.
+        </p>
       </Card>
 
       {broadcasts === null ? (
@@ -1405,6 +1419,7 @@ function StudioView({ orgId }: { orgId: string }) {
                   {b.status === 'SCHEDULED' && <Button size="sm" className="rounded-full ievx-press" onClick={() => void goLive(b.id)}><Play className="mr-1 h-3.5 w-3.5" /> Go live</Button>}
                   {b.status === 'LIVE' && (
                     <>
+                      <Button size="sm" variant="outline" className="rounded-full" onClick={() => setModeratingId((m) => (m === b.id ? null : b.id))}><MessageSquare className="mr-1 h-3.5 w-3.5" /> Chat</Button>
                       <Button size="sm" variant="outline" className="rounded-full" onClick={() => void rotateKey(b.id)}><KeyRound className="mr-1 h-3.5 w-3.5" /> Rotate key</Button>
                       <Button size="sm" variant="destructive" className="rounded-full" onClick={() => void endLive(b.id)}><Square className="mr-1 h-3.5 w-3.5" /> End</Button>
                     </>
@@ -1412,10 +1427,111 @@ function StudioView({ orgId }: { orgId: string }) {
                   <Button size="sm" variant="outline" className="rounded-full" onClick={() => navigate(`/broadcast/${b.id}`)}>Preview</Button>
                 </div>
               </CardContent>
+              {b.status === 'LIVE' && moderatingId === b.id && (
+                <div className="border-t border-border/60 p-4">
+                  <ChatModerationPanel broadcastId={b.id} title={b.title} />
+                </div>
+              )}
             </Card>
           ))}
         </div>
       )}
+    </div>
+  )
+}
+
+// ── Studio chat moderation (hide / flag / restore live-room messages) ──────────
+
+interface ModRow {
+  id: string
+  body: string
+  createdAt: string
+  status: string
+  user: { id: string; displayName: string }
+}
+
+function ChatModerationPanel({ broadcastId, title }: { broadcastId: string; title: string }) {
+  const { toast } = useToast()
+  const [messages, setMessages] = useState<ModRow[] | null>(null)
+
+  const load = useCallback(async () => {
+    const data = await api
+      .get<{ items: ModRow[] }>(`/broadcasts/${broadcastId}/chat?pageSize=60`)
+      .catch(() => ({ items: [] as ModRow[] }))
+    setMessages(data.items)
+  }, [broadcastId])
+
+  useEffect(() => {
+    void (async () => {
+      await load()
+    })()
+  }, [load])
+
+  // Live updates: new messages and moderation deltas arrive over the room socket.
+  useEffect(() => {
+    const socket = io('/?XTransformPort=3003', { transports: ['websocket', 'polling'], reconnection: true })
+    socket.on('connect', () => socket.emit('join', { room: `broadcast:${broadcastId}` }))
+    socket.on('chat', (message: ModRow) => {
+      setMessages((prev) => (prev && prev.some((m) => m.id === message.id) ? prev : [...(prev ?? []).slice(-80), message]))
+    })
+    socket.on('chat:moderated', (payload: { id: string; status: string }) => {
+      setMessages((prev) => (prev ? prev.map((m) => (m.id === payload.id ? { ...m, status: payload.status } : m)) : prev))
+    })
+    return () => {
+      socket.disconnect()
+    }
+  }, [broadcastId])
+
+  const moderate = async (messageId: string, status: 'VISIBLE' | 'HIDDEN' | 'FLAGGED') => {
+    try {
+      await api.post(`/broadcasts/${broadcastId}/chat-moderate`, { messageId, status })
+      setMessages((prev) => (prev ? prev.map((m) => (m.id === messageId ? { ...m, status } : m)) : prev))
+      if (status === 'HIDDEN') toast({ title: 'Message hidden', description: 'Viewers see a removal note immediately (realtime).' })
+      if (status === 'FLAGGED') toast({ title: 'Message flagged', description: 'Pulled from the viewer feed pending review.' })
+      if (status === 'VISIBLE') toast({ title: 'Message restored' })
+    } catch (err) {
+      toast({ title: 'Moderation failed', description: err instanceof ApiClientError ? err.message : undefined, variant: 'destructive' })
+    }
+  }
+
+  return (
+    <div className="rounded-xl border border-border/60">
+      <div className="flex items-center justify-between border-b border-border/60 px-4 py-2.5">
+        <p className="text-sm font-bold">Moderate live chat — <span className="text-muted-foreground">{title}</span></p>
+        <Button variant="ghost" size="sm" className="rounded-full text-muted-foreground" onClick={() => void load()}><RefreshCw className="h-3.5 w-3.5" aria-label="Reload chat" /></Button>
+      </div>
+      <div className="ievx-scrollbar max-h-72 space-y-2.5 overflow-y-auto px-4 py-3">
+        {messages === null && <p className="py-6 text-center text-xs text-muted-foreground">Loading chat…</p>}
+        {messages !== null && messages.length === 0 && <p className="py-6 text-center text-xs text-muted-foreground">No messages yet — viewers are quiet.</p>}
+        {messages?.map((m) => (
+          <div key={m.id} className={`flex items-start gap-2.5 rounded-lg p-2 ${m.status !== 'VISIBLE' ? 'bg-secondary/50' : ''}`}>
+            <Avatar className="h-7 w-7">
+              <AvatarFallback className="bg-secondary text-[10px] font-bold">{initials(m.user.displayName)}</AvatarFallback>
+            </Avatar>
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] leading-none">
+                <span className="font-semibold">{m.user.displayName}</span> <span className="text-muted-foreground">· {relative(m.createdAt)}</span>
+                {m.status === 'HIDDEN' && <Badge variant="secondary" className="ml-2 text-[9px] uppercase">hidden</Badge>}
+                {m.status === 'FLAGGED' && <Badge className="ml-2 bg-amber-500/15 text-[9px] uppercase text-amber-700">flagged</Badge>}
+              </p>
+              <p className={`mt-0.5 text-sm leading-snug ${m.status === 'HIDDEN' ? 'text-muted-foreground line-through' : ''}`}>{m.body}</p>
+            </div>
+            <div className="flex shrink-0 gap-1">
+              {m.status === 'VISIBLE' ? (
+                <>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 rounded-full" aria-label={`Hide message from ${m.user.displayName}`} onClick={() => void moderate(m.id, 'HIDDEN')}><EyeOff className="h-3.5 w-3.5" /></Button>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 rounded-full" aria-label={`Flag message from ${m.user.displayName}`} onClick={() => void moderate(m.id, 'FLAGGED')}><Flag className="h-3.5 w-3.5" /></Button>
+                </>
+              ) : (
+                <Button variant="ghost" size="icon" className="h-7 w-7 rounded-full" aria-label={`Restore message from ${m.user.displayName}`} onClick={() => void moderate(m.id, 'VISIBLE')}><Eye className="h-3.5 w-3.5" /></Button>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+      <p className="border-t border-border/60 px-4 py-2 text-[11px] text-muted-foreground">
+        Hidden messages stay in this ledger for restore; flagged messages are pulled from the viewer feed pending review. Every action is audited.
+      </p>
     </div>
   )
 }

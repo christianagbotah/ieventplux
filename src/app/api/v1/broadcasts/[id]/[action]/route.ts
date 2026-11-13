@@ -2,19 +2,29 @@ import { NextRequest } from 'next/server'
 import { handle, jsonOk, requireUser, readJson, errors, rateLimit, jsonList, pagination } from '@/server/api'
 import { db } from '@/lib/db'
 import { eventOrgAccess } from '@/server/permissions'
-import { issuePlayback, verifyPlayback, startBroadcast, endBroadcast, rotateStreamKey, resolveEntitlement } from '@/server/services/broadcasts'
+import { issuePlayback, verifyPlayback, startBroadcast, endBroadcast, rotateStreamKey, resolveEntitlement, moderateChatMessage } from '@/server/services/broadcasts'
 import { realtimeEmit } from '@/server/services/realtime'
 import { env } from '@/server/env'
 
 type RouteContext = { params: Promise<{ id: string; action: string }> }
 
+/** Organizer gate for studio operations (start/end/rotate/chat moderation). */
+async function requireBroadcastManage(broadcastId: string, userId: string) {
+  const broadcast = await db.liveBroadcast.findUnique({ where: { id: broadcastId }, select: { id: true, eventId: true, status: true } })
+  if (!broadcast) throw errors.notFound('Broadcast not found.')
+  const access = await eventOrgAccess(userId, broadcast.eventId, 'broadcast:manage')
+  if (!access.allowed) throw errors.forbidden('Broadcast control is organizer-only.')
+  return broadcast
+}
+
 /**
  * Broadcast sub-actions:
- *  GET  chat           → chat history (moderated, VISIBLE only)
+ *  GET  chat           → chat history (viewers: VISIBLE only · organizers: all statuses)
  *  POST chat           → send chat message (rate-limited)
- *  POST play           → entitlement check + short-lived playback token (10 min)
+ *  POST play           → entitlement check + short-lived playback token (10 min; replay or live)
  *  POST heartbeat      → keep playback session alive
- *  POST start / end / rotate-key → organizer studio operations
+ *  POST chat-moderate  → organizer hide/flag/restore a chat message
+ *  POST start / end / rotate-key → organizer studio operations (org-gated)
  */
 export async function GET(req: NextRequest, ctx: RouteContext) {
   return handle(async () => {
@@ -22,14 +32,23 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
 
     if (action === 'chat') {
       const { page, pageSize, offset } = pagination(req, 40, 100)
+      // Viewers read VISIBLE only. Organizers (broadcast:manage) see the full
+      // moderation ledger — HIDDEN and FLAGGED rows included, with status labels.
+      const session = await (await import('@/server/auth')).getSession()
+      let organizer = false
+      if (session) {
+        const broadcast = await db.liveBroadcast.findUnique({ where: { id }, select: { eventId: true } })
+        if (broadcast) organizer = (await eventOrgAccess(session.user.id, broadcast.eventId, 'broadcast:manage')).allowed
+      }
+      const statusFilter = organizer ? undefined : 'VISIBLE'
       const messages = await db.chatMessage.findMany({
-        where: { broadcastId: id, status: 'VISIBLE' },
+        where: { broadcastId: id, ...(statusFilter ? { status: statusFilter } : {}) },
         include: { user: { select: { id: true, displayName: true, avatarUrl: true } } },
         orderBy: { createdAt: 'desc' },
         skip: offset,
         take: pageSize,
       })
-      const total = await db.chatMessage.count({ where: { broadcastId: id, status: 'VISIBLE' } })
+      const total = await db.chatMessage.count({ where: { broadcastId: id, ...(statusFilter ? { status: statusFilter } : {}) } })
       return jsonList(messages.reverse(), total, page, pageSize)
     }
 
@@ -48,19 +67,25 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
       } else if (!access.allowed) {
         access = { allowed: false, reason: 'sign_in_required', requires: broadcast.accessPolicy }
       }
-      // Ingest details never go to attendees — only org staff.
-      let ingest: { url: string; key: string } | null = null
-      if (session) {
-        const access2 = await eventOrgAccess(session.user.id, broadcast.eventId, 'broadcast:manage')
-        if (access2.allowed && broadcast.status === 'LIVE') {
-          const rotated = await rotateStreamKey(id)
-          ingest = { url: rotated.ingestUrl, key: rotated.streamKey }
-        }
+      // Replay surface: an ENDED broadcast with a ready recording plays back on
+      // demand (same access policy as live; capacity does not apply to replays).
+      // replayPriceMinor overrides the pass price for on-demand viewing; when
+      // unset the live-pass price/ticket-benefit rules carry over.
+      const isReplay = broadcast.status === 'ENDED'
+      const replayEffectiveMinor = broadcast.replayPriceMinor ?? broadcast.priceMinor
+      const replay = {
+        available: isReplay && broadcast.recordingStatus === 'AVAILABLE',
+        effectivePriceMinor: isReplay ? replayEffectiveMinor : null,
       }
+      // Ingest credentials are NEVER shown here: the raw stream key is only
+      // revealed once, by the explicit start/rotate-key organizer actions.
+      // (Detail previously auto-rotated on every organizer page load while LIVE —
+      // killing a running OBS uplink mid-stream. Fixed this round.)
       return jsonOk({
         broadcast: { ...broadcast, streamKeyHash: undefined, ingestUrl: undefined },
         access,
-        ingest,
+        ingest: null,
+        replay,
         delivery: env.videoProvider === 'simulator' ? 'SYNTHETIC' : 'CLOUDFLARE_STREAM',
         deliveryNote:
           env.videoProvider === 'simulator'
@@ -117,6 +142,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     }
 
     if (action === 'start') {
+      await requireBroadcastManage(id, user.id)
       const result = await startBroadcast(id, user.id)
       const { audit } = await import('@/server/audit')
       await audit({ actorUserId: user.id, actorLabel: user.email, action: 'broadcast.start', entityType: 'LiveBroadcast', entityId: id })
@@ -124,17 +150,36 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     }
 
     if (action === 'end') {
+      await requireBroadcastManage(id, user.id)
       const result = await endBroadcast(id)
-      return jsonOk({ ...result, note: 'Broadcast ended. Replay is being prepared when recording is enabled.' })
+      const { audit } = await import('@/server/audit')
+      await audit({ actorUserId: user.id, actorLabel: user.email, action: 'broadcast.end', entityType: 'LiveBroadcast', entityId: id })
+      return jsonOk({ ...result, note: 'Broadcast ended. The replay is available immediately for entitled viewers.' })
     }
 
     if (action === 'rotate-key') {
+      await requireBroadcastManage(id, user.id)
       const broadcast = await db.liveBroadcast.findUnique({ where: { id } })
       if (!broadcast) throw errors.notFound('Broadcast not found.')
-      const access = await eventOrgAccess(user.id, broadcast.eventId, 'broadcast:manage')
-      if (!access.allowed) throw errors.forbidden('Stream keys are organizer-only.')
       const rotated = await rotateStreamKey(id)
+      const { audit } = await import('@/server/audit')
+      await audit({ actorUserId: user.id, actorLabel: user.email, action: 'broadcast.rotate_key', entityType: 'LiveBroadcast', entityId: id })
       return jsonOk({ ingestUrl: rotated.ingestUrl, streamKey: rotated.streamKey, note: 'Previous key revoked. Update OBS/vMix before your next broadcast.' })
+    }
+
+    if (action === 'chat-moderate') {
+      // Organizer-only moderation: hide / flag / restore a chat message.
+      // The viewer feed receives a realtime chat:moderated event so removals
+      // land without a refresh (GET history already filters by status).
+      await requireBroadcastManage(id, user.id)
+      rateLimit(req, 'chat-moderate', 60, 60_000)
+      const messageId = String(body.messageId ?? '')
+      const status = String(body.status ?? '')
+      if (!messageId) throw errors.badRequest('messageId is required.')
+      const message = await moderateChatMessage({ broadcastId: id, messageId, status })
+      const { audit } = await import('@/server/audit')
+      await audit({ actorUserId: user.id, actorLabel: user.email, action: `broadcast.chat_${status.toLowerCase()}`, entityType: 'ChatMessage', entityId: messageId, after: { broadcastId: id, status } })
+      return jsonOk({ message })
     }
 
     throw errors.notFound('Unknown broadcast action.')

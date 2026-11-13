@@ -56,6 +56,12 @@ export async function POST(req: NextRequest) {
     const title = sanitizeText(body.title, 140) || 'Live broadcast'
     const accessPolicy = ['FREE', 'PAID', 'TICKET_HOLDERS', 'INVITED'].includes(String(body.accessPolicy)) ? String(body.accessPolicy) : 'FREE'
     const priceMinor = accessPolicy === 'PAID' ? Math.max(100, Math.round(Number(body.priceMinor ?? 1000))) : null
+    // Optional replay override (PAID passes only): when omitted, replay access
+    // follows the same pass/ticket-benefit rules as the live room. 0 = free replay.
+    const replayPriceMinor =
+      accessPolicy === 'PAID' && body.replayPriceMinor !== undefined && body.replayPriceMinor !== null && body.replayPriceMinor !== ''
+        ? Math.max(0, Math.round(Number(body.replayPriceMinor)))
+        : null
     const broadcast = await db.liveBroadcast.create({
       data: {
         eventId,
@@ -63,6 +69,7 @@ export async function POST(req: NextRequest) {
         description: sanitizeText(body.description, 500) || null,
         accessPolicy,
         priceMinor,
+        replayPriceMinor,
         status: 'SCHEDULED',
         viewerCapacity: Math.max(50, Math.min(20000, Number(body.viewerCapacity ?? 500))),
         createdById: user.id,

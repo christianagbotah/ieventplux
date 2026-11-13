@@ -801,3 +801,33 @@ Trigger: user challenged round 25's claim ("are you sure you cannot install post
 - `db/custom.db` (SQLite) stays in the repo as the documented fallback; its working-tree drift (R24 fixture etc.) is committed rather than reset.
 - The embedded cluster uses trust auth on localhost — development-only (documented in the boot script header).
 - Sandbox restarts reset process state: `bun run db:postgres` + service restarts are required (documented in `.env.example` + scripts header); the sandbox's own init may re-export the packaged SQLite URL — the `db.ts` resolver neutralizes it for all app processes; Prisma CLI calls need the explicit `DATABASE_URL=` prefix.
+
+## Re-verification round 27 — Broadcast domain completion (replay / moderation / capacity / auth fixes)
+
+Date: 2026-11-13 · Postgres LIVE (R26 stack) · all services on :3000/:3001/:3003 + Caddy :81 gateway
+
+### Environment restored after sandbox restart (fresh cluster volume)
+- Postgres cluster re-inited via `bun run db:postgres`; **sandbox reset had also restored the packaged `.env` (SQLite URL)** — flipped back to `postgresql://…`; schema `db push` (65 tables) + canonical seed re-ran green (14 users / 19 events / 3 broadcasts: LIVE×2 + ENDED replay).
+- Realtime mini-service `node_modules` were wiped by the reset → `bun install` (socket.io@4.8.4) → :3003 healthy again. Worker/realtime/dev restarted via the R26 double-fork pattern; `/api/v1/health` → `database: up`.
+
+### Backend golden paths (curl, before any UI verification)
+- **Moderation:** pastor hides ama's msg → HIDDEN; flags second → FLAGGED; ama's GET chat = EMPTY (viewer filter) while pastor's GET shows the full ledger with statuses; restore → VISIBLE again for ama. kojo (attendee) → `chat-moderate` 403 "Broadcast control is organizer-only."
+- **Capacity:** SQL cap=1; kojo seated → ama play → **409 ROOM_FULL** "at capacity (1 viewers)"; ama re-play while kojo seated → 409; kojo re-issue (already seated) → 200.
+- **Authorization fix (the round's security defect):** kojo `POST …/end` → **403** (previously ANY user could end ANY broadcast); pastor end → 200 + minutes + audit rows.
+- **Replay:** end → detail `{replay: {available: true, effectivePriceMinor}}`; ama play → `mode: REPLAY`; chat POST on ENDED → 409 CONFLICT (read-only transcript enforced); DB row: `recordingStatus AVAILABLE`, `recordingUrl simulated://replay/{id}`, `minutesUsed`.
+- **Entitled vs gated replay:** new PAID broadcast (replay ₵30) on the masterclass event — ama (VALID VIRTUAL ticket) → access allowed, ticket-benefit entitlement created, play REPLAY; kojo (no ticket) → honestly gated with the replay price surfaced.
+
+### Browser verification (agent-browser; sessions: ama/kojo @390, pastor @1280)
+- **LiveNow replay cards:** "Fri, 13 Nov 2026, 22:50 · 1 min · Free stream" and "Ticket holders · Replay ₵20.00" (new metadata live from the API).
+- **Replay viewer (ama, 390):** PlayerSim REPLAY badge + "Simulated stream"; meta "recorded Fri, 13 Nov 2026, 22:50 · 1 min · session renews automatically"; **Chat transcript / read-only / "Chat closed after the live session"** with the restored message visible and no composer. Screenshot `docs-assets/round27-replay-mobile.png`.
+- **Gated replay (ama):** Easter TICKET_HOLDERS replay → "This replay requires a viewing pass (₵20.00) or a ticket that includes online access." + Get access CTA. Screenshot `round27-replay-gate-mobile.png`.
+- **Studio (pastor, 1280):** schedule form renders Viewer capacity (50–20000) + Pass price + **Replay price (blank = same as pass)** inputs when PAID; broadcast created + **Go live** → ingest panel (URL/key, "PRIVATE INGEST — NEVER SHARE WITH ATTENDEES"); new **Chat** button on live rows opens the moderation panel with per-message Hide/Flag/Restore. Screenshot `round27-moderation-studio.png`.
+- **ROOM_FULL gate (ama, 390):** with kojo seated at cap=1 → "This broadcast is at capacity (1 viewers). Try again when a seat frees up." + **Try again**; SQL bump to 2 → Try again → PlayerSim admitted. Screenshot `round27-roomfull-mobile.png`.
+- **Realtime two-browser moderation sync (through the REAL gateway :81):** kojo's viewer shows his live messages + presence badge ("watching · cap 2" — socket proven connected); pastor hides one → kojo's row becomes the **"Message removed by a moderator." tombstone within ~2s without reload**; restore → message returns live; flag → row vanishes from the viewer feed. Screenshot `round27-chat-live-mobile.png`.
+- **Replay after end (kojo, :81):** reload → REPLAY view with "recorded Fri, 13 Nov 2026, 22:57 · 5 min", read-only transcript, zero page errors. Screenshot `round27-replay-kojo.png`.
+- **Sweeps:** 768×1024 and 1280×900 zero horizontal overflow (scrollWidth == clientWidth) on the replay view; dark-mode studio screenshotted (`round27-studio-1280-dark.png`); LiveNow at 390 zero overflow; zero console/page errors across ama/kojo/pastor sessions; dev.log free of prisma/runtime errors (all broadcast API calls 200).
+- **Gateway lesson recorded:** direct-to-:3000 testing bypasses Caddy (:81) and silently breaks `io('/?XTransformPort=3003')` via Next.js's trailing-slash 308 — realtime paths MUST be verified through the :81 gateway (they are, this round); the app itself was correct all along.
+
+### Cleanup & static checks
+- All three R27 test broadcasts (their sessions/messages/entitlements cascade-deleted) — final DB state matches the canonical seed (2 LIVE + 1 ENDED replay).
+- `bun run lint`: 0 errors / **17 warnings (baseline held** — the two new load effects were wrapped in async IIFEs to avoid 18/19). `bunx tsc --noEmit`: 0 errors.

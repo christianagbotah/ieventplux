@@ -12,12 +12,41 @@ import { env } from '../env'
  */
 
 const PLAYBACK_TTL_MS = 10 * 60 * 1000
+// A viewer counts against the room capacity while their playback session is
+// heartbeat-fresh within this window (the client heartbeats every 60s; the
+// PLAYBACK_CLEANUP worker sweeps sessions that stop refreshing).
+const ACTIVE_VIEWER_WINDOW_MS = 2 * 60 * 1000
 
 export async function issuePlayback(params: { broadcastId: string; userId: string; ip?: string | null }) {
   const broadcast = await db.liveBroadcast.findUnique({ where: { id: params.broadcastId }, include: { event: true } })
   if (!broadcast) throw errors.notFound('Broadcast not found.')
-  if (broadcast.status === 'ENDED') throw errors.conflict('This broadcast has ended. Replay availability is shown on the event page.')
-  if (broadcast.status !== 'LIVE') throw errors.conflict('This broadcast is not live yet.')
+
+  const isReplay = broadcast.status === 'ENDED'
+  if (broadcast.status === 'FAILED') throw errors.conflict('This broadcast failed and is not available for viewing.')
+  if (!isReplay && broadcast.status !== 'LIVE') throw errors.conflict('This broadcast is not live yet.')
+  if (isReplay && broadcast.recordingStatus !== 'AVAILABLE') {
+    throw errors.conflict('Replay for this broadcast is not available yet.')
+  }
+
+  // Live rooms enforce the organizer's viewerCapacity (distinct heartbeat-fresh
+  // viewers). Replays are on-demand and carry no shared-room pressure, so the
+  // cap does not apply. Advisory count-then-create: a burst exactly at the cap
+  // can admit a viewer over — acceptable at this scale and documented honestly.
+  if (!isReplay) {
+    const activeViewers = await db.playbackSession.findMany({
+      where: { broadcastId: broadcast.id, revokedAt: null, lastHeartbeatAt: { gte: new Date(Date.now() - ACTIVE_VIEWER_WINDOW_MS) } },
+      select: { userId: true },
+      distinct: ['userId'],
+    })
+    const alreadySeated = activeViewers.some((v) => v.userId === params.userId)
+    if (!alreadySeated && activeViewers.length >= broadcast.viewerCapacity) {
+      throw new (await import('../api')).ApiError(
+        'ROOM_FULL',
+        `This broadcast is at capacity (${broadcast.viewerCapacity} viewers). Try again when a seat frees up.`,
+        409,
+      )
+    }
+  }
 
   // Free broadcasts follow the event's privacy policy (public/unlisted/invited).
   const event = broadcast.event
@@ -58,6 +87,7 @@ export async function issuePlayback(params: { broadcastId: string; userId: strin
   return {
     playbackToken: token,
     expiresAt: session.expiresAt.toISOString(),
+    mode: isReplay ? ('REPLAY' as const) : ('LIVE' as const),
     delivery: env.videoProvider === 'simulator' ? ('SYNTHETIC' as const) : ('CLOUDFLARE_STREAM' as const),
     deliveryNote:
       env.videoProvider === 'simulator'
@@ -138,9 +168,40 @@ export async function endBroadcast(broadcastId: string) {
   const minutes = broadcast.startedAt ? Math.max(1, Math.round((endedAt.getTime() - broadcast.startedAt.getTime()) / 60000)) : 0
   await db.liveBroadcast.update({
     where: { id: broadcastId },
-    data: { status: 'ENDED', endedAt, minutesUsed: minutes, recordingStatus: 'AVAILABLE' },
+    data: {
+      status: 'ENDED',
+      endedAt,
+      minutesUsed: minutes,
+      recordingStatus: 'AVAILABLE',
+      // Under the simulator the "recording" is the labelled synthetic renderer;
+      // with Cloudflare Stream configured this is where the direct-upload/DVR
+      // integration would persist the real HLS replay URL (external blocker:
+      // CF credentials — see docs/PROVIDER_CAPABILITIES.md).
+      recordingUrl: env.videoProvider === 'simulator' ? `simulated://replay/${broadcastId}` : broadcast.recordingUrl,
+    },
   })
   await db.event.update({ where: { id: broadcast.eventId }, data: { status: 'ENDED' } })
   await db.playbackSession.updateMany({ where: { broadcastId, revokedAt: null }, data: { revokedAt: endedAt } })
   return { minutes }
+}
+
+// ── Chat moderation ──────────────────────────────────────────────────────────
+// ChatMessage.status was modeled (VISIBLE | HIDDEN | FLAGGED) but previously had
+// no write path — this closes that loop. Semantics: viewers only ever read
+// VISIBLE rows; HIDDEN keeps the row for organizer restore; FLAGGED pulls it
+// from the viewer feed pending review (organizers see all three states).
+export async function moderateChatMessage(params: { broadcastId: string; messageId: string; status: string }) {
+  const message = await db.chatMessage.findUnique({ where: { id: params.messageId } })
+  if (!message || message.broadcastId !== params.broadcastId) throw errors.notFound('Chat message not found on this broadcast.')
+  if (!['VISIBLE', 'HIDDEN', 'FLAGGED'].includes(params.status)) {
+    throw errors.badRequest('Chat moderation status must be VISIBLE, HIDDEN or FLAGGED.')
+  }
+  const updated = await db.chatMessage.update({
+    where: { id: message.id },
+    data: { status: params.status },
+    include: { user: { select: { id: true, displayName: true } } },
+  })
+  const { realtimeEmit } = await import('./realtime')
+  await realtimeEmit(`broadcast:${params.broadcastId}`, 'chat:moderated', { id: updated.id, status: updated.status })
+  return updated
 }
