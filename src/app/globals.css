@@ -232,6 +232,31 @@
   }
 }
 
+/* R19b — workspace dashboard: gross-sales glass card (user report: inner panel
+   too small within the card, fonts too large). The catalog ships 1.75rem outer
+   padding + a 1.4/1.5rem inner panel — on a stat grid that swallowed the card.
+   The panel now extends to a slim 0.55rem inset and fills the card height (the
+   card is a flex row), title 1.3rem→0.7rem, panel padding compacted. View code
+   drops the old inline font-size override; (0,2,0) specificity beats the
+   injected catalog CSS. */
+.efx-glassmorphism-card.iefx-gross-card {
+  display: flex;
+  padding: 0.55rem;
+}
+.iefx-gross-card .efx-glassmorphism-card__panel {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center; /* matches the siblings' items-center stat rows */
+  padding: 0.9rem 1rem;
+}
+.iefx-gross-card .efx-glassmorphism-card__title {
+  margin: 0;
+  font-size: 0.7rem;
+  letter-spacing: 0.05em;
+  line-height: 1.2;
+}
+
 /* Dark-mode adaptations (light-hardcoded catalog colors → theme-aware). */
 .dark .efx-gradient-border-button {
   background:
@@ -385,9 +410,17 @@
   50% { transform: scaleY(1); }
 }
 
-.ievx-view-enter { animation: ievx-fade-up 0.34s cubic-bezier(0.22, 0.8, 0.32, 1) both; }
-.ievx-fade { animation: ievx-fade-in 0.28s ease both; }
-.ievx-scale { animation: ievx-scale-in 0.22s cubic-bezier(0.22, 0.8, 0.32, 1) both; }
+/* R19b: fill-mode backwards (was both) — `both` retained the final keyframe's
+   identity transform forever, and a transformed ancestor becomes the containing
+   block for position:fixed descendants. That glued the mobile workspace sidebar
+   overlay (fixed inset-y-0) to the whole view wrapper instead of the viewport:
+   opening the menu after scrolling, or scrolling with it open, drifted the
+   overlay off-screen (measured labelTop -371). The keyframes end at the
+   element's natural state (opacity 1 / translateY(0)), so releasing the fill
+   after the run is visually identical. */
+.ievx-view-enter { animation: ievx-fade-up 0.34s cubic-bezier(0.22, 0.8, 0.32, 1) backwards; }
+.ievx-fade { animation: ievx-fade-in 0.28s ease backwards; }
+.ievx-scale { animation: ievx-scale-in 0.22s cubic-bezier(0.22, 0.8, 0.32, 1) backwards; }
 
 .ievx-live-dot {
   width: 8px; height: 8px; border-radius: 999px;

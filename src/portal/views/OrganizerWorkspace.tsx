@@ -79,8 +79,12 @@ export default function OrganizerWorkspace({ route }: { route: Route }) {
 
   return (
     <div className="mx-auto flex max-w-7xl gap-0 px-0 py-0 md:gap-6 md:px-4 md:py-6">
-      {/* Sidebar (collapsible) */}
-      <aside className={`${sidebarOpen ? 'fixed inset-y-0 left-0 z-40 w-72 translate-x-0' : 'fixed inset-y-0 left-0 z-40 w-72 -translate-x-full'} transition-transform duration-200 border-r border-border/60 bg-card p-4 pt-16 md:sticky md:top-20 md:z-0 md:h-fit md:w-60 md:translate-x-0 md:rounded-2xl md:border md:pt-4`}>
+      {/* Sidebar (collapsible). R19b: scrolls independently from the main pane —
+          internally scrollable (overflow-y-auto + overscroll-contain, no scroll
+          chaining) and bounded to the viewport on md+ (max-h under the sticky
+          header offset), so long nav lists stay reachable instead of sticking
+          out past the fold. */}
+      <aside className={`${sidebarOpen ? 'fixed inset-y-0 left-0 z-40 w-72 translate-x-0' : 'fixed inset-y-0 left-0 z-40 w-72 -translate-x-full'} transition-transform duration-200 border-r border-border/60 bg-card p-4 pt-16 overflow-y-auto overscroll-contain ievx-scrollbar md:sticky md:top-20 md:z-0 md:h-fit md:max-h-[calc(100vh-6rem)] md:w-60 md:translate-x-0 md:rounded-2xl md:border md:pt-4`}>
         <button className="absolute right-3 top-3 rounded-full p-1.5 hover:bg-secondary md:hidden" aria-label="Close sidebar" onClick={() => setSidebarOpen(false)}>
           <ChevronLeft className="h-5 w-5" />
         </button>
@@ -176,11 +180,18 @@ function Dashboard({ orgId }: { orgId: string }) {
       </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {cards.map((c) => c.label === 'Gross sales' ? (
-          <div key={c.label} className="efx-glassmorphism-card" ref={(el) => { if (el) void flash(el) }}>
+          /* R19b: compact glass variant — the inner panel extends to a slim inset
+             (adapter .iefx-gross-card shrinks the catalog's 1.75rem outer padding)
+             and the fonts were minimized (value 3xl→xl, title →0.7rem) to match the
+             sibling stat cards. */
+          <div key={c.label} className="efx-glassmorphism-card iefx-gross-card" ref={(el) => { if (el) void flash(el) }}>
             <div className="efx-glassmorphism-card__backdrop" aria-hidden="true" />
             <div className="efx-glassmorphism-card__panel">
-              <p className="efx-glassmorphism-card__title uppercase" style={{ fontSize: '0.8rem' }}>{c.label}</p>
-              <p className="text-white font-extrabold text-3xl">{c.value}</p>
+              <div className="mb-1 flex items-center gap-1.5">
+                <c.icon className="h-4 w-4 shrink-0 text-white/85" aria-hidden />
+                <p className="efx-glassmorphism-card__title uppercase">{c.label}</p>
+              </div>
+              <p className="text-xl font-extrabold leading-6 text-white">{c.value}</p>
             </div>
           </div>
         ) : (
@@ -196,7 +207,10 @@ function Dashboard({ orgId }: { orgId: string }) {
         ))}
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card className="rounded-2xl">
+        {/* R19b: min-w-0 lets the grid track shrink below max-content — long event
+            titles otherwise forced the card past the phone viewport (104px horizontal
+            scroll at 390px; truncation only works when the item can actually shrink). */}
+        <Card className="min-w-0 rounded-2xl">
           <CardHeader className="pb-2"><CardTitle className="text-base">Next events</CardTitle></CardHeader>
           <CardContent className="space-y-2">
             {data.upcoming.length === 0 && <p className="text-sm text-muted-foreground">No events yet — create your first one.</p>}
@@ -211,7 +225,7 @@ function Dashboard({ orgId }: { orgId: string }) {
             ))}
           </CardContent>
         </Card>
-        <Card className="rounded-2xl">
+        <Card className="min-w-0 rounded-2xl">
           <CardHeader className="pb-2"><CardTitle className="text-base">Finance snapshot</CardTitle></CardHeader>
           <CardContent className="space-y-2.5 text-sm">
             <Row label="Gross sales" value={money(data.finance.grossSalesMinor)} />

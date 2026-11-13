@@ -563,6 +563,34 @@ Trigger: user report — "check the search with AI button on mobile view taking 
 
 **Static:** `bun run lint` 0 errors / 17 warnings (baseline); `bunx tsc --noEmit` 0 errors.
 
+## Re-verification round 19b (2026-11-13, workspace sidebar independent scroll + compact gross-sales card)
+
+Trigger: user report — "on the workspace page, let the sidebar scroll independently from the main pane, on the dashboard too the gross sales card, extend the inner card al little and also minimize the font size of the text."
+
+Signed in as `pastor@lightworld.dev` (org owner, Lightworld Chapel International) → `#/organizer?tab=…`; viewports 1280×800, 1280×600 (short-viewport stress), 768×1024, 390×844.
+
+| Case | Outcome | Status |
+|---|---|---|
+| Sidebar scrolls independently — page direction | Events tab (doc 1629px) at 1280×600: `window.scrollTo(0,600)` keeps the sidebar pinned at `top: 80` with its internal scrollTop preserved (0 before/after; separate run preserved 100 and 150 across page scrolls of 400→800). At 768×1024 (doc 2560): pinned at 80, height 711 (fits, no clamp) | ✅ live |
+| Sidebar scrolls independently — sidebar direction | `aside.scrollTop = 150` (clamped to max) leaves `window.scrollY` untouched (500 before/after); `overscroll-contain` also prevents wheel/touch chaining; custom `ievx-scrollbar` styling applied | ✅ live |
+| Last nav reachable on short viewports | `md:max-h-[calc(100vh-6rem)]` bounds the sticky sidebar (504px at 600-tall viewport, 207px internal overflow); scrolling it internally brings "Settings" (last of 13 items) fully inside the sidebar box (`inside: true`) — previously cut off below the fold | ✅ live |
+| Short-page sticky "inertness" is correct behaviour | Dashboard at 1280×800: doc 924px, the aside exactly fills its containing block (704 = 704) so there is no sticky travel — the sidebar scrolls with the page only because the page itself barely scrolls; no fix needed (misdiagnosed at first as "sticky broken", disproven by ancestor-chain + containing-block geometry) | ✅ understood |
+| Gross-sales card — inner panel extended | Adapter `.iefx-gross-card`: card padding 1.75rem → 0.55rem; panel `flex: 1` fills the card; measured inset 9px from every card edge (was 28px), `fillsHeight: true`; panel content column-centered to match sibling cards (`items-center`) — topGap 37 / bottomGap 36 | ✅ live (before/after computed styles) |
+| Gross-sales card — fonts minimized | Title 0.8rem inline → 0.7rem via adapter (measured 11.2px, margin 0); value `text-3xl` → `text-xl leading-6` (measured 20px, was 30px); TrendingUp icon (h-4, white/85) added for parity with siblings | ✅ live |
+| Stat-card row alignment | All four cards in the grid row measure identical boxes — tops [164,164,164,164], bottoms [298,298,298,298], heights 134px each (gross card included) | ✅ live |
+| Mobile sidebar overlay drift — found & fixed | `.ievx-view-enter`'s `animation-fill-mode: both` retained an identity transform forever → transformed ancestor = containing block for `position: fixed` → the mobile overlay was glued to the view wrapper (1474px, not the 844px viewport): opened-after-scrolling or scrolling-with-open drifted it off-screen (labelTop −371 measured). Fix: fill `both` → `backwards` on the 3 animation utilities (keyframes end at natural state → visually identical). After: overlay 844px, anchored at `top: 0` through page scrolls, workspace label visible at 64px | ✅ found, fixed, re-measured |
+| FAB covering footer link — found & fixed (VLM catch, DOM-confirmed) | At page bottom the voice-concierge FAB (l 1208..1264, t 720..776 at 1280) hit the footer link "CSS Effects Studio" (r 1264, t 758..776) — its right edge blocked. Fix: `pr-20` on the footer inner container. After: `footerFabHits: []` at both 390 and 1280 | ✅ found, fixed, re-measured |
+| Mobile horizontal overflow on dashboard — found & fixed | "Next events" grid items lacked `min-w-0` → max-content titles forced the card to 494px at a 390px viewport (104px horizontal scroll, `scrollWidth 494 > 390`). Fix: `min-w-0` on both dashboard cards → `scrollWidth == clientWidth == 390` | ✅ found, fixed, re-measured |
+| Click regression | Mobile "Menu" opens the overlay (x −288 → 0) and "Close sidebar" closes it; nav item click switches section; org switcher present; dashboard ↔ events ↔ attendees navigations all render | ✅ live |
+| VLM visual QA | Desktop dashboard (resting state): 4/4 PASS — four cards share top/bottom edges, frosted panel close to edges with compact text, sidebar fits, no clipping. Mobile open menu: 4/4 PASS (full-height overlay, all 13 nav items readable, chevron visible, clean panel). Mobile dashboard: 1 PASS + 3 claims dissected — (a) "value noticeably larger": measured 20px vs siblings' 18px = intentional 2px highlight; (b) "gradient fills the entire card": the panel filling the card is the user's explicit "extend the inner card" request; (c) "rows cut off by viewport bottom": normal below-the-fold scrolling under the fixed mobile nav, `main` has pb-24 clearance | ✅ live (claims adjudicated by DOM) |
+| VLM false-positive forensics | First desktop run flagged the gross card "taller than siblings" — DOM: identical boxes; root cause = the by-design 900ms `flash()` box-shadow ring re-firing on re-renders (inline ref = re-attach per render) reading as an enlarged edge, plus the Next.js devtools "N" button (dev-only) flagged as an avatar overlap. Re-run on a resting-state screenshot (shadows cleared): 4/4 PASS | ✅ documented |
+| Turbopack stale-CSS (3rd recurrence) | The round's 2nd globals.css edit (panel flex-centering) served byte-stale while the 1st was live — it can strike mid-session minutes apart; `rm -rf .next` + restart + computed-style re-verification (panelDisplay block → flex) | ✅ found, recovered |
+| Hydration / console / errors | Zero console errors, zero page errors across all viewports, tabs, the overlay flow and both dev-server restarts | ✅ live |
+
+**Honest limitations:** the sidebar's internal scrollbar only appears when its content exceeds the viewport (2 viewports of 13 nav items + org selector ≈ 709px — so ≥~805px-tall viewports show no scrollbar, by design); the hash router keeps the document scroll position across tab switches (pre-existing, out of scope this round); the `flash()` glow ring re-fires on every Dashboard re-render (pre-existing affordance — noted, not changed); the FAB/footer clearance insets the footer's right text block 80px from the container edge on every page (visible as slightly earlier wrap on narrow screens — accepted for full clickability).
+
+**Static:** `bun run lint` 0 errors / 17 warnings (baseline); `bunx tsc --noEmit` 0 errors.
+
 ## Not performed (honest)
 
 - Native Android/iOS builds and device testing (mobile is a source scaffold).
