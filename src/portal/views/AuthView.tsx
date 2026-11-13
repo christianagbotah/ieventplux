@@ -8,7 +8,8 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { useToast } from '@/hooks/use-toast'
 import { api, ApiClientError } from '../api'
 import { navigate } from '../router'
-import { usePortal } from '../store'
+import { usePortal, isPlatformStaff } from '../store'
+import { humanize } from '../format'
 
 export default function AuthView({ mode }: { mode: 'signin' | 'register' }) {
   const { toast } = useToast()
@@ -26,6 +27,17 @@ export default function AuthView({ mode }: { mode: 'signin' | 'register' }) {
     if (!me.user) return
     setUser(me.user)
     setMemberships(me.memberships ?? [])
+    // R20: platform staff (SUPPORT / MODERATOR / FINANCE_ADMIN / SUPER_ADMIN) sign in through
+    // this same form — the session backend hands back their staff role, so we route them
+    // straight into the admin console instead of the consumer landing page.
+    if (isPlatformStaff(me.user)) {
+      toast({
+        title: `Welcome back, ${me.user.displayName.split(' ')[0]}`,
+        description: `${humanize(me.user.role)} signed in — opening the platform admin console.`,
+      })
+      navigate('/admin')
+      return
+    }
     toast({ title: mode === 'signin' ? 'Welcome back' : `Welcome to iEventPlux, ${me.user.displayName.split(' ')[0]}!` })
     navigate('/')
   }
@@ -210,6 +222,12 @@ export default function AuthView({ mode }: { mode: 'signin' | 'register' }) {
             <>Already have an account? <button type="button" className="efx-underline-slide-link" style={{ fontSize: 'inherit', color: 'inherit', fontWeight: 600, paddingBottom: '2px' }} onClick={() => navigate('/signin')}>Sign in</button></>
           )}
         </p>
+        {mode === 'signin' && (
+          <p className="mt-3 flex items-center justify-center gap-1.5 text-center text-xs text-muted-foreground">
+            <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-primary/70" aria-hidden />
+            Platform staff: sign in with your staff email — you will land straight in the admin console.
+          </p>
+        )}
       </div>
 
       {resetOpen && (

@@ -1,7 +1,7 @@
 'use client'
 
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react'
-import { Compass, Radio, Film, Palette, Search, Ticket, LayoutDashboard, ShieldCheck, LogOut, Bell, Menu, Sparkles, UserRound, Command as CommandIcon } from 'lucide-react'
+import { Compass, Radio, Film, Search, Ticket, LayoutDashboard, ShieldCheck, LogOut, Bell, Menu, Sparkles, UserRound, Command as CommandIcon } from 'lucide-react'
 import { io } from 'socket.io-client'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -50,7 +50,6 @@ const NAV = [
   { path: '/', label: 'Discover', icon: Compass },
   { path: '/live', label: 'Live Now', icon: Radio },
   { path: '/reels', label: 'Reels', icon: Film },
-  { path: '/effects', label: 'Effects Studio', icon: Palette },
 ]
 
 export default function AppPortal() {
@@ -347,7 +346,8 @@ export default function AppPortal() {
 
       {/* pb on mobile clears the fixed bottom nav + iOS safe-area inset; md: clears it since the nav is hidden.
           R19b: pr-20 clears the fixed voice-concierge FAB (56px + right-4 + gap = 80px) — at page bottom it
-          overlapped and blocked the right edge of the footer link row (measured hit on "CSS Effects Studio"). */}
+          overlapped and blocked the right edge of the footer link row. R20: the dev-only Effects Studio
+          footer link was removed with its menu entries; the /effects route stays reachable by direct URL. */}
       <footer className="mt-auto border-t border-border/60 bg-card pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0">
         <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-6 pr-20 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
           <p>© {new Date().getFullYear()} iEventPlux · Lightworld Technologies Ltd. · Accra, Ghana</p>
@@ -355,8 +355,6 @@ export default function AppPortal() {
             <span>Ticketing · Social · Broadcasting</span>
             <span aria-hidden>·</span>
             <span>Prices in Ghana cedis (₵)</span>
-            <span aria-hidden>·</span>
-            <button className="efx-underline-slide-link" style={{ fontSize: 'inherit', fontWeight: 600, color: 'inherit', paddingBottom: 2 }} onClick={() => navigate('/effects')}>CSS Effects Studio</button>
           </p>
         </div>
       </footer>

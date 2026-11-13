@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from '@/components/ui/command'
 import {
-  Compass, Radio, Film, Palette, Search, Ticket, LayoutDashboard, ShieldCheck, LogOut,
+  Compass, Radio, Film, Search, Ticket, LayoutDashboard, ShieldCheck, LogOut,
   Sparkles, UserRound, Sun, Moon, Wand2, Loader2, CalendarDays,
 } from 'lucide-react'
 import { useTheme } from 'next-themes'
@@ -75,7 +75,6 @@ export function CommandPalette({ open, onOpenChange, onLogout }: PaletteProps) {
       { label: 'Discover events', icon: Compass, action: () => navigate('/') },
       { label: 'Live now', icon: Radio, action: () => navigate('/live') },
       { label: 'Reels', icon: Film, action: () => navigate('/reels') },
-      { label: 'Effects Studio', icon: Palette, action: () => navigate('/effects') },
       { label: 'AI search', icon: Wand2, action: () => navigate('/#ai-search') },
     ],
     []

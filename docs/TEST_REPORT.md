@@ -591,6 +591,28 @@ Signed in as `pastor@lightworld.dev` (org owner, Lightworld Chapel International
 
 **Static:** `bun run lint` 0 errors / 17 warnings (baseline); `bunx tsc --noEmit` 0 errors.
 
+## Re-verification round 20 (2026-11-13, Effects Studio nav removal + staff sign-in routing)
+
+Trigger: user report — "remove the effect studio menu item and continue building. how will system admin login? are you building the backend too."
+
+Cookies cleared before the guest pass; viewports 1280×800 (desktop) and 390×844 (mobile). Screenshots: `docs-assets/round20-home-desktop.png`, `round20-admin-desktop.png`, `round20-signin-mobile.png`.
+
+| Case | Outcome | Status |
+|---|---|---|
+| Desktop top nav after removal | `header nav[aria-label=Primary]` exposes exactly Discover / Live Now / Reels (aria-labels enumerated in-DOM) | ✅ live |
+| Footer after removal | Footer text = copyright + "Ticketing · Social · Broadcasting" + "Prices in Ghana cedis (₵)" — the "CSS Effects Studio" link is gone; round-19b `pr-20` FAB clearance kept as belt-and-braces | ✅ live |
+| Whole-page text sweep (guest Discover) | `document.body.innerText.includes('Effects Studio')` → false | ✅ live |
+| Mobile bottom nav | Exactly 4 items — Discover / Live Now / Reels / Me; no Effects entry | ✅ live |
+| Command palette (⌘K) | "Go to" = Discover events / Live now / Reels / AI search (Effects Studio entry removed); staff session's Account group = My tickets / Orders & profile / Platform admin / theme / Sign out | ✅ live |
+| `#/effects` still renders by direct URL | Route + view + `EffectsRuntime` catalog intentionally retained (the `efx-*` classes power the app); no longer advertised anywhere in the UI — internal dev tool | ✅ by design |
+| Staff hint on sign-in card | "Platform staff: sign in with your staff email — you will land straight in the admin console." present (signin mode only, muted, ShieldCheck icon) | ✅ live |
+| Staff golden path (SUPER_ADMIN) | Fill `admin@ieventplux.dev` / `Dev@12345` → submit → URL `#/admin`; "Platform Administration" heading + "Super Admin" role line render; in-DOM toast captured: "Welcome back, Kwabena / Super Admin signed in — opening the platform admin console." (re-verified twice; note the header also has a "Sign in" button — the form submit must be targeted by ref, a named-find clicks the header one) | ✅ live |
+| Admin overview real data | `/api/v1/admin/overview` stats render: Users / Organizations / Events / Tickets issued / Gross ticket volume / Platform revenue (fees) / Payouts pending / Payment exceptions | ✅ live |
+| Non-staff regression | `pastor@lightworld.dev` (org owner, non-staff role) → submit → lands `#/` Discover exactly as before | ✅ live |
+| Hydration / console / errors | Zero console errors, zero page errors across guest, both sign-ins, the admin console, the palette and the `#/effects` dev route | ✅ live |
+
+**Static:** `bun run lint` 0 errors / 17 warnings (baseline); `bunx tsc --noEmit` 0 errors.
+
 ## Not performed (honest)
 
 - Native Android/iOS builds and device testing (mobile is a source scaffold).
