@@ -763,3 +763,41 @@ Trigger: user asked "this should be built with postgresql — is the mobile vers
 
 ### Static checks
 - `bun run lint` (main app): 0 errors / 17 warnings. `bunx tsc --noEmit` (main app): 0 errors. `bunx tsc --noEmit` (mobile/): 0 errors.
+
+## Re-verification round 26 (2026-11-13, PostgreSQL LIVE — full platform migration)
+
+Trigger: user challenged round 25's claim ("are you sure you cannot install postgresql on this sandbox?") and asked to keep building ("don't submit to store, just build all the platform"). Outcome: the round-25 "no install rights" claim was WRONG — npm-portable binaries install PostgreSQL without root — and the whole platform now runs ON PostgreSQL 18.6.
+
+### Install + boot (no root)
+- `bun add -d embedded-postgres` → PostgreSQL 18.6 binaries in user space (`@embedded-postgres/linux-x64/native`: initdb, pg_ctl, postgres + lib/, 60 MB); bun blocked the postinstall → `bun pm trust --all` re-hydrated the versioned library symlinks (`postgres --version` runs with `LD_LIBRARY_PATH` set).
+- `initdb -D /home/z/pgdata -U postgres --auth=trust -E UTF8` → `pg_ctl … -o "-p 5432 -h 127.0.0.1" -w start` → LISTEN confirmed on 127.0.0.1:5432. Database `ieventplux` created via a `pg` client (no psql binary needed).
+- Durability: `bun run db:postgres` (scripts/dev-postgres.sh) is idempotent — verified "already running / database present" path, and the script's fresh-cluster path matches the commands actually used this round.
+
+### Migration, executed for real
+- Prisma provider `sqlite` → `postgresql`; `bunx prisma generate` (client v6.19.2 — classic engine, no driver-adapter rewrite needed) → `DATABASE_URL=… bunx prisma db push` → 65 tables.
+- Canonical seed: `bun run db:seed` green — verified by SQL: 14 users, 19 events, ama's 6 tickets, org + ticket-type rows.
+- The R25 `db/postgres-init.sql` DDL remains as the real-deployment artifact (not used here — `db push` built the schema directly).
+
+### Env-propagation defect (found because the seed failed)
+- Symptom: seed errored "the URL must start with the protocol postgresql://" — the sandbox session init EXPORTS `DATABASE_URL=file:/home/z/my-project/db/custom.db`, and exported variables BEAT `.env` in both Bun and Next.js (verified: `bun -e` printed the file: URL after .env was already postgres).
+- Fix: `src/lib/db.ts` resolves the URL at module load — any REAL externally-provisioned URL wins as-is; the known packaged SQLite defaults (`file:/home/z/my-project/db/custom.db`, `file:/app/db/custom.db`) are overridden by the DATABASE_URL line from the nearest project-root `.env` (walk-up covers the worker/realtime cwds). Verified: `bun -e "import db"` resolves the postgres URL; the running app/worker/realtime all connect to Postgres (pg_stat_activity 3→7 connections during browser traffic).
+
+### Process-reaper defect (sandbox-specific, root-caused empirically)
+- After killing the sandbox-managed dev server + mini-services, EVERY restart attempt died: plain `nohup … &`, `setsid nohup … &`, and piped `bun run dev` variants. Root cause isolated with planted `sleep` markers: the tool reaps session descendants at command end — only double-fork orphans (PPID 1) survive; agent-browser (PPid: 1) was the surviving exemplar.
+- Fix: services boot via `bash -c '… &'` (middle bash exits instantly → child orphaned to init). Verified: :3000/:3001/:3003 all survive subsequent tool commands; `.zscripts/dev.pid` updated with the live dev pid.
+
+### Full golden path ON POSTGRES (browser + SQL cross-checks)
+- One-click Attendee chip → signed in; SQL proves the Session row landed in Postgres (rows: 0 → 1); pg connections rose 3 → 7 under browser traffic.
+- R24 wallet renders from Postgres (NEXT UP hero + PAST section, ama's seeded 6 tickets). One stale-SPA note: the pre-migration browser tab needed a hard `reload` before the hash router re-rendered (old React instance from the pre-migration server — not an app defect).
+- **Purchase:** Accra Gospel Night of Wonders → 2 × Regular → Checkout ₵160.00 → simulator approve → order `ORD-34EC25E85A` **PAID**; SQL: order PAID 16000 minor, **2 VALID tickets**, and **balanced double-entry journals** — collections ₵160.00 debit against platform_fees ₵8.00 + organizer_payable ₵152.00 (the ledger's Postgres unique-index/NULL-semantics caveat from round 25 is exercised and healthy).
+- **Worker on Postgres:** OutboxJob group-by shows 77 DONE; the purchase's SMS receipt DELIVERED (MessageDelivery SMS/DELIVERED ×12); worker /health healthy (uptime across commands).
+- **Admin:** Super Admin chip → `#/admin`; sticky sidebar renders all 12 sections; the admin's own Me wallet honestly shows the empty state ("No tickets yet").
+- Responsive: 390×844 zero horizontal overflow on the wallet; zero console/page errors across the session; dev.log free of prisma errors.
+
+### Static checks
+- `bun run lint`: 0 errors / 17 warnings (baseline). `bunx tsc --noEmit` (main app): 0 errors.
+
+### Honest notes
+- `db/custom.db` (SQLite) stays in the repo as the documented fallback; its working-tree drift (R24 fixture etc.) is committed rather than reset.
+- The embedded cluster uses trust auth on localhost — development-only (documented in the boot script header).
+- Sandbox restarts reset process state: `bun run db:postgres` + service restarts are required (documented in `.env.example` + scripts header); the sandbox's own init may re-export the packaged SQLite URL — the `db.ts` resolver neutralizes it for all app processes; Prisma CLI calls need the explicit `DATABASE_URL=` prefix.

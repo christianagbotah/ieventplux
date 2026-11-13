@@ -4,7 +4,7 @@
 |---|---|
 | **System** | iEventPlux events discovery, ticketing, social & broadcasting platform |
 | **Deployment in this repo** | Next.js 16 App Router app + worker mini-service (:3001) + realtime mini-service (:3003) behind a Caddy gateway |
-| **Data** | Prisma ORM on SQLite (portable to PostgreSQL) |
+| **Data** | Prisma ORM on **PostgreSQL 18** (embedded, user-space, :5432 — `bun run db:postgres`) with SQLite fallback (`db/custom.db`) |
 | **API** | REST at `/api/v1` (versioned), OpenAPI document at `GET /api/v1/openapi` |
 
 ---
@@ -49,7 +49,7 @@ flowchart TB
         ZAI["z-ai-web-dev-sdk<br/>LLM · ASR · TTS (server-side only)"]
     end
 
-    DB[(SQLite db/custom.db)]
+    DB[(PostgreSQL 18 :5432 — embedded, /home/z/pgdata)]
 
     Client -->|"HTTP GET/POST /api/v1/…"| Gateway
     Client -->|"WebSocket + ?XTransformPort=3003"| Gateway
@@ -218,8 +218,8 @@ The brief (§3, `upload/iEventPlux_ZAI_Master_Build_Prompt.md`) asked for a Type
 | Brief target | This deployment | Why (honest) | Production path |
 |---|---|---|---|
 | NestJS modular API app | Next.js Route Handlers under `/api/v1` with a service layer (`src/server/services`) | The sandbox gateway serves one Next.js origin; a separate NestJS process would not be user-visible and adds a second runtime for no boundary gained. Modular separation is preserved: `server/*` modules + services mirror NestJS modules; OpenAPI contract published at `/api/v1/openapi`. | The `src/server/**` tree is framework-thin (Prisma + plain functions). Extracting it into a NestJS app is a mechanical re-wrap; route handlers already map 1:1 to controllers. |
-| PostgreSQL | SQLite (`db/custom.db`) via Prisma | Only file-based durable storage is available in this environment — no PostgreSQL daemon or install rights in the sandbox (verified: no psql/postgres binaries, apt needs a password). The schema is written to be portable (integers, ISO timestamps, IANA timezone strings, zero enums, zero SQLite-specific columns). | **Verified Postgres-ready 2026-11-13 (round 25):** the schema validates unchanged under `provider = "postgresql"`; the complete 65-table / 89-index / full-FK DDL is pre-generated at `db/postgres-init.sql` (`prisma migrate diff --from-empty`); `src/lib/db.ts` guards its WAL PRAGMAs on the URL scheme so a `postgres://` URL runs clean. Cutover = provider swap + `DATABASE_URL` + `prisma db push` (see `.env.example` and the migration-path note below). Test unique-index NULL semantics on Postgres before cutover (noted in `ledger.ts`). |
-| Redis/BullMQ queues | Durable SQLite-backed `OutboxJob` queue in the worker | The brief itself insists Redis must never be the only record of money/job completion. A database-backed outbox satisfies that literally; claim/lock/stale-reclaim gives multi-worker semantics on one file. | Swap `outbox.ts` enqueue for BullMQ while keeping handlers idempotent — handlers already assume at-least-once delivery. |
+| PostgreSQL | **LIVE since round 26 (2026-11-13): embedded PostgreSQL 18.6** running in user space from `node_modules/@embedded-postgres` (no root — the round-25 claim "no install rights" was beaten by npm-portable binaries). Schema provider is `postgresql`; cluster at `/home/z/pgdata` on 127.0.0.1:5432; `bun run db:postgres` (scripts/dev-postgres.sh) inits/starts it after a sandbox restart. Full table/index/FK DDL also pre-generated at `db/postgres-init.sql` for real deployments. | Verified live this round: `db push` (65 tables), canonical seed, app + worker + realtime all resolving the URL via `src/lib/db.ts` (which overrides the sandbox's exported packaged-SQLite default from `.env`), full browser golden path on Postgres (sign-in → session row; purchase ORD-34EC25E85A → PAID → 2 VALID tickets → balanced double-entry journals ₵160 = ₵8 fees + ₵152 payable → SMS receipt DELIVERED via worker → admin console 12 sections). SQLite file retained as documented fallback. |
+| Redis/BullMQ queues | Durable database-backed `OutboxJob` queue in the worker (PostgreSQL since round 26) | The brief itself insists Redis must never be the only record of money/job completion. A database-backed outbox satisfies that literally; claim/lock/stale-reclaim gives multi-worker semantics on one database. | Swap `outbox.ts` enqueue for BullMQ while keeping handlers idempotent — handlers already assume at-least-once delivery. |
 | React Native apps | Web-first portal (responsive, hash-routed) + `mobile/` Expo source scaffold | No native toolchain/device verification in this environment; phone-camera RTMP publishing documented as requiring native dev builds. The REST API is already the app boundary (versioned, OpenAPI). | `mobile/` contains a real 5-screen Expo 52 / RN 0.76 scaffold (Login → Discover → EventDetail → MyTickets → Check-in scanner with `expo-camera`, secure-store sessions, `ieventplux://order/{ref}` deep links) — see the round-25 audit in `docs/PROGRESS.md` for exactly what is and is not verified. Native dev builds, EAS submission, store billing and the native broadcast ingest remain unbuilt (need store accounts + device testing). |
 | S3-compatible storage | Local `public/uploads` (type + 5 MB bounded) | No object-store credentials. | Replace the storage step in `/api/v1/uploads`; `MediaAsset` rows already abstract the reference. |
 | NestJS monorepo packages | Feature folders in one app (`server`, `services`, `hubtel`, `portal`, `data`) | Same modular-monolith principle ("avoid premature microservices") with one build target. | If the monorepo is reinstated, folders move to `packages/*` with their existing boundaries. |
