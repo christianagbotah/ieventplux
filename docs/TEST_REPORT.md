@@ -633,6 +633,25 @@ Cookies cleared before the pass; viewports 1280×800 (desktop) and 390×844 (mob
 
 **Static:** `bun run lint` 0 errors / 17 warnings (baseline); `bunx tsc --noEmit` 0 errors.
 
+## Re-verification round 22 (2026-11-13, admin console: sticky section sidebar + deep-linkable sections)
+
+Trigger: continuation ("go on") of the staff-surface thread after rounds 20–21 — bring the 12-section console to the same layout standard as the organizer workspace.
+
+Signed in via the round-21 Super Admin demo chip; viewports 1280×800 (desktop) and 390×844 (mobile). Screenshots: `docs-assets/round22-admin-desktop.png`, `round22-admin-mobile.png`.
+
+| Case | Outcome | Status |
+|---|---|---|
+| Sidebar renders (desktop) | `main aside` exposes exactly 12 section buttons (Overview … Operations) with the "Sections" kicker; computed styles: `position: sticky`, `top: 80px`, `maxHeight: 704px` (= 100vh − 6rem at 800px-tall viewport), `overflow-y: auto`; chip row `display: none` on desktop | ✅ live |
+| Sticky pin across page scroll | Audit Log section (doc 1705px vs 800 viewport): `window.scrollTo(0, 400)` keeps the aside top at exactly 80px | ✅ live |
+| Internal scroll independence | `aside.scrollTop = 60` leaves `window.scrollY` untouched (400 before/after; no chaining); at this viewport the 12 sections (491px) fit the 704px bound so scrollTop clamps to 0 — same honest "scrollbar only when needed" behaviour as the workspace sidebar | ✅ live |
+| Deep-link golden path | Sidebar click "Payments" → hash `#/admin?tab=payments`, payments content renders; **full page reload** → hash preserved, `aria-current=page` still on Payments, "Provider events (redacted)" content re-renders | ✅ live |
+| Derived section fallback | `section` derived from `route.query.get('tab')` with invalid/missing → overview (no state mirror; a state-mirror version measurably raised the lint warning count 17 → 18 — the derivation keeps the baseline) | ✅ live |
+| Content column | `min-w-0 flex-1` measures 1016px at a 1280 viewport; tables carry their own `overflow-x-auto` wrappers (verified present in the payments section); no grid blowout | ✅ live |
+| Mobile (390×844) | Chip row `display: flex` with 12 chips, aside `display: none`; chip tap "Refunds" → hash `#/admin?tab=refunds`, Refunds marked current, content renders; `scrollWidth == 390` — zero horizontal overflow | ✅ live |
+| Hydration / console / errors | Zero console errors, zero page errors across sign-in, all section switches, the reload, both viewports | ✅ live |
+
+**Static:** `bun run lint` 0 errors / 17 warnings (baseline); `bunx tsc --noEmit` 0 errors.
+
 ## Not performed (honest)
 
 - Native Android/iOS builds and device testing (mobile is a source scaffold).

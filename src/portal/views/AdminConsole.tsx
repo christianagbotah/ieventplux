@@ -34,7 +34,6 @@ const SECTIONS = [
 
 export default function AdminConsole({ route }: { route: Route }) {
   const { user, booted } = usePortal()
-  const [section, setSection] = useState(route.query.get('tab') ?? 'overview')
 
   useEffect(() => {
     if (!booted) return // session check still in flight — do not bounce yet
@@ -46,6 +45,18 @@ export default function AdminConsole({ route }: { route: Route }) {
   }, [user, booted])
 
   if (!user || !isPlatformStaff(user)) return null
+
+  // R22: deep-linking — the hash query is the single source of truth for the
+  // active section (derived, not mirrored in state): every click replace-pushes
+  // /admin?tab=… so refresh, back and shared links land on the intended section
+  // (same convention as the organizer workspace); an invalid or missing tab
+  // deterministically falls back to the overview.
+  const rawTab = route.query.get('tab') ?? 'overview'
+  const section = SECTIONS.some((s) => s.key === rawTab) ? rawTab : 'overview'
+
+  const goSection = (key: string) => {
+    navigate(`/admin?tab=${key}`, { replace: true })
+  }
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-6">
@@ -62,11 +73,12 @@ export default function AdminConsole({ route }: { route: Route }) {
         </div>
       </div>
 
-      <div className="ievx-scrollbar mb-5 flex gap-1.5 overflow-x-auto rounded-2xl bg-secondary/60 p-1.5">
+      {/* Mobile: horizontal chip row (scrollable). Desktop: sticky sidebar below. */}
+      <div className="ievx-scrollbar mb-5 flex gap-1.5 overflow-x-auto rounded-2xl bg-secondary/60 p-1.5 md:hidden">
         {SECTIONS.map((s) => (
           <button
             key={s.key}
-            onClick={() => setSection(s.key)}
+            onClick={() => goSection(s.key)}
             className={`flex shrink-0 items-center gap-1.5 rounded-xl px-3.5 py-2 text-sm font-medium transition-colors ${
               section === s.key ? 'bg-card text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground'
             }`}
@@ -78,19 +90,47 @@ export default function AdminConsole({ route }: { route: Route }) {
         ))}
       </div>
 
-      <div key={section} className="ievx-view-enter">
-        {section === 'overview' && <Overview />}
-        {section === 'orgs' && <Orgs />}
-        {section === 'events' && <EventsAdmin />}
-        {section === 'moderation' && <Moderation />}
-        {section === 'payments' && <Payments />}
-        {section === 'refunds' && <Refunds />}
-        {section === 'payouts' && <Payouts />}
-        {section === 'fees' && <FeesPlans />}
-        {section === 'integrations' && <Integrations />}
-        {section === 'sms' && <SmsLog />}
-        {section === 'audit' && <AuditLog />}
-        {section === 'sweeps' && <Sweeps />}
+      <div className="flex items-start gap-6">
+        {/* Desktop sidebar — R19b pattern: sticky under the header, independently
+            scrollable (overflow contained, no scroll chaining), viewport-bounded
+            so all 12 sections stay reachable on short screens. */}
+        <aside className="hidden md:sticky md:top-20 md:block md:h-fit md:max-h-[calc(100vh-6rem)] md:w-52 md:shrink-0 md:overflow-y-auto md:overscroll-contain ievx-scrollbar md:rounded-2xl md:border md:border-border/60 md:bg-card md:p-2">
+          <p className="mb-1 px-2.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Sections</p>
+          <nav aria-label="Admin sections" className="flex flex-col gap-0.5">
+            {SECTIONS.map((s) => (
+              <button
+                key={s.key}
+                onClick={() => goSection(s.key)}
+                className={`flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-sm font-medium transition-colors ${
+                  section === s.key ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+                }`}
+                aria-current={section === s.key ? 'page' : undefined}
+              >
+                <s.icon className="h-4 w-4 shrink-0" aria-hidden />
+                {s.label}
+              </button>
+            ))}
+          </nav>
+        </aside>
+
+        {/* min-w-0 (R19b lesson): keeps grid children from blowing out the now
+            narrower content column. */}
+        <div className="min-w-0 flex-1">
+          <div key={section} className="ievx-view-enter">
+            {section === 'overview' && <Overview />}
+            {section === 'orgs' && <Orgs />}
+            {section === 'events' && <EventsAdmin />}
+            {section === 'moderation' && <Moderation />}
+            {section === 'payments' && <Payments />}
+            {section === 'refunds' && <Refunds />}
+            {section === 'payouts' && <Payouts />}
+            {section === 'fees' && <FeesPlans />}
+            {section === 'integrations' && <Integrations />}
+            {section === 'sms' && <SmsLog />}
+            {section === 'audit' && <AuditLog />}
+            {section === 'sweeps' && <Sweeps />}
+          </div>
+        </div>
       </div>
     </div>
   )
