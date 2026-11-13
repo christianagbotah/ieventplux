@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { Ticket, ShoppingBag, Heart, Bell, UserRound, Share2, Check, RefreshCw, Loader2, Sparkles } from 'lucide-react'
+import { Ticket, ShoppingBag, Heart, Bell, UserRound, Share2, Check, RefreshCw, Loader2, Sparkles, CalendarPlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -14,7 +14,7 @@ import { useToast } from '@/hooks/use-toast'
 import { api, ApiClientError } from '../api'
 import { navigate, type Route } from '../router'
 import { usePortal } from '../store'
-import { money, dateLong, relative, humanize, statusTone, initials } from '../format'
+import { money, dateLong, relative, humanize, statusTone, initials, countdown } from '../format'
 import { EmptyState } from '../components/EventCard'
 import { cacheTicketList, cacheTicketDetail, readCachedTicketList, readCachedTicketDetail, type CachedTicketDetail, type CachedTicketRow } from '../lib/ticket-cache'
 
@@ -70,6 +70,14 @@ export default function Me({ route }: { route: Route }) {
   const [savingProfile, setSavingProfile] = useState(false)
   const [elevated, setElevated] = useState(false)
   const [elevPassword, setElevPassword] = useState('')
+  // R24: minute-resolution clock so the wallet's countdowns tick live without a
+  // re-render storm — one setState per minute while the view is mounted.
+  const [now, setNow] = useState(() => Date.now())
+
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 60_000)
+    return () => window.clearInterval(id)
+  }, [])
 
   useEffect(() => {
     if (!booted) return // session check still in flight — do not bounce yet
@@ -189,6 +197,48 @@ export default function Me({ route }: { route: Route }) {
 
   if (!user) return null
 
+  // R24: split the wallet into Upcoming (soonest first) and Past (most recent
+  // first). A ticket is "upcoming" while its event has not ENDED — an event in
+  // progress stays up top with its countdown reading "happening now". endsAt
+  // falls back to startsAt defensively even though the API always returns it,
+  // so the offline-cached rows group identically to the fresh ones.
+  const eventEnd = (t: TicketRow) => new Date(t.event.endsAt ?? t.event.startsAt).getTime()
+  const upcomingTickets = (tickets ?? [])
+    .filter((t) => eventEnd(t) > now)
+    .sort((a, b) => a.event.startsAt.localeCompare(b.event.startsAt))
+  const pastTickets = (tickets ?? [])
+    .filter((t) => eventEnd(t) <= now)
+    .sort((a, b) => b.event.startsAt.localeCompare(a.event.startsAt))
+  const nextUp = upcomingTickets[0]
+
+  /** One wallet row — shared by the Upcoming and Past sections. */
+  const ticketRow = (t: TicketRow, opts: { countdownChip?: boolean; muted?: boolean } = {}) => (
+    <button
+      key={t.id}
+      className={`flex w-full items-center gap-4 rounded-2xl border border-border/70 bg-card p-4 text-left ievx-card-hover${opts.muted ? ' opacity-75 hover:opacity-100' : ''}`}
+      onClick={() => void openTicket(t)}
+    >
+      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/10">
+        <Ticket className="h-6 w-6 text-primary" aria-hidden />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="truncate font-semibold">{t.event.title}</p>
+        <p className="text-xs text-muted-foreground">{t.ticketType.name} · {dateLong(t.event.startsAt, t.event.timezone)}</p>
+        <p className="text-xs text-muted-foreground">{t.event.venue?.name ?? 'Online'} · <span className="font-mono">{t.code}</span></p>
+      </div>
+      <div className="flex flex-col items-end gap-1.5 shrink-0">
+        {opts.countdownChip && (() => {
+          const cd = countdown(t.event.startsAt)
+          return <span className="text-[11px] font-bold tabular-nums text-primary" aria-label={`Starts ${cd}`}>{cd === 'happening now' ? cd : `in ${cd}`}</span>
+        })()}
+        <Badge variant={t.status === 'VALID' ? 'default' : 'secondary'} className="relative overflow-visible capitalize">
+          {humanize(t.status)}
+          {t.status === 'VALID' && !opts.muted && <span className="efx-badge-ping__ping" aria-hidden />}
+        </Badge>
+      </div>
+    </button>
+  )
+
   const navTrigger = (active: boolean) =>
     `efx-underline-slide-nav__link flex-none rounded-none border-0 bg-transparent shadow-none data-[state=active]:bg-transparent data-[state=active]:shadow-none dark:data-[state=active]:bg-transparent dark:data-[state=active]:border-transparent${active ? ' efx-underline-slide-nav__link--active' : ''}`
 
@@ -245,22 +295,67 @@ export default function Me({ route }: { route: Route }) {
           ) : tickets.length === 0 ? (
             <EmptyState title="No tickets yet" description="Your purchases and RSVPs will appear here with their QR codes." action={<Button className="rounded-full" onClick={() => navigate('/')}>Discover events</Button>} />
           ) : (
-            tickets.map((t) => (
-              <button key={t.id} className="flex w-full items-center gap-4 rounded-2xl border border-border/70 bg-card p-4 text-left ievx-card-hover" onClick={() => void openTicket(t)}>
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/10">
-                  <Ticket className="h-6 w-6 text-primary" aria-hidden />
+            <>
+              {/* Next up — the first un-ended event, promoted to a hero card */}
+              {nextUp ? (
+                <section aria-label="Next up">
+                  <h2 className="mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">Next up</h2>
+                  <div className="rounded-2xl border-2 border-primary/40 bg-primary/5 p-4">
+                    <button className="flex w-full items-center gap-4 text-left" onClick={() => void openTicket(nextUp)}>
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/10">
+                        <Ticket className="h-6 w-6 text-primary" aria-hidden />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-semibold">{nextUp.event.title}</p>
+                        <p className="text-xs text-muted-foreground">{nextUp.ticketType.name} · {dateLong(nextUp.event.startsAt, nextUp.event.timezone)}</p>
+                        <p className="text-xs text-muted-foreground">{nextUp.event.venue?.name ?? 'Online'} · <span className="font-mono">{nextUp.code}</span></p>
+                      </div>
+                      <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-primary px-2.5 py-1 text-[11px] font-bold tabular-nums text-primary-foreground" aria-label={`Starts ${countdown(nextUp.event.startsAt)}`}>
+                        <span className="efx-badge-ping__dot" aria-hidden />
+                        {countdown(nextUp.event.startsAt)}
+                      </span>
+                    </button>
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-primary/15 pt-3">
+                      <p className="text-xs text-muted-foreground">Tap the card for your QR — it stays scannable offline.</p>
+                      <a
+                        href={`/api/v1/events/${nextUp.event.id}/ics`}
+                        download
+                        aria-label="Add this event to your calendar (downloads an .ics file)"
+                        className="flex items-center gap-1.5 rounded-full border border-input bg-background px-3 py-1.5 text-xs font-medium hover:bg-secondary/60"
+                      >
+                        <CalendarPlus className="h-3.5 w-3.5" aria-hidden /> Add to calendar
+                      </a>
+                    </div>
+                  </div>
+                </section>
+              ) : (
+                <div className="rounded-2xl border border-dashed border-border p-5 text-center">
+                  <p className="text-sm font-semibold">Nothing coming up</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">Your past tickets live below — find your next event.</p>
+                  <Button size="sm" className="mt-3 rounded-full" onClick={() => navigate('/')}>Discover events</Button>
                 </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-semibold">{t.event.title}</p>
-                  <p className="text-xs text-muted-foreground">{t.ticketType.name} · {dateLong(t.event.startsAt, t.event.timezone)}</p>
-                  <p className="text-xs text-muted-foreground">{t.event.venue?.name ?? 'Online'} · <span className="font-mono">{t.code}</span></p>
-                </div>
-                <Badge variant={t.status === 'VALID' ? 'default' : 'secondary'} className="relative shrink-0 overflow-visible capitalize">
-                  {humanize(t.status)}
-                  {t.status === 'VALID' && <span className="efx-badge-ping__ping" aria-hidden />}
-                </Badge>
-              </button>
-            ))
+              )}
+
+              {/* Remaining upcoming events */}
+              {upcomingTickets.length > 1 && (
+                <section aria-label="Upcoming events">
+                  <h2 className="mb-2 mt-1 text-xs font-bold uppercase tracking-wider text-muted-foreground">Upcoming · {upcomingTickets.length - 1}</h2>
+                  <div className="space-y-3">
+                    {upcomingTickets.slice(1).map((t) => ticketRow(t, { countdownChip: true }))}
+                  </div>
+                </section>
+              )}
+
+              {/* Past events — most recent first, visually settled */}
+              {pastTickets.length > 0 && (
+                <section aria-label="Past events">
+                  <h2 className="mb-2 mt-1 text-xs font-bold uppercase tracking-wider text-muted-foreground">Past · {pastTickets.length}</h2>
+                  <div className="space-y-3">
+                    {pastTickets.map((t) => ticketRow(t, { muted: true }))}
+                  </div>
+                </section>
+              )}
+            </>
           )}
         </TabsContent>
 
@@ -470,6 +565,14 @@ export default function Me({ route }: { route: Route }) {
                     </span>
                   </span>
                 </label>
+                <a
+                  href={`/api/v1/events/${selectedTicket.row.event.id}/ics`}
+                  download
+                  aria-label="Add this event to your calendar (downloads an .ics file)"
+                  className="flex w-full items-center justify-center gap-1.5 rounded-full border border-input bg-background px-4 py-2 text-sm font-medium hover:bg-secondary/60"
+                >
+                  <CalendarPlus className="h-4 w-4" aria-hidden /> Add to calendar
+                </a>
                 <Badge variant={selectedTicket.row.status === 'VALID' ? 'default' : 'secondary'} className="capitalize">{humanize(selectedTicket.row.status)}</Badge>
                 {selectedTicket.row.status === 'VALID' ? (
                   <Button variant="outline" className="w-full rounded-full" onClick={() => void createTransfer()}>

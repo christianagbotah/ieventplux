@@ -707,3 +707,36 @@ Trigger: "go on" continuation — the organizer onboarding thread proposed after
 - The two QA orgs (`Harmony Test Collective`, `Mobile QA Fellowship`) and their draft/published events remain in the dev database (no org delete endpoint exists); they are realistic seed noise, not fixtures.
 - Programmatic `.click()` on the Radix account menu proved unreliable again this session (ref-clicks work; DOM clicks toggle inconsistently) — session switch used `cookies clear` + demo chip instead.
 - `agent-browser upload` could not target the `display:none` file input by ref; the upload was exercised via DataTransfer + change-event dispatch (the same DOM contract a real file picker produces).
+
+## Re-verification round 24 (2026-11-13, attendee ticket wallet: upcoming/past split, live countdown, calendar export)
+
+Trigger: "go on" continuation — after the staff surfaces (R20–22) and organizer onboarding (R23) threads landed, the attendee "My Tickets" wallet was the weakest remaining core surface: a flat list ordered by event start (past events first), no sense of "what's next", no calendar export from the wallet even though the `.ics` endpoint has existed since round 5. Scope: `src/portal/views/Me.tsx` Tickets tab + QR dialog (frontend-only — the `/tickets` API already returns every field needed).
+
+### Golden path — rich wallet (`ama@example.dev`, demo Attendee chip)
+- One-click Attendee chip → `#/me?tab=tickets` renders from the real `/tickets` payload (6 tickets):
+  - **"Next up" hero card** (border-primary/40, bg-primary/5): Accra Gospel Night of Wonders — VIP Front Block, Fri 20 Nov 2026 17:00, Lightworld Cathedral, ticket code, and a live countdown chip ("Starts 7d 2h", `tabular-nums`, badge-ping dot) that re-computes from a 60-second `now` ticker (one setState/min, cleaned up on unmount).
+  - **"UPCOMING · 2"** section — the two remaining Gospel Night tickets, each row carrying its own small countdown ("in 7d 2h"), mixed statuses rendered honestly (Valid + Refunded badges).
+  - **"PAST · 3"** section, most-recent-first (Masterclass 12 Nov → Easter Passion ×2, 13 Sep), visually settled (muted opacity, no badge-ping) — previously these rendered ABOVE the future events (API sorts by startsAt asc).
+  - Hero footer row: "Tap the card for your QR — it stays scannable offline." + **"Add to calendar"** anchor → `/api/v1/events/cmwdltc1v002nsm5jqy0ix92l/ics` (curl-verified: real VCALENDAR, 200, no auth).
+- Hero click → QR dialog: QR renders (`aria-label="Ticket QR code"`), copy-ref checkmark, **new full-width "Add to calendar" button** (same ics href), status badge, transfer button (VALID only) — all on mobile 390 with **zero horizontal overflow**.
+
+### Empty-upcoming state (only-past wallet)
+- No seeded persona had ONLY past tickets, so one realistic dev row was created (`pastonly@example.dev` / `Dev@12345` + one CHECKED_IN ticket to the ended Easter event — created with the same field shape the real fulfilment path writes: code, qrSecret, holderName/email, seatInfo, checkedInAt).
+- That wallet renders: **"Nothing coming up — your past tickets live below — find your next event."** dashed strip + "Discover events" CTA, then "PAST · 1" — no hero, no upcoming section (all three assertions verified in-DOM via innerText).
+- The account also correctly shows the R23 "Start organizing" header button (0 memberships).
+
+### Responsive + integrity sweeps
+- 390×844: zero horizontal overflow on wallet, empty state and open dialog (`scrollWidth == 390`).
+- 1280×800: hero + upcoming + past + calendar link all render; `scrollWidth == 1280`; dark-mode screenshot archived (`docs-assets/round24-wallet-dark.png` — primary/5 and border-primary/40 tokens adapt automatically).
+- Console/page errors: **zero** across the whole session after every flow (see honest notes for one self-inflicted false alarm).
+- Screenshots: `docs-assets/round24-wallet-mobile.png`, `round24-wallet-pastonly.png`, `round24-wallet-desktop.png`, `round24-wallet-dark.png`.
+
+### Static checks
+- `bun run lint`: 0 errors / 17 warnings (baseline held — the 60s ticker is a plain `[]`-deps interval, no new warnings).
+- `bunx tsc --noEmit`: 0 errors.
+
+### Honest notes
+- Mid-session a `NotFoundError: insertBefore` page error appeared — **self-inflicted**: an earlier eval had manually removed the sonner toast container node (`ol.fixed.top-0`) from the DOM, which breaks React's reconciliation when sonner later moves its (now parentless) nodes. After `errors --clear` + fresh navigations the app shows zero errors on its own. Lesson recorded: never surgically remove React-managed nodes; let toasts expire (the round-21 known 4s coverage limitation).
+- The countdown chip refreshes at minute resolution; verifying an actual label change would require waiting out the next coarser bucket (e.g. "7d 2h" → "7d 1h" ≈ 2 h) — mechanism verified by code review only (standard interval + derived labels).
+- `pastonly@example.dev` + its ticket remain in the dev DB as seed data documenting the only-past wallet state (same convention as the round-23 QA orgs).
+- GitHub push still blocked (PAT credential store gone from the sandbox home) — round 23 (`b548a6a`) and this round are verified + committed locally; re-providing the PAT unblocks both.
