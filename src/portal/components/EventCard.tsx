@@ -64,11 +64,14 @@ export function EventCard({ event, index = 0, footer }: { event: EventCardData; 
     <Card
       role="article"
       aria-label={event.title}
-      className="ievx-card-hover group overflow-hidden rounded-2xl border-border/70 bg-card cursor-pointer"
+      className="ievx-card-hover group flex-col gap-0 overflow-hidden rounded-2xl border-border/70 bg-card py-0 cursor-pointer"
       style={{ animationDelay: `${Math.min(index * 40, 320)}ms` }}
       onClick={() => navigate(`/event/${event.slug}`)}
     >
-      <div className="relative aspect-[3/4] overflow-hidden bg-muted">
+      {/* R19: landscape 16/10 banner (was portrait 3/4 — tall banners swallowed
+          rails and the promoted rail; landscape is the standard event-ticketing
+          banner and keeps cards compact at every width). */}
+      <div className="relative aspect-[16/10] overflow-hidden bg-muted">
         {event.coverImageUrl && !imgFailed ? (
           <img
             src={event.coverImageUrl}
@@ -104,7 +107,7 @@ export function EventCard({ event, index = 0, footer }: { event: EventCardData; 
             <span className="rounded-full bg-foreground/80 px-2.5 py-1 text-[11px] font-semibold text-background shadow">Sold out</span>
           )}
         </div>
-        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 via-black/25 to-transparent p-3 pt-10">
+        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 via-black/25 to-transparent p-3 pt-8">
           <div className="flex items-center gap-2 text-[11.5px] font-medium text-white/95">
             <CalendarDays className="h-3.5 w-3.5" aria-hidden />
             {dateShort(event.startsAt)}
@@ -117,7 +120,7 @@ export function EventCard({ event, index = 0, footer }: { event: EventCardData; 
           </div>
         </div>
       </div>
-      <div className="space-y-2 p-4">
+      <div className="space-y-2 p-3.5">
         <h3 className="line-clamp-2 min-h-[2.6em] font-semibold leading-snug group-hover:text-primary">{event.title}</h3>
         {event.org?.name && <p className="text-xs text-muted-foreground">{event.org.name}{event.org.verifiedAt ? ' · Verified' : ''}</p>}
         {typeof event.ratingAvg === 'number' && event.ratingCount && event.ratingCount > 0 && (
@@ -142,9 +145,9 @@ export function EventCard({ event, index = 0, footer }: { event: EventCardData; 
 
 export function EventCardSkeleton() {
   return (
-    <Card className="overflow-hidden rounded-2xl" aria-hidden>
-      <div className="ievx-skeleton aspect-[3/4] w-full" />
-      <div className="space-y-2.5 p-4">
+    <Card className="flex-col gap-0 overflow-hidden rounded-2xl py-0" aria-hidden>
+      <div className="ievx-skeleton aspect-[16/10] w-full" />
+      <div className="space-y-2.5 p-3.5">
         <div className="ievx-skeleton h-4 w-4/5 rounded" />
         <div className="ievx-skeleton h-3 w-2/5 rounded" />
         <div className="ievx-skeleton h-6 w-24 rounded-full" />

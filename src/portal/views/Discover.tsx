@@ -5,14 +5,17 @@ import {
   Search, SlidersHorizontal, Radio, MapPin, TrendingUp, X, ArrowRight, Wand2,
   Church, Music, Presentation, Wrench, Code2, Heart, Users, Sparkles as SparklesIcon,
   PartyPopper, Activity, Smartphone, QrCode, CalendarCheck, Building2,
+  CalendarDays, ChevronRight, Monitor,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Card } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { api, qs } from '../api'
 import { navigate, type Route } from '../router'
-import { EventCard, EventCardSkeleton, EmptyState, type EventCardData } from '../components/EventCard'
+import { dateShort, humanize } from '../format'
+import { EventCard, EventCardSkeleton, EmptyState, priceLabel, type EventCardData } from '../components/EventCard'
 import { AiSearchPanel } from '../components/AiSearchPanel'
 import { ForYouRail } from '../components/ForYouRail'
 import { PlannerPanel } from '../components/PlannerPanel'
@@ -102,6 +105,68 @@ const HOW_IT_WORKS = [
   },
 ]
 
+/**
+ * R19 — compact horizontal promo card for the sponsored rail. The old portrait
+ * EventCard here put a ~520px-tall banner at mobile widths; a promo row (small
+ * thumb + one-line title + date/city/price) reads like a native ad, stays
+ * honest with its "Promoted" label and keeps the home page compact.
+ */
+function SponsoredCard({ event, index }: { event: EventCardData; index: number }) {
+  const [imgFailed, setImgFailed] = useState(false)
+  return (
+    <Card
+      role="article"
+      aria-label={`${event.title} (promoted)`}
+      className="ievx-card-hover group flex-row items-stretch gap-0 overflow-hidden rounded-2xl border-border/70 bg-card py-0 cursor-pointer"
+      style={{ animationDelay: `${Math.min(index * 40, 320)}ms` }}
+      onClick={() => navigate(`/event/${event.slug}`)}
+    >
+      <div className="relative w-24 shrink-0 overflow-hidden bg-muted sm:w-36">
+        {event.coverImageUrl && !imgFailed ? (
+          <img
+            src={event.coverImageUrl}
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
+            loading="lazy"
+            onError={() => setImgFailed(true)}
+          />
+        ) : (
+          <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-primary/15 via-accent/20 to-primary/5 p-1.5 text-center">
+            <span className="line-clamp-3 text-[10px] font-semibold text-foreground/70">{event.title}</span>
+          </div>
+        )}
+        <span className="absolute left-1.5 top-1.5 rounded-full bg-accent px-2 py-0.5 text-[10px] font-semibold text-accent-foreground shadow">Promoted</span>
+      </div>
+      <div className="flex min-w-0 flex-1 flex-col justify-center gap-1 p-3">
+        <p className="truncate text-sm font-semibold leading-snug group-hover:text-primary">{event.title}</p>
+        {event.org?.name && (
+          <p className="truncate text-xs text-muted-foreground">{event.org.name}{event.org.verifiedAt ? ' · Verified' : ''}</p>
+        )}
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <CalendarDays className="h-3.5 w-3.5 shrink-0" aria-hidden />
+          {dateShort(event.startsAt)}
+          {event.city && (
+            <>
+              <MapPin className="ml-1 h-3.5 w-3.5 shrink-0" aria-hidden />
+              {event.city}
+            </>
+          )}
+        </div>
+        <div className="flex items-center justify-between gap-2 pt-0.5">
+          <Badge variant="outline" className="gap-1 text-[10px] capitalize">
+            {event.mode === 'VIRTUAL' ? <Monitor className="h-3 w-3" /> : event.mode === 'HYBRID' ? <Radio className="h-3 w-3" /> : <MapPin className="h-3 w-3" />}
+            {humanize(event.mode ?? 'Physical')}
+          </Badge>
+          <span className="text-sm font-bold text-primary">{priceLabel(event)}</span>
+        </div>
+      </div>
+      <div className="flex items-center pr-3">
+        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" aria-hidden />
+      </div>
+    </Card>
+  )
+}
+
 export default function Discover({ route }: { route: Route }) {
   const { user } = usePortal()
   const [home, setHome] = useState<HomePayload | null>(null)
@@ -180,7 +245,7 @@ export default function Discover({ route }: { route: Route }) {
       {/* Hero */}
       {!browsing && (
         <section className="relative border-b border-border/60">
-          <div className="mx-auto max-w-7xl px-4 py-8 sm:py-12">
+          <div className="mx-auto max-w-7xl px-4 py-6 sm:py-10">
             <div className="efx-aurora-bg iefx-stage iefx-stage--hero">
               {/* Brand artwork, dimmed so the aurora ribbons stay the lead act */}
               <img
@@ -264,7 +329,7 @@ export default function Discover({ route }: { route: Route }) {
                   ))}
                 </div>
                 {home && (
-                  <div className="mt-5 flex flex-wrap items-center gap-1.5 text-[11px] sm:mt-6 sm:gap-2 sm:text-xs lg:mt-8 lg:text-sm">
+                  <div className="mt-5 flex flex-wrap items-center gap-1.5 text-[11px] sm:mt-6 sm:gap-2 sm:text-xs lg:mt-6 lg:text-sm">
                     <span className="rounded-full bg-card/80 px-2.5 py-1 font-semibold backdrop-blur sm:px-3.5 sm:py-1.5 lg:px-4 lg:py-2">
                       <TrendingUp className="mr-1 inline h-3 w-3 text-primary sm:mr-1.5 sm:h-3.5 sm:w-3.5 lg:h-4 lg:w-4" aria-hidden />
                       <span className="sm:hidden">{statEvents} event{statEvents !== 1 ? 's' : ''}</span>
@@ -438,22 +503,22 @@ export default function Discover({ route }: { route: Route }) {
       </section>
 
       {/* Content */}
-      <div className="mx-auto max-w-7xl px-4 py-8">
+      <div className="mx-auto max-w-7xl px-4 py-6">
         {/* Ask-iEventPlux: natural-language search over the real catalogue */}
-        <div className="mb-10">
+        <div className="mb-8">
           <AiSearchPanel />
         </div>
 
-        {/* Sponsored placements (labelled) */}
+        {/* Sponsored placements (labelled) — compact native-ad style promo rows */}
         {!browsing && sponsoredEvents.length > 0 && (
-          <section className="mb-10" aria-label="Sponsored events">
-            <div className="mb-4 flex items-center gap-2">
+          <section className="mb-8" aria-label="Sponsored events">
+            <div className="mb-3 flex items-center gap-2">
               <h2 className="text-lg font-bold">Promoted for you</h2>
               <Badge variant="secondary" className="text-[10px]">Sponsored</Badge>
             </div>
-            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {sponsoredEvents.map((s, i) => (
-                <EventCard key={s.event.id} event={s.event} index={i} />
+                <SponsoredCard key={s.event.id} event={s.event} index={i} />
               ))}
             </div>
           </section>
@@ -461,7 +526,7 @@ export default function Discover({ route }: { route: Route }) {
 
         {browsing ? (
           <section aria-label="Search results">
-            <div className="mb-4 flex items-baseline justify-between">
+            <div className="mb-3 flex items-baseline justify-between">
               <h2 className="text-lg font-bold">
                 {isSearch && searchQuery ? `Results for “${searchQuery}”` : browseAll && !filters.category && !filters.q ? 'All upcoming events' : 'Browse events'}
               </h2>
@@ -473,16 +538,16 @@ export default function Discover({ route }: { route: Route }) {
               </div>
             </div>
             {loading ? (
-              <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 {Array.from({ length: 8 }).map((_, i) => <EventCardSkeleton key={i} />)}
               </div>
             ) : items && items.length > 0 ? (
               <>
-                <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                   {items.map((event, i) => <EventCard key={event.id} event={event} index={i} />)}
                 </div>
                 {page * 12 < total && (
-                  <div className="mt-8 text-center">
+                  <div className="mt-6 text-center">
                     <Button variant="outline" className="rounded-full" onClick={() => setPage((p) => p + 1)}>Load more</Button>
                   </div>
                 )}
@@ -499,8 +564,8 @@ export default function Discover({ route }: { route: Route }) {
           <>
             {user && <ForYouRail />}
             {home?.liveNow && home.liveNow.length > 0 && (
-              <section className="mb-10" aria-label="Live now">
-                <div className="mb-4 flex items-center gap-2">
+              <section className="mb-8" aria-label="Live now">
+                <div className="mb-3 flex items-center gap-2">
                   <span className="ievx-live-dot" />
                   <h2 className="text-lg font-bold">Happening live</h2>
                   <button
@@ -512,14 +577,14 @@ export default function Discover({ route }: { route: Route }) {
                     See all
                   </button>
                 </div>
-                <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   {home.liveNow.map((event, i) => <EventCard key={event.id} event={event} index={i} />)}
                 </div>
               </section>
             )}
             {home?.featured && home.featured.length > 0 && (
-              <section className="mb-10" aria-label="Featured events">
-                <div className="mb-4 flex items-center justify-between">
+              <section className="mb-8" aria-label="Featured events">
+                <div className="mb-3 flex items-center justify-between">
                   <h2 className="text-lg font-bold">Featured gatherings</h2>
                   <button
                     type="button"
@@ -530,13 +595,13 @@ export default function Discover({ route }: { route: Route }) {
                     Browse all <ArrowRight className="ml-1 h-3.5 w-3.5" aria-hidden />
                   </button>
                 </div>
-                <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   {home.featured.map((event, i) => <EventCard key={event.id} event={event} index={i} />)}
                 </div>
               </section>
             )}
-            <section className="mb-10" aria-label="Upcoming events">
-              <div className="mb-4 flex items-center justify-between">
+            <section className="mb-8" aria-label="Upcoming events">
+              <div className="mb-3 flex items-center justify-between">
                 <h2 className="text-lg font-bold">Coming up</h2>
                 <div className="flex items-center gap-2">
                   {user && <Button variant="outline" size="sm" className="rounded-full" onClick={() => navigate('/me?tab=saved')}>Saved events</Button>}
@@ -551,11 +616,11 @@ export default function Discover({ route }: { route: Route }) {
                 </div>
               </div>
               {home === null ? (
-                <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                   {Array.from({ length: 8 }).map((_, i) => <EventCardSkeleton key={i} />)}
                 </div>
               ) : home.upcoming.length > 0 ? (
-                <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                   {home.upcoming.map((event, i) => <EventCard key={event.id} event={event} index={i} />)}
                 </div>
               ) : (
@@ -564,21 +629,21 @@ export default function Discover({ route }: { route: Route }) {
             </section>
 
             {/* How it works — reassurance for first-time buyers */}
-            <section className="mb-10" aria-label="How it works">
-              <div className="mb-4 flex items-center gap-2">
+            <section className="mb-8" aria-label="How it works">
+              <div className="mb-3 flex items-center gap-2">
                 <CalendarCheck className="h-5 w-5 text-primary" aria-hidden />
                 <h2 className="text-lg font-bold">How iEventPlux works</h2>
               </div>
-              <div className="grid gap-4 sm:grid-cols-3">
+              <div className="grid gap-3 sm:grid-cols-3">
                 {HOW_IT_WORKS.map((step, i) => (
-                  <div key={step.title} className="rounded-2xl border border-border/60 bg-card p-5 ievx-card-hover">
-                    <div className="mb-3 flex items-center gap-3">
-                      <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                        <step.icon className="h-5 w-5" aria-hidden />
+                  <div key={step.title} className="rounded-2xl border border-border/60 bg-card p-4 ievx-card-hover">
+                    <div className="mb-2 flex items-center gap-3">
+                      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                        <step.icon className="h-4 w-4" aria-hidden />
                       </span>
                       <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Step {i + 1}</span>
                     </div>
-                    <p className="font-semibold">{step.title}</p>
+                    <p className="text-sm font-semibold">{step.title}</p>
                     <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{step.body}</p>
                   </div>
                 ))}
@@ -587,8 +652,8 @@ export default function Discover({ route }: { route: Route }) {
 
             {/* Organizer CTA — the two-sided marketplace, made explicit */}
             <section aria-label="For organizers" className="mb-4">
-              <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-primary via-primary to-emerald-700 p-8 text-primary-foreground sm:p-10">
-                <Building2 className="pointer-events-none absolute -right-6 -top-6 h-40 w-40 opacity-10" aria-hidden />
+              <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-primary via-primary to-emerald-700 p-6 text-primary-foreground sm:p-8">
+                <Building2 className="pointer-events-none absolute -right-6 -top-6 h-32 w-32 opacity-10" aria-hidden />
                 <div className="relative flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
                   <div className="max-w-xl">
                     <h2 className="text-xl font-extrabold sm:text-2xl">Organizing a gathering?</h2>

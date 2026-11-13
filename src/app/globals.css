@@ -158,8 +158,11 @@
 /* Brand headline — strip demo margins/sizing when used as a page headline. */
 .iefx-headline.efx-animated-gradient-text {
   margin: 0;
-  font-size: clamp(1.9rem, 4.6vw, 3.1rem);
-  line-height: 1.12;
+  /* R19: trimmed from clamp(1.9rem, 4.6vw, 3.1rem) — and re-capped at 2.3rem
+     (2.6rem still wrapped the two intended lines into 4 ragged ones at ≥lg,
+     measured 191px tall). Two clean lines at every width keeps the hero compact. */
+  font-size: clamp(1.7rem, 4vw, 2.3rem);
+  line-height: 1.15;
 }
 .iefx-subhead.efx-animated-gradient-text {
   margin: 0;
@@ -188,7 +191,8 @@
 .iefx-stage.efx-aurora-bg {
   border-radius: 1.25rem;
   min-height: 0;
-  padding: 1.75rem 1.5rem;
+  /* R19: 1.75rem/1.5rem → 1.5rem/1.25rem (compact home page pass). */
+  padding: 1.5rem 1.25rem;
 }
 
 /* R18b — hero CTA row (user report: oversized CTAs "covered the entire hero").
@@ -439,8 +443,13 @@
 }
 .ievx-reel-snap > * { scroll-snap-align: start; }
 
-/* Anchor/section scrolling clears the sticky glass header (65px + breathing room). */
-section[id], #live-engagement, #reviews, #discussion { scroll-margin-top: 84px; }
+/* Anchor/section scrolling clears the sticky glass header (65px + breathing room).
+   R19 fix: the old blanket `section[id]` selector (unlayered — beats every
+   utilities-layer `scroll-mt-*`) silently capped the AI panel's scroll-mt-48
+   (it needs to clear the Discover sticky filter bar ≈179px too) and the org
+   profile's scroll-mt-24. Only the classless Card anchors + #browse keep the
+   84px default; every section with its own scroll-mt utility now owns it. */
+#browse, #live-engagement, #reviews, #discussion { scroll-margin-top: 84px; }
 
 /* Bare utility grids (`grid gap-*` with no explicit grid-cols template) size
    their implicit tracks to content min-content, which can exceed the container

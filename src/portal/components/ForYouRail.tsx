@@ -41,12 +41,12 @@ export function ForYouRail() {
   if (failed) return null
   if (!data) {
     return (
-      <section className="mb-10" aria-label="Personalized recommendations loading">
-        <div className="mb-4 flex items-center gap-2">
+      <section className="mb-8" aria-label="Personalized recommendations loading">
+        <div className="mb-3 flex items-center gap-2">
           <Loader2 className="h-4 w-4 animate-spin text-primary" aria-hidden />
           <h2 className="text-lg font-bold">Finding picks for you…</h2>
         </div>
-        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => (
             <EventCardSkeleton key={i} />
           ))}
@@ -57,8 +57,8 @@ export function ForYouRail() {
   if (data.items.length === 0) return null
 
   return (
-    <section className="mb-10" aria-label={data.degraded ? 'Trending events' : 'Personalized recommendations'}>
-      <div className="mb-4 flex items-center gap-2">
+    <section className="mb-8" aria-label={data.degraded ? 'Trending events' : 'Personalized recommendations'}>
+      <div className="mb-3 flex items-center gap-2">
         {data.degraded ? (
           <>
             <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent text-accent-foreground">
@@ -85,7 +85,7 @@ export function ForYouRail() {
           More
         </button>
       </div>
-      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {data.items.map((event, i) => (
           <EventCard
             key={event.id}

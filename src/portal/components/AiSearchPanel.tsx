@@ -91,16 +91,16 @@ export function AiSearchPanel({ id }: { id?: string }) {
     : []
 
   return (
-    <section id={id ?? 'ai-search'} aria-label="AI powered event search" className="ievx-scale scroll-mt-32">
-      <div className="relative overflow-hidden rounded-3xl border border-primary/25 bg-gradient-to-br from-primary/10 via-card to-card p-5 shadow-sm sm:p-6">
-        <div className="pointer-events-none absolute -right-10 -top-10 h-44 w-44 rounded-full bg-primary/10 blur-2xl" aria-hidden />
+    <section id={id ?? 'ai-search'} aria-label="AI powered event search" className="ievx-scale scroll-mt-48">
+      <div className="relative overflow-hidden rounded-3xl border border-primary/25 bg-gradient-to-br from-primary/10 via-card to-card p-4 shadow-sm sm:p-5">
+        <div className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-primary/10 blur-2xl" aria-hidden />
         <div className="relative">
-          <div className="flex items-center gap-2">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-md shadow-primary/25">
-              <Wand2 className="h-5 w-5" aria-hidden />
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-md shadow-primary/25">
+              <Wand2 className="h-4 w-4" aria-hidden />
             </span>
-            <div>
-              <h2 className="text-base font-bold leading-tight">Ask iEventPlux</h2>
+            <div className="min-w-0">
+              <h2 className="text-sm font-bold leading-tight sm:text-base">Ask iEventPlux</h2>
               <p className="text-xs text-muted-foreground">Describe the event you want — AI turns it into filters and searches the real catalogue.</p>
             </div>
             <Badge variant="secondary" className="ml-auto hidden gap-1 sm:inline-flex">
@@ -108,42 +108,46 @@ export function AiSearchPanel({ id }: { id?: string }) {
             </Badge>
           </div>
 
+          {/* R19: field + submit stay in ONE row on every viewport (the full-width
+              stacked button swallowed the panel on phones). items-stretch keeps
+              button height locked to the input row; label shortens below sm. */}
           <form
-            className="mt-4 flex flex-col gap-2 sm:flex-row"
+            className="mt-3 flex items-stretch gap-2 sm:mt-4"
             role="search"
             onSubmit={(e) => {
               e.preventDefault()
               void runSearch(query)
             }}
           >
-            <div className="efx-glow-focus-input flex-1" style={{ margin: 0, maxWidth: 'none', borderRadius: '999px' }}>
-              <Wand2 className="efx-glow-focus-input__icon pointer-events-none" style={{ width: 18, height: 18 }} aria-hidden />
+            <div className="efx-glow-focus-input min-w-0 flex-1" style={{ margin: 0, maxWidth: 'none', borderRadius: '999px' }}>
+              <Wand2 className="efx-glow-focus-input__icon pointer-events-none" style={{ width: 16, height: 16 }} aria-hidden />
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="e.g. affordable online workshops for creators this weekend"
+                placeholder="e.g. free workshops in Accra this weekend"
                 aria-label="Describe the events you are looking for"
                 maxLength={300}
                 className="efx-glow-focus-input__field"
                 style={{ padding: '0.55rem 0' }}
               />
             </div>
-            <div className="flex gap-2">
+            <div className="flex shrink-0 items-stretch gap-2">
               <button
                 type="submit"
-                className="efx-neon-pulse-button flex-1 sm:flex-none"
+                className="efx-neon-pulse-button whitespace-nowrap"
                 style={{
-                  fontSize: '0.9rem',
-                  padding: '0.65rem 1.4rem',
+                  fontSize: '0.8rem',
+                  padding: '0 0.95rem',
                   ...(state === 'loading' || query.trim().length < 3 ? { opacity: 0.6, cursor: 'not-allowed' } : {}),
                 }}
                 disabled={state === 'loading' || query.trim().length < 3}
               >
                 {state === 'loading' ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <SendHorizonal className="h-4 w-4" aria-hidden />}
-                Search with AI
+                <span className="sm:hidden">Ask</span>
+                <span className="hidden sm:inline">Search with AI</span>
               </button>
               {state !== 'idle' && (
-                <Button type="button" variant="outline" className="h-11 rounded-full" onClick={reset} aria-label="Reset AI search">
+                <Button type="button" variant="outline" className="h-auto rounded-full px-3" onClick={reset} aria-label="Reset AI search">
                   <RotateCcw className="h-4 w-4" aria-hidden />
                 </Button>
               )}
@@ -159,7 +163,7 @@ export function AiSearchPanel({ id }: { id?: string }) {
                     setQuery(ex)
                     void runSearch(ex)
                   }}
-                  className="rounded-full border border-border/70 bg-card px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:border-primary hover:text-primary ievx-press"
+                  className="rounded-full border border-border/70 bg-card px-2.5 py-1 text-[11px] text-muted-foreground transition-colors hover:border-primary hover:text-primary ievx-press"
                 >
                   “{ex}”
                 </button>
@@ -178,7 +182,7 @@ export function AiSearchPanel({ id }: { id?: string }) {
               <div className="mb-4 flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin text-primary" aria-hidden /> Understanding your request and searching events…
               </div>
-              <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 {Array.from({ length: 4 }).map((_, i) => (
                   <EventCardSkeleton key={i} />
                 ))}
@@ -211,7 +215,7 @@ export function AiSearchPanel({ id }: { id?: string }) {
               </div>
               <p className="mb-3 text-sm text-muted-foreground">{result.total} matching event{result.total !== 1 ? 's' : ''} from the live catalogue</p>
               {result.items.length > 0 ? (
-                <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                   {result.items.map((event, i) => (
                     <EventCard key={event.id} event={event} index={i} />
                   ))}
