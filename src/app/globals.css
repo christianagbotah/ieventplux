@@ -191,6 +191,43 @@
   padding: 1.75rem 1.5rem;
 }
 
+/* R18b — hero CTA row (user report: oversized CTAs "covered the entire hero").
+   The four hero actions hold ONE compact line on phones/tablets: the catalog
+   neon button's fixed 0.95rem/2.4rem padding & 1rem font is retuned here
+   (the old inline-style override is gone from view code), with a ≥sm and ≥lg
+   relaxation back to the roomy desktop proportions. Adapter layer wins over
+   the injected catalog CSS via specificity. */
+.iefx-hero-cta .efx-neon-pulse-button {
+  gap: 0.375rem;
+  padding: 0.5rem 0.7rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+@media (min-width: 640px) {
+  .iefx-hero-cta .efx-neon-pulse-button {
+    gap: 0.5rem;
+    padding: 0.55rem 1.3rem;
+    font-size: 0.875rem;
+    letter-spacing: 0.02em;
+  }
+}
+@media (min-width: 1024px) {
+  .iefx-hero-cta .efx-neon-pulse-button {
+    padding: 0.8rem 1.7rem;
+    font-size: 0.95rem;
+  }
+}
+
+/* R18b — slimmer hero stage gutters below sm so the compact CTA row keeps its
+   breathing room without the stage towering over phones. Hero-scoped modifier:
+   AuthView's stage sets its own inline padding and is untouched. */
+@media (max-width: 639px) {
+  .iefx-stage--hero.efx-aurora-bg {
+    padding: 1.25rem 1rem;
+  }
+}
+
 /* Dark-mode adaptations (light-hardcoded catalog colors → theme-aware). */
 .dark .efx-gradient-border-button {
   background:

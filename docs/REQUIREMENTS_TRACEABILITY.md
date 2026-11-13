@@ -50,7 +50,7 @@ Verification evidence keys: `TEST_REPORT.md` sections E1–E14 (scripted browser
 | Required public/attendee/organizer/admin experiences | All screens built (see README journeys) | DONE | E1–E12 |
 | Persisted changes; no dead buttons / fake analytics | All actions hit real APIs; analytics from DB aggregates | DONE | E5 |
 | Pointer cursor on all links/clickable cards (round 18) | Base-layer cursor rule (links, unclassed buttons, Radix role widgets, native controls) + `cursor-pointer` replacing shadcn's utilities-layer `cursor-default` on menu/cmdk/Select items; clickable copy labels | DONE | R18 |
-| Professional hero CTA arrangement on mobile/tablets (round 18) | Edge-aligned `grid-cols-2` hero set (primary full → equal halves w/ responsive labels → live CTA full) relaxing to one row ≥lg; pre-existing 768–1023px header overflow fixed via icon-only nav pills (md–lg); zero horizontal overflow 390–1280 | DONE | R18 |
+| Professional hero CTA arrangement on mobile/tablets (round 18, superseded by 18b per user follow-up) | All four hero CTAs and the three stat pills each hold ONE compact row below lg (user: "the 4 buttons at the top could all be in same row with minimal sizes, same applies to the 3 buttons below") — three-tier responsive labels/sizes (`<sm` short copy h-8 pills → sm–lg medium h-9 → `≥lg` roomy full-copy row), `.iefx-hero-cta` adapter tiers retune the catalog neon button per breakpoint, `iefx-stage--hero` slimmer mobile gutters, flex-wrap safety net (320px wraps 3+1, zero overflow); DOM-measured single rows at 390/768/1280; pre-existing 768–1023px header overflow fixed via icon-only nav pills (md–lg); zero horizontal overflow 390–1280 | DONE | R18, R18b |
 
 ## §6 Event creation & lifecycle
 

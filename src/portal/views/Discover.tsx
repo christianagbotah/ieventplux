@@ -181,7 +181,7 @@ export default function Discover({ route }: { route: Route }) {
       {!browsing && (
         <section className="relative border-b border-border/60">
           <div className="mx-auto max-w-7xl px-4 py-8 sm:py-12">
-            <div className="efx-aurora-bg iefx-stage">
+            <div className="efx-aurora-bg iefx-stage iefx-stage--hero">
               {/* Brand artwork, dimmed so the aurora ribbons stay the lead act */}
               <img
                 src="/images/hero-banner.png"
@@ -200,16 +200,15 @@ export default function Discover({ route }: { route: Route }) {
                   Church services, concerts, conferences, workshops and community moments — with secure mobile-money checkout,
                   QR tickets and protected live broadcasts.
                 </p>
-                {/* CTA set — professionally arranged at every viewport (round 18):
-                    mobile/tablet use an edge-aligned grid (primary full-width,
-                    two half-width utility actions, live CTA closing full-width;
-                    labels shorten below sm so nothing truncates), ≥lg relaxes
-                    into a single auto-width row. */}
-                <div className="mt-6 grid grid-cols-2 gap-2.5 sm:gap-3 lg:flex lg:flex-wrap lg:items-center lg:gap-3">
+                {/* CTA set (round 18b): ONE compact row of four actions on phones/tablets —
+                    the earlier edge-aligned grid let oversized CTAs swallow the hero.
+                    Tight pills + short labels below sm, fuller copy ≥sm, roomy auto
+                    row ≥lg; flex-wrap stays as a graceful fallback for ultra-narrow
+                    viewports (sizing is tuned to hold a single line at 390px). */}
+                <div className="iefx-hero-cta mt-5 flex flex-wrap items-center gap-1.5 sm:gap-2 lg:mt-6 lg:gap-3">
                   <button
                     type="button"
-                    className="efx-neon-pulse-button col-span-2 w-full lg:w-auto"
-                    style={{ fontSize: '0.95rem', padding: '0.8rem 1.7rem' }}
+                    className="efx-neon-pulse-button whitespace-nowrap"
                     aria-label={primaryEvent ? `View featured event: ${primaryEvent.title}` : 'Browse the event grid'}
                     onClick={() => {
                       if (primaryEvent) {
@@ -221,25 +220,31 @@ export default function Discover({ route }: { route: Route }) {
                       }
                     }}
                   >
-                    {primaryEvent ? 'View featured event' : 'Browse all events'}
-                    <ArrowRight className="h-4 w-4" aria-hidden />
+                    <span className="sm:hidden">{primaryEvent ? 'Featured' : 'Browse'}</span>
+                    <span className="hidden sm:inline lg:hidden">{primaryEvent ? 'Featured event' : 'Browse events'}</span>
+                    <span className="hidden lg:inline">{primaryEvent ? 'View featured event' : 'Browse all events'}</span>
+                    <ArrowRight className="h-3.5 w-3.5 sm:h-4 sm:w-4" aria-hidden />
                   </button>
-                  <Button size="lg" variant="outline" className="h-11 rounded-full bg-card/70 ievx-press" onClick={() => setPlannerOpen(true)}>
-                    <CalendarCheck className="mr-2 h-4 w-4" aria-hidden />
-                    <span className="sm:hidden">Plan weekend</span>
-                    <span className="hidden sm:inline">Plan my weekend</span>
+                  <Button variant="outline" className="ievx-press h-8 gap-1 rounded-full bg-card/70 px-2.5 text-xs sm:h-9 sm:gap-1.5 sm:px-3.5 sm:text-sm lg:h-11 lg:gap-2 lg:px-5" onClick={() => setPlannerOpen(true)}>
+                    <CalendarCheck className="size-3.5 sm:size-4" aria-hidden />
+                    <span className="sm:hidden">Plan</span>
+                    <span className="hidden sm:inline lg:hidden">Plan weekend</span>
+                    <span className="hidden lg:inline">Plan my weekend</span>
                   </Button>
-                  <Button size="lg" variant="outline" className="h-11 rounded-full bg-card/70 ievx-press" onClick={() => document.getElementById('ai-search')?.scrollIntoView({ behavior: 'smooth' })}>
-                    <Wand2 className="mr-2 h-4 w-4" aria-hidden />
-                    <span className="sm:hidden">Ask AI</span>
-                    <span className="hidden sm:inline">Ask AI to find events</span>
+                  <Button variant="outline" className="ievx-press h-8 gap-1 rounded-full bg-card/70 px-2.5 text-xs sm:h-9 sm:gap-1.5 sm:px-3.5 sm:text-sm lg:h-11 lg:gap-2 lg:px-5" onClick={() => document.getElementById('ai-search')?.scrollIntoView({ behavior: 'smooth' })}>
+                    <Wand2 className="size-3.5 sm:size-4" aria-hidden />
+                    <span className="sm:hidden">AI</span>
+                    <span className="hidden sm:inline lg:hidden">Ask AI</span>
+                    <span className="hidden lg:inline">Ask AI to find events</span>
                   </Button>
-                  <Button size="lg" variant="outline" className="h-11 rounded-full bg-card/70 ievx-press col-span-2 w-full sm:w-auto lg:w-auto" onClick={() => navigate('/live')}>
-                    <Radio className="mr-2 h-4 w-4" /> Watch live
+                  <Button variant="outline" className="ievx-press h-8 gap-1 rounded-full bg-card/70 px-2.5 text-xs sm:h-9 sm:gap-1.5 sm:px-3.5 sm:text-sm lg:h-11 lg:gap-2 lg:px-5" onClick={() => navigate('/live')}>
+                    <Radio className="size-3.5 sm:size-4" aria-hidden />
+                    <span className="sm:hidden">Live</span>
+                    <span className="hidden sm:inline">Watch live</span>
                   </Button>
                 </div>
                 {/* Quick links — the fastest paths into the catalogue */}
-                <div className="mt-5 flex flex-wrap items-center gap-x-1 gap-y-2 text-sm">
+                <div className="mt-4 flex flex-wrap items-center gap-x-1 gap-y-2 text-sm">
                   <span className="pr-1 text-xs font-medium uppercase tracking-wide" style={{ color: 'rgba(226, 232, 240, 0.72)' }}>Quick find:</span>
                   {[
                     { label: 'Today', filter: () => applyFilter('when', 'TODAY') },
@@ -259,10 +264,22 @@ export default function Discover({ route }: { route: Route }) {
                   ))}
                 </div>
                 {home && (
-                  <div className="mt-8 flex flex-wrap gap-2 text-sm">
-                    <span className="rounded-full bg-card/80 px-4 py-2 font-semibold backdrop-blur"><TrendingUp className="mr-1.5 inline h-4 w-4 text-primary" aria-hidden />{statEvents} upcoming event{statEvents !== 1 ? 's' : ''}</span>
-                    <span className="rounded-full bg-card/80 px-4 py-2 font-semibold backdrop-blur"><MapPin className="mr-1.5 inline h-4 w-4 text-primary" aria-hidden />{statOrgs} verified organizer{statOrgs !== 1 ? 's' : ''}</span>
-                    <span className="rounded-full bg-card/80 px-4 py-2 font-semibold backdrop-blur"><Radio className="mr-1.5 inline h-4 w-4 text-destructive" aria-hidden />{statLive} live right now</span>
+                  <div className="mt-5 flex flex-wrap items-center gap-1.5 text-[11px] sm:mt-6 sm:gap-2 sm:text-xs lg:mt-8 lg:text-sm">
+                    <span className="rounded-full bg-card/80 px-2.5 py-1 font-semibold backdrop-blur sm:px-3.5 sm:py-1.5 lg:px-4 lg:py-2">
+                      <TrendingUp className="mr-1 inline h-3 w-3 text-primary sm:mr-1.5 sm:h-3.5 sm:w-3.5 lg:h-4 lg:w-4" aria-hidden />
+                      <span className="sm:hidden">{statEvents} event{statEvents !== 1 ? 's' : ''}</span>
+                      <span className="hidden sm:inline">{statEvents} upcoming event{statEvents !== 1 ? 's' : ''}</span>
+                    </span>
+                    <span className="rounded-full bg-card/80 px-2.5 py-1 font-semibold backdrop-blur sm:px-3.5 sm:py-1.5 lg:px-4 lg:py-2">
+                      <MapPin className="mr-1 inline h-3 w-3 text-primary sm:mr-1.5 sm:h-3.5 sm:w-3.5 lg:h-4 lg:w-4" aria-hidden />
+                      <span className="sm:hidden">{statOrgs} organizer{statOrgs !== 1 ? 's' : ''}</span>
+                      <span className="hidden sm:inline">{statOrgs} verified organizer{statOrgs !== 1 ? 's' : ''}</span>
+                    </span>
+                    <span className="rounded-full bg-card/80 px-2.5 py-1 font-semibold backdrop-blur sm:px-3.5 sm:py-1.5 lg:px-4 lg:py-2">
+                      <Radio className="mr-1 inline h-3 w-3 text-destructive sm:mr-1.5 sm:h-3.5 sm:w-3.5 lg:h-4 lg:w-4" aria-hidden />
+                      <span className="sm:hidden">{statLive} live</span>
+                      <span className="hidden sm:inline">{statLive} live right now</span>
+                    </span>
                   </div>
                 )}
               </div>

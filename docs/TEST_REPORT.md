@@ -513,7 +513,29 @@ Trigger: user request — "all links and clickable cards should have cursor poin
 | Hydration / console | Zero errors, zero mismatch lines after all changes (fresh cold build) | ✅ live |
 | **Ops defect — Turbopack persistent-cache CSS staleness** | After editing `globals.css`, the dev server served a byte-identical stale `/_next/static/chunks/*.css` (206,702 B before AND after edit; JS chunks fresh — new DOM classes verified present while the CSS rule was absent). Survived a full dev-server restart AND a file touch; only `rm -rf .next` + restart produced the new compile. Recovery documented: if a CSS-layer rule "does not apply" in dev, verify it exists in the served chunk with `curl` before debugging the cascade | ✅ found, fixed, documented |
 
-**Honest limitations:** the cursor matrix covered the portal shell, discovery surfaces and live-opened menus (dropdown, cmdk); other views' identical primitives inherit the same global rule rather than being exhaustively hovered. `cursor-not-allowed` on disabled controls was left to shadcn's existing `disabled:pointer-events-none` convention (no visible cursor on disabled = current shadcn behaviour, unchanged deliberately). Icon-only nav in the md–lg band is a standard collapse pattern but reduces label discoverability for sighted keyboard/pointer users at those widths — `aria-label` and `title` preserve semantics and hover names.
+**Honest limitations:** the cursor matrix covered the portal shell, discovery surfaces and live-opened menus (dropdown, cmdk); other views' identical primitives inherit the same global rule rather than being exhaustively hovered. `cursor-not-allowed` on disabled controls was left to shadcn's existing `disabled:pointer-events-none` convention (no visible cursor on disabled = current shadcn behaviour, unchanged deliberately). Icon-only nav in the md–lg band is a standard collapse pattern but reduces label discoverability for sighted keyboard/pointer users at those widths — `aria-label` and `title` preserve semantics and hover names. The round-18 hero grid itself was superseded by round 18b below (user follow-up: single compact row).
+
+**Static:** `bun run lint` 0 errors / 17 warnings (baseline); `bunx tsc --noEmit` 0 errors.
+
+## Re-verification round 18b (2026-11-13, hero CTAs & stat pills into minimal single rows)
+
+Trigger: user report — "on mobile and tablet the buttons are too big, covering the entire hero section… the 4 buttons at the top could all be in same row with minimal sizes, same applies to the 3 buttons below too, they should be minimized and put in same row." The round-18 edge-aligned grid (primary full-width + halves + full-width live CTA ≈ 150px of stacked button height) is replaced by ONE compact row everywhere below lg.
+
+| Case | Outcome | Status |
+|---|---|---|
+| Hero CTA row @390 | DOM-measured: all four CTAs on ONE row (y=417/418) — "Featured" w=104 h=34, "Plan" w=70 h=32, "AI" w=56 h=32, "Live" w=69 h=32; row right edge 358 ≤ 390, `scrollWidth == viewport` (zero overflow). Total CTA band ≈ 34px vs ≈150px stacked before | ✅ live |
+| Hero CTA row @768 | ONE row (y=345/346) with sm-tier labels: "Featured event" 190 / "Plan weekend" 145 / "Ask AI" 91 / "Watch live" 121 px, h=36-39 | ✅ live |
+| Hero CTA row @1280 | ONE roomy row with full labels ("View featured event" 258 / "Plan my weekend" 173 / "Ask AI to find events" 194 / "Watch live" 123 px, h=44-48); neon button back at 15.2px font / 12.8×27.2px padding (previous desktop proportions preserved) | ✅ live |
+| Stat pills @390 | All three on ONE row (y=543): "14 events" 97 / "3 organizers" 113 / "0 live" 70 px, h=25 — compact `text-[11px]`/`px-2.5` tier below sm, full labels ≥sm | ✅ live |
+| Stat pills @768 / @1280 | ONE row each (185/188/154 @768; 214/217/178 @1280) with full labels at ≥sm sizes | ✅ live |
+| Responsive label tiers | 3-tier span pattern verified via computed display: <sm "Featured/Plan/AI/Live" + "N events/organizers/live"; sm–lg medium copy; ≥lg full copy — every tier renders exactly one visible span per button | ✅ live |
+| Adapter CSS | `.iefx-hero-cta .efx-neon-pulse-button` tiers (0.75rem font/0.5rem 0.7rem padding <sm → 0.875rem @sm → 0.95rem/0.8rem 1.7rem @lg) beat the injected catalog CSS (specificity 0,2,0 vs 0,1,0); the old inline-style override removed from view code; `iefx-stage--hero` slims stage gutters to 1.25rem/1rem below sm (AuthView's inline-padded stage untouched) | ✅ live (computed styles measured) |
+| 320px stress test (wrap fallback) | Legacy-SE width: flex-wrap degrades gracefully — "Featured/Plan/AI" on row 1, "Live" wraps to row 2, zero horizontal overflow | ✅ live |
+| CTA golden path (mobile 390) | "Live" click → `#/live`; "Plan" click → "AI weekend planner" sheet opens (title verified); "Featured" click → `#/event/accra-gospel-night-of-wonders`; "AI" click → ai-search panel scrolled into view (panelTop 84) | ✅ live |
+| Visual QA (VLM screenshots) | 390 / 768 / 1280 px hero screenshots: buttons "professionally sized, don't dominate the hero", single rows confirmed, no truncation/overlap/cramping; only cosmetic note = quick-find chips wrap two lines on mobile (acceptable, unchanged from before) | ✅ live |
+| Hydration / console / errors | Zero console errors, zero page errors across navigation, sheet open, back-nav and all three viewport resizes; dev log all-200s | ✅ live |
+
+**Honest limitations:** single-row guarantee is sizing-tuned to 390px (the user's complaint band); below ~330px the row wraps 3+1 rather than staying one line (no overflow either way — graceful, not broken). Short sub-sm labels ("AI", "Live") trade copy richness for the single-row requirement; full copy returns ≥sm and aria-labels carry semantics (primary keeps the full event title in `aria-label` at all sizes).
 
 **Static:** `bun run lint` 0 errors / 17 warnings (baseline); `bunx tsc --noEmit` 0 errors.
 
