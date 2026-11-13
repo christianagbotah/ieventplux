@@ -49,6 +49,8 @@ Verification evidence keys: `TEST_REPORT.md` sections E1–E14 (scripted browser
 | Search, pagination, tables, collapsible organizer sidebar | Discovery pagination, admin/organizer tables, collapsible sidebar | DONE | E5, E11 |
 | Required public/attendee/organizer/admin experiences | All screens built (see README journeys) | DONE | E1–E12 |
 | Persisted changes; no dead buttons / fake analytics | All actions hit real APIs; analytics from DB aggregates | DONE | E5 |
+| Pointer cursor on all links/clickable cards (round 18) | Base-layer cursor rule (links, unclassed buttons, Radix role widgets, native controls) + `cursor-pointer` replacing shadcn's utilities-layer `cursor-default` on menu/cmdk/Select items; clickable copy labels | DONE | R18 |
+| Professional hero CTA arrangement on mobile/tablets (round 18) | Edge-aligned `grid-cols-2` hero set (primary full → equal halves w/ responsive labels → live CTA full) relaxing to one row ≥lg; pre-existing 768–1023px header overflow fixed via icon-only nav pills (md–lg); zero horizontal overflow 390–1280 | DONE | R18 |
 
 ## §6 Event creation & lifecycle
 

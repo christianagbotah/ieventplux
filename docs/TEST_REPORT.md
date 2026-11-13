@@ -494,6 +494,29 @@ Trigger: user-submitted console error — React 19 hydration attribute mismatch 
 
 **Static:** `bun run lint` 0 errors / 17 warnings (baseline); `bunx tsc --noEmit` 0 errors; secret scan clean.
 
+## Re-verification round 18 (2026-11-13, cursor affordance + hero/CTA arrangement on mobile & tablets)
+
+Trigger: user request — "all links and clickable cards should have cursor pointer. hero section buttons on mobile and tablets should be well and professionally arranged."
+
+| Case | Outcome | Status |
+|---|---|---|
+| Pointer affordance — base layer | New `@layer base` rule (`a[href]`, `button:not(:disabled)`, Radix `menuitem`/`option`/`tab`/`checkbox`/`radio`/`switch`/`combobox`/`link` roles, native checkbox/radio/range/select, `summary`) compiled and applied — Tailwind v4 preflight keeps `<button>` at browser `cursor: default` | ✅ live |
+| Pointer affordance — utilities-layer conflict | shadcn New York ships `cursor-default` on dropdown-menu/menubar/context-menu items, cmdk `CommandItem` and `SelectItem` (utilities layer beats base layer) — all swapped to `cursor-pointer`; Select scroll arrows intentionally keep `cursor-default` (non-clickable) | ✅ live |
+| Computed-cursor matrix (browser) | nav Discover pill, theme toggle, palette trigger, hero neon CTA, hero outline CTAs, quick-find Today, footer Effects Studio link, event card, mobile bottom nav — **all `pointer`**; search input stays `text` (correct — it is a text field) | ✅ live |
+| Live widget cursors | Theme dropdown opened → 3 `[role=menuitem]` computed `pointer`; ⌘K palette → 7 `[role=option]` computed `pointer` | ✅ live |
+| Hero CTA arrangement @390 | DOM-measured: primary "View featured event" w=310 (full), row 2: "Plan weekend" w=150 + "Ask AI" w=150 (equal halves, same row), "Watch live" w=310 (full) — edge-aligned grid, zero horizontal overflow; labels shorten below sm (no truncation, `whitespace-nowrap` never trips) | ✅ live |
+| Hero CTA arrangement @768 | w=688 full / 338+338 halves / 688 full with full labels restored at sm | ✅ live |
+| Hero CTA arrangement @1280 | Single auto-width row, center-aligned (primary 258 / 189 / 210 / 139 px), lg:flex relaxation works | ✅ live |
+| Pre-existing tablet header overflow (found during verification) | At 768px the right action group ended at x=817 (+49px overflow) — full nav labels + brand + account group exceeded the container. Fix: md–lg band runs icon-only nav pills (`aria-label` + `title` kept); scrollWidth == viewport at **390 / 768 / 844 / 1024 / 1280** (zero overflow anywhere) | ✅ live (before/after measured) |
+| Nav smoke at tablet | Icon-only "Live Now" pill click → `#/live` navigation works; cursor pointer | ✅ live |
+| Copy-checkmark labels | Order-reference and ticket-code copy `<label>`s gained `cursor-pointer` | ✅ code |
+| Hydration / console | Zero errors, zero mismatch lines after all changes (fresh cold build) | ✅ live |
+| **Ops defect — Turbopack persistent-cache CSS staleness** | After editing `globals.css`, the dev server served a byte-identical stale `/_next/static/chunks/*.css` (206,702 B before AND after edit; JS chunks fresh — new DOM classes verified present while the CSS rule was absent). Survived a full dev-server restart AND a file touch; only `rm -rf .next` + restart produced the new compile. Recovery documented: if a CSS-layer rule "does not apply" in dev, verify it exists in the served chunk with `curl` before debugging the cascade | ✅ found, fixed, documented |
+
+**Honest limitations:** the cursor matrix covered the portal shell, discovery surfaces and live-opened menus (dropdown, cmdk); other views' identical primitives inherit the same global rule rather than being exhaustively hovered. `cursor-not-allowed` on disabled controls was left to shadcn's existing `disabled:pointer-events-none` convention (no visible cursor on disabled = current shadcn behaviour, unchanged deliberately). Icon-only nav in the md–lg band is a standard collapse pattern but reduces label discoverability for sighted keyboard/pointer users at those widths — `aria-label` and `title` preserve semantics and hover names.
+
+**Static:** `bun run lint` 0 errors / 17 warnings (baseline); `bunx tsc --noEmit` 0 errors.
+
 ## Not performed (honest)
 
 - Native Android/iOS builds and device testing (mobile is a source scaffold).

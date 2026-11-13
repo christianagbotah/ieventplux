@@ -219,7 +219,7 @@ export default function OrderView({ reference }: { reference: string }) {
             <p className="mt-1 text-sm text-muted-foreground">
               Order <span className="font-mono font-semibold">{order.reference}</span> · {dateLong(order.createdAt)}
             </p>
-            <label className="efx-copy-success-checkmark" style={{ margin: '0.75rem 0 0' }} onClick={() => void copyReference()}>
+            <label className="efx-copy-success-checkmark cursor-pointer" style={{ margin: '0.75rem 0 0' }} onClick={() => void copyReference()}>
               <input className="efx-copy-success-checkmark__input" type="checkbox" checked={refCopied} onChange={() => {}} aria-label="Copy order reference" />
               <span className="efx-copy-success-checkmark__button">
                 <span className="efx-copy-success-checkmark__badge" aria-hidden="true">

@@ -200,10 +200,15 @@ export default function Discover({ route }: { route: Route }) {
                   Church services, concerts, conferences, workshops and community moments — with secure mobile-money checkout,
                   QR tickets and protected live broadcasts.
                 </p>
-                <div className="mt-6 flex flex-wrap items-center gap-3">
+                {/* CTA set — professionally arranged at every viewport (round 18):
+                    mobile/tablet use an edge-aligned grid (primary full-width,
+                    two half-width utility actions, live CTA closing full-width;
+                    labels shorten below sm so nothing truncates), ≥lg relaxes
+                    into a single auto-width row. */}
+                <div className="mt-6 grid grid-cols-2 gap-2.5 sm:gap-3 lg:flex lg:flex-wrap lg:items-center lg:gap-3">
                   <button
                     type="button"
-                    className="efx-neon-pulse-button"
+                    className="efx-neon-pulse-button col-span-2 w-full lg:w-auto"
                     style={{ fontSize: '0.95rem', padding: '0.8rem 1.7rem' }}
                     aria-label={primaryEvent ? `View featured event: ${primaryEvent.title}` : 'Browse the event grid'}
                     onClick={() => {
@@ -219,13 +224,17 @@ export default function Discover({ route }: { route: Route }) {
                     {primaryEvent ? 'View featured event' : 'Browse all events'}
                     <ArrowRight className="h-4 w-4" aria-hidden />
                   </button>
-                  <Button size="lg" variant="outline" className="rounded-full bg-card/70 ievx-press" onClick={() => setPlannerOpen(true)}>
-                    <CalendarCheck className="mr-2 h-4 w-4" aria-hidden /> Plan my weekend
+                  <Button size="lg" variant="outline" className="h-11 rounded-full bg-card/70 ievx-press" onClick={() => setPlannerOpen(true)}>
+                    <CalendarCheck className="mr-2 h-4 w-4" aria-hidden />
+                    <span className="sm:hidden">Plan weekend</span>
+                    <span className="hidden sm:inline">Plan my weekend</span>
                   </Button>
-                  <Button size="lg" variant="outline" className="rounded-full bg-card/70 ievx-press" onClick={() => document.getElementById('ai-search')?.scrollIntoView({ behavior: 'smooth' })}>
-                    <Wand2 className="mr-2 h-4 w-4" aria-hidden /> Ask AI to find events
+                  <Button size="lg" variant="outline" className="h-11 rounded-full bg-card/70 ievx-press" onClick={() => document.getElementById('ai-search')?.scrollIntoView({ behavior: 'smooth' })}>
+                    <Wand2 className="mr-2 h-4 w-4" aria-hidden />
+                    <span className="sm:hidden">Ask AI</span>
+                    <span className="hidden sm:inline">Ask AI to find events</span>
                   </Button>
-                  <Button size="lg" variant="outline" className="rounded-full bg-card/70 ievx-press" onClick={() => navigate('/live')}>
+                  <Button size="lg" variant="outline" className="h-11 rounded-full bg-card/70 ievx-press col-span-2 w-full sm:w-auto lg:w-auto" onClick={() => navigate('/live')}>
                     <Radio className="mr-2 h-4 w-4" /> Watch live
                   </Button>
                 </div>

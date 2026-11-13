@@ -440,7 +440,7 @@ export default function Me({ route }: { route: Route }) {
                   <p className="text-xs text-muted-foreground">{selectedTicket.row.event.venue?.name ?? 'Online'} · {selectedTicket.row.event.org.name}</p>
                 </div>
                 <label
-                  className="efx-copy-success-checkmark"
+                  className="efx-copy-success-checkmark cursor-pointer"
                   style={{ margin: '0.25rem 0 0' }}
                   onClick={() => {
                     if (selectedTicket && !copiedCode) {

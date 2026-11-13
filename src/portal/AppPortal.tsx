@@ -216,12 +216,17 @@ export default function AppPortal() {
                 key={item.path}
                 onClick={() => navigate(item.path)}
                 aria-current={activeNav(item.path) ? 'page' : undefined}
+                aria-label={item.label}
+                title={item.label}
                 className={`flex items-center gap-1.5 rounded-full px-3.5 py-2 text-sm font-medium transition-colors ievx-press ${
                   activeNav(item.path) ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
                 }`}
               >
                 <item.icon className="h-4 w-4" aria-hidden />
-                {item.label}
+                {/* md–lg band runs icon-only (round 18): full pill labels + the
+                    account group overflowed 768px tablets by ~49px; labels
+                    return at lg where the row has room again. */}
+                <span className="hidden lg:inline">{item.label}</span>
               </button>
             ))}
           </nav>
