@@ -28,7 +28,7 @@ export default function CreateOrg() {
       const result = await api.post<{ org: { id: string; name: string } }>('/orgs', form)
       const me = await api.get<{ memberships: Parameters<typeof setMemberships>[0] }>('/auth/me')
       setMemberships(me.memberships ?? [])
-      toast({ title: `${result.org.name} created`, description: 'Verification is required before paid ticket sales — submit documents from the workspace.' })
+      toast({ title: `${result.org.name} created`, description: 'Verification is required before paid ticket sales — your dashboard checklist walks you through it.' })
       navigate('/organizer')
     } catch (err) {
       toast({ title: 'Could not create the organization', description: err instanceof ApiClientError ? err.message : 'Please try again.', variant: 'destructive' })

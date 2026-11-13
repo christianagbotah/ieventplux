@@ -660,3 +660,50 @@ Signed in via the round-21 Super Admin demo chip; viewports 1280×800 (desktop) 
 - PWA offline install check (web app is online-first; tickets refresh from API).
 
 **Conclusion:** the golden paths — discovery → paid checkout → ticket issuance → QR check-in → ledger/payouts/admin — run end-to-end on real code with a simulated provider boundary, with the defects found during verification fixed and re-verified. Remaining gaps are recorded in REQUIREMENTS_TRACEABILITY and CHIEF_ARCHITECT_HANDOFF.
+
+## Re-verification round 23 (2026-11-13, organizer onboarding: checklist, verification surface, event editor)
+
+Trigger: "go on" continuation — the organizer onboarding thread proposed after round 22 (admin console) was chosen. Scope: dashboard onboarding checklist, verification banner, dead-end fixes, organizer entry points, event editor slimming + poster upload.
+
+### Setup
+- Signed in as the Attendee demo persona (`ama@example.dev`, no memberships) — the exact user the onboarding targets. Viewports 1280×900, 768×1024, 390×844. Screenshots: `docs-assets/round23-desktop-dashboard.png`, `round23-mobile-dashboard.png`, `round23-mobile-dialog.png`.
+
+### Entry points (new)
+- Me page header (attendee): "Start organizing" button present for a signed-in account with 0 memberships; after creating an org it is replaced by "Organizer workspace" (verified both states on the same session).
+- ⌘K command palette (attendee): "Start organizing" account item → navigates to `#/create-org` (click-through verified). After becoming an organizer the palette shows "Organizer workspace" instead.
+
+### Create-org → dashboard checklist golden path
+1. Palette → Start organizing → create-org form filled (name/tagline/city/about/phone) → org created → lands on `#/organizer` dashboard.
+2. Dashboard now shows, from the REAL `/orgs/[id]/overview` payload: amber "Verification required" banner (ShieldAlert + "Submit documents" CTA) and a "Getting started" card — 0 of 4 complete, progress bar 0%, steps: Create your first event / Add a ticket type / Submit verification / Publish an event, each with hint copy, chevron and deep-link.
+3. Dead-end fixed: the "Next events" empty state is now a proper EmptyState with a "Create your first event" button (previously a bare muted line).
+
+### Deep-link + auto-open create dialog
+- Tapping checklist step 1 navigates to `#/organizer?tab=events&new=1` and the Create event dialog opens on mount.
+- Defect found & fixed during verification: the first implementation stripped the query with a `navigate(..., { replace: true })` effect — but AppPortal keys the whole view tree by `route.raw` (`<div key={route.raw}>`), so the strip remounted the view and reset the open state (dialog never appeared). Fix: `new=1` stays in the URL as a real deep link (same truth-source pattern as the R22 admin sections); the sidebar nav always writes `?tab=<key>` without extra params, so the flag naturally disappears on the next section click. Re-verified: direct URL open, checklist click-through and sidebar round-trip all behave.
+
+### Event editor (slimmed + wired to uploads)
+- Category is now a Select fed by the real discovery catalog (`GET /discovery/categories` → Church Service, Concert, Conference, Workshop, Bootcamp, Wedding, Community, Ministry, Festival, Sports & Health) — replaces the free-text slug input that silently hid typo'd events from every filter. Legacy unknown slugs still render as a "(current)" option; on API failure the old Input returns (graceful degradation).
+- Poster: real upload through the existing `/api/v1/uploads` endpoint (button next to the URL field). Verified with a programmatic file-set → POST → asset URL set into the cover field → asset serves 200 (922 KB) → "Event saved".
+- "More options" collapses age guidance / accessibility / attendance rules / refund policy (11 visible fields on create instead of 15); edit mode auto-opens the section when an event already uses those fields.
+- Post-create: the dialog STAYS OPEN on the ticket-types step — title switches to "Add tickets — {title}", a "Draft created." success strip renders, the primary button becomes Done. Ticket type "Free RSVP" added from this state ("Free · 0/100 sold · max 4/buyer"), Done closes, event list refreshed.
+- Publish from the events list → "Published"; the event appears in the public events feed (verified via API).
+
+### Checklist progress reflects real data
+- After create + ticket type + publish: dashboard shows "3 of 4 complete", progress bar 75%, three steps struck through "Complete", verification step still pending.
+- Verification submit from Settings (checklist step 3 deep-link): evidence saved → dashboard banner flips to "Verification under review" with "Review submission" CTA; checklist reaches 4/4 and hides itself.
+- Established organizer regression (`pastor@lightworld.dev`, Lightworld Chapel International, ACTIVE org): no checklist, no banner — dashboard unchanged for verified orgs.
+
+### Responsive + integrity sweeps
+- 390×844: zero horizontal overflow on dashboard and dialog (`scrollWidth == clientWidth == 390`); banner wraps to a stacked 186px block fully inside the viewport; checklist step buttons ≥ 68px tall; create dialog fits exactly 390px and completes the create → ticket-step flow on mobile (event "Mobile QA Event One" created).
+- 768: no overflow, banner fits, checklist renders, workspace sidebar visible.
+- 1280: screenshot archived (banner + 1-of-4 checklist visible above the fold).
+- Console/page errors: zero across the whole session (checked after every flow).
+
+### Static checks
+- `bun run lint`: 0 errors / 17 warnings (baseline held — the first auto-open implementation added an 18th `set-state-in-effect` warning and was refactored to a state-initializer + navigation-only effect).
+- `bunx tsc --noEmit`: 0 errors.
+
+### Honest notes
+- The two QA orgs (`Harmony Test Collective`, `Mobile QA Fellowship`) and their draft/published events remain in the dev database (no org delete endpoint exists); they are realistic seed noise, not fixtures.
+- Programmatic `.click()` on the Radix account menu proved unreliable again this session (ref-clicks work; DOM clicks toggle inconsistently) — session switch used `cookies clear` + demo chip instead.
+- `agent-browser upload` could not target the `display:none` file input by ref; the upload was exercised via DataTransfer + change-event dispatch (the same DOM contract a real file picker produces).

@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { Ticket, ShoppingBag, Heart, Bell, UserRound, Share2, Check, RefreshCw, Loader2 } from 'lucide-react'
+import { Ticket, ShoppingBag, Heart, Bell, UserRound, Share2, Check, RefreshCw, Loader2, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -203,6 +203,14 @@ export default function Me({ route }: { route: Route }) {
         </div>
         {memberships.length > 0 && (
           <Button variant="outline" className="rounded-full" onClick={() => navigate('/organizer')}>Organizer workspace</Button>
+        )}
+        {/* R23: every signed-in account can organize — the header previously only
+            surfaced the workspace to existing organizers, leaving attendees with
+            the single Discover promo band as their only entry point. */}
+        {memberships.length === 0 && (
+          <Button className="rounded-full ievx-press" onClick={() => navigate('/create-org')}>
+            <Sparkles className="mr-1.5 h-4 w-4" aria-hidden /> Start organizing
+          </Button>
         )}
       </div>
 

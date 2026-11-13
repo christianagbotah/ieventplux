@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from '@/components/ui/command'
 import {
   Compass, Radio, Film, Search, Ticket, LayoutDashboard, ShieldCheck, LogOut,
-  Sparkles, UserRound, Sun, Moon, Wand2, Loader2, CalendarDays,
+  Sparkles, UserRound, Sun, Moon, Wand2, Loader2, CalendarDays, CalendarPlus,
 } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import { navigate } from '../router'
@@ -88,6 +88,9 @@ export function CommandPalette({ open, onOpenChange, onLogout }: PaletteProps) {
       if (isOrganizer(user, memberships)) {
         items.push({ label: 'Organizer workspace', icon: LayoutDashboard, action: () => navigate('/organizer') })
         items.push({ label: 'AI Content Studio', icon: Sparkles, action: () => navigate('/ai-studio') })
+      } else {
+        // R23: signed-in non-organizers get the same entry the Me header now offers.
+        items.push({ label: 'Start organizing', icon: CalendarPlus, action: () => navigate('/create-org') })
       }
       if (isPlatformStaff(user)) {
         items.push({ label: 'Platform admin', icon: ShieldCheck, action: () => navigate('/admin') })

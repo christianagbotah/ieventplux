@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   LayoutDashboard, CalendarPlus, Users, Ticket, Radio, Megaphone, MessageSquare, Wallet, UserCog, CreditCard, Settings,
-  ChevronLeft, Plus, Loader2, Camera, ScanLine, Search, Play, Square, RefreshCw, KeyRound, Pause, PlayCircle, Trash2, FileText, ShieldAlert, TrendingUp, Repeat, Activity, Vote, HandCoins, Sparkles, Download,
+  ChevronLeft, ChevronRight, ChevronDown, Plus, Loader2, Camera, ScanLine, Search, Play, Square, RefreshCw, KeyRound, Pause, PlayCircle, Trash2, FileText, ShieldAlert, TrendingUp, Repeat, Activity, Vote, HandCoins, Sparkles, Download, Upload, CheckCircle2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -129,9 +129,9 @@ export default function OrganizerWorkspace({ route }: { route: Route }) {
           <ChevronLeft className="mr-1 h-4 w-4 rotate-180" /> Menu
         </Button>
         <div key={section} className="ievx-view-enter">
-          {section === 'dashboard' && <Dashboard orgId={activeOrg.orgId} />}
+          {section === 'dashboard' && <Dashboard orgId={activeOrg.orgId} route={route} />}
           {section === 'insights' && <InsightsView orgId={activeOrg.orgId} />}
-          {section === 'events' && <EventsManager orgId={activeOrg.orgId} role={activeOrg.role} />}
+          {section === 'events' && <EventsManager orgId={activeOrg.orgId} role={activeOrg.role} autoNew={route.query.get('new') === '1'} />}
           {section === 'orders' && <OrdersView orgId={activeOrg.orgId} />}
           {section === 'attendees' && <AttendeesView orgId={activeOrg.orgId} />}
           {section === 'studio' && <StudioView orgId={activeOrg.orgId} />}
@@ -150,12 +150,20 @@ export default function OrganizerWorkspace({ route }: { route: Route }) {
 
 // ── Dashboard ────────────────────────────────────────────────────────────────
 
-function Dashboard({ orgId }: { orgId: string }) {
+interface OnboardingData {
+  orgStatus: string
+  verificationStatus: string
+  evidenceCount: number
+  ticketTypeCount: number
+}
+
+function Dashboard({ orgId, route }: { orgId: string; route: Route }) {
   const [data, setData] = useState<{
     counts: { published: number; draft: number; live: number; ticketsSold: number; followers: number }
     grossMinor: number
     finance: { availablePayoutMinor: number; pendingSettlementMinor: number; grossSalesMinor: number; platformFeesMinor: number; payoutsCompletedMinor: number }
     upcoming: OrgEvent[]
+    onboarding?: OnboardingData
   } | null>(null)
 
   useEffect(() => {
@@ -206,6 +214,15 @@ function Dashboard({ orgId }: { orgId: string }) {
           </Card>
         ))}
       </div>
+      {/* R23: verification state surfaced on the dashboard — previously invisible
+          unless the user opened Settings (org sits at PENDING_VERIFICATION by
+          default, so new organizers never saw why paid sales were blocked). */}
+      {data.onboarding && data.onboarding.orgStatus !== 'ACTIVE' && (
+        <VerificationBanner onboarding={data.onboarding} onOpenSettings={() => navigate('/organizer?tab=settings')} />
+      )}
+      {/* R23: getting-started checklist from REAL overview data; hidden once all
+          four steps are complete so established organizers keep a clean dashboard. */}
+      {data.onboarding && <OnboardingChecklist counts={data.counts} onboarding={data.onboarding} />}
       <div className="grid gap-4 lg:grid-cols-2">
         {/* R19b: min-w-0 lets the grid track shrink below max-content — long event
             titles otherwise forced the card past the phone viewport (104px horizontal
@@ -213,7 +230,13 @@ function Dashboard({ orgId }: { orgId: string }) {
         <Card className="min-w-0 rounded-2xl">
           <CardHeader className="pb-2"><CardTitle className="text-base">Next events</CardTitle></CardHeader>
           <CardContent className="space-y-2">
-            {data.upcoming.length === 0 && <p className="text-sm text-muted-foreground">No events yet — create your first one.</p>}
+            {data.upcoming.length === 0 && (
+              <EmptyState
+                title="No events yet"
+                description="Create your first event — free RSVP works immediately; paid sales unlock after verification."
+                action={<Button size="sm" className="rounded-full" onClick={() => navigate('/organizer?tab=events&new=1')}><Plus className="mr-1 h-4 w-4" /> Create your first event</Button>}
+              />
+            )}
             {data.upcoming.map((e) => (
               <button key={e.id} className="flex w-full items-center justify-between gap-2 rounded-xl bg-secondary/50 p-3 text-left text-sm hover:bg-secondary" onClick={() => navigate(`/event/${e.slug}`)}>
                 <div className="min-w-0">
@@ -240,6 +263,103 @@ function Dashboard({ orgId }: { orgId: string }) {
         </Card>
       </div>
     </div>
+  )
+}
+
+// ── R23 onboarding components ───────────────────────────────────────────────
+
+function VerificationBanner({ onboarding, onOpenSettings }: { onboarding: OnboardingData; onOpenSettings: () => void }) {
+  const copy =
+    onboarding.verificationStatus === 'APPROVED'
+      ? { title: 'Verified — activation in progress', body: 'Your documents were approved. Paid ticket sales unlock as soon as the organization is activated.' }
+      : onboarding.verificationStatus === 'REJECTED'
+        ? { title: 'Verification declined', body: 'Your last submission was declined. Update your details and resubmit to unlock paid ticket sales.' }
+        : onboarding.evidenceCount > 0
+          ? { title: 'Verification under review', body: 'Documents received — platform finance review is in progress. Free RSVP events work meanwhile.' }
+          : { title: 'Verification required', body: 'Submit your registration documents to unlock paid ticket sales. Free RSVP events work immediately.' }
+  const done = onboarding.orgStatus === 'ACTIVE'
+  return (
+    <div className={`flex flex-wrap items-center gap-3 rounded-2xl border p-4 ${done ? 'border-primary/30 bg-primary/5' : 'border-amber-500/40 bg-amber-500/10'}`} role="status">
+      <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${done ? 'bg-primary/10' : 'bg-amber-500/15'}`}>
+        <ShieldAlert className={`h-4.5 w-4.5 ${done ? 'text-primary' : 'text-amber-600 dark:text-amber-400'}`} aria-hidden />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-bold">{copy.title}</p>
+        <p className="text-xs text-muted-foreground">{copy.body}</p>
+      </div>
+      <Button size="sm" variant={done ? 'outline' : 'default'} className="rounded-full" onClick={onOpenSettings}>
+        {done ? 'View settings' : onboarding.evidenceCount > 0 ? 'Review submission' : 'Submit documents'}
+      </Button>
+    </div>
+  )
+}
+
+function OnboardingChecklist({ counts, onboarding }: { counts: { published: number; draft: number; live: number }; onboarding: OnboardingData }) {
+  const steps = [
+    {
+      label: 'Create your first event',
+      hint: 'Free RSVP works immediately — paid sales unlock after verification.',
+      done: counts.published + counts.draft + counts.live > 0,
+      go: () => navigate('/organizer?tab=events&new=1'),
+    },
+    {
+      label: 'Add a ticket type',
+      hint: 'Free RSVP or paid admission — prices are set per ticket type.',
+      done: onboarding.ticketTypeCount > 0,
+      go: () => navigate('/organizer?tab=events'),
+    },
+    {
+      label: 'Submit verification',
+      hint: 'Registration documents unlock paid ticket sales after review.',
+      done: onboarding.evidenceCount > 0 || onboarding.verificationStatus === 'APPROVED',
+      go: () => navigate('/organizer?tab=settings'),
+    },
+    {
+      label: 'Publish an event',
+      hint: 'Published events appear in Discover and can start selling.',
+      done: counts.published > 0,
+      go: () => navigate('/organizer?tab=events'),
+    },
+  ]
+  const doneCount = steps.filter((s) => s.done).length
+  if (doneCount === steps.length) return null
+  const nextStep = steps.find((s) => !s.done)
+  return (
+    <Card className="rounded-2xl border-primary/25 bg-primary/[0.04]">
+      <CardHeader className="pb-2">
+        <CardTitle className="flex flex-wrap items-center justify-between gap-2 text-base">
+          <span className="flex items-center gap-2"><Sparkles className="h-4 w-4 text-primary" aria-hidden /> Getting started</span>
+          <span className="text-xs font-medium text-muted-foreground">{doneCount} of {steps.length} complete</span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="h-1.5 w-full overflow-hidden rounded-full bg-secondary" role="progressbar" aria-valuenow={doneCount} aria-valuemin={0} aria-valuemax={steps.length} aria-label="Onboarding progress">
+          <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${(doneCount / steps.length) * 100}%` }} />
+        </div>
+        <ul className="space-y-1">
+          {steps.map((s, i) => (
+            <li key={s.label}>
+              <button
+                type="button"
+                onClick={s.go}
+                className={`flex w-full items-start gap-2.5 rounded-xl px-2.5 py-2 text-left transition-colors hover:bg-secondary/60 ${s.done ? 'opacity-70' : ''}`}
+                aria-label={s.done ? `${s.label} — done` : `Next step: ${s.label}`}
+              >
+                <span className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${s.done ? 'bg-primary text-primary-foreground' : 'border border-border bg-background text-muted-foreground'}`}>
+                  {s.done ? '✓' : i + 1}
+                </span>
+                <span className="min-w-0">
+                  <span className={`block text-sm font-semibold ${s.done ? 'line-through decoration-muted-foreground/50' : ''}`}>{s.label}</span>
+                  <span className="block text-xs text-muted-foreground">{s.done ? 'Complete' : s.hint}</span>
+                </span>
+                {!s.done && <ChevronRight className="ml-auto mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />}
+              </button>
+            </li>
+          ))}
+        </ul>
+        {nextStep && <p className="text-[11px] text-muted-foreground">Tip: tap any step to jump straight to it.</p>}
+      </CardContent>
+    </Card>
   )
 }
 
@@ -280,11 +400,17 @@ interface TicketTypeRow {
   saleEndsAt?: string | null
 }
 
-function EventsManager({ orgId, role }: { orgId: string; role: string }) {
+function EventsManager({ orgId, role, autoNew }: { orgId: string; role: string; autoNew?: boolean }) {
   const { toast } = useToast()
   const [events, setEvents] = useState<OrgEvent[] | null>(null)
   const [editing, setEditing] = useState<OrgEvent | null>(null)
-  const [creating, setCreating] = useState(false)
+  // R23: deep-link `/organizer?tab=events&new=1` (checklist + dashboard empty
+  // state) opens the create dialog on mount. `new=1` stays in the URL as a real
+  // deep link — the app view tree is keyed by route.raw (AppPortal), so ANY
+  // query rewrite (including a strip) remounts the view and would reset state;
+  // the sidebar nav always writes `?tab=<key>` without extra params, so the
+  // flag naturally disappears on the next section click.
+  const [creating, setCreating] = useState(() => Boolean(autoNew) && ['OWNER', 'ADMIN', 'EVENT_MANAGER'].includes(role))
   const [stats, setStats] = useState<Record<string, { ticketsSold: number; grossMinor: number; checkedIn: number }>>({})
   const canPublish = ['OWNER', 'ADMIN', 'EVENT_MANAGER'].includes(role)
 
@@ -406,6 +532,18 @@ function EventEditor({ orgId, event, onClose }: { orgId: string; event: OrgEvent
   const [seriesFields, setSeriesFields] = useState<string[]>(['summary', 'city'])
   const [seriesAdoptTime, setSeriesAdoptTime] = useState(false)
   const [applying, setApplying] = useState(false)
+  // R23 onboarding: after CREATE the dialog stays open on the ticket-types step
+  // (the old bare "Add ticket types, then publish." toast dumped the user back
+  // on the list with nothing in hand). createdEvent holds the fresh draft.
+  const [createdEvent, setCreatedEvent] = useState<OrgEvent | null>(null)
+  const activeEvent = event ?? createdEvent
+  // R23: real category list from the discovery catalog (replaces the free-text
+  // slug input — a typo there silently hid events from every filter). Falls
+  // back to the old input while loading / on failure.
+  const [cats, setCats] = useState<{ slug: string; name: string }[] | null>(null)
+  const [moreOpen, setMoreOpen] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const posterFileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (event) {
@@ -419,9 +557,18 @@ function EventEditor({ orgId, event, onClose }: { orgId: string; event: OrgEvent
           ageGuidance: d.event.ageGuidance ?? '',
           refundPolicy: d.event.refundPolicy ?? '',
         }))
+        // R23: editing an event that already uses the optional fields opens the
+        // collapsed "More options" section so nothing looks lost.
+        if (d.event.accessibilityInfo || d.event.attendanceRules || d.event.ageGuidance || d.event.refundPolicy) setMoreOpen(true)
       })
     }
   }, [event])
+
+  useEffect(() => {
+    void api.get<{ categories: { slug: string; name: string }[] }>('/discovery/categories')
+      .then((d) => setCats(d.categories.map((c) => ({ slug: c.slug, name: c.name }))))
+      .catch(() => setCats(null))
+  }, [])
 
   const save = async () => {
     setBusy(true)
@@ -435,9 +582,10 @@ function EventEditor({ orgId, event, onClose }: { orgId: string; event: OrgEvent
         await api.patch(`/events/${event.id}`, payload)
         toast({ title: 'Event saved' })
       } else {
-        const result = await api.post<{ event: { id: string }; occurrencesCreated: number }>('/events', { ...payload, orgId, repeatWeeks: repeat ? Math.max(0, Math.min(26, Number(repeatWeeks) || 0)) : 0 })
-        toast({ title: 'Event created', description: result.occurrencesCreated > 0 ? `${result.occurrencesCreated} weekly occurrences added as drafts.` : 'Add ticket types, then publish.' })
-        void result
+        const result = await api.post<{ event: OrgEvent; occurrencesCreated: number }>('/events', { ...payload, orgId, repeatWeeks: repeat ? Math.max(0, Math.min(26, Number(repeatWeeks) || 0)) : 0 })
+        toast({ title: 'Event created as a draft', description: result.occurrencesCreated > 0 ? `${result.occurrencesCreated} weekly occurrences added as drafts — publish them individually.` : 'Add a ticket type below, then publish from Events.' })
+        setCreatedEvent(result.event) // R23: keep the dialog open on the ticket-types step
+        return
       }
       onClose()
     } catch (err) {
@@ -448,10 +596,10 @@ function EventEditor({ orgId, event, onClose }: { orgId: string; event: OrgEvent
   }
 
   const addTicketType = async () => {
-    if (!event || !tt.name.trim()) return
+    if (!activeEvent || !tt.name.trim()) return
     setSavingTt(true)
     try {
-      await api.post(`/events/${event.id}/ticket-types`, {
+      await api.post(`/events/${activeEvent.id}/ticket-types`, {
         name: tt.name,
         priceMinor: moneyFromCedis(Number(tt.price)),
         quota: Number(tt.quota),
@@ -459,7 +607,7 @@ function EventEditor({ orgId, event, onClose }: { orgId: string; event: OrgEvent
         kind: tt.kind,
         includesVirtualAccess: tt.includesVirtualAccess,
       })
-      const detail = await api.get<{ event: { ticketTypes: TicketTypeRow[] } }>(`/events/${event.id}`)
+      const detail = await api.get<{ event: { ticketTypes: TicketTypeRow[] } }>(`/events/${activeEvent.id}`)
       setTicketTypes(detail.event.ticketTypes)
       setTt({ ...tt, name: '', price: '0.00' })
       toast({ title: 'Ticket type added' })
@@ -471,9 +619,38 @@ function EventEditor({ orgId, event, onClose }: { orgId: string; event: OrgEvent
   }
 
   const deactivateTt = async (id: string) => {
-    await api.delete(`/events/${event?.id}/ticket-types/${id}`).catch(() => {})
+    await api.delete(`/events/${activeEvent?.id}/ticket-types/${id}`).catch(() => {})
     setTicketTypes((list) => (list ?? []).map((t) => (t.id === id ? { ...t, active: false } : t)))
   }
+
+  // R23: real poster upload through the existing /uploads endpoint (previously
+  // only reachable from the AI Content Studio) — no more URL-paste-only flow.
+  const onPosterFile = async (file: File) => {
+    setUploading(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      fd.append('orgId', orgId)
+      fd.append('kind', 'POSTER')
+      fd.append('caption', `Poster — ${form.title || 'event'}`.slice(0, 200))
+      const res = await api.upload<{ asset: { url: string } }>('/uploads', fd)
+      setForm((f) => ({ ...f, coverImageUrl: res.asset.url }))
+      toast({ title: 'Poster uploaded', description: 'Saved to your media library and set as the cover.' })
+    } catch (err) {
+      toast({ title: 'Upload failed', description: err instanceof ApiClientError ? err.message : 'Please try again.', variant: 'destructive' })
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const catOptions = useMemo(() => {
+    if (!cats) return null
+    const list = cats.map((c) => ({ slug: c.slug, name: c.name }))
+    if (form.categorySlug && !list.some((c) => c.slug === form.categorySlug)) {
+      list.unshift({ slug: form.categorySlug, name: `${humanize(form.categorySlug)} (current)` })
+    }
+    return list
+  }, [cats, form.categorySlug])
 
   const SERIES_FIELD_OPTIONS: { key: string; label: string }[] = [
     { key: 'title', label: 'Title' },
@@ -509,7 +686,7 @@ function EventEditor({ orgId, event, onClose }: { orgId: string; event: OrgEvent
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto ievx-scrollbar">
         <DialogHeader>
-          <DialogTitle>{event ? `Edit: ${event.title}` : 'Create event'}</DialogTitle>
+          <DialogTitle>{event ? `Edit: ${event.title}` : createdEvent ? `Add tickets — ${createdEvent.title}` : 'Create event'}</DialogTitle>
         </DialogHeader>
         <div className="grid gap-4">
           <div className="grid gap-4 sm:grid-cols-2">
@@ -527,7 +704,18 @@ function EventEditor({ orgId, event, onClose }: { orgId: string; event: OrgEvent
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="category">Category</Label>
-              <Input id="category" value={form.categorySlug} onChange={(e) => setForm((f) => ({ ...f, categorySlug: e.target.value }))} placeholder="concert" />
+              {catOptions ? (
+                <Select value={form.categorySlug} onValueChange={(v) => setForm((f) => ({ ...f, categorySlug: v }))}>
+                  <SelectTrigger id="category" aria-label="Category"><SelectValue placeholder="Pick a category" /></SelectTrigger>
+                  <SelectContent>
+                    {catOptions.map((c) => (
+                      <SelectItem key={c.slug} value={c.slug}>{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input id="category" value={form.categorySlug} onChange={(e) => setForm((f) => ({ ...f, categorySlug: e.target.value }))} placeholder="concert" />
+              )}
             </div>
             <div className="space-y-1.5">
               <Label>Format</Label>
@@ -563,25 +751,62 @@ function EventEditor({ orgId, event, onClose }: { orgId: string; event: OrgEvent
               <Label htmlFor="endsAt">Ends</Label>
               <Input id="endsAt" type="datetime-local" value={form.endsAt} onChange={(e) => setForm((f) => ({ ...f, endsAt: e.target.value }))} />
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="cover">Poster image URL</Label>
-              <Input id="cover" value={form.coverImageUrl} onChange={(e) => setForm((f) => ({ ...f, coverImageUrl: e.target.value }))} placeholder="/images/posters/… or /uploads/…" />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="age">Age guidance</Label>
-              <Input id="age" value={form.ageGuidance} onChange={(e) => setForm((f) => ({ ...f, ageGuidance: e.target.value }))} placeholder="All ages / 13–19" />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="accessibility">Accessibility info</Label>
-              <Input id="accessibility" value={form.accessibilityInfo} onChange={(e) => setForm((f) => ({ ...f, accessibilityInfo: e.target.value }))} placeholder="Wheelchair access, reserved seating…" />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="rules">Attendance rules</Label>
-              <Input id="rules" value={form.attendanceRules} onChange={(e) => setForm((f) => ({ ...f, attendanceRules: e.target.value }))} placeholder="No professional cameras…" />
-            </div>
             <div className="space-y-1.5 sm:col-span-2">
-              <Label htmlFor="refund">Refund policy</Label>
-              <Input id="refund" value={form.refundPolicy} onChange={(e) => setForm((f) => ({ ...f, refundPolicy: e.target.value }))} placeholder="Full refunds up to 48h before start…" />
+              <Label htmlFor="cover">Poster image</Label>
+              <div className="flex gap-2">
+                <Input id="cover" value={form.coverImageUrl} onChange={(e) => setForm((f) => ({ ...f, coverImageUrl: e.target.value }))} placeholder="/uploads/… or paste a URL" />
+                <input
+                  ref={posterFileRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  tabIndex={-1}
+                  aria-hidden="true"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (file) void onPosterFile(file)
+                    e.target.value = ''
+                  }}
+                />
+                <Button type="button" variant="outline" className="shrink-0 rounded-full" disabled={uploading} onClick={() => posterFileRef.current?.click()}>
+                  {uploading ? <Loader2 className="mr-1 h-4 w-4 animate-spin" aria-hidden /> : <Upload className="mr-1 h-4 w-4" aria-hidden />}
+                  {uploading ? 'Uploading…' : 'Upload'}
+                </Button>
+              </div>
+            </div>
+            {/* R23: the four optional policy fields collapse behind "More options"
+                — the create form now shows 11 fields instead of 15, with nothing
+                removed (editing an event that uses them re-opens the section). */}
+            <div className="sm:col-span-2">
+              <button
+                type="button"
+                className="flex items-center gap-1.5 rounded-lg px-1 py-1 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+                onClick={() => setMoreOpen((v) => !v)}
+                aria-expanded={moreOpen}
+              >
+                <ChevronDown className={`h-4 w-4 transition-transform ${moreOpen ? 'rotate-180' : ''}`} aria-hidden />
+                More options{moreOpen ? '' : ' — age guidance, accessibility, rules, refund policy'}
+              </button>
+              {moreOpen && (
+                <div className="mt-3 grid gap-4">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="age">Age guidance</Label>
+                    <Input id="age" value={form.ageGuidance} onChange={(e) => setForm((f) => ({ ...f, ageGuidance: e.target.value }))} placeholder="All ages / 13–19" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="accessibility">Accessibility info</Label>
+                    <Input id="accessibility" value={form.accessibilityInfo} onChange={(e) => setForm((f) => ({ ...f, accessibilityInfo: e.target.value }))} placeholder="Wheelchair access, reserved seating…" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="rules">Attendance rules</Label>
+                    <Input id="rules" value={form.attendanceRules} onChange={(e) => setForm((f) => ({ ...f, attendanceRules: e.target.value }))} placeholder="No professional cameras…" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="refund">Refund policy</Label>
+                    <Input id="refund" value={form.refundPolicy} onChange={(e) => setForm((f) => ({ ...f, refundPolicy: e.target.value }))} placeholder="Full refunds up to 48h before start…" />
+                  </div>
+                </div>
+              )}
             </div>
             {!event && (
               <div className="rounded-xl border border-border/70 p-4 sm:col-span-2">
@@ -599,8 +824,14 @@ function EventEditor({ orgId, event, onClose }: { orgId: string; event: OrgEvent
             )}
           </div>
 
-          {event && (
+          {activeEvent && (
             <div className="rounded-xl border border-border/70 p-4">
+              {createdEvent && (
+                <div role="status" className="mb-3 flex items-center gap-2 rounded-xl border border-primary/30 bg-primary/5 p-3 text-sm">
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" aria-hidden />
+                  <span>Draft created. Add a ticket type below, then publish from Events.</span>
+                </div>
+              )}
               <p className="mb-2 text-sm font-bold">Ticket types</p>
               <div className="mb-3 space-y-1.5">
                 {(ticketTypes ?? []).map((t) => (
@@ -687,13 +918,15 @@ function EventEditor({ orgId, event, onClose }: { orgId: string; event: OrgEvent
           </DialogContent>
         </Dialog>
         <DialogFooter>
-          <Button variant="outline" className="rounded-full" onClick={onClose}>Close</Button>
+          <Button variant="outline" className="rounded-full" onClick={onClose}>{event ? 'Close' : createdEvent ? 'Done' : 'Cancel'}</Button>
           {busy && (
             <span className="efx-dual-ring-loader shrink-0" role="status" aria-label="Saving event" style={{ width: 36, height: 36, margin: 0, borderWidth: 4 }} />
           )}
-          <Button className="rounded-full ievx-press" onClick={() => void save()} disabled={busy || form.title.trim().length < 3}>
-            {event ? 'Save event' : 'Create event'}
-          </Button>
+          {!createdEvent && (
+            <Button className="rounded-full ievx-press" onClick={() => void save()} disabled={busy || form.title.trim().length < 3}>
+              {event ? 'Save event' : 'Create event'}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

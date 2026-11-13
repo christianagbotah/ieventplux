@@ -85,7 +85,7 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
 
     if (action === 'overview') {
       const now = new Date()
-      const [published, draft, live, ticketsSold, revenue, followers, upcoming] = await Promise.all([
+      const [published, draft, live, ticketsSold, revenue, followers, upcoming, ticketTypeCount, orgRow, verificationRow] = await Promise.all([
         db.event.count({ where: { orgId: id, status: { in: ['PUBLISHED', 'SCHEDULED'] }, deletedAt: null } }),
         db.event.count({ where: { orgId: id, status: 'DRAFT', deletedAt: null } }),
         db.event.count({ where: { orgId: id, status: 'LIVE', deletedAt: null } }),
@@ -93,13 +93,31 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
         db.order.aggregate({ where: { orgId: id, status: 'PAID' }, _sum: { totalMinor: true } }),
         db.follow.count({ where: { orgId: id } }),
         db.event.findMany({ where: { orgId: id, startsAt: { gte: now }, deletedAt: null, status: { in: ['PUBLISHED', 'SCHEDULED'] } }, orderBy: { startsAt: 'asc' }, take: 5 }),
+        db.ticketType.count({ where: { event: { orgId: id }, active: true } }),
+        db.organization.findUnique({ where: { id }, select: { status: true } }),
+        db.organizerVerification.findUnique({ where: { orgId: id }, select: { status: true, evidence: true } }),
       ])
+      // R23 onboarding: the dashboard checklist is computed from this ONE round
+      // trip — evidenceCount (>0 = documents submitted at least once; the row is
+      // created with an empty array at org creation) distinguishes "awaiting
+      // review" from "never submitted" even though both are status PENDING.
+      let evidenceCount = 0
+      try {
+        const arr = JSON.parse(verificationRow?.evidence ?? '[]')
+        if (Array.isArray(arr)) evidenceCount = arr.length
+      } catch { evidenceCount = 0 }
       const { orgFinanceSummary } = await import('@/server/ledger')
       return jsonOk({
         counts: { published, draft, live, ticketsSold, followers },
         grossMinor: revenue._sum.totalMinor ?? 0,
         finance: await orgFinanceSummary(id),
         upcoming,
+        onboarding: {
+          orgStatus: orgRow?.status ?? 'PENDING_VERIFICATION',
+          verificationStatus: verificationRow?.status ?? 'PENDING',
+          evidenceCount,
+          ticketTypeCount,
+        },
       })
     }
 
