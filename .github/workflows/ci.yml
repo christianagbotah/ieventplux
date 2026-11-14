@@ -57,6 +57,9 @@ jobs:
       - name: Typecheck
         run: bun run typecheck
 
+      - name: Payment security policy unit tests
+        run: bun test src/server/hubtel/security-policy.test.ts
+
       - name: Push schema + seed
         run: |
           bunx prisma db push --accept-data-loss
@@ -114,3 +117,72 @@ jobs:
       - name: Typecheck
         working-directory: mobile
         run: bunx tsc --noEmit
+
+  # Isolated from the dev-server smoke job: Next dev and next build must not
+  # write to the same .next directory concurrently.
+  production-build:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ieventplux
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ieventplux
+      APP_URL: http://127.0.0.1:3100
+      APP_SECRET: ci-only-prod-build-not-a-real-secret-0123456789
+      PAYMENTS_SIMULATOR: auto
+      SMS_SIMULATOR: auto
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Validate production payment safety policies
+        run: bun test src/server/hubtel/security-policy.test.ts
+
+      - name: Prepare ephemeral PostgreSQL schema
+        run: bunx prisma db push
+
+      - name: Build standalone artifact with production environment
+        run: bun run build
+
+      - name: Start standalone artifact and verify healthy no-simulator state
+        run: |
+          test -f .next/standalone/server.js
+          PORT=3100 HOSTNAME=127.0.0.1 bun .next/standalone/server.js > production.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:3100/api/v1/health 2>/dev/null | jq -e '.status == "healthy" and .database == "up" and (.validation.errors | length) == 0 and ([.integrations[] | select(.key == "hubtel-checkout" or .key == "hubtel-sms") | .mode] | all(. != "simulated"))' >/dev/null; then
+              echo "Production artifact healthy; payment and SMS simulators disabled."
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Production artifact did not reach the expected healthy state."
+          tail -100 production.log || true
+          exit 1
+
+      - name: Upload production boot logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-boot-logs
+          path: production.log
+          if-no-files-found: ignore
+          retention-days: 7
