@@ -252,7 +252,9 @@ function Orgs() {
         // resubmit) — surfacing that raw status here made a decided case look
         // still-pending and re-rendered both decision buttons forever.
         // - PENDING  → decision buttons (the only state a decision is asked for)
-        // - REJECTED → destructive badge, no buttons until organizer resubmits
+        // - REJECTED → destructive badge + "Approve now" reconsider path
+        //              (admin can reverse the decision without waiting for a
+        //              resubmission; organizer resubmit ALSO returns to PENDING)
         // - APPROVED → verified badge (+ Suspend when the org is active)
         const vStatus = o.verification?.status ?? 'PENDING'
         const decidedRejected = vStatus === 'REJECTED'
@@ -282,7 +284,9 @@ function Orgs() {
                   {o.verification?.submittedAt ? ` · submitted ${relative(o.verification.submittedAt)}` : ''}
                 </p>
                 {decidedRejected && (
-                  <p className="mt-1 text-xs text-destructive">Declined — the organizer must resubmit documents before a new review.</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    <span className="text-destructive">Declined —</span> the organizer must resubmit for a new review, or approve now to reverse this decision.
+                  </p>
                 )}
                 {awaitingDecision && evidenceCount === 0 && (
                   <p className="mt-1 text-xs text-muted-foreground">No documents submitted yet.</p>
@@ -293,6 +297,9 @@ function Orgs() {
                   <Button size="sm" className="rounded-full" onClick={() => void verify(o.id, 'APPROVE')}><Check className="mr-1 h-3.5 w-3.5" /> Approve</Button>
                   <Button size="sm" variant="outline" className="rounded-full text-destructive" onClick={() => void verify(o.id, 'REJECT')}><X className="mr-1 h-3.5 w-3.5" /> Reject</Button>
                 </div>
+              )}
+              {decidedRejected && (
+                <Button size="sm" variant="outline" className="rounded-full" title="Reverse the earlier rejection and verify this organization now" onClick={() => void verify(o.id, 'APPROVE')}><Check className="mr-1 h-3.5 w-3.5" /> Approve now</Button>
               )}
               {o.status === 'ACTIVE' && (
                 <Button size="sm" variant="outline" className="rounded-full" onClick={async () => { await api.post(`/admin/orgs/${o.id}/suspend`, {}); reload() }}>Suspend</Button>

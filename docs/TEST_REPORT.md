@@ -874,3 +874,21 @@ Date: 2026-11-14 · Postgres LIVE (R26 stack) · all services on :3000/:3001/:30
 - **Sweeps & hygiene:** 390×844 and 1280×800; footer intact; zero console/page errors (only the pre-existing Radix Dialog aria warnings); dev.log free of prisma/runtime errors through the whole session.
 - **Cleanup:** the demo org was restored to its seed state (`PENDING_VERIFICATION` / `PENDING`, notes "Awaiting business registration documents.") so the verification workflow remains demonstrable — final state matches the canonical seed.
 - Static: `bun run lint` 0 errors / 17 warnings (baseline); `bunx tsc --noEmit` 0 errors. Screenshots: `docs-assets/round29-orgs-{rejected-390,approved-1280,pending-desktop-1280}.png`.
+
+## Re-verification round 30 — Approve-after-reject + mobile parity builds (offline check-in, wallet, broadcasts)
+
+**Approve now (the user's follow-up to the R29 fix):** the admin Organizations list renders an "Approve now" button on REJECTED rows with the explanatory note ("the organizer must resubmit for a new review, or approve now to reverse this decision"). Verified on the live rejected state — which the audit trail attributes to the user's own Reject click minutes earlier (`org.verify.approved` 01:03 → `org.verify.rejected` 01:06 (user) → `org.verify.approved` 01:12 (Approve now)): clicking it flipped the row to "Verified" + Suspend, org → `ACTIVE` with `verifiedAt` set, verification → `APPROVED` with `decidedAt/reviewerId`, owner notification "Organization verified" delivered. Demo org reset to seed state afterward (PENDING_VERIFICATION / PENDING, "submitted just now" rendering with the Approve/Reject pair).
+
+**Roster endpoint (first consumer = the new mobile offline loop):**
+- director@lwministries.dev (OWNER, lightworld-ministries) `GET /checkin/roster?eventId=<Ministry Leaders Summit>` → minimized payload exactly as the mobile client types it: event {id,title,startsAt}, rosterVersion, count 1, tickets [{id, code TKT-2037E16DD3F7B5, holderName "Kojo Owusu", status VALID}] — no payment data.
+- kojo@example.dev (plain attendee, no staff role) → 403 "Roster download requires check-in staff permissions."
+
+**Mobile static verification (no device/emulator exists in this sandbox — same honesty as R25):**
+- `bun install` + `expo install @react-native-community/netinfo` + `expo install --fix` (the R25 drift lesson applied; netinfo 11.4.1 is the SDK-52 set).
+- `tsc --noEmit` → **0 errors** (new modules `src/lib/checkin-offline.ts`, `src/lib/ticket-wallet.ts`; rewritten `CheckinScreen`/`MyTicketsScreen`; new `BroadcastScreen`; extended `DiscoverScreen`, `navigation.ts`, `App.tsx`, `api/client.ts` with roster + broadcasts endpoints).
+- `expo export --platform android` → production Hermes bytecode bundle **3.0 MB** (R25: 2.96 MB; the growth is the three new surfaces) — every import resolves through Metro/Babel and the netinfo native codegen.
+- Repo-wide lint caught one ERROR in the new code (Animated `useRef(...).current` accessed during render in SimPlayer) → fixed with a state-initialized Animated.Value → **0 errors / 16 warnings** (below the 17 baseline; the retained warning in MyTicketsScreen is the pre-existing QR-modal reset-on-close pattern).
+
+**Server-side paths the mobile screens ride on (all previously browser-verified, re-confirmed live this session):** `/broadcasts/{id}/detail|play|heartbeat|chat` (R27 golden paths incl. ROOM_FULL gate and read-only ENDED transcripts), `/checkin/scan|sync` (conflict preservation), `/orders`, `/tickets{,/:id}` (QR credential). The mobile screens implement the identical entitlement/capacity/heartbeat semantics as the web client; the only NEW consumer path (roster) is curl-verified above.
+
+**Web hygiene through the session:** dev.log free of runtime/prisma errors; home + admin orgs render clean at 390×844 (zero console/page errors beyond the known Radix Dialog aria warnings); the approve-after-reject screenshot is `docs-assets/round30-orgs-approve-now-390.png`.

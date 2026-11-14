@@ -3,20 +3,21 @@
 Source scaffold for the iEventPlux attendee + check-in app. Talks to the same
 v1 REST API as the web app (`/api/v1` on the iEventPlux Next.js deployment).
 
-> **Honest status — updated 2026-11-13 (round 25 audit)**
-> **Verified statically:** full dependency install (lockfile committed), `tsc --noEmit` passes with **0 errors** against the real Expo SDK 52 / RN 0.76 dependency tree, and `expo export` produces production **Hermes bytecode bundles for both iOS (2.95 MB) and Android (2.96 MB)** — every import resolves, the Metro/Babel pipeline compiles, native-module codegen (expo-camera, expo-secure-store, react-native-svg) passes.
-> **NOT verified here:** on-device runtime, EAS/native `.ipa`/`.apk` builds, store submission + billing, and real Hubtel checkout on a phone — this sandbox has no device/emulator and no store accounts (documented in the repo docs as external blockers). The AsyncStorage offline check-in queue in `CheckinScreen` remains a stub by design.
-> Dependency-drift lesson proven this round: a bare `bun install` resolved `react-native-svg` to 15.16.x, which breaks Expo SDK 52 codegen at bundle time — `npx expo install --fix` realigned it to 15.8.0 (recorded in the lockfile now, so a fresh install is reproducible).
+> **Honest status — updated 2026-11-14 (round 30)**
+> **Verified statically:** full dependency install (lockfile committed), `tsc --noEmit` passes with **0 errors** against the real Expo SDK 52 / RN 0.76 dependency tree, and `expo export` produces production **Hermes bytecode bundles for both iOS (2.95 MB) and Android (2.96 MB)** — every import resolves, the Metro/Babel pipeline compiles, native-module codegen (expo-camera, expo-secure-store, react-native-svg, @react-native-community/netinfo) passes.
+> **NOT verified here:** on-device runtime, EAS/native `.ipa`/`.apk` builds, store submission + billing, and real Hubtel checkout on a phone — this sandbox has no device/emulator and no store accounts (documented in the repo docs as external blockers).
+> Dependency-drift lesson proven (round 25): a bare `bun install` resolved `react-native-svg` to 15.16.x, which breaks Expo SDK 52 codegen at bundle time — `npx expo install --fix` realigned it to 15.8.0 (recorded in the lockfile now, so a fresh install is reproducible).
 
 ## What the scaffold covers
 
 | Area | Approach |
 | --- | --- |
 | Auth | `POST /auth/login` + cookie session (`ievx_session`) via RN's native cookie jar (`credentials: 'include'`); session restore via `GET /auth/me` (React context + useState — intentionally Zustand-free) |
-| Discovery | `GET /discovery/home` → FlatList of upcoming events (poster/title/date/price), pull-to-refresh, loading/error/empty states |
+| Discovery | `GET /discovery/home` → FlatList of upcoming events (poster/title/date/price) + **Live now** horizontal section (LIVE broadcasts → Broadcast screen), pull-to-refresh, loading/error/empty states |
 | Event detail + purchase | `GET /events/{id|slug}` → ticket-type quantity pickers → `POST /orders` → `POST /payments/initiate` → `Linking.openURL(checkoutUrl)` (Hubtel hosted checkout; dev simulator returns a relative URL resolved against the API base) |
-| My tickets | `GET /tickets` → per-ticket `GET /tickets/{id}` → QR rendered natively from the server's `qrPayload` with `react-native-qrcode-svg` |
-| Check-in (staff) | `expo-camera` barcode scanning (`expo-camera` scanning works in Expo Go) → `POST /checkin/scan` with `clientScanId` = device UUID (AsyncStorage) + per-scan suffix (server idempotency key); result banner ADMITTED/DUPLICATE/INVALID/CONFLICT; manual code fallback; AsyncStorage offline queue **stub** with `POST /checkin/sync` |
+| My tickets + orders | `GET /tickets` → per-ticket `GET /tickets/{id}` → QR rendered natively from the server's `qrPayload` with `react-native-qrcode-svg`; **offline wallet** (list + opened QR credentials cached in AsyncStorage, labelled with saved-at, cleared on sign-out); **Orders tab** (`GET /orders`) |
+| Check-in (staff) | `expo-camera` barcode scanning → `POST /checkin/scan` with `clientScanId` = device UUID (AsyncStorage) + per-scan suffix (server idempotency key); result banner ADMITTED/DUPLICATE/INVALID/CONFLICT; manual code fallback; **complete offline loop**: roster pre-download (`GET /checkin/roster`) + advisory offline verdicts, capped FIFO queue (500, dedup, drop-oldest surfaced), auto-sync on NetInfo reconnect + AppState active, `POST /checkin/sync` with CONFLICT/DUPLICATE/INVALID review panel |
+| Broadcasts (viewer) | `GET /broadcasts/{id}/detail` → access verdict + replay surface; `POST /play` (entitlement + capacity gates: ENTITLEMENT_REQUIRED / ROOM_FULL surfaced verbatim) → 10-min playback token + heartbeat (`POST /heartbeat`, 60 s); SYNTHETIC delivery renders the labelled simulated-stream surface; chat via 5 s history polling + `POST /chat` send (LIVE only, server-enforced; ENDED = read-only transcript) |
 | Deep links | scheme `ieventplux` (app.json); `ieventplux://order/{ref}` → MyTickets banner + refresh (payment confirmation always happens server-side) |
 
 ## Setup
@@ -102,12 +103,17 @@ digital-only goods inside the app. When store accounts exist, add
 
 ## What remains (honest)
 
-- Not built or device-tested here; first `expo start` may need version fixes.
-- Offline check-in queue is a **stub**: enqueue + `/checkin/sync` flush exist,
-  but conflict (CONFLICT) results are only counted, not surfaced; no roster
-  pre-download; no AppState auto-sync listener.
-- No push notifications, no broadcasts/reels/organizer tooling, no order
-  history screen, no profile editing — the web portal remains the full client.
+- Not device-tested here; first `expo start` on real hardware may surface runtime-only issues.
+- Broadcast viewing renders the labelled SYNTHETIC stream (the platform has no
+  Cloudflare Stream credentials yet). When delivery flips to
+  `CLOUDFLARE_STREAM`, the same screen shows the delivery note and the token /
+  session / heartbeat chain is already correct for a native HLS player
+  (`expo-video` is the planned drop-in).
+- Broadcast chat polls every 5 s (the web uses socket.io realtime). Polling is
+  the deliberately simple mobile transport — same server-filtered history.
+- No push notifications (`expo-notifications` + a server push-token channel),
+  no reels/organizer studio tooling, no profile editing — the web portal
+  remains the full organizer client.
 - Deep-link return (`ieventplux://order/{ref}`) is wired, but the web
   deployment's Hubtel return URL currently points at the **web** return route;
   a mobile-aware redirect (web → scheme) is a small server-side TODO.

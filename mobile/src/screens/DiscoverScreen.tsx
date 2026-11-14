@@ -22,6 +22,7 @@ import {
   formatDate,
   minPriceLabel,
   type DiscoveryEventCard,
+  type DiscoveryHome,
 } from '../api/client'
 import { theme } from '../theme'
 import type { DiscoverScreenProps } from '../navigation'
@@ -29,18 +30,18 @@ import type { DiscoverScreenProps } from '../navigation'
 type ListState =
   | { status: 'loading' }
   | { status: 'error'; message: string }
-  | { status: 'empty' }
-  | { status: 'ready'; items: DiscoveryEventCard[] }
+  | { status: 'empty'; home: DiscoveryHome }
+  | { status: 'ready'; home: DiscoveryHome }
 
 export default function DiscoverScreen({ navigation }: DiscoverScreenProps) {
   const [state, setState] = useState<ListState>({ status: 'loading' })
   const [refreshing, setRefreshing] = useState(false)
 
   const load = useCallback(async () => {
-    setState({ status: 'loading' })
+    setState((prev) => (prev.status === 'ready' || prev.status === 'empty' ? prev : { status: 'loading' }))
     try {
       const home = await api.discovery.home()
-      setState(home.upcoming.length === 0 ? { status: 'empty' } : { status: 'ready', items: home.upcoming })
+      setState(home.upcoming.length === 0 ? { status: 'empty', home } : { status: 'ready', home })
     } catch (err) {
       setState({
         status: 'error',
@@ -53,7 +54,7 @@ export default function DiscoverScreen({ navigation }: DiscoverScreenProps) {
     setRefreshing(true)
     try {
       const home = await api.discovery.home()
-      setState(home.upcoming.length === 0 ? { status: 'empty' } : { status: 'ready', items: home.upcoming })
+      setState(home.upcoming.length === 0 ? { status: 'empty', home } : { status: 'ready', home })
     } catch {
       // Keep showing the current list; pull-to-refresh failures stay silent
       // rather than wiping a usable screen with an error state.
@@ -120,12 +121,36 @@ export default function DiscoverScreen({ navigation }: DiscoverScreenProps) {
     )
   }
 
+  const liveNow = state.home.liveNow.filter((e) => e.broadcasts.some((b) => b.status === 'LIVE'))
+
   return (
     <FlatList<DiscoveryEventCard>
       style={styles.list}
       contentContainerStyle={styles.listContent}
-      data={state.items}
+      data={state.home.upcoming}
       keyExtractor={(item) => item.id}
+      ListHeaderComponent={
+        liveNow.length > 0 ? (
+          <View style={styles.liveSection}>
+            <Text style={styles.liveSectionTitle}>Live now</Text>
+            <FlatList
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              data={liveNow}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => (
+                <LiveNowCard
+                  event={item}
+                  onPress={() => {
+                    const live = item.broadcasts.find((b) => b.status === 'LIVE')
+                    if (live) navigation.navigate('Broadcast', { broadcastId: live.id })
+                  }}
+                />
+              )}
+            />
+          </View>
+        ) : null
+      }
       renderItem={({ item }) => (
         <EventRow
           event={item}
@@ -136,6 +161,40 @@ export default function DiscoverScreen({ navigation }: DiscoverScreenProps) {
         <RefreshControl refreshing={refreshing} onRefresh={() => void refresh()} tintColor={theme.colors.primary} />
       }
     />
+  )
+}
+
+function LiveNowCard({ event, onPress }: { event: DiscoveryHome['liveNow'][number]; onPress: () => void }) {
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.liveCard, pressed && styles.cardPressed]}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`Watch ${event.title} live`}
+    >
+      <View style={styles.liveBadge}>
+        <Text style={styles.liveBadgeText}>LIVE</Text>
+      </View>
+      {event.coverImageUrl ? (
+        // eslint-disable-next-line jsx-a11y/alt-text -- React Native Image uses accessibility props, not alt
+        <Image source={{ uri: event.coverImageUrl }} style={styles.livePoster} accessibilityLabel={`${event.title} artwork`} />
+      ) : (
+        <View style={[styles.livePoster, styles.posterPlaceholder]}>
+          <Text style={styles.posterPlaceholderText} numberOfLines={3}>
+            {event.title}
+          </Text>
+        </View>
+      )}
+      <View style={styles.liveCardBody}>
+        <Text style={styles.liveCardTitle} numberOfLines={2}>
+          {event.title}
+        </Text>
+        <Text style={styles.liveCardMeta} numberOfLines={1}>
+          {event.org.name} · {event.mode === 'HYBRID' ? 'Hybrid' : 'Online'}
+        </Text>
+        <Text style={styles.liveWatch}>Watch ›</Text>
+      </View>
+    </Pressable>
   )
 }
 
@@ -178,6 +237,33 @@ const styles = StyleSheet.create({
   headerActions: { flexDirection: 'row', alignItems: 'center' },
   headerAction: { paddingHorizontal: theme.spacing.sm },
   headerActionText: { color: '#ffffff', fontWeight: '600', fontSize: 14 },
+  liveSection: { marginBottom: theme.spacing.lg },
+  liveSectionTitle: { color: theme.colors.text, fontSize: 15, fontWeight: '800', marginBottom: theme.spacing.sm },
+  liveCard: {
+    width: 168,
+    marginRight: theme.spacing.md,
+    backgroundColor: theme.colors.card,
+    borderRadius: theme.radius.lg,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    overflow: 'hidden',
+  },
+  liveBadge: {
+    position: 'absolute',
+    top: theme.spacing.sm,
+    left: theme.spacing.sm,
+    zIndex: 1,
+    backgroundColor: theme.colors.danger,
+    borderRadius: theme.radius.sm,
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: 2,
+  },
+  liveBadgeText: { color: '#ffffff', fontSize: 9, fontWeight: '800', letterSpacing: 0.5 },
+  livePoster: { width: '100%', height: 96, resizeMode: 'cover' },
+  liveCardBody: { padding: theme.spacing.md },
+  liveCardTitle: { color: theme.colors.text, fontSize: 13, fontWeight: '700' },
+  liveCardMeta: { color: theme.colors.textMuted, fontSize: 11, marginTop: 2 },
+  liveWatch: { color: theme.colors.primaryDark, fontWeight: '700', fontSize: 12, marginTop: theme.spacing.xs },
   card: {
     flexDirection: 'row',
     backgroundColor: theme.colors.card,

@@ -273,6 +273,73 @@ export interface CheckinSyncResponse {
   results: ScanResult[]
 }
 
+/** GET /api/v1/checkin/roster — minimized offline roster (id/code/name/status only). */
+export interface CheckinRosterResponse {
+  event: { id: string; title?: string | null; startsAt?: string | null }
+  rosterVersion: string
+  count: number
+  tickets: { id: string; code: string; holderName: string; status: string }[]
+  note: string
+}
+
+// ─────────────────────────────────────────────── broadcasts (live + replay) ──
+
+export interface BroadcastDetail {
+  id: string
+  eventId: string
+  status: string // SCHEDULED | LIVE | ENDED | FAILED
+  title: string
+  accessPolicy: string // FREE | PAID | TICKET_HOLDERS | INVITE_ONLY
+  priceMinor: number | null
+  replayPriceMinor: number | null
+  viewerCapacity: number
+  viewerCount: number
+  recordingStatus: string | null
+  startedAt?: string | null
+  endedAt?: string | null
+  scheduledFor?: string | null
+  event: {
+    id: string
+    title: string
+    slug: string
+    startsAt: string
+    endsAt: string
+    coverImageUrl?: string | null
+    org: { name: string; slug: string }
+  }
+}
+
+export interface BroadcastDetailResponse {
+  broadcast: BroadcastDetail
+  access: { allowed: boolean; reason?: string; requires?: string }
+  replay: { available: boolean; effectivePriceMinor: number | null }
+  delivery: 'SYNTHETIC' | 'CLOUDFLARE_STREAM'
+  deliveryNote: string
+}
+
+/** POST /broadcasts/{id}/play — entitlement-gated playback session. */
+export interface PlaybackIssueResponse {
+  playbackToken: string
+  expiresAt: string
+  mode: 'LIVE' | 'REPLAY'
+  delivery: 'SYNTHETIC' | 'CLOUDFLARE_STREAM'
+  deliveryNote: string
+}
+
+export interface BroadcastChatMessage {
+  id: string
+  body: string
+  createdAt: string
+  user: { id: string; displayName: string }
+}
+
+export interface BroadcastChatPage {
+  items: BroadcastChatMessage[]
+  total: number
+  page: number
+  pageSize: number
+}
+
 export interface NotificationItem {
   id: string
   type: string
@@ -457,6 +524,23 @@ export const api = {
     /** Offline batch replay — conflicts are preserved as CONFLICT results. */
     sync: (payload: { eventId: string; deviceSessionId?: string; scans: { payload: string; clientScanId: string; capturedOfflineAt?: string }[] }) =>
       request<CheckinSyncResponse>('POST', '/checkin/sync', payload),
+    /** Minimized offline roster (staff-gated server-side). */
+    roster: (eventId: string) =>
+      request<CheckinRosterResponse>('GET', `/checkin/roster?eventId=${encodeURIComponent(eventId)}`),
+  },
+  broadcasts: {
+    /** Detail + viewer access verdict + replay surface + delivery mode. */
+    detail: (id: string) => request<BroadcastDetailResponse>('GET', `/broadcasts/${encodeURIComponent(id)}/detail`),
+    /** Entitlement check → short-lived playback token (10 min; live or replay). */
+    play: (id: string) => request<PlaybackIssueResponse>('POST', `/broadcasts/${encodeURIComponent(id)}/play`, {}),
+    /** Keep the playback session alive (server revokes stale sessions). */
+    heartbeat: (id: string, token: string) =>
+      request<{ alive: boolean; expiresAt?: string | null }>('POST', `/broadcasts/${encodeURIComponent(id)}/heartbeat`, { token }),
+    /** Chat history — viewers read VISIBLE only (server-filtered). */
+    chat: (id: string) => request<BroadcastChatPage>('GET', `/broadcasts/${encodeURIComponent(id)}/chat`),
+    /** Send a chat message (LIVE broadcasts only, server-enforced). */
+    chatSend: (id: string, body: string) =>
+      request<{ message: BroadcastChatMessage }>('POST', `/broadcasts/${encodeURIComponent(id)}/chat`, { body }),
   },
   notifications: {
     list: () => request<NotificationsResponse>('GET', '/notifications'),

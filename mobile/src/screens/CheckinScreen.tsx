@@ -18,42 +18,58 @@
  *  - Result banner: ADMITTED=green, DUPLICATE=amber, INVALID=red,
  *    CONFLICT=red (offline replay collided with an earlier admission).
  *
- * Offline queue — STUB (documented TODO, deliberately minimal):
- *  1. Scans that fail with a NETWORK error append to an AsyncStorage FIFO queue.
- *  2. "Sync now" (and, in the full design, an AppState-active listener) flushes
- *     via POST /api/v1/checkin/sync with source OFFLINE_SYNC so the server
- *     preserves conflicts as CONFLICT results instead of discarding them.
- *  3. TODO(offline): surface CONFLICT results in the scanner UI + organizer
- *     dashboard review queue; pre-download GET /checkin/roster for offline
- *     verification; cap queue size; exponential backoff. Verify against your
- *     event-ops SOP before trusting it at a door.
+ * Offline loop — COMPLETE since round 30 (was a labelled stub):
+ *  1. ONLINE scans hit /checkin/scan directly. NETWORK failures append to the
+ *     capped AsyncStorage FIFO queue (500; oldest dropped and counted — the
+ *     banner says so, never silent) with local dedup (same payload + event
+ *     is not queued twice).
+ *  2. Offline verification is ADVISORY: against the pre-downloaded roster
+ *     (GET /checkin/roster — id/code/name/status only, staff-gated server-side)
+ *     each queued scan gets a local verdict (roster match / not valid /
+ *     not on roster / no roster). The server still decides at sync time.
+ *  3. Sync triggers: NetInfo connectivity regain, AppState active, and the
+ *     manual Sync now button. Failed batches stay queued verbatim (the
+ *     triggers are discrete, so there is no busy retry loop to back off).
+ *  4. Post-sync REVIEW: CONFLICT/DUPLICATE/INVALID outcomes from the last
+ *     flush are surfaced in a review panel (the door lead acknowledges
+ *     them) — the server preserves conflicts as results instead of
+ *     discarding them, so nothing is lost, and nothing is hidden.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   ActivityIndicator,
+  AppState,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import NetInfo from '@react-native-community/netinfo'
 import { CameraView, useCameraPermissions } from 'expo-camera'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { ApiClientError, api, type ScanResult } from '../api/client'
+import { ApiClientError, api, formatDateTime, type ScanResult } from '../api/client'
+import {
+  downloadRoster,
+  enqueueOfflineScan,
+  pendingVerdicts,
+  readQueue,
+  readRoster,
+  readSyncReport,
+  syncOfflineQueue,
+  verifyOffline,
+  type OfflineVerdict,
+  type PendingVerdictRow,
+  type RosterCache,
+  type SyncReport,
+} from '../lib/checkin-offline'
 import { theme } from '../theme'
 import type { CheckinScreenProps } from '../navigation'
 
 const DEVICE_SCAN_ID_KEY = 'ieventplux.device.scanId'
-const OFFLINE_QUEUE_KEY = 'ieventplux.checkin.offlineQueue'
-
-interface QueuedScan {
-  eventId: string
-  payload: string
-  clientScanId: string
-  capturedOfflineAt: string
-}
 
 /** Small random-hex helper (no uuid dependency needed for a scan id). */
 function randomHex(len: number): string {
@@ -67,73 +83,12 @@ function makeDeviceScanId(): string {
   return `${randomHex(8)}-${randomHex(4)}-4${randomHex(3)}-${randomHex(4)}-${randomHex(12)}}`
 }
 
-// ───────────────────────────────── offline queue (STUB — see header TODOs) ──
-
-async function readQueue(): Promise<QueuedScan[]> {
-  try {
-    const raw = await AsyncStorage.getItem(OFFLINE_QUEUE_KEY)
-    if (!raw) return []
-    const parsed: unknown = JSON.parse(raw)
-    return Array.isArray(parsed) ? (parsed as QueuedScan[]) : []
-  } catch {
-    return []
-  }
-}
-
-async function writeQueue(items: QueuedScan[]): Promise<void> {
-  await AsyncStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(items))
-}
-
-/** Returns the new queue length. */
-async function enqueueOfflineScan(item: QueuedScan): Promise<number> {
-  const queue = await readQueue()
-  // TODO(offline): cap the queue (e.g. 500) and drop oldest with an audit note.
-  const next = [...queue, item]
-  await writeQueue(next)
-  return next.length
-}
-
-/** Flush via /checkin/sync (source OFFLINE_SYNC → conflicts preserved). */
-async function syncOfflineQueue(): Promise<number> {
-  const queue = await readQueue()
-  if (queue.length === 0) return 0
-  let synced = 0
-  // The sync endpoint is per-eventId; group the queue before flushing.
-  const byEvent = new Map<string, QueuedScan[]>()
-  for (const item of queue) {
-    const list = byEvent.get(item.eventId) ?? []
-    list.push(item)
-    byEvent.set(item.eventId, list)
-  }
-  const remaining: QueuedScan[] = []
-  for (const [eventId, scans] of byEvent) {
-    try {
-      const res = await api.checkin.sync({
-        eventId,
-        scans: scans.map((s) => ({
-          payload: s.payload,
-          clientScanId: s.clientScanId,
-          capturedOfflineAt: s.capturedOfflineAt,
-        })),
-      })
-      synced += res.synced
-      // TODO(offline): res.results may contain CONFLICT entries that must be
-      // surfaced for review — currently only counted, not displayed. See header.
-    } catch {
-      // Event batch failed (offline again / permission lost) — keep for retry.
-      remaining.push(...scans)
-    }
-  }
-  await writeQueue(remaining)
-  return synced
-}
-
-// ─────────────────────────────────────────────────────────────────── screen ──
-
 type Banner =
   | { kind: 'result'; scan: ScanResult }
-  | { kind: 'queued'; payload: string; pending: number }
-  | { kind: 'synced'; count: number }
+  | { kind: 'queued'; payload: string; pending: number; droppedAtCap: number; verdict: OfflineVerdict }
+  | { kind: 'duplicate'; payload: string; pending: number }
+  | { kind: 'synced'; report: SyncReport }
+  | { kind: 'roster'; count: number; savedAt: string }
   | { kind: 'error'; message: string }
 
 const RESULT_COLORS: Record<ScanResult['result'], string> = {
@@ -141,6 +96,13 @@ const RESULT_COLORS: Record<ScanResult['result'], string> = {
   DUPLICATE: theme.colors.warning,
   INVALID: theme.colors.danger,
   CONFLICT: theme.colors.danger,
+}
+
+const VERDICT_COLORS: Record<OfflineVerdict['verdict'], string> = {
+  ROSTER_MATCH: theme.colors.success,
+  ROSTER_NOT_VALID: theme.colors.danger,
+  NOT_ON_ROSTER: theme.colors.danger,
+  NO_ROSTER: theme.colors.warning,
 }
 
 export default function CheckinScreen({ route }: CheckinScreenProps) {
@@ -151,6 +113,12 @@ export default function CheckinScreen({ route }: CheckinScreenProps) {
   const [pendingCount, setPendingCount] = useState(0)
   const [deviceScanId, setDeviceScanId] = useState<string | null>(null)
   const [permission, requestPermission] = useCameraPermissions()
+  const [roster, setRoster] = useState<RosterCache | null>(null)
+  const [rosterBusy, setRosterBusy] = useState(false)
+  const [syncing, setSyncing] = useState(false)
+  const [report, setReport] = useState<SyncReport | null>(null)
+  const [verdicts, setVerdicts] = useState<PendingVerdictRow[]>([])
+  const [reviewOpen, setReviewOpen] = useState(false)
 
   // Stable per-device id (persisted) — see header for why each scan adds a suffix.
   useEffect(() => {
@@ -170,14 +138,101 @@ export default function CheckinScreen({ route }: CheckinScreenProps) {
     }
   }, [])
 
+  // Last sync report (persisted) + queue length on mount.
+  useEffect(() => {
+    void readSyncReport().then(setReport)
+    void readQueue().then((q) => setPendingCount(q.length))
+  }, [])
+
+  // Roster cache for the selected event (advisory offline verification).
+  useEffect(() => {
+    if (!eventId) {
+      setRoster(null)
+      return
+    }
+    let cancelled = false
+    void readRoster(eventId).then((r) => {
+      if (!cancelled) setRoster(r)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [eventId])
+
   const refreshPending = useCallback(async () => {
     const queue = await readQueue()
     setPendingCount(queue.length)
-  }, [])
+    if (eventId) setVerdicts(await pendingVerdicts(roster, eventId))
+  }, [eventId, roster])
 
   useEffect(() => {
     void refreshPending()
   }, [refreshPending])
+
+  const handleSync = useCallback(async () => {
+    if (syncing) return
+    setSyncing(true)
+    try {
+      const rep = await syncOfflineQueue()
+      setReport(rep)
+      setBanner({ kind: 'synced', report: rep })
+      if (rep.review.length > 0) setReviewOpen(true)
+      await refreshPending()
+    } catch {
+      setBanner({ kind: 'error', message: 'Sync failed — try again when back online.' })
+    } finally {
+      setSyncing(false)
+    }
+  }, [refreshPending, syncing])
+
+  // Auto-sync triggers (round 30): connectivity regain + app active. The queue
+  // is only flushed when there is something to flush — a discrete trigger, so
+  // failed batches simply stay queued for the next trigger (no retry storm).
+  const autoSyncRef = useRef(false)
+  useEffect(() => {
+    const tryAutoSync = () => {
+      if (autoSyncRef.current) return
+      void readQueue().then((q) => {
+        if (q.length === 0) return
+        autoSyncRef.current = true
+        void handleSync().finally(() => {
+          autoSyncRef.current = false
+        })
+      })
+    }
+    const netUnsub = NetInfo.addEventListener((state) => {
+      if (state.isConnected) tryAutoSync()
+    })
+    const appSub = AppState.addEventListener('change', (next) => {
+      if (next === 'active') {
+        void NetInfo.fetch().then((state) => {
+          if (state.isConnected) tryAutoSync()
+        })
+      }
+    })
+    return () => {
+      netUnsub()
+      appSub.remove()
+    }
+  }, [handleSync])
+
+  const handleRoster = useCallback(async () => {
+    if (!eventId || rosterBusy) return
+    setRosterBusy(true)
+    try {
+      const cache = await downloadRoster(eventId)
+      setRoster(cache)
+      setBanner({ kind: 'roster', count: cache.count, savedAt: cache.savedAt })
+      setVerdicts(await pendingVerdicts(cache, eventId))
+    } catch (err) {
+      setBanner({
+        kind: 'error',
+        message: err instanceof ApiClientError ? `${err.code}: ${err.message}` : 'Roster download failed.',
+      })
+    } finally {
+      setRosterBusy(false)
+    }
+  }, [eventId, rosterBusy])
 
   // Throttle the scanner: expo-camera keeps firing while a code is in view.
   const scanLockRef = useRef(false)
@@ -197,14 +252,25 @@ export default function CheckinScreen({ route }: CheckinScreenProps) {
         setBanner({ kind: 'result', scan })
       } catch (err) {
         if (err instanceof ApiClientError && err.code === 'NETWORK') {
-          const pending = await enqueueOfflineScan({
+          const outcome = await enqueueOfflineScan({
             eventId,
             payload: trimmed,
             clientScanId,
             capturedOfflineAt: new Date().toISOString(),
           })
-          setPendingCount(pending)
-          setBanner({ kind: 'queued', payload: trimmed, pending })
+          setPendingCount(outcome.pending)
+          if (outcome.duplicate) {
+            setBanner({ kind: 'duplicate', payload: trimmed, pending: outcome.pending })
+          } else {
+            setBanner({
+              kind: 'queued',
+              payload: trimmed,
+              pending: outcome.pending,
+              droppedAtCap: outcome.droppedAtCap,
+              verdict: verifyOffline(roster, trimmed),
+            })
+          }
+          setVerdicts(await pendingVerdicts(roster, eventId))
         } else {
           setBanner({
             kind: 'error',
@@ -213,18 +279,8 @@ export default function CheckinScreen({ route }: CheckinScreenProps) {
         }
       }
     },
-    [eventId, deviceScanId]
+    [eventId, deviceScanId, roster]
   )
-
-  const handleSync = useCallback(async () => {
-    try {
-      const count = await syncOfflineQueue()
-      await refreshPending()
-      setBanner({ kind: 'synced', count })
-    } catch {
-      setBanner({ kind: 'error', message: 'Sync failed — try again when back online.' })
-    }
-  }, [refreshPending])
 
   // ── No event selected yet: manual entry (organizer staff fetch the event id
   //    from their dashboard — the scan API is org-permission scoped server-side).
@@ -255,6 +311,10 @@ export default function CheckinScreen({ route }: CheckinScreenProps) {
           >
             <Text style={styles.buttonText}>Start scanning</Text>
           </Pressable>
+          <Text style={styles.setupHint}>
+            With the event selected, download the offline roster — scans queue locally when the
+            venue network drops and sync with conflict preservation when it returns.
+          </Text>
         </View>
       </SafeAreaView>
     )
@@ -262,64 +322,164 @@ export default function CheckinScreen({ route }: CheckinScreenProps) {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-      <View style={styles.cameraWrap}>
-        {permission === null ? (
-          <View style={styles.center}>
-            <ActivityIndicator color={theme.colors.primary} />
-          </View>
-        ) : permission.granted ? (
-          // expo-camera barcode scanning works in Expo Go (RTMP publishing does
-          // not — that requires a development build; see docs/NATIVE_MODULES.md).
-          <CameraView
-            style={styles.camera}
-            barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
-            onBarcodeScanned={({ data }) => {
-              void handleScan(data)
-            }}
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        <View style={styles.cameraWrap}>
+          {permission === null ? (
+            <View style={styles.center}>
+              <ActivityIndicator color={theme.colors.primary} />
+            </View>
+          ) : permission.granted ? (
+            // expo-camera barcode scanning works in Expo Go (RTMP publishing does
+            // not — that requires a development build; see docs/NATIVE_MODULES.md).
+            <CameraView
+              style={styles.camera}
+              barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+              onBarcodeScanned={({ data }) => {
+                void handleScan(data)
+              }}
+            />
+          ) : (
+            <View style={styles.center}>
+              <Text style={styles.permissionTitle}>Camera access needed</Text>
+              <Text style={styles.setupBody}>Grant camera access to scan ticket QR codes.</Text>
+              <Pressable style={styles.button} onPress={() => void requestPermission()} accessibilityRole="button">
+                <Text style={styles.buttonText}>Grant camera access</Text>
+              </Pressable>
+            </View>
+          )}
+        </View>
+
+        <BannerView banner={banner} eventId={eventId} />
+
+        <View style={styles.manualRow}>
+          <TextInput
+            style={styles.manualInput}
+            value={manualCode}
+            onChangeText={setManualCode}
+            placeholder="Manual code fallback (TKT-…)"
+            placeholderTextColor={theme.colors.textMuted}
+            autoCapitalize="characters"
+            autoCorrect={false}
           />
-        ) : (
-          <View style={styles.center}>
-            <Text style={styles.permissionTitle}>Camera access needed</Text>
-            <Text style={styles.setupBody}>Grant camera access to scan ticket QR codes.</Text>
-            <Pressable style={styles.button} onPress={() => void requestPermission()} accessibilityRole="button">
-              <Text style={styles.buttonText}>Grant camera access</Text>
-            </Pressable>
+          <Pressable
+            style={styles.manualSubmit}
+            disabled={manualCode.trim().length === 0}
+            onPress={() => {
+              void handleScan(manualCode.trim())
+              setManualCode('')
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Submit manual ticket code"
+          >
+            <Text style={styles.buttonText}>Submit</Text>
+          </Pressable>
+        </View>
+
+        {/* Offline roster (advisory verification source). */}
+        <View style={styles.rosterRow}>
+          <View style={styles.rosterInfo}>
+            <Text style={styles.rosterTitle}>
+              {roster
+                ? `Roster · ${roster.count} tickets · saved ${formatDateTime(roster.savedAt)}`
+                : 'No roster downloaded yet'}
+            </Text>
+            <Text style={styles.rosterNote}>
+              {roster
+                ? 'Offline scans are verified against this roster (advisory) and still queue for the server verdict.'
+                : 'Download before doors open to get local verdicts while offline.'}
+            </Text>
+          </View>
+          <Pressable
+            style={[styles.syncButton, rosterBusy && styles.buttonDisabled]}
+            disabled={rosterBusy}
+            onPress={() => void handleRoster()}
+            accessibilityRole="button"
+            accessibilityLabel={roster ? 'Refresh offline roster' : 'Download offline roster'}
+          >
+            {rosterBusy ? (
+              <ActivityIndicator size="small" color={theme.colors.primaryDark} />
+            ) : (
+              <Text style={styles.syncButtonText}>{roster ? 'Refresh' : 'Download'}</Text>
+            )}
+          </Pressable>
+        </View>
+
+        {/* Review panel: last sync report + pending advisory verdicts. */}
+        <Pressable
+          style={styles.reviewToggle}
+          onPress={() => setReviewOpen((v) => !v)}
+          accessibilityRole="button"
+          accessibilityLabel={reviewOpen ? 'Hide sync review panel' : 'Show sync review panel'}
+        >
+          <Text style={styles.reviewToggleText}>
+            {reviewOpen ? 'Hide' : 'Show'} review{report && report.review.length > 0 ? ` · ${report.review.length} to review` : ''}
+            {verdicts.length > 0 ? ` · ${verdicts.length} queued` : ''}
+          </Text>
+        </Pressable>
+        {reviewOpen && (
+          <View style={styles.reviewPanel}>
+            {report ? (
+              <>
+                <Text style={styles.reviewHeading}>
+                  Last sync {formatDateTime(report.syncedAt)} — {report.synced} sent
+                  {report.retained > 0 ? ` · ${report.retained} still queued` : ''}
+                </Text>
+                {report.review.length === 0 ? (
+                  <Text style={styles.reviewEmpty}>No conflicts, duplicates or invalid codes.</Text>
+                ) : (
+                  report.review.map((r) => (
+                    <View key={`${r.payload}-${r.syncedAt}`} style={styles.reviewItem}>
+                      <Text style={[styles.reviewResult, { color: RESULT_COLORS[r.result] ?? theme.colors.textMuted }]}>
+                        {r.result} · {r.payload}
+                      </Text>
+                      <Text style={styles.reviewDetail}>
+                        {r.holder ? `${r.holder} — ` : ''}
+                        {r.detail}
+                      </Text>
+                    </View>
+                  ))
+                )}
+              </>
+            ) : (
+              <Text style={styles.reviewEmpty}>No sync has run yet.</Text>
+            )}
+            {verdicts.length > 0 && (
+              <>
+                <Text style={styles.reviewHeading}>Queued offline ({verdicts.length}) — advisory verdicts</Text>
+                {verdicts.map((v) => (
+                  <View key={v.payload + v.capturedOfflineAt} style={styles.reviewItem}>
+                    <Text style={[styles.reviewResult, { color: VERDICT_COLORS[v.verdict] }]}>
+                      {v.verdict.replace(/_/g, ' ').toLowerCase()} · {v.payload}
+                    </Text>
+                    <Text style={styles.reviewDetail}>
+                      {v.holder ? `${v.holder} — ` : ''}
+                      {v.note}
+                    </Text>
+                  </View>
+                ))}
+              </>
+            )}
           </View>
         )}
-      </View>
-
-      <BannerView banner={banner} eventId={eventId} />
-
-      <View style={styles.manualRow}>
-        <TextInput
-          style={styles.manualInput}
-          value={manualCode}
-          onChangeText={setManualCode}
-          placeholder="Manual code fallback (TKT-…)"
-          placeholderTextColor={theme.colors.textMuted}
-          autoCapitalize="characters"
-          autoCorrect={false}
-        />
-        <Pressable
-          style={styles.manualSubmit}
-          disabled={manualCode.trim().length === 0}
-          onPress={() => {
-            void handleScan(manualCode.trim())
-            setManualCode('')
-          }}
-          accessibilityRole="button"
-          accessibilityLabel="Submit manual ticket code"
-        >
-          <Text style={styles.buttonText}>Submit</Text>
-        </Pressable>
-      </View>
+      </ScrollView>
 
       <View style={styles.footer}>
         <Text style={styles.footerText}>
           Event {eventId} · {pendingCount > 0 ? `${pendingCount} offline scan(s) queued` : 'queue empty'}
+          {syncing ? ' · syncing…' : ''}
         </Text>
-        <Pressable style={styles.syncButton} onPress={() => void handleSync()} accessibilityRole="button" accessibilityLabel="Sync offline scans now">
-          <Text style={styles.syncButtonText}>Sync now</Text>
+        <Pressable
+          style={[styles.syncButton, (syncing || pendingCount === 0) && styles.buttonDisabled]}
+          disabled={syncing || pendingCount === 0}
+          onPress={() => void handleSync()}
+          accessibilityRole="button"
+          accessibilityLabel="Sync offline scans now"
+        >
+          {syncing ? (
+            <ActivityIndicator size="small" color={theme.colors.primaryDark} />
+          ) : (
+            <Text style={styles.syncButtonText}>Sync now</Text>
+          )}
         </Pressable>
       </View>
     </SafeAreaView>
@@ -351,11 +511,28 @@ function BannerView({ banner, eventId }: { banner: Banner | null; eventId: strin
     )
   }
   if (banner.kind === 'queued') {
+    const color = VERDICT_COLORS[banner.verdict.verdict]
+    return (
+      <View style={[styles.banner, { backgroundColor: color }]}>
+        <Text style={styles.bannerTitle}>
+          Queued offline ({banner.pending} pending) — {banner.verdict.verdict.replace(/_/g, ' ').toLowerCase()}
+        </Text>
+        <Text style={styles.bannerBody}>
+          {banner.verdict.holder ? `${banner.verdict.holder} · ` : ''}
+          {banner.payload} — {banner.verdict.note}
+        </Text>
+        {banner.droppedAtCap > 0 && (
+          <Text style={styles.bannerBody}>Queue cap reached: {banner.droppedAtCap} oldest scan(s) dropped.</Text>
+        )}
+      </View>
+    )
+  }
+  if (banner.kind === 'duplicate') {
     return (
       <View style={[styles.banner, { backgroundColor: theme.colors.warning }]}>
-        <Text style={styles.bannerTitle}>Queued offline ({banner.pending} pending)</Text>
+        <Text style={styles.bannerTitle}>Already queued ({banner.pending} pending)</Text>
         <Text style={styles.bannerBody}>
-          {banner.payload} — will sync with conflict preservation when back online.
+          {banner.payload} — this code is already in the offline queue; it will sync once.
         </Text>
       </View>
     )
@@ -363,7 +540,25 @@ function BannerView({ banner, eventId }: { banner: Banner | null; eventId: strin
   if (banner.kind === 'synced') {
     return (
       <View style={[styles.banner, { backgroundColor: theme.colors.success }]}>
-        <Text style={styles.bannerTitle}>Synced {banner.count} offline scan(s)</Text>
+        <Text style={styles.bannerTitle}>
+          Synced {banner.report.synced} offline scan(s)
+          {banner.report.retained > 0 ? ` · ${banner.report.retained} still queued` : ''}
+        </Text>
+        {banner.report.review.length > 0 && (
+          <Text style={styles.bannerBody}>
+            {banner.report.review.length} result(s) need review — open the review panel below.
+          </Text>
+        )}
+      </View>
+    )
+  }
+  if (banner.kind === 'roster') {
+    return (
+      <View style={[styles.banner, { backgroundColor: theme.colors.primaryDark }]}>
+        <Text style={styles.bannerTitle}>Roster saved · {banner.count} tickets</Text>
+        <Text style={styles.bannerBody}>
+          Saved {formatDateTime(banner.savedAt)} — offline scans now get local advisory verdicts.
+        </Text>
       </View>
     )
   }
@@ -377,13 +572,15 @@ function BannerView({ banner, eventId }: { banner: Banner | null; eventId: strin
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.colors.bg },
-  cameraWrap: { flex: 1, backgroundColor: '#0c0a09' },
+  scrollContent: { paddingBottom: theme.spacing.md },
+  cameraWrap: { height: 320, backgroundColor: '#0c0a09' },
   camera: { flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: theme.spacing.xl },
   permissionTitle: { color: theme.colors.text, fontSize: 16, fontWeight: '700', marginBottom: theme.spacing.sm },
   setupCard: { flex: 1, padding: theme.spacing.xl, justifyContent: 'center' },
   setupTitle: { color: theme.colors.text, fontSize: 20, fontWeight: '700', marginBottom: theme.spacing.sm },
   setupBody: { color: theme.colors.textMuted, fontSize: 13, marginBottom: theme.spacing.lg },
+  setupHint: { color: theme.colors.textMuted, fontSize: 11, marginTop: theme.spacing.lg },
   input: {
     backgroundColor: theme.colors.card,
     borderWidth: 1,
@@ -422,6 +619,33 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
   },
   manualSubmit: { backgroundColor: theme.colors.primary, borderRadius: theme.radius.md, paddingHorizontal: theme.spacing.lg, justifyContent: 'center' },
+  rosterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.md,
+    padding: theme.spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border,
+  },
+  rosterInfo: { flex: 1 },
+  rosterTitle: { color: theme.colors.text, fontSize: 12, fontWeight: '700' },
+  rosterNote: { color: theme.colors.textMuted, fontSize: 11, marginTop: 2 },
+  reviewToggle: { paddingVertical: theme.spacing.sm, paddingHorizontal: theme.spacing.md },
+  reviewToggleText: { color: theme.colors.primaryDark, fontSize: 12, fontWeight: '700' },
+  reviewPanel: {
+    marginHorizontal: theme.spacing.md,
+    marginBottom: theme.spacing.md,
+    backgroundColor: theme.colors.card,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.md,
+    padding: theme.spacing.md,
+  },
+  reviewHeading: { color: theme.colors.text, fontSize: 12, fontWeight: '700', marginBottom: theme.spacing.sm },
+  reviewEmpty: { color: theme.colors.textMuted, fontSize: 11 },
+  reviewItem: { marginBottom: theme.spacing.sm },
+  reviewResult: { fontSize: 12, fontWeight: '700' },
+  reviewDetail: { color: theme.colors.textMuted, fontSize: 11, marginTop: 2 },
   footer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -431,6 +655,15 @@ const styles = StyleSheet.create({
     borderTopColor: theme.colors.border,
   },
   footerText: { color: theme.colors.textMuted, fontSize: 11, flex: 1 },
-  syncButton: { backgroundColor: '#ecfdf5', borderWidth: 1, borderColor: theme.colors.primary, borderRadius: theme.radius.sm, paddingHorizontal: theme.spacing.md, paddingVertical: theme.spacing.xs },
+  syncButton: {
+    backgroundColor: '#ecfdf5',
+    borderWidth: 1,
+    borderColor: theme.colors.primary,
+    borderRadius: theme.radius.sm,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.xs,
+    minWidth: 84,
+    alignItems: 'center',
+  },
   syncButtonText: { color: theme.colors.primaryDark, fontWeight: '700', fontSize: 12 },
 })

@@ -10,7 +10,9 @@ build** (a custom `expo run:android` / `expo run:ios` binary, not Expo Go).
 | Event discovery, login, orders, hosted checkout, tickets, notifications | fetch (JS) | ✅ works | ✅ works | Implemented (`src/api/client.ts`) |
 | Ticket QR display | `react-native-qrcode-svg` (+ `react-native-svg`) | ✅ works | ✅ works | Implemented (`MyTicketsScreen`) |
 | Session token slot | `expo-secure-store` | ✅ works | ✅ works | Implemented (empty until server exposes a token — see below) |
-| Offline scan queue | `@react-native-async-storage/async-storage` | ✅ works | ✅ works | **Stub** with TODOs (`CheckinScreen`) |
+| Offline scan queue | `@react-native-async-storage/async-storage` | ✅ works | ✅ works | **Complete** (`CheckinScreen` + `src/lib/checkin-offline.ts`: roster pre-download, advisory offline verdicts, capped FIFO queue with dedup, NetInfo/AppState auto-sync, CONFLICT review panel) |
+| Network reachability | `@react-native-community/netinfo` | ✅ works | ✅ works | Implemented (check-in auto-sync trigger) |
+| **Broadcast viewing (viewer side)** | fetch + Animated (SYNTHETIC surface) | ✅ works | ✅ works | Implemented (`BroadcastScreen`: entitlement/capacity gates, playback token + 60 s heartbeat, polling chat). Real HLS needs `expo-video` once Cloudflare Stream credentials exist — RTMP **publishing** (organizer side) is the part that needs a custom native module. |
 | **Camera barcode scanning (check-in)** | `expo-camera` `CameraView` + `barcodeScannerSettings` | ✅ **barcode scanning DOES work in Expo Go** | ✅ works | Implemented (`CheckinScreen`) |
 | **RTMP live broadcasting / live publishing** | — | ❌ **does NOT work in Expo Go** | ❌ needs a **custom native module**, not just a dev build | **NOT IMPLEMENTED.** `expo-camera` dropped RTMP publishing; streaming requires a bespoke native module (e.g. an RTMP/WHIP client written in Kotlin/Swift) wired through an Expo config plugin. Budget this as a separate workstream before promising live-from-the-door features. |
 | In-app purchase (store billing) | `react-native-iap` or expo-community wrappers | ❌ | ✅ required | **Disabled / not present.** See store-billing section. |
@@ -109,6 +111,7 @@ customized with the plugin's `cameraPermission` config when polishing).
    `POST /auth/login?client=mobile` that returns a long-lived token.
 2. **Hosted-checkout return redirect** to `ieventplux://order/{ref}` for mobile
    user agents (see Deep link caveat above).
-3. **Offline sync conflict review** — `/checkin/sync` already preserves
-   CONFLICT results server-side; the mobile stub only counts them. Surface them
-   in the organizer dashboard before relying on offline door scanning.
+3. **Offline sync conflict review** — `/checkin/sync` preserves CONFLICT
+   results server-side, and the mobile scanner now surfaces them in its review
+   panel (round 30). An organizer-dashboard review queue (server-side table of
+   non-ADMITTED sync outcomes) remains a web-repo TODO for larger doors.
