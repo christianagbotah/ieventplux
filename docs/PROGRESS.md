@@ -401,3 +401,9 @@ bun run db:seed   # optional reset of dev data
 - Event media public API returns a reduced projection instead of raw media database records with uploader/organization IDs.
 - Seeded HTTP integration suite now proves anonymous 404 on private subresources, private-calendar denial for anonymous/unapproved guests, organizer private calendar allowance, and draft occurrence filtering for public vs organizer.
 - **Remaining:** comprehensive per-action role/visibility audit, manual browser UAT and all real-provider launch gates. Round 38 changes are merged into `main`, but Round 39 remains a candidate until all CI jobs pass.
+
+## Round 42 — public domain on the Lightworld VPS (2026-11-14)
+
+- The reviewed Round 41 application commit `e54a0ec` is running on the shared VPS, not just in CI; five dedicated systemd services report active. Dedicated PostgreSQL 18 uses separate credentials and port 55450. No seeded demo identities or live payment providers were enabled.
+- Cloudflare now fronts `https://ieventplux.lightworldtech.com/`; Webuzo-managed Let's Encrypt certificate verified; the Webuzo domain-specific Nginx include proxies to application port 3160 and realtime port 3162. Public homepage, health and WebSocket 101 have been verified, while untrusted WebSocket origins are rejected.
+- Local backups and a scratch PostgreSQL restore were successful; offsite storage, interactive first-admin bootstrap, real providers, privacy/UX device acceptance and payment gates remain **open**. See `docs/LIVE_VPS_STATUS.md`.
