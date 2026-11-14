@@ -1,5 +1,7 @@
 import { createServer } from 'http'
 import { Server } from 'socket.io'
+import { mayJoinRealtimeRoom } from './realtime-auth'
+import { parseRoomKey } from './room-authorization'
 
 /**
  * iEventPlux realtime service (:3003).
@@ -56,7 +58,11 @@ const io = new Server(httpServer, {
   // port ONLY in the XTransformPort query). The engine.io path stays at its
   // default ('/socket.io/') so this service can also serve plain HTTP endpoints
   // (/health, /emit) on the same port — Caddy forwards both by query param.
-  cors: { origin: '*', methods: ['GET', 'POST'] },
+  cors: {
+    origin: process.env.NODE_ENV === 'production' ? (process.env.APP_URL || false) : true,
+    credentials: true,
+    methods: ['GET', 'POST'],
+  },
   pingTimeout: 60000,
   pingInterval: 25000,
 })
@@ -72,19 +78,40 @@ function bumpRoom(room: string, delta: number): number {
 
 io.on('connection', (socket) => {
   let joinedRoom: string | null = null
+  let joinPending = false
 
-  socket.on('join', (data: { room?: string }) => {
-    const room = String(data?.room ?? '')
-    if (!/^[\w:-]{1,80}$/.test(room)) return
-    if (joinedRoom && joinedRoom !== room) {
-      socket.leave(joinedRoom)
-      const count = bumpRoom(joinedRoom, -1)
-      io.to(joinedRoom).emit('presence', { room: joinedRoom, viewers: count })
+  socket.on('join', async (data: { room?: string }) => {
+    // A guessed user or broadcast room must never receive private pushes.
+    const room = data?.room
+    if (joinPending || !parseRoomKey(room)) {
+      socket.emit('room:denied', { code: 'INVALID_ROOM' })
+      return
     }
-    joinedRoom = room
-    socket.join(room)
-    const count = bumpRoom(room, 1)
-    io.to(room).emit('presence', { room, viewers: count })
+    joinPending = true
+    try {
+      const allowed = await mayJoinRealtimeRoom(room, socket.handshake.headers.cookie)
+      if (!socket.connected) return
+      if (!allowed) {
+        socket.emit('room:denied', { code: 'NOT_AUTHORIZED' })
+        return
+      }
+      if (joinedRoom === room) return // do not inflate presence on duplicate joins
+      if (joinedRoom) {
+        socket.leave(joinedRoom)
+        const count = bumpRoom(joinedRoom, -1)
+        io.to(joinedRoom).emit('presence', { room: joinedRoom, viewers: count })
+      }
+      joinedRoom = room!
+      socket.join(room!)
+      const count = bumpRoom(room!, 1)
+      io.to(room!).emit('presence', { room: room!, viewers: count })
+      socket.emit('room:joined', { room })
+    } catch (error) {
+      console.error('[realtime] authorization unavailable:', error instanceof Error ? error.message : 'unknown')
+      socket.emit('room:denied', { code: 'AUTH_UNAVAILABLE' })
+    } finally {
+      joinPending = false
+    }
   })
 
   socket.on('leave', () => {
