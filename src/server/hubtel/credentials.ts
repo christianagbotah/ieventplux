@@ -1,4 +1,5 @@
 import { db } from '../../lib/db'
+import { simulatorAllowed } from './security-policy'
 import { env } from '../env'
 
 /**
@@ -115,6 +116,8 @@ export async function resolveHubtelCreds(): Promise<ResolvedHubtelCreds> {
  * the moment real checkout credentials exist from either source.
  */
 export function paymentsSimulatorActive(creds: ResolvedHubtelCreds): boolean {
+  // Fail closed: an absent production credential must never become fake payment success.
+  if (!simulatorAllowed(process.env.NODE_ENV)) return false
   if (process.env.PAYMENTS_SIMULATOR !== undefined && process.env.PAYMENTS_SIMULATOR !== 'auto') {
     return ['1', 'true', 'yes'].includes(process.env.PAYMENTS_SIMULATOR)
   }
@@ -123,6 +126,7 @@ export function paymentsSimulatorActive(creds: ResolvedHubtelCreds): boolean {
 
 /** Same rule for SMS (sender id required in addition to credentials). */
 export function smsSimulatorActive(creds: ResolvedHubtelCreds): boolean {
+  if (!simulatorAllowed(process.env.NODE_ENV)) return false
   if (process.env.SMS_SIMULATOR !== undefined && process.env.SMS_SIMULATOR !== 'auto') {
     return ['1', 'true', 'yes'].includes(process.env.SMS_SIMULATOR)
   }
