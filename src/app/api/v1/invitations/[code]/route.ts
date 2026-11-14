@@ -10,10 +10,12 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
     void req
     const { code } = await ctx.params
     const invitation = await db.invitation.findUnique({ where: { code: code.toUpperCase() }, include: { event: { select: { id: true, title: true, slug: true, startsAt: true, endsAt: true, city: true, coverImageUrl: true, org: { select: { name: true } } } } } })
-    if (!invitation || invitation.status !== 'ACTIVE') throw errors.notFound('This invitation is no longer valid.')
+    // R28: REVOKED codes are invalid, but EXHAUSTED ones still describe themselves
+    // (guestsRemaining 0) so a revisiting guest can load their RSVP status and a
+    // new guest sees an honest "fully used" instead of "no longer valid".
+    if (!invitation || invitation.status === 'REVOKED') throw errors.notFound('This invitation is no longer valid.')
     if (invitation.expiresAt && invitation.expiresAt < new Date()) throw errors.notFound('This invitation has expired.')
-    const remaining = invitation.maxGuests - invitation.guestsUsed
-    if (remaining <= 0) throw errors.conflict('This invitation is fully used.')
+    const remaining = Math.max(0, invitation.maxGuests - invitation.guestsUsed)
     return jsonOk({
       invitation: {
         code: invitation.code, displayName: invitation.displayName, maxGuests: invitation.maxGuests,
@@ -30,9 +32,11 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     const user = await requireUser()
     const body = await readJson<{ guests?: number }>(req)
     const invitation = await db.invitation.findUnique({ where: { code: code.toUpperCase() }, include: { event: true } })
-    if (!invitation || invitation.status !== 'ACTIVE') throw errors.notFound('This invitation is no longer valid.')
+    if (!invitation || invitation.status === 'REVOKED') throw errors.notFound('This invitation is no longer valid.')
     if (invitation.expiresAt && invitation.expiresAt < new Date()) throw errors.notFound('This invitation has expired.')
-    const guests = Math.max(1, Math.min(invitation.maxGuests - invitation.guestsUsed, Number(body.guests ?? 1)))
+    const remaining = invitation.maxGuests - invitation.guestsUsed
+    if (remaining <= 0) throw errors.conflict('This invitation is fully used.')
+    const guests = Math.max(1, Math.min(remaining, Number(body.guests ?? 1)))
 
     const existing = await db.rsvp.findFirst({ where: { invitationId: invitation.id, userId: user.id } })
     if (existing) throw errors.conflict('You have already responded to this invitation.')
@@ -49,14 +53,20 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
         status: invitation.requireApproval ? 'PENDING' : 'APPROVED',
       },
     })
-    await db.invitation.update({ where: { id: invitation.id }, data: { guestsUsed: { increment: guests } } })
+    const used = invitation.guestsUsed + guests
+    // R28: a fully-redeemed code records EXHAUSTED (previously the status
+    // stayed ACTIVE forever while the GET path refused guests — dead field).
+    await db.invitation.update({
+      where: { id: invitation.id },
+      data: { guestsUsed: { increment: guests }, status: used >= invitation.maxGuests ? 'EXHAUSTED' : invitation.status },
+    })
     const { notifyUser } = await import('@/server/services/notify')
     await notifyUser({
       userId: user.id,
       type: 'INVITATION',
       title: invitation.requireApproval ? 'RSVP received — awaiting approval' : 'RSVP confirmed',
       body: `${invitation.event.title}: ${invitation.requireApproval ? 'the organizer will approve your attendance shortly.' : 'your place is confirmed.'}`,
-      link: `#/event/${invitation.event.slug}`,
+      link: `#/invite/${invitation.code}`,
     }).catch(() => {})
     void sanitizeText
     return jsonOk({ rsvp, approved: !invitation.requireApproval, nextStep: invitation.requireApproval ? 'await_approval' : 'tickets' })

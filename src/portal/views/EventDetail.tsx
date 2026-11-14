@@ -72,7 +72,7 @@ interface EventDetailPayload {
     seriesId?: string | null
   }
   stats: { followers: number; going: number; comments: number; ratingAvg: number; ratingCount: number }
-  mine: { saved: boolean; going: boolean; following: boolean }
+  mine: { saved: boolean; going: boolean; following: boolean; rsvpStatus: string | null; rsvpGuests: number | null }
   canManage: boolean
 }
 
@@ -116,7 +116,8 @@ export default function EventDetail({ slug }: { slug: string }) {
   const [error, setError] = useState<string | null>(null)
   const [comments, setComments] = useState<CommentNode[]>([])
   const [commentDraft, setCommentDraft] = useState('')
-  const [mine, setMine] = useState({ saved: false, going: false, following: false })
+  const [mine, setMine] = useState({ saved: false, going: false, following: false, rsvpStatus: null as string | null, rsvpGuests: null as number | null })
+  const [inviteCode, setInviteCode] = useState('')
   const [buyOpen, setBuyOpen] = useState(false)
   const [buyQty, setBuyQty] = useState<Record<string, number>>({})
   const [discountCode, setDiscountCode] = useState('')
@@ -803,10 +804,65 @@ export default function EventDetail({ slug }: { slug: string }) {
                           </div>
                         )
                       })}
-                      <button type="button" className="efx-neon-pulse-button w-full" onClick={() => { setBuyQty({}); setBuyOpen(true) }}>
-                        {saleable.some((t) => t.priceMinor > 0) ? 'Get tickets' : 'Free RSVP'}
-                      </button>
-                      <p className="text-center text-[11px] text-white/60">Secure checkout · Mobile money / cards via Hubtel</p>
+                      {event.visibility === 'INVITE_ONLY' && !data.canManage && mine.rsvpStatus !== 'APPROVED' ? (
+                        // R28: truthful invitation gate — the old UI let anyone
+                        // open checkout and hit a bare 403. Now: code entry, or the
+                        // real RSVP state (pending/declined), replaces the CTA.
+                        <div className="space-y-2.5">
+                          {mine.rsvpStatus === 'PENDING' ? (
+                            <div className="rounded-xl border border-amber-300/40 bg-amber-300/10 p-3 text-center">
+                              <p className="text-sm font-semibold text-amber-200">Invitation awaiting approval</p>
+                              <p className="mt-0.5 text-xs text-white/70">The organizer is reviewing your RSVP — you will be notified when they decide.</p>
+                            </div>
+                          ) : mine.rsvpStatus === 'DECLINED' ? (
+                            <div className="rounded-xl border border-red-400/40 bg-red-400/10 p-3 text-center">
+                              <p className="text-sm font-semibold text-red-200">RSVP declined</p>
+                              <p className="mt-0.5 text-xs text-white/70">The organizer was unable to accommodate this RSVP.</p>
+                            </div>
+                          ) : (
+                            <>
+                              <div className="space-y-1.5">
+                                <label htmlFor="invite-code" className="text-xs font-semibold text-white/80">Invitation code</label>
+                                <input
+                                  id="invite-code"
+                                  value={inviteCode}
+                                  onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
+                                  placeholder="e.g. DONOR2026"
+                                  autoComplete="off"
+                                  className="h-10 w-full rounded-lg border border-white/30 bg-white/10 px-3 text-sm text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-emerald-300/60"
+                                />
+                              </div>
+                              <button
+                                type="button"
+                                className="efx-neon-pulse-button w-full"
+                                onClick={() => {
+                                  const trimmed = inviteCode.trim()
+                                  if (!trimmed) {
+                                    toast({ title: 'Enter your invitation code', variant: 'destructive' })
+                                    return
+                                  }
+                                  navigate(`/invite/${encodeURIComponent(trimmed.toUpperCase())}`)
+                                }}
+                              >
+                                Redeem invitation
+                              </button>
+                              <p className="text-center text-[11px] text-white/60">Approved invitations unlock the private address and tickets.</p>
+                            </>
+                          )}
+                        </div>
+                      ) : (
+                        <>
+                          {event.visibility === 'INVITE_ONLY' && mine.rsvpStatus === 'APPROVED' && (
+                            <p className="rounded-xl border border-emerald-300/40 bg-emerald-300/10 px-3 py-2 text-center text-xs font-semibold text-emerald-200">
+                              Invitation approved — private address unlocked{mine.rsvpGuests ? ` · ${mine.rsvpGuests} ${mine.rsvpGuests === 1 ? 'place' : 'places'}` : ''}
+                            </p>
+                          )}
+                          <button type="button" className="efx-neon-pulse-button w-full" onClick={() => { setBuyQty({}); setBuyOpen(true) }}>
+                            {saleable.some((t) => t.priceMinor > 0) ? 'Get tickets' : 'Free RSVP'}
+                          </button>
+                          <p className="text-center text-[11px] text-white/60">Secure checkout · Mobile money / cards via Hubtel</p>
+                        </>
+                      )}
                     </>
                   )}
                   {!mine.following && event.status !== 'CANCELLED' && (

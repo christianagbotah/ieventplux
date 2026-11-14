@@ -359,7 +359,9 @@ async function main() {
   await db.event.update({ where: { id: easterPast.id }, data: { status: 'ENDED' } })
 
   // ── Invitation (private dinner) ─────────────────────────────────────────
-  const invitation = await db.invitation.create({ data: { eventId: donorsDinner.id, code: 'DONOR2026', displayName: 'Akua Frimpong', contact: 'akua@example.dev', maxGuests: 2, requireApproval: false, createdBy: users.director.id } })
+  // R28: guestsUsed reflects akua's approved seat (the seed previously left it
+  // 0/2 while a seat was claimed — the invitation showed capacity it didn't have).
+  const invitation = await db.invitation.create({ data: { eventId: donorsDinner.id, code: 'DONOR2026', displayName: 'Akua Frimpong', contact: 'akua@example.dev', maxGuests: 2, guestsUsed: 1, requireApproval: false, createdBy: users.director.id } })
   await db.rsvp.create({ data: { eventId: donorsDinner.id, invitationId: invitation.id, userId: users.akua.id, name: 'Akua Frimpong', email: 'akua@example.dev', guests: 1, status: 'APPROVED', decidedAt: new Date() } })
 
   // ── Orders through the REAL services (ledger + tickets + fees) ──────────

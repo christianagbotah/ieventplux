@@ -187,6 +187,64 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
       return jsonOk({ items })
     }
 
+    // R28 — guest management payload in ONE round trip: invitations (with
+    // live RSVP counts) + the RSVP ledger (pending queue first, then decided).
+    if (action === 'guests') {
+      const user = await requireUser()
+      const access = await eventOrgAccess(user.id, id, 'event:edit')
+      if (!access.event) throw errors.notFound('Event not found.')
+      if (!access.allowed) throw errors.forbidden('Guest lists are managed by the event organization.')
+      const [invitations, rsvps] = await Promise.all([
+        db.invitation.findMany({
+          where: { eventId: id },
+          orderBy: { createdAt: 'desc' },
+          include: {
+            _count: { select: { rsvps: true } },
+            rsvps: { select: { status: true } },
+          },
+        }),
+        db.rsvp.findMany({
+          where: { eventId: id },
+          include: { invitation: { select: { code: true, displayName: true } } },
+          orderBy: [{ createdAt: 'desc' }],
+          take: 200,
+        }),
+      ])
+      const invitationItems = invitations.map((i) => ({
+        id: i.id,
+        code: i.code,
+        displayName: i.displayName,
+        contact: i.contact,
+        maxGuests: i.maxGuests,
+        guestsUsed: i.guestsUsed,
+        guestsRemaining: Math.max(0, i.maxGuests - i.guestsUsed),
+        requireApproval: i.requireApproval,
+        expiresAt: i.expiresAt,
+        status: i.status,
+        createdAt: i.createdAt,
+        rsvpCount: i._count.rsvps,
+        approvedCount: i.rsvps.filter((r) => r.status === 'APPROVED').length,
+        pendingCount: i.rsvps.filter((r) => r.status === 'PENDING').length,
+      }))
+      // Pending queue first (actionable), then approved, declined, newest first.
+      const rank = (s: string) => (s === 'PENDING' ? 0 : s === 'APPROVED' ? 1 : 2)
+      const rsvpItems = rsvps
+        .map((r) => ({
+          id: r.id,
+          name: r.name,
+          email: r.email,
+          phone: r.phone,
+          guests: r.guests,
+          status: r.status,
+          createdAt: r.createdAt,
+          decidedAt: r.decidedAt,
+          invitationCode: r.invitation ? r.invitation.code : null,
+          invitationName: r.invitation ? r.invitation.displayName : null,
+        }))
+        .sort((a, b) => rank(a.status) - rank(b.status) || b.createdAt.getTime() - a.createdAt.getTime())
+      return jsonOk({ invitations: invitationItems, rsvps: rsvpItems })
+    }
+
     if (action === 'stats') {
       const user = await requireUser()
       const access = await eventOrgAccess(user.id, id, 'orders:view')
@@ -496,6 +554,93 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
         },
       })
       return jsonOk({ invitation })
+    }
+
+    // ── R28: RSVP decision queue write path (approve / decline) ────────────
+    // Rsvp.decidedAt/decidedBy and DECLINED were modeled but had NO writer —
+    // guests with requireApproval invitations were stuck "awaiting approval" forever.
+    if (action === 'rsvp-decision') {
+      const access = await eventOrgAccess(user.id, id, 'event:edit')
+      if (!access.event) throw errors.notFound('Event not found.')
+      if (!access.allowed) throw errors.forbidden('You do not have permission to decide invitations.')
+      rateLimit(req, 'rsvp-decision', 60, 60_000)
+      const rsvpId = String(body.rsvpId ?? '')
+      const decision = String(body.decision ?? '')
+      if (!rsvpId) throw errors.badRequest('rsvpId is required.')
+      if (!['approve', 'decline'].includes(decision)) throw errors.badRequest('decision must be approve or decline.')
+      const rsvp = await db.rsvp.findUnique({ where: { id: rsvpId }, include: { invitation: true } })
+      if (!rsvp || rsvp.eventId !== access.event.id) throw errors.notFound('RSVP not found for this event.')
+      if (rsvp.status !== 'PENDING') throw errors.conflict(`This RSVP was already decided (${rsvp.status.toLowerCase()}).`)
+
+      const approved = decision === 'approve'
+      const updated = await db.rsvp.update({
+        where: { id: rsvp.id },
+        data: { status: approved ? 'APPROVED' : 'DECLINED', decidedAt: new Date(), decidedBy: user.id },
+      })
+      // Declines release the guest seats the pending RSVP had claimed, so a
+      // shared invitation stays usable by the next guest (floor at zero). A
+      // code that had flipped EXHAUSTED returns to ACTIVE when seats free up.
+      if (!approved && rsvp.invitation) {
+        const inv = await db.invitation.findUnique({ where: { id: rsvp.invitation.id } })
+        if (inv) {
+          const used = Math.max(0, inv.guestsUsed - rsvp.guests)
+          await db.invitation
+            .update({
+              where: { id: inv.id },
+              data: { guestsUsed: used, status: inv.status === 'EXHAUSTED' && used < inv.maxGuests ? 'ACTIVE' : inv.status },
+            })
+            .catch(() => {})
+        }
+      }
+      const { notifyUser } = await import('@/server/services/notify')
+      const event = access.event
+      if (rsvp.userId) {
+        await notifyUser({
+          userId: rsvp.userId,
+          type: 'INVITATION',
+          title: approved ? 'Your invitation is approved' : 'Your RSVP was declined',
+          body: approved
+            ? `${event.title}: your place is confirmed — the private address is now visible and tickets are unlocked.`
+            : `${event.title}: the organizer is unable to accommodate this RSVP.`,
+          link: approved ? `#/event/${event.slug}` : rsvp.invitation ? `#/invite/${rsvp.invitation.code}` : `#/event/${event.slug}`,
+        }).catch(() => {})
+      }
+      const { audit } = await import('@/server/audit')
+      await audit({
+        actorUserId: user.id,
+        actorLabel: user.email,
+        action: approved ? 'rsvp.approve' : 'rsvp.decline',
+        entityType: 'Rsvp',
+        entityId: rsvp.id,
+        before: { status: 'PENDING', guests: rsvp.guests },
+        after: { status: updated.status, decidedBy: user.email },
+      })
+      return jsonOk({ rsvp: updated })
+    }
+
+    // ── R28: invitation revoke (REVOKED previously had no writer) ───────────
+    if (action === 'invitation-revoke') {
+      const access = await eventOrgAccess(user.id, id, 'event:edit')
+      if (!access.event) throw errors.notFound('Event not found.')
+      if (!access.allowed) throw errors.forbidden('You do not have permission to manage invitations.')
+      rateLimit(req, 'invitation-revoke', 30, 60_000)
+      const invitationId = String(body.invitationId ?? '')
+      if (!invitationId) throw errors.badRequest('invitationId is required.')
+      const invitation = await db.invitation.findUnique({ where: { id: invitationId } })
+      if (!invitation || invitation.eventId !== access.event.id) throw errors.notFound('Invitation not found for this event.')
+      if (invitation.status !== 'ACTIVE') throw errors.conflict('This invitation is already closed.')
+      const revoked = await db.invitation.update({ where: { id: invitation.id }, data: { status: 'REVOKED' } })
+      const { audit } = await import('@/server/audit')
+      await audit({
+        actorUserId: user.id,
+        actorLabel: user.email,
+        action: 'invitation.revoke',
+        entityType: 'Invitation',
+        entityId: invitation.id,
+        before: { code: invitation.code, status: invitation.status, guestsUsed: invitation.guestsUsed },
+        after: { status: 'REVOKED' },
+      })
+      return jsonOk({ invitation: revoked })
     }
 
     // ── Discount codes ────────────────────────────────────────────────────

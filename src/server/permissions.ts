@@ -85,7 +85,7 @@ export async function membershipsOf(userId: string): Promise<OrgMembershipInfo[]
 
 /** Event org scoping: fetch event and verify the caller's org membership in one step. */
 export async function eventOrgAccess(userId: string, eventId: string, permission: OrgPermission) {
-  const event = await db.event.findUnique({ where: { id: eventId }, select: { id: true, orgId: true, status: true, visibility: true } })
+  const event = await db.event.findUnique({ where: { id: eventId }, select: { id: true, orgId: true, status: true, visibility: true, slug: true, title: true } })
   if (!event) return { event: null, membership: null, allowed: false }
   const membership = await membershipFor(userId, event.orgId)
   const allowed = Boolean(membership && orgCan(membership.role, permission))

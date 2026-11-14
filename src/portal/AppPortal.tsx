@@ -34,6 +34,7 @@ const OrganizerWorkspace = lazy(() => import('./views/OrganizerWorkspace'))
 const AdminConsole = lazy(() => import('./views/AdminConsole'))
 const CreateOrg = lazy(() => import('./views/CreateOrg'))
 const ClaimTicket = lazy(() => import('./views/ClaimTicket'))
+const InviteRedeem = lazy(() => import('./views/InviteRedeem'))
 const AiStudio = lazy(() => import('./views/AiStudio'))
 
 function ViewFallback() {
@@ -181,6 +182,8 @@ export default function AppPortal() {
         return <AiStudio />
       case 'claim':
         return param ? <ClaimTicket token={param} /> : <Discover route={route} />
+      case 'invite':
+        return param ? <InviteRedeem key={param} code={param} /> : <Discover route={route} />
       case 'search':
         return <Discover route={route} />
       default:

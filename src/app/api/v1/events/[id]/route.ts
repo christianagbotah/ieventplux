@@ -37,20 +37,32 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
     const reviews = await db.eventReview.aggregate({ where: { eventId: event.id, status: 'VISIBLE' }, _avg: { rating: true }, _count: true })
     const ratingAvg = reviews._avg.rating ? Math.round(reviews._avg.rating * 10) / 10 : 0
 
+    // R28: the invitation-only address gate now keys on an APPROVED RSVP, not
+    // the social "going" interest (which any signed-in user could toggle — a
+    // real privacy hole for private events). Approved guests and org members
+    // see the real address; everyone else gets the honest placeholder.
+    const myRsvp =
+      session && event.visibility === 'INVITE_ONLY'
+        ? await db.rsvp.findFirst({ where: { eventId: event.id, userId: session.user.id }, select: { status: true, guests: true } })
+        : null
+    const inviteApproved = Boolean(myRsvp && myRsvp.status === 'APPROVED')
+
     const mine = session
       ? {
           saved: Boolean(await db.eventInterest.findFirst({ where: { userId: session.user.id, eventId: event.id, kind: 'SAVE' } })),
           going: Boolean(await db.eventInterest.findFirst({ where: { userId: session.user.id, eventId: event.id, kind: 'GOING' } })),
           following: Boolean(await db.follow.findFirst({ where: { userId: session.user.id, orgId: event.orgId } })),
+          rsvpStatus: myRsvp ? myRsvp.status : null,
+          rsvpGuests: myRsvp ? myRsvp.guests : null,
         }
-      : { saved: false, going: false, following: false }
+      : { saved: false, going: false, following: false, rsvpStatus: null, rsvpGuests: null }
 
     const venue = event.venue
     const venueSafe = venue
       ? {
           ...venue,
-          // Full address stays private for invitation-only events until the invitation is approved.
-          address: event.visibility === 'INVITE_ONLY' && !isOrgMember && !mine.going ? 'Address shared with approved guests' : venue.address,
+          // Full address stays private for invitation-only events until an invitation is approved.
+          address: event.visibility === 'INVITE_ONLY' && !isOrgMember && !inviteApproved ? 'Address shared with approved guests' : venue.address,
         }
       : null
 

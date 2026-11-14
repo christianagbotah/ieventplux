@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { io } from 'socket.io-client'
 import {
   LayoutDashboard, CalendarPlus, Users, Ticket, Radio, Megaphone, MessageSquare, Wallet, UserCog, CreditCard, Settings,
-  ChevronLeft, ChevronRight, ChevronDown, Plus, Loader2, Camera, ScanLine, Search, Play, Square, RefreshCw, KeyRound, Pause, PlayCircle, Trash2, FileText, ShieldAlert, TrendingUp, Repeat, Activity, Vote, HandCoins, Sparkles, Download, Upload, CheckCircle2, Eye, EyeOff, Flag, History,
+  ChevronLeft, ChevronRight, ChevronDown, Plus, Loader2, Camera, ScanLine, Search, Play, Square, RefreshCw, KeyRound, Pause, PlayCircle, Trash2, FileText, ShieldAlert, TrendingUp, Repeat, Activity, Vote, HandCoins, Sparkles, Download, Upload, CheckCircle2, Eye, EyeOff, Flag, History, Clock,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -406,6 +406,8 @@ function EventsManager({ orgId, role, autoNew }: { orgId: string; role: string; 
   const { toast } = useToast()
   const [events, setEvents] = useState<OrgEvent[] | null>(null)
   const [editing, setEditing] = useState<OrgEvent | null>(null)
+  // R28: guest & invitation management for INVITE_ONLY events.
+  const [guestsEvent, setGuestsEvent] = useState<OrgEvent | null>(null)
   // R23: deep-link `/organizer?tab=events&new=1` (checklist + dashboard empty
   // state) opens the create dialog on mount. `new=1` stays in the URL as a real
   // deep link — the app view tree is keyed by route.raw (AppPortal), so ANY
@@ -489,6 +491,9 @@ function EventsManager({ orgId, role, autoNew }: { orgId: string; role: string; 
                     <Button size="sm" variant="destructive" className="rounded-full" onClick={() => void transition(e, 'CANCELLED')}>Cancel</Button>
                   )}
                   <Button size="sm" variant="outline" className="rounded-full" onClick={() => void openEditor(e)}>Edit</Button>
+                  {canPublish && e.visibility === 'INVITE_ONLY' && (
+                    <Button size="sm" variant="outline" className="rounded-full" onClick={() => setGuestsEvent(e)}><Users className="mr-1 h-3.5 w-3.5" aria-hidden /> Guests</Button>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -502,7 +507,264 @@ function EventsManager({ orgId, role, autoNew }: { orgId: string; role: string; 
         event={creating ? null : editing}
         onClose={() => { setEditing(null); setCreating(false); void load() }}
       />}
+
+      {guestsEvent && <GuestsDialog
+        key={guestsEvent.id}
+        event={guestsEvent}
+        onClose={() => { setGuestsEvent(null); void load() }}
+      />}
     </div>
+  )
+}
+
+// ── R28: Guests & invitations ───────────────────────────────────────────
+interface InvitationRow {
+  id: string
+  code: string
+  displayName: string | null
+  contact: string | null
+  maxGuests: number
+  guestsUsed: number
+  guestsRemaining: number
+  requireApproval: boolean
+  expiresAt: string | null
+  status: string
+  createdAt: string
+  rsvpCount: number
+  approvedCount: number
+  pendingCount: number
+}
+
+interface RsvpRow {
+  id: string
+  name: string
+  email: string | null
+  phone: string | null
+  guests: number
+  status: string
+  createdAt: string
+  decidedAt: string | null
+  invitationCode: string | null
+  invitationName: string | null
+}
+
+function GuestsDialog({ event, onClose }: { event: OrgEvent; onClose: () => void }) {
+  const { toast } = useToast()
+  const [invitations, setInvitations] = useState<InvitationRow[] | null>(null)
+  const [rsvps, setRsvps] = useState<RsvpRow[]>([])
+  const [deciding, setDeciding] = useState<string | null>(null)
+  const [revoking, setRevoking] = useState<string | null>(null)
+  const [formOpen, setFormOpen] = useState(false)
+  const [creating, setCreating] = useState(false)
+  const [form, setForm] = useState({ displayName: '', contact: '', maxGuests: '2', requireApproval: false, expiresAt: '', code: '' })
+
+  const load = useCallback(async () => {
+    const data = await api.get<{ invitations: InvitationRow[]; rsvps: RsvpRow[] }>(`/events/${event.id}/guests`).catch(() => null)
+    if (!data) {
+      toast({ title: 'Could not load guests', variant: 'destructive' })
+      return
+    }
+    setInvitations(data.invitations)
+    setRsvps(data.rsvps)
+    if (data.invitations.length === 0) setFormOpen(true)
+  }, [event.id, toast])
+
+  useEffect(() => {
+    void (async () => { await load() })()
+  }, [load])
+
+  const decide = async (rsvp: RsvpRow, decision: 'approve' | 'decline') => {
+    setDeciding(rsvp.id)
+    try {
+      await api.post(`/events/${event.id}/rsvp-decision`, { rsvpId: rsvp.id, decision })
+      toast({
+        title: decision === 'approve' ? 'Guest approved' : 'RSVP declined',
+        description: decision === 'approve' ? `${rsvp.name} can now see the private address and get tickets.` : `${rsvp.name} was notified, and the seats were released.`,
+      })
+      await load()
+    } catch (err) {
+      toast({ title: 'Could not decide', description: err instanceof ApiClientError ? err.message : undefined, variant: 'destructive' })
+    } finally {
+      setDeciding(null)
+    }
+  }
+
+  const revoke = async (invitation: InvitationRow) => {
+    setRevoking(invitation.id)
+    try {
+      await api.post(`/events/${event.id}/invitation-revoke`, { invitationId: invitation.id })
+      toast({ title: 'Invitation revoked', description: `Code ${invitation.code} no longer accepts RSVPs. Existing approved guests keep their places.` })
+      await load()
+    } catch (err) {
+      toast({ title: 'Could not revoke', description: err instanceof ApiClientError ? err.message : undefined, variant: 'destructive' })
+    } finally {
+      setRevoking(null)
+    }
+  }
+
+  const createInvitation = async () => {
+    setCreating(true)
+    try {
+      const result = await api.post<{ invitation: { code: string } }>(`/events/${event.id}/invitations`, {
+        displayName: form.displayName || undefined,
+        contact: form.contact || undefined,
+        maxGuests: Number(form.maxGuests) || 2,
+        requireApproval: form.requireApproval,
+        expiresAt: form.expiresAt ? new Date(form.expiresAt).toISOString() : undefined,
+        code: form.code.trim() || undefined,
+      })
+      toast({ title: 'Invitation created', description: `Share code ${result.invitation.code} — link ${window.location.origin}/#/invite/${result.invitation.code}` })
+      setForm({ displayName: '', contact: '', maxGuests: '2', requireApproval: false, expiresAt: '', code: '' })
+      setFormOpen(false)
+      await load()
+    } catch (err) {
+      toast({ title: 'Could not create', description: err instanceof ApiClientError ? err.message : undefined, variant: 'destructive' })
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  const copyLink = async (code: string) => {
+    const link = `${window.location.origin}/#/invite/${code}`
+    try {
+      await navigator.clipboard.writeText(link)
+      toast({ title: 'Invite link copied', description: link })
+    } catch {
+      toast({ title: 'Invite link', description: link })
+    }
+  }
+
+  const pending = rsvps.filter((r) => r.status === 'PENDING')
+  const approved = rsvps.filter((r) => r.status === 'APPROVED')
+  const declined = rsvps.filter((r) => r.status === 'DECLINED')
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto ievx-scrollbar">
+        <DialogHeader>
+          <DialogTitle>Guests &amp; invitations — {event.title}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-5">
+          <div className="flex flex-wrap gap-2 text-xs">
+            <Badge variant={pending.length > 0 ? 'default' : 'secondary'} className="gap-1"><Clock className="h-3 w-3" aria-hidden /> {pending.length} awaiting approval</Badge>
+            <Badge variant="secondary" className="gap-1"><CheckCircle2 className="h-3 w-3" aria-hidden /> {approved.length} approved</Badge>
+            <Badge variant="secondary">{invitations?.length ?? '…'} codes</Badge>
+            {declined.length > 0 && <Badge variant="outline">{declined.length} declined</Badge>}
+          </div>
+
+          {/* RSVP decision queue — R28's missing write path lives here. */}
+          <section aria-label="RSVP queue" className="space-y-2">
+            <h3 className="text-sm font-semibold">RSVP queue</h3>
+            {invitations === null ? (
+              <div className="ievx-skeleton h-16 rounded-2xl" />
+            ) : rsvps.length === 0 ? (
+              <p className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">No RSVPs yet — share an invitation code below.</p>
+            ) : (
+              <div className="max-h-72 space-y-2 overflow-y-auto ievx-scrollbar pr-1">
+                {[...pending, ...approved, ...declined].map((r) => (
+                  <div key={r.id} className="flex flex-wrap items-center gap-3 rounded-xl border border-border/70 px-3 py-2.5">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold">{r.name}{r.invitationCode && <span className="ml-2 font-mono text-[11px] text-muted-foreground">{r.invitationCode}</span>}</p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {r.guests} {r.guests === 1 ? 'guest' : 'guests'}
+                        {r.email ? ` · ${r.email}` : ''}{r.phone ? ` · ${r.phone}` : ''}
+                      </p>
+                    </div>
+                    {r.status === 'PENDING' ? (
+                      <div className="flex gap-1.5">
+                        <Button size="sm" className="rounded-full" disabled={deciding === r.id} onClick={() => void decide(r, 'approve')}>Approve</Button>
+                        <Button size="sm" variant="outline" className="rounded-full" disabled={deciding === r.id} onClick={() => void decide(r, 'decline')}>Decline</Button>
+                      </div>
+                    ) : (
+                      <Badge variant={r.status === 'APPROVED' ? 'default' : 'outline'} className="shrink-0 text-[10px]">
+                        {humanize(r.status)}{r.decidedAt ? ` · ${relative(r.decidedAt)}` : ''}
+                      </Badge>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          {/* Invitation codes */}
+          <section aria-label="Invitation codes" className="space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-sm font-semibold">Invitation codes</h3>
+              {!formOpen && (
+                <Button size="sm" variant="outline" className="rounded-full" onClick={() => setFormOpen(true)}><Plus className="mr-1 h-3.5 w-3.5" aria-hidden /> New invitation</Button>
+              )}
+            </div>
+            {formOpen && (
+              <Card className="rounded-2xl">
+                <CardContent className="grid gap-3 p-4 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="inv-name">Guest name (optional)</Label>
+                    <Input id="inv-name" value={form.displayName} onChange={(e) => setForm((f) => ({ ...f, displayName: e.target.value }))} placeholder="e.g. Akua Frimpong" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="inv-contact">Contact (optional)</Label>
+                    <Input id="inv-contact" value={form.contact} onChange={(e) => setForm((f) => ({ ...f, contact: e.target.value }))} placeholder="phone or email" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="inv-max">Guests per invitation</Label>
+                    <Input id="inv-max" type="number" min={1} max={10} value={form.maxGuests} onChange={(e) => setForm((f) => ({ ...f, maxGuests: e.target.value }))} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="inv-code">Custom code (optional)</Label>
+                    <Input id="inv-code" value={form.code} onChange={(e) => setForm((f) => ({ ...f, code: e.target.value.toUpperCase() }))} placeholder="auto-generated if blank" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="inv-exp">Expires (optional)</Label>
+                    <Input id="inv-exp" type="date" value={form.expiresAt} onChange={(e) => setForm((f) => ({ ...f, expiresAt: e.target.value }))} />
+                  </div>
+                  <div className="flex items-center gap-2 pt-5">
+                    <Switch id="inv-approval" checked={form.requireApproval} onCheckedChange={(v) => setForm((f) => ({ ...f, requireApproval: v }))} />
+                    <Label htmlFor="inv-approval" className="text-xs">Require organizer approval</Label>
+                  </div>
+                  <div className="flex gap-2 sm:col-span-2">
+                    <Button className="rounded-full" disabled={creating} onClick={() => void createInvitation()}>{creating ? 'Creating…' : 'Create invitation'}</Button>
+                    <Button variant="ghost" className="rounded-full" onClick={() => setFormOpen(false)}>Cancel</Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+            {invitations === null ? (
+              <div className="ievx-skeleton h-16 rounded-2xl" />
+            ) : invitations.length === 0 ? (
+              <p className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">No invitation codes yet — create one to let guests RSVP.</p>
+            ) : (
+              <div className="max-h-72 space-y-2 overflow-y-auto ievx-scrollbar pr-1">
+                {invitations.map((i) => (
+                  <div key={i.id} className="flex flex-wrap items-center gap-3 rounded-xl border border-border/70 px-3 py-2.5">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold">
+                        <span className="font-mono">{i.code}</span>
+                        {i.displayName && <span className="ml-2 font-normal text-muted-foreground">{i.displayName}</span>}
+                      </p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {i.guestsUsed}/{i.maxGuests} seats used{i.contact ? ` · ${i.contact}` : ''}
+                        {i.pendingCount > 0 ? ` · ${i.pendingCount} pending` : ''}
+                        {i.expiresAt ? ` · expires ${dateLong(i.expiresAt)}` : ''}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {i.requireApproval && <Badge variant="outline" className="text-[10px]">Approval required</Badge>}
+                      <Badge variant={i.status === 'ACTIVE' ? 'secondary' : i.status === 'EXHAUSTED' ? 'default' : 'destructive'} className="text-[10px]">{humanize(i.status)}</Badge>
+                      <Button size="sm" variant="outline" className="rounded-full" onClick={() => void copyLink(i.code)}>Copy link</Button>
+                      {i.status === 'ACTIVE' && (
+                        <Button size="sm" variant="destructive" className="rounded-full" disabled={revoking === i.id} onClick={() => void revoke(i)}>Revoke</Button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          <p className="text-center text-[11px] text-muted-foreground">Approved guests see the private address and can get tickets. Declines release the invitation's seats.</p>
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 
