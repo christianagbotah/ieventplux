@@ -390,3 +390,14 @@ bun run db:seed   # optional reset of dev data
 - **Admin Events:** mobile/desktop audit view, search and status filter, deliberate suspension confirmation with a recorded reason, correct failure feedback (no false success toast).
 - **Ticket picker:** smaller-screen scroll containment and touch-sized quantity steps, accurate label for estimate (not a final fee/discount amount), distinct free RSVP vs paid messages.
 - **Release:** still waiting on browser device screenshots, durable offline check-in, real Hubtel/SMTP/SMS/Cloudflare evidence and the live infrastructure gates in `docs/GO_LIVE.md`. These cannot be replaced by green CI.
+
+
+## Round 39 — Event subresource privacy and calendar access (2026-11-14)
+
+- **Branch:** `hardening/round-39-event-subresource-privacy`; PR #10 pending CI/merge.
+- Public event subresource GETs now enforce the same **unpublished-event** privacy boundary as event detail: anonymous/unrelated users cannot access DRAFT or SCHEDULED agenda, series, waitlist, reminder, calendar, media, comments, updates, stats or review-digest payloads; accepted organization staff may preview them.
+- **Private calendar** `.ics` now requires an approved RSVP, a valid issued ticket, or accepted staff membership before revealing precise venue/address. Sign-in alone is insufficient.
+- **Recurring series** no longer lists private, unlisted, invite-only or unpublished sibling occurrences to outsiders. Accepted organizers still see their own draft previews.
+- Event media public API returns a reduced projection instead of raw media database records with uploader/organization IDs.
+- Seeded HTTP integration suite now proves anonymous 404 on private subresources, private-calendar denial for anonymous/unapproved guests, organizer private calendar allowance, and draft occurrence filtering for public vs organizer.
+- **Remaining:** comprehensive per-action role/visibility audit, manual browser UAT and all real-provider launch gates. Round 38 changes are merged into `main`, but Round 39 remains a candidate until all CI jobs pass.

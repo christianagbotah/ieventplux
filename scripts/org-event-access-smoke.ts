@@ -95,6 +95,22 @@ async function main() {
   })
   const invitation = await fetch(base + '/events/' + inviteEvent.id).then((res) => res.json())
   assert(Boolean(invitation.event), 'invitation-only landing page stays reachable by direct link')
+  const guestCalendar = await fetch(base + '/events/' + inviteEvent.id + '/ics')
+  assert(guestCalendar.status === 401, 'anonymous users cannot export private-event venue by calendar')
+  const unrelatedCalendar = await fetch(base + '/events/' + inviteEvent.id + '/ics', { headers: { Cookie: attendee } })
+  assert(unrelatedCalendar.status === 403, 'signed-in but unapproved attendees cannot download exact private venue address')
+  const invitationHost = await db.event.findUniqueOrThrow({
+    where: { id: inviteEvent.id },
+    select: { org: { select: { memberships: {
+      where: { role: 'OWNER', acceptedAt: { not: null } },
+      take: 1, select: { user: { select: { email: true } } },
+    } } } },
+  })
+  const hostEmail = invitationHost.org.memberships[0]?.user.email
+  assert(Boolean(hostEmail), 'invitation-only event has an accepted owner in the seed')
+  const hostCookie = await auth(hostEmail!)
+  const hostCalendar = await fetch(base + '/events/' + inviteEvent.id + '/ics', { headers: { Cookie: hostCookie } })
+  assert(hostCalendar.status === 200, 'accepted organizer can export its private-event calendar')
   assert(
     invitation.event.venue?.mapsUrl === null && invitation.event.venue?.address === null &&
       invitation.event.venue?.lat === null && invitation.event.directionsUrl === null && invitation.event.venueId === null,
@@ -103,9 +119,14 @@ async function main() {
 
   // A real DRAFT must stay hidden from anonymous public API reads while its
   // authenticated organizer can still preview it. Remove the test row afterward.
+  const seriesParent = await db.event.findFirstOrThrow({
+    where: { orgId: chapel.id, seriesId: { not: null }, status: 'PUBLISHED' },
+    select: { id: true, seriesId: true },
+  })
   const draft = await db.event.create({
     data: {
       orgId: chapel.id,
+      seriesId: seriesParent.seriesId,
       title: 'Private security regression event',
       slug: 'private-security-smoke-' + Date.now(),
       description: 'Development-only draft fixture.',
@@ -120,6 +141,14 @@ async function main() {
     assert(guestDraft.status === 404, 'anonymous cannot read unpublished event details')
     const organizerDraft = await fetch(base + '/events/' + draft.id, { headers: { Cookie: pastor } })
     assert(organizerDraft.status === 200, 'accepted organizer can preview an unpublished event')
+    const guestAgenda = await fetch(base + '/events/' + draft.id + '/agenda')
+    assert(guestAgenda.status === 404, 'anonymous cannot read unpublished agendas')
+    const guestDraftCalendar = await fetch(base + '/events/' + draft.id + '/ics')
+    assert(guestDraftCalendar.status === 404, 'anonymous cannot export unpublished event calendar')
+    const guestSeries = await fetch(base + '/events/' + seriesParent.id + '/series').then((response) => response.json())
+    assert(!guestSeries.occurrences.some((row: { id: string }) => row.id === draft.id), 'public series list never leaks draft occurrences')
+    const organizerSeries = await fetch(base + '/events/' + seriesParent.id + '/series', { headers: { Cookie: pastor } }).then((response) => response.json())
+    assert(organizerSeries.occurrences.some((row: { id: string }) => row.id === draft.id), 'organizer series preview includes its own unpublished occurrence')
   } finally {
     await db.event.delete({ where: { id: draft.id } })
   }

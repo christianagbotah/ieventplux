@@ -14,6 +14,24 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
     const { id, action } = await ctx.params
     const url = new URL(req.url)
 
+    // Public subresources must not bypass /events/{id}'s draft visibility
+    // rules. Privileged actions below retain their separate permission checks.
+    let organizerCanPreview = false
+    if (['agenda', 'series', 'waitlist', 'reminder', 'ics', 'media', 'comments', 'updates', 'stats', 'review-digest'].includes(action)) {
+      const event = await db.event.findUnique({
+        where: { id }, select: { orgId: true, status: true, deletedAt: true },
+      })
+      if (!event || event.deletedAt) throw errors.notFound('Event not found.')
+      const session = await (await import('@/server/auth')).getSession()
+      organizerCanPreview = Boolean(session && await db.membership.findFirst({
+        where: { userId: session.user.id, orgId: event.orgId, acceptedAt: { not: null }, org: { deletedAt: null } },
+        select: { id: true },
+      }))
+      if (!organizerCanPreview && !['PUBLISHED', 'LIVE', 'ENDED', 'POSTPONED', 'CANCELLED'].includes(event.status)) {
+        throw errors.notFound('Event not found.')
+      }
+    }
+
     if (action === 'agenda') {
       const items = await db.agendaItem.findMany({ where: { eventId: id }, orderBy: [{ sortOrder: 'asc' }, { startsAt: 'asc' }] })
       return jsonOk({ items })
@@ -35,7 +53,9 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
         take: 12,
         select: { id: true, slug: true, title: true, startsAt: true, endsAt: true, status: true, visibility: true },
       })
-      const visible = occurrences.filter((o) => o.visibility !== 'INVITE_ONLY')
+      const visible = organizerCanPreview
+        ? occurrences
+        : occurrences.filter((occurrence) => occurrence.visibility === 'PUBLIC' && ['PUBLISHED', 'LIVE'].includes(occurrence.status))
       return jsonOk({
         series: series ? { id: series.id, title: series.title, recurrence: series.recurrence } : null,
         occurrences: visible.map((o) => ({ id: o.id, slug: o.slug, title: o.title, startsAt: o.startsAt.toISOString(), status: o.status })),
@@ -78,7 +98,15 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
       if (!event || event.deletedAt) throw errors.notFound('Event not found.')
       if (event.visibility !== 'PUBLIC') {
         const session = await (await import('@/server/auth')).getSession()
-        if (!session) throw errors.unauthorized('This event\'s calendar file requires signing in.')
+        if (!session) throw errors.unauthorized("This event's calendar file requires signing in.")
+        if (event.visibility === 'INVITE_ONLY' && !organizerCanPreview) {
+          // An ICS includes an exact address; mere sign-in is not entitlement.
+          const [approved, ticket] = await Promise.all([
+            db.rsvp.findFirst({ where: { eventId: id, userId: session.user.id, status: 'APPROVED' }, select: { id: true } }),
+            db.ticket.findFirst({ where: { eventId: id, userId: session.user.id, status: { in: ['VALID', 'CHECKED_IN'] } }, select: { id: true } }),
+          ])
+          if (!approved && !ticket) throw errors.forbidden('An approved invitation or valid ticket is required for this calendar file.')
+        }
       }
       const fmt = (d: Date) => d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '')
       const esc = (v: string) => v.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n')
@@ -113,7 +141,11 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
     }
 
     if (action === 'media') {
-      const items = await db.mediaAsset.findMany({ where: { eventId: id, OR: [{ linksToEventId: id }] }, orderBy: { createdAt: 'desc' } })
+      const items = await db.mediaAsset.findMany({
+        where: { eventId: id, OR: [{ linksToEventId: id }] },
+        select: { id: true, kind: true, url: true, posterUrl: true, durationSec: true, caption: true, status: true, views: true, createdAt: true },
+        orderBy: { createdAt: 'desc' },
+      })
       return jsonOk({ items })
     }
 
