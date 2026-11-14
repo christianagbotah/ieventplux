@@ -6,7 +6,7 @@
 import { db } from '../src/lib/db'
 
 if (process.env.NODE_ENV === 'production') throw new Error('Development seed smoke must never run in production.')
-const base = (process.env.SMOKE_BASE_URL ?? 'http://localhost:3000/api/v1').replace(/\\/$/, '')
+const base = (process.env.SMOKE_BASE_URL ?? 'http://localhost:3000/api/v1').replace(/\/$/, '')
 const seededPassword = 'Dev@12345'
 const assert = (condition: unknown, message: string) => {
   if (!condition) throw new Error(message)
