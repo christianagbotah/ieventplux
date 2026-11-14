@@ -72,8 +72,8 @@ export async function runOpsChecks(appBase: string): Promise<TargetProbe[]> {
 
   // Mini-services behind the gateway.
   for (const [target, url] of [
-    ['worker', 'http://localhost:3001/health'],
-    ['realtime', 'http://localhost:3003/health'],
+    ['worker', `http://127.0.0.1:${Number(process.env.WORKER_PORT ?? 3001)}/health`],
+    ['realtime', `http://127.0.0.1:${Number(process.env.REALTIME_PORT ?? 3003)}/health`],
   ] as const) {
     const r = await fetchWithTimeout(url)
     probes.push(
