@@ -44,7 +44,12 @@ export default function LiveNow() {
         setLoadError(false)
       })
       .catch(() => {
-        if (!controller.signal.aborted) setLoadError(true)
+        if (controller.signal.aborted) return
+        setLoadError(true)
+        // Initial network errors must leave the skeleton state and reveal the
+        // accessible retry view. Subsequent failures keep the last known list.
+        setLive((previous) => previous ?? [])
+        setReplays((previous) => previous ?? [])
       }).finally(() => {
         if (!controller.signal.aborted) setRefreshing(false)
       })

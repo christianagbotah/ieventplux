@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { CheckCircle2, Clock, XCircle, AlertTriangle, Ticket, ChevronLeft, RefreshCw, CalendarPlus, RotateCw, HandCoins } from 'lucide-react'
+import { CheckCircle2, Clock, XCircle, AlertTriangle, Ticket, ChevronLeft, RefreshCw, CalendarPlus, RotateCw, HandCoins, Copy, Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -219,20 +219,17 @@ export default function OrderView({ reference }: { reference: string }) {
             <p className="mt-1 text-sm text-muted-foreground">
               Order <span className="font-mono font-semibold">{order.reference}</span> · {dateLong(order.createdAt)}
             </p>
-            <label className="efx-copy-success-checkmark cursor-pointer" style={{ margin: '0.75rem 0 0' }} onClick={() => void copyReference()}>
-              <input className="efx-copy-success-checkmark__input" type="checkbox" checked={refCopied} onChange={() => {}} aria-label="Copy order reference" />
-              <span className="efx-copy-success-checkmark__button">
-                <span className="efx-copy-success-checkmark__badge" aria-hidden="true">
-                  <svg className="efx-copy-success-checkmark__icon" viewBox="0 0 24 24" aria-hidden="true">
-                    <path className="efx-copy-success-checkmark__path" d="M5 12.5l4.5 4.5L19 7.5" />
-                  </svg>
-                </span>
-                <span className="efx-copy-success-checkmark__text">
-                  <span className="efx-copy-success-checkmark__text-copy">Copy reference</span>
-                  <span className="efx-copy-success-checkmark__text-done">Copied!</span>
-                </span>
-              </span>
-            </label>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="mt-3 gap-2 rounded-full border-border bg-card/75"
+              onClick={() => void copyReference()}
+              aria-label={refCopied ? 'Order reference copied' : 'Copy order reference'}
+            >
+              {refCopied ? <Check className="h-4 w-4 text-primary" aria-hidden /> : <Copy className="h-4 w-4" aria-hidden />}
+              <span aria-live="polite">{refCopied ? 'Copied!' : 'Copy reference'}</span>
+            </Button>
             {polling && (
               <div className="mt-2 flex items-center justify-center gap-3" role="status" aria-label="Waiting for payment confirmation">
                 <span className="efx-pie-spinner shrink-0" aria-hidden="true" style={{ width: '44px', height: '44px', margin: 0 }} />
