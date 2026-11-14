@@ -1,7 +1,7 @@
 # iEventPlux — Go-Live Checklist (the launch procedure)
 
-> **How to use this document.** Development is done and evidenced (32 rounds, CI green on GitHub's
-> runners, `docs/TEST_REPORT.md`). What remains between "code ready" and "first real customer" is a
+> **How to use this document.** Engineering has synthetic CI evidence (`docs/TEST_REPORT.md`), but Round 35 found
+> release-blocking payment verification and deployment gaps. What remains between "code ready" and "first real customer" is a
 > **launch procedure**, not development. Execute the gates **in order**. Each gate has: commands,
 > expected results, and an explicit abort condition. Do not skip a failed gate — every one exists
 > because the thing it verifies has never run against real infrastructure or real providers.
@@ -15,11 +15,11 @@
 
 | # | Check | Command / where | Pass condition |
 |---|---|---|---|
-| 0.1 | CI green on latest main | https://github.com/christianagbotah/ieventplux/actions | web + mobile jobs `success` on the commit being deployed |
+| 0.1 | CI green on latest main | https://github.com/christianagbotah/ieventplux/actions | web + mobile + production-build jobs `success` on the EXACT release commit |
 | 0.2 | Zero boot-validation errors locally | `curl -s localhost:3000/api/v1/health \| jq .validation.errors` | `[]` |
 | 0.3 | Env completeness audit | `grep -rhoE "process\.env\.[A-Z_0-9]+" src/ scripts/ \| …` vs `.env.example` | every key documented (done in R33 — re-run if env surface changes) |
 | 0.4 | Backup taken AND restored successfully | `bun run ops:backup` then `bun run ops:restore -- --target <scratch DB URL>` | `verification: every restored table's count matches the dump — restore OK` |
-| 0.5 | Smoke suite green | `bun run smoke` | 11/11 |
+| 0.5 | Isolated DEVELOPMENT smoke suite green | `bun run smoke` against seeded test DB only | 11/11 — NEVER aim this suite at a real deployment |
 | 0.6 | Secrets ledger (operator) | `.env` filled from `.env.example` | every blank below Gate 1 filled with STAGING credentials first |
 
 **Abort if:** any row fails. Fix in development first — never debug on launch day.
@@ -68,14 +68,13 @@ staging keys with production keys only need the one-checkout-charge confirmation
 
 ---
 
-## Gate 2 — First production build (never compiled in development)
+## Gate 2 — Production build (now a required CI gate)
 
-The dev sandbox runs the dev server only (by design); CI runs the dev stack. **`next build` has
-never been executed.** On the target VPS (or a build box with the same Node/Bun majors):
+Round 35 adds a separate `production-build` GitHub Actions job: build the Next standalone artifact and boot it with ephemeral PostgreSQL. Verify it is green on the exact commit being released. This CI build **does not replace** an artifact test on the target VPS. On the target VPS (or a build box with matching Node/Bun majors):
 
 ```bash
 bun install --frozen-lockfile
-NODE_ENV=production DATABASE_URL=<staging-or-placeholder> bunx next build
+NODE_ENV=production DATABASE_URL=<staging-postgres-url> APP_SECRET=<high-entropy-secret> bun run build
 ```
 
 - **Pass:** build completes; `.next/standalone/server.js` exists (the `start` script expects it).
@@ -92,9 +91,7 @@ Rehearsed in pieces (embedded PG init, monitor, backup/restore all ran for real)
 on real infrastructure. Sequence (details in DEPLOYMENT.md):
 
 1. VPS provisioned (Ubuntu LTS, non-root user, firewall: 22/80/443 only).
-2. Managed PostgreSQL created; `DATABASE_URL` points at it; `bunx prisma db push` + `bun run db:seed`
-   **only if starting from the demo dataset** — for a real launch, push schema and seed ONLY the
-   platform admin, then create the real organizer accounts through the admin console.
+2. Managed PostgreSQL created; `DATABASE_URL` points at it; **on an empty database only**, run `bunx prisma db push` WITHOUT `--accept-data-loss`. Do **not** run `bun run db:seed`: it creates known-password demo accounts. Establish, review, test and audit a real administrator bootstrap procedure before opening the site. No committed Prisma migrations existed at the Round 34 handoff; schema upgrades require reviewed migration SQL and a restore rehearsal.
 3. `APP_SECRET` = fresh 64-char random; `NODE_ENV=production` (boot guard refuses to start without
    `APP_SECRET`; simulators are refused in production — if you see a simulator warning here, stop).
 4. systemd units (copy each; `WorkingDirectory` = repo checkout):
@@ -134,10 +131,10 @@ with `database: up` and zero validation errors.
 
 | # | Check | Pass condition |
 |---|---|---|
-| 4.1 | `SMOKE_BASE_URL=https://<domain>/api/v1 bun run smoke` | 11/11 — note check 10 intentionally burns a password-reset bucket; run it, then wait out the window |
+| 4.1 | `PROD_SMOKE_BASE_URL=https://<domain>/api/v1 REQUIRE_LIVE_INTEGRATIONS=1 bun run prod:smoke` | Read-only GET checks pass; no simulated payment/SMS and live provider keys configured. This is NOT proof that providers work — verify Gate 1. Do NOT run `bun run smoke` on production (demo logins, orders, callbacks, and password reset writes). |
 | 4.2 | Golden path with REAL money | ₵1 test event → live charge → `PAID` + ticket issued + journal balanced (DEPLOYMENT.md §6) |
 | 4.3 | Ops monitor cycle on prod | `bun run ops:monitor -- --once` → 4/4 UP; admin Ops Health shows the targets |
-| 4.4 | Backup + RESTORE rehearsal ON PROD | `ops:backup` → restore into a scratch database on the managed PG → counts match. **A backup that has never been restored on the production environment is a hypothesis.** |
+| 4.4 | Backup + RESTORE rehearsal from production data | `ops:backup` → restore into a SEPARATE scratch database → counts match. Never overwrite the live database for a drill. |
 | 4.5 | Worker queue | admin Outbox: no `DEAD` jobs; `GET :3001/stats` (secret) clean |
 | 4.6 | Audit trail | admin Audit shows the launch actions (org verify, event publish, test charge) |
 
@@ -160,16 +157,12 @@ with `database: up` and zero validation errors.
 
 ## Gate 6 — Go / No-Go
 
-**GO requires ALL of:** Gate 0 rows pass · Gate 1 all five externals verified (staging → production
-swap confirmed) · Gate 2 build artifact healthy · Gate 3 four services under systemd · Gate 4 all six
-checks pass on production · explicit go/no-go decision recorded by the organizer.
+**GO requires ALL of:** Gate 0 rows pass · Round 35 payment-security fixes reviewed and on `main` · Gate 1 all five externals verified (staging → production swap confirmed) · Gate 2 production build artifact healthy · a separately verified, non-demo admin bootstrap · Gate 3 four services under systemd · Gate 4 all six checks pass on production · explicit go/no-go decision recorded by the organizer.
 
 **Launch may proceed WITHOUT mobile stores** (web-first launch is legitimate — the mobile apps follow
 when Gate 5 completes).
 
-**Rollback (any gate):** `systemctl stop ieventplux-*` → previous release directory → restore DB from
-the last verified snapshot (`ops:restore --i-know-this-wipes-live` ONLY on a stopped app) → start →
-`bun run smoke`. DEPLOYMENT.md §8 has the full procedure.
+**Rollback (any gate):** stop the affected services → restore a compatible previous application release (not database by default) → start → `bun run prod:smoke`. Restoring a database with live payments is a separate, high-risk incident operation requiring reconciliation and an approved recovery point. See DEPLOYMENT.md §9.
 
 ---
 
