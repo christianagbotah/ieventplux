@@ -18,7 +18,7 @@ const MAX_BYTES = 5 * 1024 * 1024
 
 export async function POST(req: NextRequest) {
   return handle(async () => {
-    rateLimit(req, 'upload', 20, 60_000)
+    await rateLimit(req, 'upload', 20, 60_000)
     const user = await requireUser()
     const form = await req.formData().catch(() => null)
     if (!form) throw errors.badRequest('Multipart form required.')

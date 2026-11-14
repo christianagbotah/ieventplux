@@ -19,7 +19,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     const body = await readJson<{ optionId?: unknown }>(req).catch(() => ({}) as Record<string, unknown>)
 
     if (action === 'vote') {
-      rateLimit(req, 'poll-vote', 30, 60_000)
+      await rateLimit(req, 'poll-vote', 30, 60_000)
       const optionId = String(body.optionId ?? '')
       if (!optionId) throw errors.badRequest('Choose an option to vote.')
       const result = await castVote({ pollId: id, optionId, userId: user.id })

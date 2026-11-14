@@ -117,7 +117,9 @@ digital-only goods inside the app. When store accounts exist, add
 - Deep-link return (`ieventplux://order/{ref}`) is wired, but the web
   deployment's Hubtel return URL currently points at the **web** return route;
   a mobile-aware redirect (web → scheme) is a small server-side TODO.
-- No tests (no Jest config, no Detox).
+- Automated tests ARE present now (R32): `bun test` in `mobile/` runs 40 pure-logic unit
+  tests (offline check-in queue + wallet caches — see `src/lib/*.test.ts`). Still no
+  on-device/automation suite (Detox/Maestro) — device hardware remains an external blocker.
 
 ## Layout
 

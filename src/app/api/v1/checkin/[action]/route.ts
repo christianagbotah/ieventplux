@@ -34,7 +34,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     }
 
     if (action === 'scan') {
-      rateLimit(req, 'scan', 120, 60_000)
+      await rateLimit(req, 'scan', 120, 60_000)
       const body = await readJson<{ eventId?: string; payload?: string; deviceSessionId?: string; clientScanId?: string; source?: string; capturedOfflineAt?: string }>(req)
       const eventId = String(body.eventId ?? '')
       const access = await eventOrgAccess(user.id, eventId, 'checkin:scan')
@@ -55,7 +55,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     }
 
     if (action === 'sync') {
-      rateLimit(req, 'sync', 30, 60_000)
+      await rateLimit(req, 'sync', 30, 60_000)
       const body = await readJson<{ eventId?: string; deviceSessionId?: string; scans?: { payload: string; clientScanId: string; capturedOfflineAt?: string }[] }>(req)
       const eventId = String(body.eventId ?? '')
       const access = await eventOrgAccess(user.id, eventId, 'checkin:scan')

@@ -915,3 +915,56 @@ Date: 2026-11-14 · Postgres LIVE (R26 stack) · all services on :3000/:3001/:30
 **Defect fixed mid-round (pre-existing, exposed by the venue-clear save):** `PATCH /events/[id]` coerced empty strings to `null` for every text field — any event with a blank description 500'd (`PrismaClientValidationError: Argument 'description' must not be null`; two 500s in the network log before the fix, 200 after). title/description/categorySlug now coerce to `''` (the POST contract); optional fields still null out.
 
 **Hygiene:** zero console/page errors beyond the known Radix Dialog aria warnings; dev.log clean apart from the two intentionally-reproduced 500s above. Cleanup verified: 4 seed venues, 10 seed categories, no live test events; the taxonomy view re-reads "10 active of 10" after reload. Static: `bun run lint` 0 errors / 16 warnings (below the 17 baseline); `bunx tsc --noEmit` 0 errors.
+
+---
+
+## Re-verification round 32 — the four honest gaps, closed and proven (2026-11-14)
+
+**Scope:** DB-backed rate limiting (46 call sites), the smoke-test CI suite, ops monitor/backup tooling + Admin Ops Health tab, mobile pure-logic tests, sandbox PostgreSQL restoration.
+
+### API / tooling verification (all executed, exit codes checked)
+
+| Check | Result |
+|---|---|
+| `bun run smoke` (run 1) | **11/11 PASS** — health healthy/db up; discovery 27 refs; organizer login + me (session cookie round-trip); event detail (accra-gospel-night-of-wonders); order ORD-F4FA44AA04; simulator attempt GHS 200.00; callback → worker fulfilment → attempt SUCCESS / order PAID (3.1 s poll); ticket listed; admin ops (4 targets, 1 alert, 1 backup); 404 + NOT_FOUND; rate limit `200×5 → 429` + `Retry-After: 50s` |
+| `bun run smoke` (run 2, stability) | **11/11 PASS** again (rate-limit window rolled: Retry-After 45 s — fixed windows behaving) |
+| `bun run ops:monitor -- --once` (worker down) | truthful: app UP, worker DOWN (0 ms, connection refused), realtime UP, database UP → **1 CRITICAL alert OPENED** |
+| worker restarted → monitor once | worker UP → **alert RESOLVED** ("recovered after 1 non-UP check") — transition lifecycle proven on a real outage |
+| `bun run ops:backup` | 68 tables, 435 rows, 25.9 KB gzip, sha256 recorded, **re-read line count verified**, BackupRun audit row written, retention 1 kept |
+| mobile `bun test` | **40 pass / 0 fail** (1659 expect() calls, 2 files) |
+| web `bunx tsc --noEmit` / mobile `tsc --noEmit` | 0 errors / 0 errors |
+| `bun run lint` | **0 errors / 16 warnings** (below the 17 baseline) |
+| worker log during smoke | RESERVATION_SWEEP, PROCESS_PROVIDER_EVENT (the smoke's payment callback), SEND_MESSAGE all completing — the golden path ran the real queue |
+
+### Browser verification (agent-browser, demo Super Admin persona)
+
+- `#/admin?tab=ops` at **1280×800**: 14th section renders — 4 target cards (app/worker/realtime/database) with status badges, latency, honest uptime (worker 50%→67% as cycles accumulated — real history, not decoration); Alerts card with the RESOLVED worker alert; Backups card with the OK run (68 tables · 435 rows · 25.9 KB · sha256 prefix). Zero console errors, zero page errors.
+- **"Run check now" golden path:** first click exposed a real defect — POST `/admin/ops/check` returned **404** (the 2-element path puts `check` in the `id` slot; the handler matched on `op`). Fixed → re-verified: toast **"Health check: 4/4 targets UP — Recorded to the uptime history."**, POST 200 in the network log, all four targets re-rendered "checked just now" with fresh latencies (28/6/12/2 ms).
+- **390×844:** full section reachable via the chip row; `scrollWidth == 390` (zero horizontal overflow); screenshot archived (`docs-assets/round32-ops-{desktop-1280,mobile-390}.png`).
+- Login page → "Sign in as demo Super Admin" one-click path still working (unchanged by the auth route's new awaited rate limiter — the smoke suite's 2 logins + this browser login all passed within the 10/min `auth` budget).
+
+### Sandbox topology note (found & fixed this round)
+
+The session restart had left the app running against a dead datasource (`.env` at the packaged SQLite default, no Postgres cluster — every DB route 500-ing). Restored per the runbook: embedded PostgreSQL 18 init → `prisma db push` (4 new models: RateLimitBucket, OpsCheck, OpsAlert, BackupRun) → seed (14 users) → app/worker/realtime restarts. The outage itself became the monitor's first real test case.
+
+### What remains honestly open
+
+- The GitHub Actions workflow is authored with every command locally verified, but **has not executed on GitHub's runners yet** — watch the first run (`.github/workflows/ci.yml`).
+- Mobile on-device runtime remains externally blocked (no device/emulator exists in this sandbox) — now covered by the 40 logic tests as the maximum verifiable substitute.
+
+### Re-verification after a SECOND sandbox reset (same round, pre-push)
+
+A second session restart again wiped the Postgres cluster and reverted `.env` to the packaged SQLite default — which proved the recovery runbook is repeatable rather than a one-off fix: `bun run db:postgres` (fresh cluster + `ieventplux` database) → `db:push` → `db:seed` → app/worker/realtime restarts (realtime additionally needed `bun install`; its node_modules is not committed). Full suite re-executed against the fresh stack, every exit code checked:
+
+| Check | Result |
+|---|---|
+| `bun run smoke` | **11/11 PASS** — purchase golden path end-to-end (order → simulator checkout → callback → worker fulfilment → PAID → ticket listed, 4.6 s poll) and the rate-limit proof `200×5 → 429` + `Retry-After: 60s` |
+| `bun run ops:monitor -- --once` | **4/4 UP** (app 19 ms · worker 1 ms · realtime 1 ms · database 25 ms) |
+| `bun run ops:backup` | **68 tables / 455 rows**, 27.2 KB gzip, sha256 recorded, re-read line-count verified, retention enforced |
+| mobile `bun test` / mobile `tsc` | **40 pass / 0 fail** · 0 errors |
+| web `bunx tsc --noEmit` / `bun run lint` | 0 errors · **0 errors / 16 warnings** |
+| Browser `#/admin?tab=ops` (390×844) `Run check now` | all four targets re-rendered "checked just now" with fresh latencies (178/19/32/7 ms); zero console/page errors; dev.log clean |
+
+**The multi-instance proof, executed for real (not design-claimed):** a second full app process was booted on :3004 from a project copy sharing the SAME PostgreSQL instance (Turbopack's per-project lock prevents two `next dev` in one dir; the copy gets its own build dir + its own Prisma client — only the database is shared). Six POST `/auth/password-reset` requests were fired interleaved between the two instances: `:3000 → 200 · :3004 → 200 · :3000 → 200 · :3004 → 200 · :3000 → 200 · :3004 → 429 + Retry-After: 41`. Each instance handled only THREE of the six requests — a per-instance in-memory limiter could never trip at a limit of 5. The single durable bucket row after the run: `pwreset:::1` (both processes resolved the same client IP), `count = 7` (6 proof requests + the header probe), one window. The old limitation is closed with evidence, not reasoning.
+
+Only after this second full pass was the round pushed.

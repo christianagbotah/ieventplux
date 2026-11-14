@@ -30,7 +30,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
   return handle(async () => {
     const { id } = await ctx.params
     const user = await requireUser()
-    rateLimit(req, 'qa-ask', 10, 60_000)
+    await rateLimit(req, 'qa-ask', 10, 60_000)
     const body = await readJson<{ body?: unknown }>(req).catch(() => ({}) as Record<string, unknown>)
     const question = await askQuestion({ eventId: id, userId: user.id, body: sanitizeText(body.body, 280) })
     return jsonOk({ question })

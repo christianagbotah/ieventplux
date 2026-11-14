@@ -107,7 +107,21 @@ Remember: **API acceptance ≠ handset delivery** — customer-facing answers sh
 
 ## 7. Backup & restore
 
-### SQLite (this deployment)
+### Logical snapshot (works on BOTH providers — the built-in audited path, R32)
+
+```bash
+bun run ops:backup
+# → backups/ieventplux-2026-11-14T04-09-59.jsonl.gz
+#   68 tables · row counts · gzip · SHA-256 · re-read verification
+#   BackupRun audit row (Admin → Ops Health renders the trail)
+#   retention: newest 30 by default (BACKUP_RETENTION)
+```
+
+- Each line is `{"t":"TableName","r":{…}}` — provider-agnostic, inspectable, restorable by row-insert.
+- The script VERIFIES itself: the file is re-read after writing and the line count must equal the counted rows (a mismatch marks the run FAILED).
+- Schedule: at least daily; always immediately before a migration or any administrative money action.
+
+### SQLite (single-writer deployments)
 
 ```bash
 # consistent backup (WAL-aware)
@@ -123,7 +137,7 @@ cp db/custom.db db/custom.db-wal db/custom.db-shm /backups/
 
 ### PostgreSQL (production path)
 
-- `pg_dump` nightly + WAL archiving/PITR; test restores quarterly; the schema needs no SQLite-specific translation (`DATA_MODEL.md` §5).
+- `bun run ops:backup` (logical, portable) PLUS `pg_dump` nightly + WAL archiving/PITR; test restores quarterly; the schema needs no SQLite-specific translation (`DATA_MODEL.md` §5).
 
 ## 8. Rollback steps
 
@@ -137,6 +151,8 @@ cp db/custom.db db/custom.db-wal db/custom.db-shm /backups/
 
 | Hook | What it tells you |
 |---|---|
+| `bun run ops:monitor` (R32) | The standing loop: probes app + worker + realtime + database every 30 s (MONITOR_INTERVAL_SEC), writes durable OpsCheck rows (uptime history) and opens/resolves transition-based OpsAlerts. `--once` for a single cron-style cycle. |
+| Admin → `Ops Health` (R32) | The same data in-console: per-target status/latency/uptime 24h/7d, alert trail, backup audit trail, and a "Run check now" button that records an on-demand cycle through the same runner |
 | `GET :3000/api/v1/health` | DB up/down, env validation errors/warnings, per-integration stage (`implemented` / `sandbox-verified` / `live-verified` / `externally-blocked`), mode (real/simulated/unavailable) |
 | `GET :3001/health` | Worker identity + uptime |
 | `GET :3001/stats` (secret) | OutboxJob counts by status — alert on `DEAD > 0` and `RUNNING` older than a few minutes |
@@ -144,7 +160,13 @@ cp db/custom.db db/custom.db-wal db/custom.db-shm /backups/
 | Admin → `integrations` | Same integration stages as health, in-console |
 | Admin → `outbox` / `sms` / `audit` | Queue, delivery log, privileged-action trail |
 
+Retention (enforced by the monitor's hourly prune): OpsCheck 7 days, RESOLVED OpsAlerts 30 days — open alerts are never pruned. Uptime percentages are honest: they are `null` ("no check recorded yet") until the first cycle exists.
+
 Suggested alerts (wire to any uptime monitor): health `status != healthy`, worker DEAD jobs > 0, UNKNOWN payment attempts > 0 (sustained), FAILED SMS ratio spike, realtime connections = 0 during a scheduled live event.
+
+### Rate limiting (R32 — shared store)
+
+The per-instance in-memory limiter is RETIRED: every protected route now increments one durable `RateLimitBucket` row per (scope, client IP, fixed window) via an atomic PostgreSQL UPSERT — horizontally-scaled deployments enforce a single global budget. 429 responses carry a real `Retry-After` header. The limiter fails OPEN if the database is unreachable (availability beats blocking; logged, throttled). Expired buckets are swept at most once per minute.
 
 ## 10. Routine operator checklist
 

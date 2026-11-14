@@ -51,7 +51,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     const { action } = await ctx.params
 
     if (action === 'register') {
-      rateLimit(req, 'auth', 10, 60_000)
+      await rateLimit(req, 'auth', 10, 60_000)
       const body = await readJson<{ email?: string; password?: string; displayName?: string; phone?: string; marketingSms?: boolean }>(req)
       const email = String(body.email ?? '').trim().toLowerCase()
       const password = String(body.password ?? '')
@@ -91,7 +91,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     }
 
     if (action === 'login') {
-      rateLimit(req, 'auth', 10, 60_000)
+      await rateLimit(req, 'auth', 10, 60_000)
       const body = await readJson<{ email?: string; password?: string }>(req)
       const email = String(body.email ?? '').trim().toLowerCase()
       const user = await db.user.findUnique({ where: { email } })
@@ -118,7 +118,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     }
 
     if (action === 'elevate') {
-      rateLimit(req, 'elevate', 5, 60_000)
+      await rateLimit(req, 'elevate', 5, 60_000)
       const session = await getSession()
       if (!session) throw errors.unauthorized()
       const body = await readJson<{ password?: string }>(req)
@@ -129,7 +129,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     }
 
     if (action === 'verify-contact') {
-      rateLimit(req, 'verify', 10, 60_000)
+      await rateLimit(req, 'verify', 10, 60_000)
       const user = await requireUser()
       const body = await readJson<{ channel?: string; code?: string }>(req)
       const channel = body.channel === 'SMS' ? 'SMS' : 'EMAIL'
@@ -149,7 +149,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     }
 
     if (action === 'resend-code') {
-      rateLimit(req, 'verify', 5, 60_000)
+      await rateLimit(req, 'verify', 5, 60_000)
       const user = await requireUser()
       const code = otpCode()
       await db.contactVerification.create({ data: { userId: user.id, channel: 'EMAIL', target: user.email, codeHash: sha256(code), purpose: 'VERIFY', expiresAt: new Date(Date.now() + 30 * 60_000) } })
@@ -158,7 +158,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     }
 
     if (action === 'password-reset') {
-      rateLimit(req, 'pwreset', 5, 60_000)
+      await rateLimit(req, 'pwreset', 5, 60_000)
       const body = await readJson<{ email?: string }>(req)
       const email = String(body.email ?? '').trim().toLowerCase()
       const user = await db.user.findUnique({ where: { email } })
@@ -173,7 +173,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     }
 
     if (action === 'password-reset-confirm') {
-      rateLimit(req, 'pwreset', 10, 60_000)
+      await rateLimit(req, 'pwreset', 10, 60_000)
       const body = await readJson<{ email?: string; code?: string; password?: string }>(req)
       const email = String(body.email ?? '').trim().toLowerCase()
       const password = String(body.password ?? '')

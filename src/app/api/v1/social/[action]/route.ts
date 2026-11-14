@@ -52,7 +52,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     }
 
     if (action === 'reaction') {
-      rateLimit(req, 'reaction', 30, 60_000)
+      await rateLimit(req, 'reaction', 30, 60_000)
       const targetType = String(body.targetType ?? 'MEDIA')
       const targetId = String(body.targetId ?? '')
       const kind = ['LIKE', 'CELEBRATE', 'HEART', 'FIRE'].includes(String(body.kind)) ? String(body.kind) : 'LIKE'
@@ -74,7 +74,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     }
 
     if (action === 'report') {
-      rateLimit(req, 'report', 5, 60_000)
+      await rateLimit(req, 'report', 5, 60_000)
       const targetType = ['EVENT', 'COMMENT', 'USER', 'ORG', 'BROADCAST'].includes(String(body.targetType)) ? String(body.targetType) : null
       if (!targetType) throw errors.badRequest('Invalid report target.')
       const report = await db.moderationReport.create({

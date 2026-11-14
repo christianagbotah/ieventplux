@@ -30,7 +30,7 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
     const membership = await membershipFor(user.id, id)
     if (!membership) throw errors.forbidden('You are not a member of this organization.')
     if (!orgCan(membership.role, 'event:create')) throw errors.forbidden('Venue management requires an organizer role.')
-    rateLimit(req, 'venue-edit', 60, 60_000)
+    await rateLimit(req, 'venue-edit', 60, 60_000)
     await loadScopedVenue(id, venueId)
 
     const body = await readJson<Record<string, unknown>>(req)
@@ -83,7 +83,7 @@ export async function DELETE(req: NextRequest, ctx: RouteContext) {
     const membership = await membershipFor(user.id, id)
     if (!membership) throw errors.forbidden('You are not a member of this organization.')
     if (!orgCan(membership.role, 'event:create')) throw errors.forbidden('Venue management requires an organizer role.')
-    rateLimit(req, 'venue-delete', 30, 60_000)
+    await rateLimit(req, 'venue-delete', 30, 60_000)
     await loadScopedVenue(id, venueId)
 
     // Honest guard: a venue still referenced by events (live, past, or draft)

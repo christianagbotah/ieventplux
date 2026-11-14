@@ -93,11 +93,11 @@ export function initials(name: string): string {
 
 export function statusTone(status: string): 'default' | 'success' | 'warning' | 'destructive' | 'info' {
   switch (status) {
-    case 'PUBLISHED': case 'PAID': case 'SUCCESS': case 'ADMITTED': case 'VALID': case 'ACTIVE': case 'DONE': case 'DELIVERED': case 'RUNNING': case 'LIVE':
+    case 'PUBLISHED': case 'PAID': case 'SUCCESS': case 'ADMITTED': case 'VALID': case 'ACTIVE': case 'DONE': case 'DELIVERED': case 'RUNNING': case 'LIVE': case 'UP': case 'OK':
       return 'success'
-    case 'PENDING_PAYMENT': case 'PENDING': case 'QUEUED': case 'ACCEPTED': case 'REQUESTED': case 'SCHEDULED': case 'APPROVED': case 'REDIRECTED': case 'INITIATED': case 'GRACE': case 'SUBMITTED':
+    case 'PENDING_PAYMENT': case 'PENDING': case 'QUEUED': case 'ACCEPTED': case 'REQUESTED': case 'SCHEDULED': case 'APPROVED': case 'REDIRECTED': case 'INITIATED': case 'GRACE': case 'SUBMITTED': case 'DEGRADED': case 'OPEN':
       return 'warning'
-    case 'CANCELLED': case 'FAILED': case 'REJECTED': case 'EXPIRED': case 'REFUNDED': case 'REVOKED': case 'DEAD': case 'SUSPENDED': case 'UNKNOWN':
+    case 'CANCELLED': case 'FAILED': case 'REJECTED': case 'EXPIRED': case 'REFUNDED': case 'REVOKED': case 'DEAD': case 'SUSPENDED': case 'UNKNOWN': case 'DOWN': case 'FAILED_BACKUP':
       return 'destructive'
     case 'DRAFT': case 'ENDED': case 'CHECKED_IN': case 'EXCEPTION_REVIEW': case 'MANUAL_TRACKED': case 'SUPPRESSED':
       return 'default'

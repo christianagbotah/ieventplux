@@ -11,14 +11,30 @@
  *  - All reads degrade to "no cache" instead of crashing (AsyncStorage
  *    failures on exotic targets are swallowed, never fatal).
  *  - signOut() clears the wallet — credentials do not outlive the session.
+ *
+ * Test seam: storage is injectable via setWalletStore() so the pure logic can
+ * run under `bun test` without react-native; with no override every call
+ * lazily resolves the real AsyncStorage (src/lib/kv-store.ts) — the app's
+ * runtime behavior is byte-for-byte what it was before the seam.
  */
 
-import AsyncStorage from '@react-native-async-storage/async-storage'
 import type { TicketDetail, TicketSummary } from '../api/client'
+import { loadDefaultKVStore, type KVStore } from './kv-store'
 
 const LIST_KEY = 'ieventplux.mobile.tickets.v1'
 const DETAIL_PREFIX = 'ieventplux.mobile.ticket.'
 const MAX_DETAILS = 30
+
+let storeOverride: KVStore | null = null
+
+/** Swap the backing store. Pass null to restore the React Native default. */
+export function setWalletStore(store: KVStore | null): void {
+  storeOverride = store
+}
+
+async function getStore(): Promise<KVStore> {
+  return storeOverride ?? loadDefaultKVStore()
+}
 
 export interface CachedTicketList {
   savedAt: string
@@ -32,7 +48,8 @@ export interface CachedTicketDetail {
 
 async function readJson<T>(key: string): Promise<T | null> {
   try {
-    const raw = await AsyncStorage.getItem(key)
+    const store = await getStore()
+    const raw = await store.getItem(key)
     return raw ? (JSON.parse(raw) as T) : null
   } catch {
     return null
@@ -41,7 +58,8 @@ async function readJson<T>(key: string): Promise<T | null> {
 
 async function writeJson(key: string, value: unknown): Promise<void> {
   try {
-    await AsyncStorage.setItem(key, JSON.stringify(value))
+    const store = await getStore()
+    await store.setItem(key, JSON.stringify(value))
   } catch {
     // Quota / unavailable storage — the wallet is resilience, never critical.
   }
@@ -59,7 +77,8 @@ export async function cacheTicketDetail(detail: TicketDetail): Promise<void> {
   await writeJson(`${DETAIL_PREFIX}${detail.id}`, { row: detail, savedAt: new Date().toISOString() } satisfies CachedTicketDetail)
   // Trim oldest beyond the cap so the wallet can never grow unbounded.
   try {
-    const keys = await AsyncStorage.getAllKeys()
+    const store = await getStore()
+    const keys = await store.getAllKeys()
     const detailKeys = keys.filter((k) => k.startsWith(DETAIL_PREFIX))
     if (detailKeys.length <= MAX_DETAILS) return
     const entries = await Promise.all(
@@ -67,7 +86,7 @@ export async function cacheTicketDetail(detail: TicketDetail): Promise<void> {
     )
     entries.sort((a, b) => a.savedAt.localeCompare(b.savedAt))
     const stale = entries.slice(0, entries.length - MAX_DETAILS).map((e) => e.key)
-    if (stale.length > 0) await AsyncStorage.multiRemove(stale)
+    if (stale.length > 0) await store.multiRemove(stale)
   } catch {
     // ignore — trimming is best-effort
   }
@@ -79,9 +98,10 @@ export async function readCachedTicketDetail(id: string): Promise<CachedTicketDe
 
 export async function clearTicketWallet(): Promise<void> {
   try {
-    const keys = await AsyncStorage.getAllKeys()
+    const store = await getStore()
+    const keys = await store.getAllKeys()
     const stale = keys.filter((k) => k === LIST_KEY || k.startsWith(DETAIL_PREFIX))
-    if (stale.length > 0) await AsyncStorage.multiRemove(stale)
+    if (stale.length > 0) await store.multiRemove(stale)
   } catch {
     // ignore
   }

@@ -17,7 +17,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
   return handle(async () => {
     const { ref } = await ctx.params
     const user = await requireUser()
-    rateLimit(req, 'order-refund-request', 6, 60_000)
+    await rateLimit(req, 'order-refund-request', 6, 60_000)
     const body = await readJson<{ reason?: unknown }>(req).catch(() => ({}) as Record<string, unknown>)
 
     const reason = sanitizeText(body.reason, 500)

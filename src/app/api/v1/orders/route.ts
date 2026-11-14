@@ -9,7 +9,7 @@ import { createOrder } from '@/server/services/ordering'
  */
 export async function POST(req: NextRequest) {
   return handle(async () => {
-    rateLimit(req, 'checkout', 20, 60_000)
+    await rateLimit(req, 'checkout', 20, 60_000)
     const user = await requireUser()
     const body = await readJson<{
       eventId?: string

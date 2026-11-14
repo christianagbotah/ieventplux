@@ -61,7 +61,7 @@ async function configureSQLite(prisma: PrismaClient) {
 }
 
 /** SQLite is only in play when the URL is a file: (or bare) path — never for postgres://. */
-function isSqliteUrl(url: string): boolean {
+export function isSqliteUrl(url: string): boolean {
   const u = url.trim().toLowerCase()
   return u.startsWith('file:') || u === '' || (!u.includes('://') && !u.startsWith('postgres'))
 }

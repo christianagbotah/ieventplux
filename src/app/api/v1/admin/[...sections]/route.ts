@@ -8,8 +8,8 @@ import { sweepOnce } from '@/server/jobs/handlers'
 /**
  * Platform administration API (staff-only, narrowly scoped, audited):
  *
- * GET  overview | users | orgs | events | moderation | fees | plans | payments | refunds | payouts | sms | audit | integrations | outbox | settings | categories
- * POST orgs/:id/verify | events/:id/suspend | moderation/:id/action | fees | plans | payouts/:id/submit|paid|fail | refunds/:id/process|approve|reject | settings | sweeps/:kind | categories (create) | categories/:id/update|delete
+ * GET  overview | users | orgs | events | moderation | fees | plans | payments | refunds | payouts | sms | audit | integrations | outbox | settings | categories | ops
+ * POST orgs/:id/verify | events/:id/suspend | moderation/:id/action | fees | plans | payouts/:id/submit|paid|fail | refunds/:id/process|approve|reject | settings | sweeps/:kind | categories (create) | categories/:id/update|delete | ops/check (run the health cycle now)
  */
 type RouteContext = { params: Promise<{ sections: string[] }> }
 
@@ -159,6 +159,51 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
       return jsonOk({ accounts, journals })
     }
 
+    if (root === 'ops') {
+      // R32: uptime history, transition-based alerts and the backup trail —
+      // written by the ops monitor loop (scripts/monitor.ts) and the backup
+      // script (scripts/backup.ts); the "Run check now" POST reuses the same
+      // runner. Uptime percentages are honest: null until a first check exists.
+      const targets = ['app', 'worker', 'realtime', 'database'] as const
+      const since24h = new Date(Date.now() - 86_400_000)
+      const since7d = new Date(Date.now() - 7 * 86_400_000)
+      const perTarget = await Promise.all(
+        targets.map(async (target) => {
+          const [last, up24, total24, up7, total7] = await Promise.all([
+            db.opsCheck.findFirst({ where: { target }, orderBy: { checkedAt: 'desc' } }),
+            db.opsCheck.count({ where: { target, checkedAt: { gte: since24h }, status: 'UP' } }),
+            db.opsCheck.count({ where: { target, checkedAt: { gte: since24h } } }),
+            db.opsCheck.count({ where: { target, checkedAt: { gte: since7d }, status: 'UP' } }),
+            db.opsCheck.count({ where: { target, checkedAt: { gte: since7d } } }),
+          ])
+          return {
+            target,
+            status: last?.status ?? 'UNKNOWN',
+            lastCheckedAt: last?.checkedAt ?? null,
+            latencyMs: last?.latencyMs ?? null,
+            detail: last?.detail ?? null,
+            uptime24h: total24 > 0 ? Math.round((up24 / total24) * 100) : null,
+            uptime7d: total7 > 0 ? Math.round((up7 / total7) * 100) : null,
+          }
+        }),
+      )
+      const [alerts, backups, latestSweep] = await Promise.all([
+        db.opsAlert.findMany({ orderBy: { createdAt: 'desc' }, take: 30 }),
+        db.backupRun.findMany({ orderBy: { startedAt: 'desc' }, take: 10 }),
+        db.opsCheck.findFirst({ orderBy: { checkedAt: 'desc' } }),
+      ])
+      return jsonOk({
+        targets: perTarget,
+        alerts,
+        backups: backups.map((b) => ({ ...b, bytes: b.bytes.toString() })),
+        lastCheckedAt: latestSweep?.checkedAt ?? null,
+        commands: {
+          monitor: 'bun run ops:monitor (loop) · bun run ops:monitor -- --once',
+          backup: 'bun run ops:backup',
+        },
+      })
+    }
+
     throw errors.notFound('Unknown admin section.')
   })
 }
@@ -232,7 +277,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
 
     if (root === 'fees' && !id) {
       if (!platformCan(user.role, 'admin:settings')) throw errors.forbidden('Super administrator role required for fee changes.')
-      rateLimit(req, 'fees', 10, 60_000)
+      await rateLimit(req, 'fees', 10, 60_000)
       const latest = await db.feeVersion.findFirst({ orderBy: { version: 'desc' } })
       const version = (latest?.version ?? 0) + 1
       const fee = await db.feeVersion.create({
@@ -335,7 +380,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
       // Hubtel issues ONE API client per business account — the saved pair
       // feeds Checkout, Send Money and SMS. Secrets are write-only here.
       if (!platformCan(user.role, 'admin:settings')) throw errors.forbidden('Super administrator role required.')
-      rateLimit(req, 'hubtel-creds', 10, 60_000)
+      await rateLimit(req, 'hubtel-creds', 10, 60_000)
       const { HUBTEL_SETTING_KEYS } = await import('@/server/hubtel/credentials')
       const { setSetting } = await import('@/server/settings')
       const str = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '')
@@ -376,7 +421,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
       // Round 14: empirical connection test — ONE real GHS 1.00 checkout initiate
       // (unpaid sessions expire at the provider; no live charge is possible).
       if (!platformCan(user.role, 'admin:settings')) throw errors.forbidden('Super administrator role required.')
-      rateLimit(req, 'hubtel-probe', 6, 60_000)
+      await rateLimit(req, 'hubtel-probe', 6, 60_000)
       const { resolveHubtelCreds, HUBTEL_SETTING_KEYS, paymentsSimulatorActive } = await import('@/server/hubtel/credentials')
       const { probeCheckoutConnection } = await import('@/server/hubtel/payments')
       const { setSetting } = await import('@/server/settings')
@@ -416,7 +461,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     // in use cannot be deleted — deactivate it instead.
     if (root === 'categories' && !id) {
       if (!platformCan(user.role, 'admin:settings')) throw errors.forbidden('Super administrator role required for taxonomy changes.')
-      rateLimit(req, 'taxonomy', 20, 60_000)
+      await rateLimit(req, 'taxonomy', 20, 60_000)
       const name = sanitizeText(body.name, 60)
       if (name.length < 3) throw errors.badRequest('Category name is required (at least 3 characters).')
       // Slug: explicit if provided, otherwise derived from the name.
@@ -443,7 +488,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
 
     if (root === 'categories' && id && (op === 'update' || op === 'delete')) {
       if (!platformCan(user.role, 'admin:settings')) throw errors.forbidden('Super administrator role required for taxonomy changes.')
-      rateLimit(req, 'taxonomy', 20, 60_000)
+      await rateLimit(req, 'taxonomy', 20, 60_000)
       const category = await db.category.findUnique({ where: { id } })
       if (!category) throw errors.notFound('Category not found.')
       const { audit } = await import('@/server/audit')
@@ -487,6 +532,18 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
       const { audit } = await import('@/server/audit')
       await audit({ actorUserId: user.id, actorLabel: user.email, action: suspend ? 'user.suspend' : 'user.restore', entityType: 'User', entityId: id })
       return jsonOk({ suspended: suspend })
+    }
+
+    if (root === 'ops' && id === 'check') {
+      // Runs the SAME probe cycle as the standing monitor (src/server/ops/monitor.ts)
+      // and persists it — the button is an on-demand datapoint, not a different truth.
+      await rateLimit(req, 'ops-check', 6, 60_000)
+      const { runOpsChecks, recordOpsChecks } = await import('@/server/ops/monitor')
+      const probes = await runOpsChecks(env.appUrl)
+      const recorded = await recordOpsChecks(probes)
+      const { audit } = await import('@/server/audit')
+      await audit({ actorUserId: user.id, actorLabel: user.email, action: 'ops.check', entityType: 'OpsCheck', entityId: 'cycle' })
+      return jsonOk({ probes, ...recorded })
     }
 
     throw errors.notFound('Unknown admin operation.')

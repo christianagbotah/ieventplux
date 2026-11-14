@@ -477,7 +477,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     if (!env.aiEnabled) throw errors.unavailable('AI_DISABLED', 'The AI concierge is disabled on this deployment.')
 
     if (mode === 'search') {
-      rateLimit(req, 'ai-search', 12, 60_000)
+      await rateLimit(req, 'ai-search', 12, 60_000)
       const body = await readJson<{ query?: string }>(req)
       const query = sanitizeText(body.query, 300)
       if (query.length < 3) throw errors.badRequest('Describe what you are looking for (at least 3 characters).')
@@ -486,21 +486,21 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     }
 
     if (mode === 'planner') {
-      rateLimit(req, 'ai-planner', 8, 60_000)
+      await rateLimit(req, 'ai-planner', 8, 60_000)
       const body = await readJson<Record<string, unknown>>(req)
       const result = await runPlanner(body)
       return jsonOk(result)
     }
 
     if (mode === 'recommend') {
-      rateLimit(req, 'ai-recommend', 10, 60_000)
+      await rateLimit(req, 'ai-recommend', 10, 60_000)
       const user = await requireUser()
       const result = await runRecommendations(user.id)
       return jsonOk(result)
     }
 
     if (mode === 'studio') {
-      rateLimit(req, 'ai-studio', 15, 60_000)
+      await rateLimit(req, 'ai-studio', 15, 60_000)
       const user = await requireUser()
       const body = await readJson<Record<string, unknown>>(req)
       const result = await runStudio(user.id, body)
@@ -511,7 +511,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     const system = await buildConciergeContext()
 
     if (mode === 'chat') {
-      rateLimit(req, 'ai-chat', 20, 60_000)
+      await rateLimit(req, 'ai-chat', 20, 60_000)
       const body = (await req.json().catch(() => ({}))) as { message?: string; conversationId?: string }
       const message = sanitizeText(body.message, 1000)
       if (message.length < 2) throw errors.badRequest('Message is required.')
@@ -524,7 +524,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     }
 
     if (mode === 'voice') {
-      rateLimit(req, 'ai-voice', 12, 60_000)
+      await rateLimit(req, 'ai-voice', 12, 60_000)
       const form = await req.formData().catch(() => null)
       if (!form) throw errors.badRequest('Multipart form with an audio field is required.')
       const audio = form.get('audio')

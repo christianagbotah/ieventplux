@@ -19,7 +19,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     const body = await readJson<{ answer?: unknown }>(req).catch(() => ({}) as Record<string, unknown>)
 
     if (action === 'upvote') {
-      rateLimit(req, 'qa-upvote', 60, 60_000)
+      await rateLimit(req, 'qa-upvote', 60, 60_000)
       const result = await toggleUpvote({ questionId: id, userId: user.id })
       return jsonOk(result)
     }

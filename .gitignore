@@ -65,3 +65,6 @@ tool-results/
 
 # User-uploaded files (session input, not product assets)
 /upload/
+
+# ops backups (logical snapshots — never committed)
+backups/

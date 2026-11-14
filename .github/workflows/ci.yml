@@ -1,0 +1,116 @@
+# iEventPlux — CI (Round 32)
+#
+# Two jobs:
+#   web    — lint + typecheck + the golden-path smoke suite against a REAL stack
+#            (Next dev server + embedded worker/realtime services + a PostgreSQL
+#            service container), exactly the commands that run in the dev sandbox.
+#   mobile — bun test (40 pure-logic unit tests) + tsc --noEmit.
+#
+# Honest notes:
+#  - Authored and every command verified locally in the dev sandbox; the first
+#    run on GitHub's runners should be watched (runner images differ — e.g. wait
+#    loops may need adjusting).
+#  - The smoke suite expects the DEV payment simulator (no Hubtel credentials in
+#    CI) — which is exactly the point: the full order → callback → fulfilment →
+#    ticket path runs for real against the database.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ieventplux
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ieventplux
+      APP_URL: http://localhost:3000
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Lint (0 errors required; warnings are the documented baseline)
+        run: bun run lint
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Push schema + seed
+        run: |
+          bunx prisma db push --accept-data-loss
+          bun run db:seed
+
+      - name: Start the stack
+        run: |
+          (bun run dev > dev.log 2>&1 &)
+          (cd mini-services/worker && bun install && (bun run dev > worker.log 2>&1 &))
+          (cd mini-services/realtime && bun install && (bun run dev > realtime.log 2>&1 &))
+          for i in $(seq 1 40); do
+            curl -sf http://localhost:3000/api/v1/health > /dev/null && curl -sf http://localhost:3001/health > /dev/null && curl -sf http://localhost:3003/health > /dev/null && break
+            sleep 3
+          done
+          curl -sf http://localhost:3000/api/v1/health | head -c 200
+          echo
+          curl -sf http://localhost:3001/health | head -c 200
+
+      - name: Smoke suite (golden paths incl. rate-limit proof)
+        run: bun run smoke
+
+      - name: Ops check + backup (proves the ops tooling runs in CI too)
+        run: |
+          bun run ops:monitor -- --once
+          bun run ops:backup
+
+      - name: Upload stack logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stack-logs
+          path: |
+            dev.log
+            mini-services/worker/worker.log
+            mini-services/realtime/realtime.log
+          retention-days: 7
+
+  mobile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        working-directory: mobile
+        run: bun install --frozen-lockfile
+
+      - name: Unit tests (offline queue + wallet logic)
+        working-directory: mobile
+        run: bun test
+
+      - name: Typecheck
+        working-directory: mobile
+        run: bunx tsc --noEmit

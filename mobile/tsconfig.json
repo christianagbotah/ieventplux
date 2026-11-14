@@ -4,7 +4,12 @@
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "forceConsistentCasingInFileNames": true,
-    "jsx": "react-jsx"
+    "jsx": "react-jsx",
+    // Explicit ES modules so tsc accepts the lazy `await import()` in
+    // src/lib/kv-store.ts / checkin-offline.ts (needed to keep react-native
+    // off the module-eval path for `bun test`). Metro transpiles the app
+    // itself; tsc only ever runs with --noEmit here.
+    "module": "esnext"
   },
   "include": ["src", "App.tsx", "index.ts"],
   "exclude": ["node_modules"]

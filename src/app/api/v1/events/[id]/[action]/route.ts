@@ -337,7 +337,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
 
     // ── Waitlist (guest-friendly; joins are only valid while sold out) ────
     if (action === 'waitlist') {
-      rateLimit(req, 'waitlist-join', 5, 60_000)
+      await rateLimit(req, 'waitlist-join', 5, 60_000)
       const session = await (await import('@/server/auth')).getSession()
       const { joinWaitlist } = await import('@/server/services/waitlist')
       const result = await joinWaitlist({
@@ -360,7 +360,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
 
     // ── Round 15: AI moderation triage (organizer decision support) ─────────
     if (action === 'moderation-triage') {
-      rateLimit(req, 'moderation-triage', 6, 60_000)
+      await rateLimit(req, 'moderation-triage', 6, 60_000)
       const user = await requireUser()
       const access = await eventOrgAccess(user.id, id, 'event:edit')
       if (!access.event) throw errors.notFound('Event not found.')
@@ -371,7 +371,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
 
     // ── Round 15: "Remind me" set / cancel ─────────────────────────────────
     if (action === 'reminder') {
-      rateLimit(req, 'reminder-set', 20, 60_000)
+      await rateLimit(req, 'reminder-set', 20, 60_000)
       const user = await requireUser()
       const event = await db.event.findUnique({ where: { id } })
       if (!event || event.deletedAt) throw errors.notFound('Event not found.')
@@ -525,7 +525,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
 
     // ── Comments (discussion/Q&A) ─────────────────────────────────────────
     if (action === 'comments') {
-      rateLimit(req, 'comment', 10, 60_000)
+      await rateLimit(req, 'comment', 10, 60_000)
       const event = await db.event.findUnique({ where: { id } })
       if (!event) throw errors.notFound('Event not found.')
       const text = sanitizeText(body.body, 1000)
@@ -563,7 +563,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
       const access = await eventOrgAccess(user.id, id, 'event:edit')
       if (!access.event) throw errors.notFound('Event not found.')
       if (!access.allowed) throw errors.forbidden('You do not have permission to decide invitations.')
-      rateLimit(req, 'rsvp-decision', 60, 60_000)
+      await rateLimit(req, 'rsvp-decision', 60, 60_000)
       const rsvpId = String(body.rsvpId ?? '')
       const decision = String(body.decision ?? '')
       if (!rsvpId) throw errors.badRequest('rsvpId is required.')
@@ -623,7 +623,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
       const access = await eventOrgAccess(user.id, id, 'event:edit')
       if (!access.event) throw errors.notFound('Event not found.')
       if (!access.allowed) throw errors.forbidden('You do not have permission to manage invitations.')
-      rateLimit(req, 'invitation-revoke', 30, 60_000)
+      await rateLimit(req, 'invitation-revoke', 30, 60_000)
       const invitationId = String(body.invitationId ?? '')
       if (!invitationId) throw errors.badRequest('invitationId is required.')
       const invitation = await db.invitation.findUnique({ where: { id: invitationId } })

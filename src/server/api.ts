@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession, type AuthUser } from './auth'
 import { correlationId } from './ids'
+import { db } from '@/lib/db'
 
 /**
- * API helpers: stable error codes, correlation IDs, pagination and in-memory
- * rate limiting (documented limitation: single-instance; move to a shared store
- * when horizontally scaled — see docs/OPERATIONS.md).
+ * API helpers: stable error codes, correlation IDs, pagination and
+ * DATABASE-BACKED rate limiting (R32: shared across every app instance —
+ * horizontally-scaled deployments enforce one global budget per scope+IP).
  */
 
 export class ApiError extends Error {
@@ -58,7 +59,11 @@ export async function handle(fn: () => Promise<NextResponse>): Promise<NextRespo
     return await fn()
   } catch (err) {
     if (err instanceof ApiError) {
-      return NextResponse.json({ error: { code: err.code, message: err.message, ...err.extra } }, { status: err.status })
+      const res = NextResponse.json({ error: { code: err.code, message: err.message, ...err.extra } }, { status: err.status })
+      // 429s carry the bucket's real window expiry so well-behaved clients back off.
+      const retryAfter = (err.extra as { retryAfterSec?: number } | undefined)?.retryAfterSec
+      if (err.status === 429 && typeof retryAfter === 'number') res.headers.set('Retry-After', String(Math.max(1, Math.ceil(retryAfter))))
+      return res
     }
     const message = err instanceof Error ? err.message : 'Unexpected error'
     console.error('[api]', message, err)
@@ -105,29 +110,93 @@ export async function readJson<T = Record<string, unknown>>(req: NextRequest): P
   }
 }
 
-// ── Rate limiting (in-memory, per instance) ─────────────────────────────────
+// ── Rate limiting (database-backed: shared across instances) ────────────────
+// R32 replaces the retired per-instance in-memory Map. Every protected route
+// increments ONE durable bucket row per (scope, client IP) via an atomic
+// UPSERT — two app processes behind one load balancer now enforce a single
+// global budget (the previously documented single-instance limitation).
+// Contract:
+//  - PostgreSQL: single-statement INSERT … ON CONFLICT … RETURNING (atomic);
+//  - SQLite deployments (single-writer WAL): transactional increment fallback;
+//  - fail-open if the shared store is unreachable — availability beats blocking
+//    (logged, throttled to once per minute);
+//  - fixed windows; 429 responses carry Retry-After (see handle()).
 
-interface Bucket {
+interface RateLimitRow {
   count: number
-  resetAt: number
 }
-const buckets = new Map<string, Bucket>()
 
-export function rateLimit(req: NextRequest, scope: string, limit: number, windowMs: number) {
+let lastSweepAt = 0
+let lastFailOpenLogAt = 0
+
+function sweepExpiredBuckets(now: number) {
+  if (now - lastSweepAt < 60_000) return
+  lastSweepAt = now
+  void db
+    .$executeRaw`DELETE FROM "RateLimitBucket" WHERE "expiresAt" < ${BigInt(now)}`
+    .catch(() => {
+      // Non-fatal: the next sweep retries; expired rows only cost space.
+    })
+}
+
+/** SQLite / fallback path: read-modify-write inside a transaction (serialized by
+ *  SQLite's single-writer WAL mode; approximate under extreme concurrency —
+ *  undercounting a burst by one is harmless for abuse protection). */
+async function transactionalIncrement(key: string, windowStart: bigint, expiresAt: bigint): Promise<number> {
+  return db.$transaction(async (tx) => {
+    const existing = await tx.rateLimitBucket.findUnique({ where: { key_windowStart: { key, windowStart } } })
+    if (!existing) {
+      try {
+        await tx.rateLimitBucket.create({ data: { key, windowStart, count: 1, expiresAt } })
+        return 1
+      } catch {
+        // Lost a concurrent create race — fall through and increment the winner.
+      }
+    }
+    const updated = await tx.rateLimitBucket.update({
+      where: { key_windowStart: { key, windowStart } },
+      data: { count: { increment: 1 } },
+      select: { count: true },
+    })
+    return updated.count
+  })
+}
+
+export async function rateLimit(req: NextRequest, scope: string, limit: number, windowMs: number) {
   const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'local'
   const key = `${scope}:${ip}`
   const now = Date.now()
-  const bucket = buckets.get(key)
-  if (!bucket || bucket.resetAt < now) {
-    buckets.set(key, { count: 1, resetAt: now + windowMs })
-    return
+  const windowStart = BigInt(Math.floor(now / windowMs) * windowMs)
+  const expiresAt = windowStart + BigInt(windowMs)
+
+  let count = 1
+  try {
+    const rows = await db.$queryRaw<RateLimitRow[]>`
+      INSERT INTO "RateLimitBucket" ("key", "windowStart", "count", "expiresAt")
+      VALUES (${key}, ${windowStart}, 1, ${expiresAt})
+      ON CONFLICT ("key", "windowStart")
+      DO UPDATE SET "count" = "RateLimitBucket"."count" + 1
+      RETURNING "count"`
+    count = Number(rows[0]?.count ?? 1)
+  } catch (err) {
+    if (err instanceof ApiError) throw err
+    try {
+      count = await transactionalIncrement(key, windowStart, expiresAt)
+    } catch {
+      if (now - lastFailOpenLogAt > 60_000) {
+        lastFailOpenLogAt = now
+        console.warn('[rate-limit] shared store unreachable — failing open for scope', scope)
+      }
+      return // fail-open: never block traffic because the counter itself is down
+    }
   }
-  bucket.count += 1
-  if (bucket.count > limit) throw errors.rateLimited()
-  // Opportunistic cleanup to keep memory bounded.
-  if (buckets.size > 5000) {
-    for (const [k, v] of buckets) if (v.resetAt < now) buckets.delete(k)
+
+  if (count > limit) {
+    throw new ApiError('RATE_LIMITED', 'Too many requests. Please slow down.', 429, {
+      retryAfterSec: Math.max(1, Math.ceil((Number(expiresAt) - now) / 1000)),
+    })
   }
+  sweepExpiredBuckets(now)
 }
 
 // ── Simple XSS-safe rendering of user HTML-free text ────────────────────────

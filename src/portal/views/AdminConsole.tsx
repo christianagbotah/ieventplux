@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState, type ComponentType, type CSSProperties } from 'react'
 import {
-  ShieldCheck, Users, Building2, CalendarDays, Flag, Percent, CreditCard, Wallet, RotateCw, Bell, ScrollText, Plug, Settings2, Landmark, Loader2, Check, X, Play, Tags, Church, Music, Presentation, Wrench, Code2, Heart, Users as UsersIcon, Sparkles, PartyPopper, Activity, Calendar, Trash2, Pencil, Plus,
+  ShieldCheck, Users, Building2, CalendarDays, Flag, Percent, CreditCard, Wallet, RotateCw, Bell, ScrollText, Plug, Settings2, Landmark, Loader2, Check, X, Play, Tags, Church, Music, Presentation, Wrench, Code2, Heart, Users as UsersIcon, Sparkles, PartyPopper, Activity, Calendar, Trash2, Pencil, Plus, HeartPulse, Database, ShieldAlert, Archive,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -32,6 +32,7 @@ const SECTIONS = [
   { key: 'sms', label: 'SMS Log', icon: Bell },
   { key: 'audit', label: 'Audit Log', icon: ScrollText },
   { key: 'taxonomy', label: 'Taxonomy', icon: Tags },
+  { key: 'ops', label: 'Ops Health', icon: HeartPulse },
   { key: 'sweeps', label: 'Operations', icon: Settings2 },
 ]
 
@@ -132,6 +133,7 @@ export default function AdminConsole({ route }: { route: Route }) {
             {section === 'sms' && <SmsLog />}
             {section === 'audit' && <AuditLog />}
             {section === 'taxonomy' && <Taxonomy />}
+            {section === 'ops' && <Ops />}
             {section === 'sweeps' && <Sweeps />}
           </div>
         </div>
@@ -860,6 +862,186 @@ function AuditLog() {
           <span className="ml-auto text-muted-foreground">{relative(a.createdAt)}</span>
         </div>
       ))}
+    </div>
+  )
+}
+
+/* ───────────────────────────── Ops Health (R32) ───────────────────────────── */
+
+type OpsTargetRow = {
+  target: string
+  status: string
+  lastCheckedAt: string | null
+  latencyMs: number | null
+  detail: string | null
+  uptime24h: number | null
+  uptime7d: number | null
+}
+
+type OpsAlertRow = {
+  id: string
+  target: string
+  severity: string
+  title: string
+  detail: string | null
+  status: string
+  checksWhileOpen: number
+  createdAt: string
+  resolvedAt: string | null
+}
+
+type BackupRunRow = {
+  id: string
+  status: string
+  startedAt: string
+  finishedAt: string | null
+  tables: number
+  tableRows: number
+  bytes: string
+  path: string
+  checksum: string | null
+  error: string | null
+}
+
+type OpsData = {
+  targets: OpsTargetRow[]
+  alerts: OpsAlertRow[]
+  backups: BackupRunRow[]
+  lastCheckedAt: string | null
+  commands: { monitor: string; backup: string }
+}
+
+const TARGET_ICONS: Record<string, ComponentType<{ className?: string }>> = {
+  app: HeartPulse,
+  worker: Loader2,
+  realtime: Activity,
+  database: Database,
+}
+
+function Ops() {
+  const { toast } = useToast()
+  const [data, reload, loading] = useAdmin<OpsData>('/admin/ops')
+  const [checking, setChecking] = useState(false)
+
+  const runCheck = async () => {
+    setChecking(true)
+    try {
+      const res = await api.post<{ probes: { target: string; status: string; latencyMs: number }[]; alertsOpened: number; alertsResolved: number }>('/admin/ops/check', {})
+      const up = res.probes.filter((p) => p.status === 'UP').length
+      toast({
+        title: `Health check: ${up}/${res.probes.length} targets UP`,
+        description: res.alertsOpened > 0 ? `${res.alertsOpened} new alert(s) opened.` : res.alertsResolved > 0 ? `${res.alertsResolved} alert(s) resolved.` : 'Recorded to the uptime history.',
+        variant: up === res.probes.length ? 'default' : 'destructive',
+      })
+      reload()
+    } catch (err) {
+      toast({ description: err instanceof ApiClientError ? err.message : 'Check failed.', variant: 'destructive' })
+    } finally {
+      setChecking(false)
+    }
+  }
+
+  if (loading) return <AdminLoader label="Loading ops history…" />
+  if (!data) return <EmptyState title="Ops unavailable" description="Super administrator role required." />
+
+  const openAlerts = data.alerts.filter((a) => a.status === 'OPEN')
+  const kb = (raw: string) => `${(Number(raw) / 1024).toFixed(1)} KB`
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm text-muted-foreground">
+          Uptime history, alerts and backups — written by <span className="font-mono text-xs">ops:monitor</span> / <span className="font-mono text-xs">ops:backup</span>; the button records an on-demand cycle through the same runner.
+        </p>
+        <Button size="sm" className="rounded-full" disabled={checking} onClick={() => void runCheck()}>
+          {checking ? <Loader2 className="mr-1 h-4 w-4 animate-spin" aria-hidden /> : <HeartPulse className="mr-1 h-4 w-4" aria-hidden />}
+          Run check now
+        </Button>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        {data.targets.map((t) => {
+          const Icon = TARGET_ICONS[t.target] ?? Activity
+          const fresh = t.status !== 'UNKNOWN'
+          return (
+            <Card key={t.target} className="rounded-2xl">
+              <CardContent className="flex items-center gap-3 p-4">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border/70 bg-secondary/40">
+                  <Icon className="h-4 w-4" aria-hidden />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-semibold capitalize">{t.target}</p>
+                    {fresh ? (
+                      <Badge variant={t.status === 'UP' ? 'default' : t.status === 'DOWN' ? 'destructive' : 'secondary'} className="text-[10px]">{t.status}</Badge>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">no check recorded yet</span>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {t.lastCheckedAt ? `checked ${relative(t.lastCheckedAt)}` : 'never checked'}
+                    {t.latencyMs != null && ` · ${t.latencyMs} ms`}
+                    {t.uptime24h != null && ` · 24h uptime ${t.uptime24h}%`}
+                    {t.uptime7d != null && ` · 7d ${t.uptime7d}%`}
+                  </p>
+                  {t.detail && <p className="mt-1 truncate text-xs text-destructive/80" title={t.detail}>{t.detail}</p>}
+                </div>
+              </CardContent>
+            </Card>
+          )
+        })}
+      </div>
+
+      <Card className="rounded-2xl">
+        <CardHeader className="pb-2">
+          <CardTitle className="flex items-center gap-2 text-sm"><ShieldAlert className="h-4 w-4" aria-hidden /> Alerts{openAlerts.length > 0 && <Badge variant="destructive" className="text-[10px]">{openAlerts.length} open</Badge>}</CardTitle>
+        </CardHeader>
+        <CardContent className="pt-0">
+          {data.alerts.length === 0 ? (
+            <p className="py-4 text-sm text-muted-foreground">No alerts recorded — transitions only: an alert opens when a target first goes non-UP and closes when it recovers.</p>
+          ) : (
+            <div className="ievx-scrollbar max-h-72 overflow-y-auto">
+              {data.alerts.map((a) => (
+                <div key={a.id} className="flex flex-wrap items-center gap-2 border-b border-border/60 py-2.5 last:border-0">
+                  <Badge variant={a.status === 'OPEN' ? 'destructive' : 'secondary'} className="text-[10px]">{a.severity}</Badge>
+                  <p className="min-w-0 flex-1 truncate text-sm">{a.title}<span className="ml-1 text-xs text-muted-foreground">· {a.target} · {relative(a.createdAt)}</span></p>
+                  <Badge variant={a.status === 'OPEN' ? 'default' : 'secondary'} className="text-[10px]">{a.status}</Badge>
+                  {a.status === 'RESOLVED' && a.resolvedAt && <span className="text-xs text-muted-foreground">after {a.checksWhileOpen} non-UP checks</span>}
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="rounded-2xl">
+        <CardHeader className="pb-2">
+          <CardTitle className="flex items-center gap-2 text-sm"><Archive className="h-4 w-4" aria-hidden /> Backups</CardTitle>
+        </CardHeader>
+        <CardContent className="pt-0">
+          {data.backups.length === 0 ? (
+            <p className="py-4 text-sm text-muted-foreground">
+              No backups recorded yet — run <span className="font-mono text-xs">bun run ops:backup</span> from the project root (logical JSONL.gz snapshot of every table; PostgreSQL deployments additionally schedule pg_dump per the runbook).
+            </p>
+          ) : (
+            <div className="ievx-scrollbar max-h-72 overflow-y-auto">
+              {data.backups.map((b) => (
+                <div key={b.id} className="flex flex-wrap items-center gap-2 border-b border-border/60 py-2.5 last:border-0">
+                  <Badge variant={b.status === 'OK' ? 'default' : b.status === 'FAILED' ? 'destructive' : 'secondary'} className="text-[10px]">{b.status}</Badge>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm">{b.path.split('/').pop() ?? b.path}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {relative(b.startedAt)} · {b.tables} tables · {b.tableRows.toLocaleString()} rows · {kb(b.bytes)}
+                      {b.checksum && ` · sha256 ${b.checksum.slice(0, 12)}…`}
+                    </p>
+                    {b.error && <p className="truncate text-xs text-destructive/80" title={b.error}>{b.error}</p>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }

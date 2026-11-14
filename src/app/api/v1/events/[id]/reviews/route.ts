@@ -30,7 +30,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
   return handle(async () => {
     const { id } = await ctx.params
     const user = await requireUser()
-    rateLimit(req, 'review-write', 10, 60_000)
+    await rateLimit(req, 'review-write', 10, 60_000)
     const body = await readJson<{ rating?: unknown; body?: unknown }>(req).catch(() => ({}) as Record<string, unknown>)
 
     // id may be the slug or the internal id (matches the event detail route).

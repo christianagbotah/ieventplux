@@ -105,7 +105,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     const body = await readJson<Record<string, unknown>>(req).catch(() => ({}) as Record<string, unknown>)
 
     if (action === 'play') {
-      rateLimit(req, 'playback', 30, 60_000)
+      await rateLimit(req, 'playback', 30, 60_000)
       const result = await issuePlayback({ broadcastId: id, userId: user.id, ip: req.headers.get('x-forwarded-for') ?? undefined })
       return jsonOk(result)
     }
@@ -126,7 +126,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     }
 
     if (action === 'chat') {
-      rateLimit(req, 'chat', 15, 60_000)
+      await rateLimit(req, 'chat', 15, 60_000)
       const text = (await import('@/server/api')).sanitizeText(body.body, 400)
       if (text.length < 1) throw errors.badRequest('Message is empty.')
       const broadcast = await db.liveBroadcast.findUnique({ where: { id } })
@@ -172,7 +172,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
       // The viewer feed receives a realtime chat:moderated event so removals
       // land without a refresh (GET history already filters by status).
       await requireBroadcastManage(id, user.id)
-      rateLimit(req, 'chat-moderate', 60, 60_000)
+      await rateLimit(req, 'chat-moderate', 60, 60_000)
       const messageId = String(body.messageId ?? '')
       const status = String(body.status ?? '')
       if (!messageId) throw errors.badRequest('messageId is required.')

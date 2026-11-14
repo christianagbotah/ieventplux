@@ -6,7 +6,7 @@ import { env } from '@/server/env'
 /** POST /api/v1/payments/initiate — create a payment attempt + provider checkout. */
 export async function POST(req: NextRequest) {
   return handle(async () => {
-    rateLimit(req, 'payments', 20, 60_000)
+    await rateLimit(req, 'payments', 20, 60_000)
     const user = await requireUser()
     const body = await readJson<{ orderReference?: string }>(req)
     const result = await initiatePaymentForOrder(String(body.orderReference ?? ''), user.id)

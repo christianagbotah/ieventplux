@@ -17,8 +17,8 @@
  *    only counted them.
  */
 
-import AsyncStorage from '@react-native-async-storage/async-storage'
-import { api, type ScanResult } from '../api/client'
+import type { CheckinRosterResponse, CheckinSyncResponse, ScanResult } from '../api/client'
+import { loadDefaultKVStore, type KVStore } from './kv-store'
 
 export interface QueuedScan {
   eventId: string
@@ -67,11 +67,60 @@ const REPORT_KEY = 'ieventplux.checkin.lastSyncReport'
 const MAX_QUEUE = 500
 const MAX_REPORT = 40
 
+// ────────────────────────────── injectable store / transport (test seam) ───
+
+/**
+ * Storage + transport injection seam. The app NEVER calls the setters: every
+ * function defaults to AsyncStorage and the real api client, both resolved
+ * lazily via dynamic import so that importing this module never evaluates
+ * react-native (which would make the pure logic impossible to load under
+ * `bun test`). checkin-offline.test.ts injects an in-memory KVStore and a
+ * scripted fake transport here. Runtime behavior without injection is
+ * identical to the pre-seam code.
+ */
+let storeOverride: KVStore | null = null
+
+/** Swap the backing store. Pass null to restore the React Native default. */
+export function setOfflineStore(store: KVStore | null): void {
+  storeOverride = store
+}
+
+async function getStore(): Promise<KVStore> {
+  return storeOverride ?? loadDefaultKVStore()
+}
+
+/** Request body of POST /checkin/sync (the shape api.checkin.sync accepts). */
+export interface CheckinSyncRequest {
+  eventId: string
+  deviceSessionId?: string
+  scans: { payload: string; clientScanId: string; capturedOfflineAt?: string }[]
+}
+
+/** Transport surface this module needs from the api client (a subset of api.checkin). */
+export interface CheckinTransport {
+  roster(eventId: string): Promise<CheckinRosterResponse>
+  sync(payload: CheckinSyncRequest): Promise<CheckinSyncResponse>
+}
+
+let transportOverride: CheckinTransport | null = null
+
+/** Swap the network transport. Pass null to restore the real api client. */
+export function setOfflineTransport(transport: CheckinTransport | null): void {
+  transportOverride = transport
+}
+
+async function getTransport(): Promise<CheckinTransport> {
+  if (transportOverride) return transportOverride
+  const { api } = await import('../api/client')
+  return api.checkin
+}
+
 // ─────────────────────────────────────────────────────────────── queue ───
 
 export async function readQueue(): Promise<QueuedScan[]> {
   try {
-    const raw = await AsyncStorage.getItem(QUEUE_KEY)
+    const store = await getStore()
+    const raw = await store.getItem(QUEUE_KEY)
     if (!raw) return []
     const parsed: unknown = JSON.parse(raw)
     return Array.isArray(parsed) ? (parsed as QueuedScan[]) : []
@@ -81,7 +130,8 @@ export async function readQueue(): Promise<QueuedScan[]> {
 }
 
 async function writeQueue(items: QueuedScan[]): Promise<void> {
-  await AsyncStorage.setItem(QUEUE_KEY, JSON.stringify(items))
+  const store = await getStore()
+  await store.setItem(QUEUE_KEY, JSON.stringify(items))
 }
 
 export interface EnqueueOutcome {
@@ -114,7 +164,8 @@ export async function enqueueOfflineScan(item: QueuedScan): Promise<EnqueueOutco
 // ─────────────────────────────────────────────────────────────── roster ───
 
 export async function downloadRoster(eventId: string): Promise<RosterCache> {
-  const roster = await api.checkin.roster(eventId)
+  const transport = await getTransport()
+  const roster = await transport.roster(eventId)
   const cache: RosterCache = {
     eventId,
     eventTitle: roster.event?.title ?? null,
@@ -123,13 +174,15 @@ export async function downloadRoster(eventId: string): Promise<RosterCache> {
     count: roster.count,
     tickets: roster.tickets.map((t) => ({ id: t.id, code: t.code, holderName: t.holderName, status: t.status })),
   }
-  await AsyncStorage.setItem(`${ROSTER_PREFIX}${eventId}`, JSON.stringify(cache))
+  const store = await getStore()
+  await store.setItem(`${ROSTER_PREFIX}${eventId}`, JSON.stringify(cache))
   return cache
 }
 
 export async function readRoster(eventId: string): Promise<RosterCache | null> {
   try {
-    const raw = await AsyncStorage.getItem(`${ROSTER_PREFIX}${eventId}`)
+    const store = await getStore()
+    const raw = await store.getItem(`${ROSTER_PREFIX}${eventId}`)
     return raw ? (JSON.parse(raw) as RosterCache) : null
   } catch {
     return null
@@ -172,12 +225,14 @@ export function verifyOffline(roster: RosterCache | null, payload: string): Offl
 // ──────────────────────────────────────────────────────────── sync + report ──
 
 async function writeReport(report: SyncReport): Promise<void> {
-  await AsyncStorage.setItem(REPORT_KEY, JSON.stringify(report))
+  const store = await getStore()
+  await store.setItem(REPORT_KEY, JSON.stringify(report))
 }
 
 export async function readSyncReport(): Promise<SyncReport | null> {
   try {
-    const raw = await AsyncStorage.getItem(REPORT_KEY)
+    const store = await getStore()
+    const raw = await store.getItem(REPORT_KEY)
     return raw ? (JSON.parse(raw) as SyncReport) : null
   } catch {
     return null
@@ -211,6 +266,7 @@ export async function pendingVerdicts(roster: RosterCache | null, eventId: strin
  * there is no busy retry loop to back off from.
  */
 export async function syncOfflineQueue(): Promise<SyncReport> {
+  const transport = await getTransport()
   const queue = await readQueue()
   const review: SyncReportEntry[] = []
   let synced = 0
@@ -223,7 +279,7 @@ export async function syncOfflineQueue(): Promise<SyncReport> {
   const remaining: QueuedScan[] = []
   for (const [eventId, scans] of byEvent) {
     try {
-      const res = await api.checkin.sync({
+      const res = await transport.sync({
         eventId,
         scans: scans.map((s) => ({ payload: s.payload, clientScanId: s.clientScanId, capturedOfflineAt: s.capturedOfflineAt })),
       })

@@ -1308,3 +1308,64 @@ model EventReminder {
   @@unique([eventId, userId])
   @@index([eventId])
 }
+
+// ─────────────────────────────── Platform operations (R32) ───────────────────────────────
+// Production ops, closed loop:
+//  - RateLimitBucket: the shared-store rate limiter (docs/OPERATIONS.md's documented
+//    single-instance limitation). One durable row per (scope, IP, fixed window),
+//    incremented atomically by every app instance.
+//  - OpsCheck / OpsAlert: uptime history + transition-based alerts written by the
+//    ops monitor (scripts/monitor.ts loop, or the admin "Run check now" button).
+//  - BackupRun: audit trail of logical backups (scripts/backup.ts).
+
+model RateLimitBucket {
+  key         String // "scope:ip"
+  windowStart BigInt // epoch ms — fixed-window bucket start
+  count       Int    @default(1)
+  expiresAt   BigInt // windowStart + windowMs
+
+  @@unique([key, windowStart])
+  @@index([expiresAt])
+}
+
+model OpsCheck {
+  id        String   @id @default(cuid())
+  target    String // app | worker | realtime | database
+  status    String // UP | DEGRADED | DOWN
+  latencyMs Int?
+  detail    String?
+  checkedAt DateTime @default(now())
+
+  @@index([target, checkedAt])
+  @@index([checkedAt])
+}
+
+model OpsAlert {
+  id             String    @id @default(cuid())
+  target         String
+  severity       String    @default("CRITICAL") // WARNING | CRITICAL
+  title          String
+  detail         String?
+  status         String    @default("OPEN") // OPEN | RESOLVED
+  checksWhileOpen Int      @default(0)
+  createdAt      DateTime  @default(now())
+  resolvedAt     DateTime?
+
+  @@index([status, createdAt])
+  @@index([target, status])
+}
+
+model BackupRun {
+  id         String    @id @default(cuid())
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+  status     String    @default("RUNNING") // RUNNING | OK | FAILED
+  tables     Int       @default(0)
+  tableRows  Int       @default(0)
+  bytes      BigInt    @default(0)
+  path       String
+  checksum   String?
+  error      String?
+
+  @@index([startedAt])
+}

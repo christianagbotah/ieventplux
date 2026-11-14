@@ -45,7 +45,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     const membership = await membershipFor(user.id, id)
     if (!membership) throw errors.forbidden('You are not a member of this organization.')
     if (!orgCan(membership.role, 'event:create')) throw errors.forbidden('Venue management requires an organizer role.')
-    rateLimit(req, 'venue-create', 30, 60_000)
+    await rateLimit(req, 'venue-create', 30, 60_000)
 
     const body = await readJson<Record<string, unknown>>(req)
     const name = sanitizeText(body.name, 140)

@@ -31,7 +31,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
   return handle(async () => {
     const { id } = await ctx.params
     const user = await requireUser()
-    rateLimit(req, 'poll-create', 20, 60_000)
+    await rateLimit(req, 'poll-create', 20, 60_000)
     const body = await readJson<{ question?: unknown; options?: unknown }>(req).catch(() => ({}) as Record<string, unknown>)
 
     const access = await eventOrgAccess(user.id, id, 'event:edit')

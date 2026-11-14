@@ -7,7 +7,7 @@ type RouteContext = { params: Promise<{ token: string }> }
 /** POST /api/v1/tickets/transfer/[token] — claim a transferred ticket. */
 export async function POST(req: NextRequest, ctx: RouteContext) {
   return handle(async () => {
-    rateLimit(req, 'transfer', 10, 60_000)
+    await rateLimit(req, 'transfer', 10, 60_000)
     const { token } = await ctx.params
     const user = await requireUser()
     const ticket = await db.ticket.findFirst({ where: { transferToken: token } })

@@ -120,16 +120,14 @@ curl -s https://yourdomain.com/api/v1/health      # expect healthy + configured 
 ### 9. Upgrades
 `git pull && bun install && bunx prisma db push && systemctl restart ieventplux-web ieventplux-worker ieventplux-realtime` — worker picks up queued jobs idempotently after restart.
 
-## CI (recommended, not yet configured)
+## CI (configured — `.github/workflows/ci.yml`, R32)
 
-```yaml
-# .github/workflows/ci.yml sketch
-- bun install
-- bunx tsc --noEmit
-- bun run lint
-- bun run build
-- prisma db push (sqlite tmp) + golden-path API smoke tests
-```
+Two jobs on every push/PR to `main`:
+
+- **web** — lint (0 errors; warnings are the documented baseline) → `tsc --noEmit` → schema push + seed against a PostgreSQL service container → starts the REAL stack (app + worker + realtime) → **`bun run smoke`** (the 11-check golden-path suite: health, discovery, login/session, event detail, order → simulator checkout → provider callback → worker fulfilment → PAID → ticket listed, admin ops endpoint, 404 contract, and the 429 + Retry-After rate-limit proof) → `ops:monitor --once` + `ops:backup` (proves the ops tooling runs in CI too). Stack logs upload as artifacts on failure.
+- **mobile** — `bun test` (40 pure-logic unit tests for the offline check-in queue and ticket wallet) → `tsc --noEmit`.
+
+Honest note: authored with every command verified locally in the dev sandbox; the first run on GitHub-hosted runners should be watched (runner images can differ — the wait loops may need one adjustment). The suite intentionally runs against the DEV payment simulator (no Hubtel credentials in CI) — the entire order → callback → fulfilment → ticket path is the real production code; only the provider boundary is simulated, exactly as in development.
 
 ## Mobile release path
 

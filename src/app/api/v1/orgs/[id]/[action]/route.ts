@@ -245,7 +245,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
       // Round 14: org-scoped AI advisor (pricing suggestions / weekly digest).
       // Read-only advisory — nothing is auto-applied to real prices.
       if (!orgCan(membership.role, 'org:view_finance')) throw errors.forbidden('The AI advisor requires a finance role.')
-      rateLimit(req, 'ai-advisor', 8, 60_000)
+      await rateLimit(req, 'ai-advisor', 8, 60_000)
       const { orgPricingAdvisor, orgDigestAdvisor } = await import('@/server/services/aiAdvisor')
       const kind = String(body.kind ?? 'pricing')
       if (kind === 'digest') return jsonOk(await orgDigestAdvisor(id))

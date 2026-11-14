@@ -52,7 +52,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     const user = await requireUser()
 
     if (action === 'send') {
-      rateLimit(req, 'sms-send', 5, 60_000)
+      await rateLimit(req, 'sms-send', 5, 60_000)
       const body = await readJson<{ orgId?: string; eventId?: string; body?: string; purpose?: string; recipients?: { phone: string; userId?: string }[] }>(req)
       const orgId = String(body.orgId ?? '')
       const membership = await membershipFor(user.id, orgId)
