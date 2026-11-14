@@ -78,6 +78,9 @@ jobs:
           echo
           curl -sf http://localhost:3001/health | head -c 200
 
+      - name: Realtime access smoke (public event, private notification and broadcast)
+        run: bun run scripts/realtime-smoke.ts
+
       - name: Smoke suite (golden paths incl. rate-limit proof)
         run: bun run smoke
 
