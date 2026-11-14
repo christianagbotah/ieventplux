@@ -43,6 +43,22 @@ async function main() {
   assert(attendeeMine.status === 200 && attendeeMine.data.total === 0 && attendeeMine.data.items.length === 0, 'attendee cannot enumerate any organizer events')
   assert((await list(attendee, 'mine=1&orgId=' + chapel.id)).status === 403, 'attendee denied when guessing organization id')
 
+  // Unaccepted invitations must never grant access to drafts, attendee lists
+  // or organizer navigation. Clean up the test-only invitation even on error.
+  const ama = await db.user.findUniqueOrThrow({ where: { email: 'ama@example.dev' } })
+  const pendingInvite = await db.membership.create({
+    data: { userId: ama.id, orgId: ministries.id, role: 'EVENT_MANAGER', acceptedAt: null },
+  })
+  try {
+    assert((await list(attendee, 'mine=1&orgId=' + ministries.id)).status === 403, 'pending invitation grants no private event access')
+    const pendingMine = await list(attendee, 'mine=1')
+    assert(pendingMine.status === 200 && pendingMine.data.total === 0, 'pending invitation excluded from own org list')
+    const me = await fetch(base + '/auth/me', { headers: { Cookie: attendee } }).then((res) => res.json())
+    assert(!(me.memberships ?? []).some((m: any) => m.orgId === ministries.id), 'unaccepted invitation excluded from authorized session memberships')
+  } finally {
+    await db.membership.delete({ where: { id: pendingInvite.id } })
+  }
+
   const pastor = await auth('pastor@lightworld.dev')
   const own = await list(pastor, 'mine=1&orgId=' + chapel.id + '&pageSize=50')
   assert(own.status === 200 && own.data.total > 0, 'organizer accesses own organization')
