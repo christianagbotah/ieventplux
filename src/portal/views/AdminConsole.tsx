@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState, type ComponentType, type CSSProperties } from 'react'
 import {
-  ShieldCheck, Users, Building2, CalendarDays, Flag, Percent, CreditCard, Wallet, RotateCw, Bell, ScrollText, Plug, Settings2, Landmark, Loader2, Check, X, Play, Tags, Church, Music, Presentation, Wrench, Code2, Heart, Users as UsersIcon, Sparkles, PartyPopper, Activity, Calendar, Trash2, Pencil, Plus, HeartPulse, Database, ShieldAlert, Archive,
+  Search, ShieldCheck, Users, Building2, CalendarDays, Flag, Percent, CreditCard, Wallet, RotateCw, Bell, ScrollText, Plug, Settings2, Landmark, Loader2, Check, X, Play, Tags, Church, Music, Presentation, Wrench, Code2, Heart, Users as UsersIcon, Sparkles, PartyPopper, Activity, Calendar, Trash2, Pencil, Plus, HeartPulse, Database, ShieldAlert, Archive,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
