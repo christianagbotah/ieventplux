@@ -75,6 +75,54 @@ async function main() {
   const globalAdmin = await auth('admin@ieventplux.dev')
   const staffMine = await list(globalAdmin, 'mine=1')
   assert(staffMine.status === 200 && staffMine.data.items.length === 0, 'platform admin cannot bypass member tenant access')
+
+  const broadcast = await db.liveBroadcast.findFirstOrThrow({
+    where: { event: { visibility: 'PUBLIC', status: 'LIVE' } },
+    select: { eventId: true },
+  })
+  const detail = await fetch(base + '/events/' + broadcast.eventId).then((res) => res.json())
+  assert((detail.event?.broadcasts ?? []).length > 0, 'public event detail includes broadcast metadata')
+  const secretFields = ['ingestUrl', 'streamKeyHash', 'streamKeyId', 'recordingUrl', 'createdById']
+  assert(
+    detail.event.broadcasts.every((row: Record<string, unknown>) => secretFields.every((field) => !(field in row))),
+    'event detail never exposes internal broadcaster credentials or recording origins',
+  )
+  assert(!('media' in detail.event), 'event response omits raw internal media records')
+
+  const inviteEvent = await db.event.findFirstOrThrow({
+    where: { visibility: 'INVITE_ONLY', venueId: { not: null } },
+    select: { id: true },
+  })
+  const invitation = await fetch(base + '/events/' + inviteEvent.id).then((res) => res.json())
+  assert(Boolean(invitation.event), 'invitation-only landing page stays reachable by direct link')
+  assert(
+    invitation.event.venue?.mapsUrl === null && invitation.event.venue?.address === null &&
+      invitation.event.venue?.lat === null && invitation.event.directionsUrl === null && invitation.event.venueId === null,
+    'unauthorized invitation-only visitor receives no precise venue, map, directions or venue identifier',
+  )
+
+  // A real DRAFT must stay hidden from anonymous public API reads while its
+  // authenticated organizer can still preview it. Remove the test row afterward.
+  const draft = await db.event.create({
+    data: {
+      orgId: chapel.id,
+      title: 'Private security regression event',
+      slug: 'private-security-smoke-' + Date.now(),
+      description: 'Development-only draft fixture.',
+      categorySlug: 'community',
+      startsAt: new Date(Date.now() + 86400000),
+      endsAt: new Date(Date.now() + 90000000),
+      status: 'DRAFT',
+    },
+  })
+  try {
+    const guestDraft = await fetch(base + '/events/' + draft.id)
+    assert(guestDraft.status === 404, 'anonymous cannot read unpublished event details')
+    const organizerDraft = await fetch(base + '/events/' + draft.id, { headers: { Cookie: pastor } })
+    assert(organizerDraft.status === 200, 'accepted organizer can preview an unpublished event')
+  } finally {
+    await db.event.delete({ where: { id: draft.id } })
+  }
 }
 
 main().catch((err) => {
