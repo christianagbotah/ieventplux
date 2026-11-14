@@ -18,7 +18,7 @@ function usage() {
 
 function requireEmail(value: string | undefined): string {
   const email = value?.trim().toLowerCase() ?? ''
-  if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email) || email.length > 254) {
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) {
     throw new Error('Set BOOTSTRAP_ADMIN_EMAIL to a valid admin email address.')
   }
   if (email.endsWith('.dev') || email.endsWith('.local') || email.endsWith('.example')) {
@@ -40,12 +40,12 @@ function hiddenPrompt(prompt: string): Promise<string> {
     process.stdout.write(prompt)
     rl.once('SIGINT', () => {
       rl.close()
-      process.stdout.write('\\n')
+      process.stdout.write('\n')
       reject(new Error('Cancelled by operator.'))
     })
     rl.question('', (answer) => {
       rl.close()
-      process.stdout.write('\\n')
+      process.stdout.write('\n')
       resolve(answer)
     })
   })
@@ -55,7 +55,7 @@ async function main() {
   if (process.argv.includes('--help') || process.argv.includes('-h')) { usage(); return }
   if (process.env.NODE_ENV !== 'production') throw new Error('Refusing bootstrap unless NODE_ENV=production.')
   if (!productionSecretConfigured(process.env.APP_SECRET)) throw new Error('Configure a unique production APP_SECRET first.')
-  if (!/^postgres(ql)?:\\/\\//.test(process.env.DATABASE_URL ?? '')) {
+  if (!/^postgres(ql)?:\/\//.test(process.env.DATABASE_URL ?? '')) {
     throw new Error('The production DATABASE_URL must be PostgreSQL.')
   }
   if (!process.stdin.isTTY || !process.stdout.isTTY) throw new Error('Interactive TTY required for hidden password input.')
