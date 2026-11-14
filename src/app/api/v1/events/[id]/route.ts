@@ -19,17 +19,26 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
         ticketTypes: { where: { active: true }, orderBy: { sortOrder: 'asc' } },
         media: { where: { kind: { in: ['GALLERY', 'CLIP'] } } },
         updates: { orderBy: { createdAt: 'desc' }, take: 10 },
-        broadcasts: true,
+        // Public event detail never needs ingest URLs, stream-key hashes,
+        // recording origins, or other internal broadcaster credentials.
+        broadcasts: { select: {
+          id: true, title: true, status: true, accessPolicy: true, recordingStatus: true,
+        } },
       },
     })
     if (!event || event.deletedAt) throw errors.notFound('Event not found.')
 
-    // Visibility rules: unlisted/invite-only events are reachable only by direct link.
-    // INVITE_ONLY additionally hides location details from anonymous users.
+    // Public/unlisted/invite-only PUBLISHED events are addressable by link.
+    // Unpublished drafts and scheduled previews are private to accepted staff.
     const session = await getSession()
     const isOrgMember = session
-      ? await db.membership.findFirst({ where: { userId: session.user.id, orgId: event.orgId } })
+      ? await db.membership.findFirst({
+          where: { userId: session.user.id, orgId: event.orgId, acceptedAt: { not: null } },
+        })
       : null
+    if (!isOrgMember && !['PUBLISHED', 'LIVE', 'ENDED', 'POSTPONED', 'CANCELLED'].includes(event.status)) {
+      throw errors.notFound('Event not found.')
+    }
 
     const followStats = await db.follow.count({ where: { orgId: event.orgId } })
     const interested = await db.eventInterest.count({ where: { eventId: event.id, kind: 'GOING' } })
@@ -57,20 +66,27 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
         }
       : { saved: false, going: false, following: false, rsvpStatus: null, rsvpGuests: null }
 
-    const venue = event.venue
-    const venueSafe = venue
-      ? {
-          ...venue,
-          // Full address stays private for invitation-only events until an invitation is approved.
-          address: event.visibility === 'INVITE_ONLY' && !isOrgMember && !inviteApproved ? 'Address shared with approved guests' : venue.address,
-        }
+    // Do not reveal private venue names, geocoordinates, map URLs or direct
+    // directions through nested fields before invitation approval.
+    const redactVenue = event.visibility === 'INVITE_ONLY' && !isOrgMember && !inviteApproved
+    const venueSafe = event.venue
+      ? redactVenue
+        ? { id: null, name: 'Location shared with approved guests', address: null, city: null, mapsUrl: null, lat: null, lng: null, accessibilityInfo: null }
+        : event.venue
       : null
+    // A spread of included Prisma relations accidentally exposes private media
+    // metadata. Explicitly replace the relations with public projections.
+    const { media, venue: _venue, broadcasts, ...safeEvent } = event
+    void _venue
 
     return jsonOk({
       event: {
-        ...event,
+        ...safeEvent,
         tags: parseTags(event.tags),
-        gallery: event.media.map((m) => ({ id: m.id, url: m.url, caption: m.caption })),
+        venueId: redactVenue ? null : event.venueId,
+        directionsUrl: redactVenue ? null : event.directionsUrl,
+        gallery: media.map((item) => ({ id: item.id, url: item.url, caption: item.caption })),
+        broadcasts,
         venue: venueSafe,
         feeNote: event.ticketTypes.some((t) => t.priceMinor > 0) ? 'Platform commission is borne by the organizer.' : null,
       },
