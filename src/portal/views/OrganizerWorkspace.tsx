@@ -24,6 +24,7 @@ import { money, dateLong, timeRange, humanize, statusTone, relative, moneyToInpu
 import { PlayerSim } from '../components/PlayerSim'
 import { EmptyState } from '../components/EventCard'
 import { flash } from '../animate'
+import { scanMayQueueOffline } from '../lib/checkin-policy'
 
 interface OrgEvent {
   id: string
@@ -1517,8 +1518,7 @@ function AttendeesView({ orgId }: { orgId: string }) {
     } catch (err) {
       // HTTP 400/401/403/409/429 errors are authoritative server decisions,
       // NOT evidence that this device is offline. Never queue rejected codes.
-      const networkFailure = !(err instanceof ApiClientError) &&
-        (typeof navigator !== 'undefined' && !navigator.onLine || err instanceof TypeError)
+      const networkFailure = scanMayQueueOffline(err, typeof navigator === 'undefined' ? true : navigator.onLine)
       if (networkFailure) {
         setOfflineQueue((queue) => [...queue, { eventId: targetEventId, payload: code, clientScanId, at: new Date().toISOString() }])
         setLastResult({ result: 'QUEUED_OFFLINE', detail: 'Network unavailable. Scan queued in this browser tab; keep the tab open until you sync.' })
