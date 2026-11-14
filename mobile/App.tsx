@@ -69,9 +69,10 @@ function AppRoutes() {
     <Stack.Navigator
       initialRouteName={status === 'authenticated' ? 'Discover' : 'Login'}
       screenOptions={{
-        headerStyle: { backgroundColor: theme.colors.primary },
-        headerTintColor: '#ffffff',
-        headerTitleStyle: { fontWeight: '600' },
+        headerStyle: { backgroundColor: theme.colors.card },
+        headerTintColor: theme.colors.primaryDark,
+        headerShadowVisible: false,
+        headerTitleStyle: { fontWeight: '700', color: theme.colors.text, fontSize: 17 },
         contentStyle: { backgroundColor: theme.colors.bg },
       }}
     >
