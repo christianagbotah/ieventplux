@@ -40,6 +40,9 @@ export default function DiscoverScreen({ navigation }: DiscoverScreenProps) {
   const [refreshing, setRefreshing] = useState(false)
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('all')
+  const [serverResults, setServerResults] = useState<DiscoveryEventCard[] | null>(null)
+  const [searchBusy, setSearchBusy] = useState(false)
+  const [searchError, setSearchError] = useState(false)
 
   const load = useCallback(async () => {
     setState((prev) => (prev.status === 'ready' || prev.status === 'empty' ? prev : { status: 'loading' }))
@@ -70,6 +73,28 @@ export default function DiscoverScreen({ navigation }: DiscoverScreenProps) {
   useEffect(() => {
     void load()
   }, [load])
+
+  // Search the complete server catalogue with debounce, not just the small
+  // homepage rail. Keep a clearly labelled local fallback if connectivity fails.
+  useEffect(() => {
+    const query = search.trim()
+    if (!query && category === 'all') return
+    let cancelled = false
+    const handle = setTimeout(() => {
+      void api.discovery.searchEvents(query, category).then((result) => {
+        if (cancelled) return
+        setServerResults(result.items)
+        setSearchError(false)
+      }).catch(() => {
+        if (cancelled) return
+        setServerResults(null)
+        setSearchError(true)
+      }).finally(() => {
+        if (!cancelled) setSearchBusy(false)
+      })
+    }, 300)
+    return () => { cancelled = true; clearTimeout(handle) }
+  }, [search, category])
 
   useEffect(() => {
     navigation.setOptions({
@@ -127,11 +152,13 @@ export default function DiscoverScreen({ navigation }: DiscoverScreenProps) {
 
   const liveNow = state.home.liveNow.filter((e) => e.broadcasts.some((b) => b.status === 'LIVE'))
   const query = search.trim().toLocaleLowerCase()
-  const visibleUpcoming = state.home.upcoming.filter((event) => {
+  const filtered = query.length > 0 || category !== 'all'
+  const fallbackUpcoming = state.home.upcoming.filter((event) => {
     const matchesCategory = category === 'all' || event.categorySlug === category
     const searchable = [event.title, event.org.name, event.city ?? '', event.categorySlug ?? ''].join(' ').toLocaleLowerCase()
     return matchesCategory && (!query || searchable.includes(query))
   })
+  const visibleUpcoming = filtered ? (serverResults ?? fallbackUpcoming) : state.home.upcoming
   const featured = state.home.featured[0]
 
   return (
@@ -154,7 +181,12 @@ export default function DiscoverScreen({ navigation }: DiscoverScreenProps) {
             <TextInput
               style={styles.searchInput}
               value={search}
-              onChangeText={setSearch}
+              onChangeText={(text) => {
+                setSearch(text)
+                setServerResults(null)
+                setSearchError(false)
+                setSearchBusy(Boolean(text.trim() || category !== 'all'))
+              }}
               placeholder="Search upcoming events or cities"
               placeholderTextColor={theme.colors.textMuted}
               autoCorrect={false}
@@ -162,7 +194,7 @@ export default function DiscoverScreen({ navigation }: DiscoverScreenProps) {
               accessibilityLabel="Search upcoming events"
             />
             {search ? (
-              <Pressable onPress={() => setSearch('')} accessibilityRole="button" accessibilityLabel="Clear search" style={styles.clearSearch}>
+              <Pressable onPress={() => { setSearch(''); setServerResults(null); setSearchError(false); setSearchBusy(category !== 'all') }} accessibilityRole="button" accessibilityLabel="Clear search" style={styles.clearSearch}>
                 <Text style={styles.clearSearchText}>×</Text>
               </Pressable>
             ) : null}
@@ -172,7 +204,12 @@ export default function DiscoverScreen({ navigation }: DiscoverScreenProps) {
             {[{ slug: 'all', name: 'All events' }, ...state.home.categories].map((option) => (
               <Pressable
                 key={option.slug}
-                onPress={() => setCategory(option.slug)}
+                onPress={() => {
+                  setCategory(option.slug)
+                  setServerResults(null)
+                  setSearchError(false)
+                  setSearchBusy(Boolean(search.trim() || option.slug !== 'all'))
+                }}
                 style={[styles.categoryPill, category === option.slug && styles.categoryPillSelected]}
                 accessibilityRole="button"
                 accessibilityState={{ selected: category === option.slug }}
@@ -215,16 +252,25 @@ export default function DiscoverScreen({ navigation }: DiscoverScreenProps) {
           ) : null}
 
           <View style={styles.sectionHeading}>
-            <Text style={styles.sectionTitle}>{query || category !== 'all' ? 'Matching events' : 'Coming up'}</Text>
+            <Text style={styles.sectionTitle}>{filtered ? 'Matching events' : 'Coming up'}</Text>
             <Text style={styles.sectionCount}>{visibleUpcoming.length} events</Text>
           </View>
+          {filtered && searchBusy ? (
+            <View style={styles.searchStatus}>
+              <ActivityIndicator color={theme.colors.primary} size="small" />
+              <Text style={styles.searchStatusText}>Searching all published events…</Text>
+            </View>
+          ) : null}
+          {filtered && searchError ? (
+            <Text style={styles.searchStatusText} accessibilityRole="alert">Online search is unavailable. Showing only the events already downloaded.</Text>
+          ) : null}
         </View>
       }
       ListEmptyComponent={
         <View style={styles.filterEmpty}>
           <Text style={styles.emptyTitle}>No matching events</Text>
           <Text style={styles.errorBody}>Try another search or category to explore more gatherings.</Text>
-          <Pressable style={styles.retryButton} accessibilityRole="button" onPress={() => { setSearch(''); setCategory('all') }}>
+          <Pressable style={styles.retryButton} accessibilityRole="button" onPress={() => { setSearch(''); setCategory('all'); setServerResults(null); setSearchError(false); setSearchBusy(false) }}>
             <Text style={styles.retryButtonText}>Clear filters</Text>
           </Pressable>
         </View>
@@ -347,6 +393,8 @@ const styles = StyleSheet.create({
   clearSearch: { minWidth: 36, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   clearSearchText: { color: theme.colors.textMuted, fontSize: 25 },
   categoryScroll: { marginBottom: 22 },
+  searchStatus: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12 },
+  searchStatusText: { color: theme.colors.textMuted, fontSize: 12, lineHeight: 19, marginBottom: 10 },
   categoryRow: { gap: 8, paddingBottom: 3 },
   categoryPill: { borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.card, borderRadius: 99, paddingHorizontal: 15, paddingVertical: 10, minHeight: 42, justifyContent: 'center' },
   categoryPillSelected: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
