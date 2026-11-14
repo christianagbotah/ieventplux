@@ -1614,9 +1614,9 @@ function AttendeesView({ orgId }: { orgId: string }) {
           <h1 className="efx-animated-gradient-text iefx-page-title font-extrabold">Attendees & Check-in</h1>
           {stats && <p className="text-sm text-muted-foreground">{stats.admitted}/{stats.ticketsIssued} admitted · {stats.anomalies} anomalies</p>}
         </div>
-        <div className="flex gap-2">
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
           <Select value={eventId} onValueChange={setEventId}>
-            <SelectTrigger className="w-56 rounded-xl" aria-label="Select event"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="h-11 w-full min-w-0 rounded-xl sm:w-56" aria-label="Select event"><SelectValue /></SelectTrigger>
             <SelectContent>{events.map((e) => <SelectItem key={e.id} value={e.id}>{e.title}</SelectItem>)}</SelectContent>
           </Select>
           {eventId && (
@@ -1626,8 +1626,11 @@ function AttendeesView({ orgId }: { orgId: string }) {
               </a>
             </Button>
           )}
-          <Button variant={scanMode ? 'default' : 'outline'} className="rounded-full" onClick={() => setScanMode((s) => !s)}>
+          <Button variant={scanMode ? 'default' : 'outline'} className="h-11 rounded-full" onClick={() => setScanMode((s) => !s)}>
             <ScanLine className="mr-1.5 h-4 w-4" /> {scanMode ? 'Close scanner' : 'Scan tickets'}
+          </Button>
+          <Button variant="outline" size="icon" className="h-11 w-11 rounded-full" aria-label="Refresh attendee list" disabled={!eventId} onClick={() => void refresh()}>
+            <RefreshCw className="h-4 w-4" aria-hidden />
           </Button>
         </div>
       </div>
@@ -1676,26 +1679,50 @@ function AttendeesView({ orgId }: { orgId: string }) {
       </div>
 
       {attendees === null ? (
-        Array.from({ length: 4 }).map((_, i) => <div key={i} className="ievx-skeleton h-14 rounded-xl" />)
-      ) : (
-        <div className="overflow-x-auto rounded-2xl border border-border/70">
-          <table className="w-full min-w-[560px] text-sm">
-            <thead className="bg-secondary/60 text-left text-xs uppercase tracking-wide text-muted-foreground">
-              <tr><th className="p-3">Ticket</th><th className="p-3">Attendee</th><th className="p-3">Type</th><th className="p-3">Status</th><th className="p-3">Checked in</th></tr>
-            </thead>
-            <tbody>
-              {(attendees as { id: string; code: string; holderName: string; ticketType: string; status: string; checkedInAt?: string | null }[]).map((a) => (
-                <tr key={a.id} className="border-t border-border/50 hover:bg-secondary/30">
-                  <td className="p-3 font-mono text-xs">{a.code}</td>
-                  <td className="p-3 font-medium">{a.holderName}</td>
-                  <td className="p-3 text-xs">{a.ticketType}</td>
-                  <td className="p-3"><Badge variant={a.status === 'CHECKED_IN' ? 'default' : a.status === 'VALID' ? 'secondary' : 'outline'} className="capitalize text-[10px]">{humanize(a.status)}</Badge></td>
-                  <td className="p-3 text-xs text-muted-foreground">{a.checkedInAt ? relative(a.checkedInAt) : '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div role="status" aria-label="Loading attendee list" className="grid gap-2">
+          {Array.from({ length: 4 }).map((_, i) => <div key={i} className="ievx-skeleton h-16 rounded-xl" />)}
         </div>
+      ) : attendees.length === 0 ? (
+        <EmptyState title="No matching attendees" description="Try a different ticket code or attendee name, or refresh the selected event." />
+      ) : (
+        <>
+          <div className="mb-2 text-xs text-muted-foreground" aria-live="polite">{attendees.length} attendees shown</div>
+          <div className="grid gap-3 md:hidden">
+            {(attendees as { id?: string; code: string; holderName: string; ticketType?: string; status: string; checkedInAt?: string | null }[]).map((attendee) => (
+              <article key={attendee.id ?? attendee.code} className="ievx-surface space-y-3 p-4">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-semibold">{attendee.holderName}</p>
+                    <p className="mt-1 break-all font-mono text-xs text-primary">{attendee.code}</p>
+                  </div>
+                  <Badge variant={attendee.status === 'CHECKED_IN' ? 'default' : attendee.status === 'VALID' ? 'secondary' : 'outline'}>{humanize(attendee.status)}</Badge>
+                </div>
+                <div className="flex justify-between gap-3 border-t border-border/70 pt-3 text-xs">
+                  <span className="text-muted-foreground">{attendee.ticketType ?? 'Ticket'}</span>
+                  <span className="text-right text-muted-foreground">{attendee.checkedInAt ? relative(attendee.checkedInAt) : 'Not checked in'}</span>
+                </div>
+              </article>
+            ))}
+          </div>
+          <div className="hidden overflow-x-auto rounded-2xl border border-border/70 md:block">
+            <table className="w-full min-w-[560px] text-sm">
+              <thead className="bg-secondary/60 text-left text-xs uppercase tracking-wide text-muted-foreground">
+                <tr><th scope="col" className="p-3">Ticket</th><th scope="col" className="p-3">Attendee</th><th scope="col" className="p-3">Type</th><th scope="col" className="p-3">Status</th><th scope="col" className="p-3">Checked in</th></tr>
+              </thead>
+              <tbody>
+                {(attendees as { id?: string; code: string; holderName: string; ticketType?: string; status: string; checkedInAt?: string | null }[]).map((attendee) => (
+                  <tr key={attendee.id ?? attendee.code} className="border-t border-border/50 hover:bg-secondary/30">
+                    <td className="p-3 break-all font-mono text-xs">{attendee.code}</td>
+                    <td className="p-3 font-medium">{attendee.holderName}</td>
+                    <td className="p-3 text-xs">{attendee.ticketType ?? '—'}</td>
+                    <td className="p-3"><Badge variant={attendee.status === 'CHECKED_IN' ? 'default' : attendee.status === 'VALID' ? 'secondary' : 'outline'}>{humanize(attendee.status)}</Badge></td>
+                    <td className="p-3 text-xs text-muted-foreground">{attendee.checkedInAt ? relative(attendee.checkedInAt) : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </div>
   )
