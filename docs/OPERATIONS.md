@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Topology** | Caddy gateway → Next.js app (:3000) · worker (:3001) · realtime (:3003) · SQLite (`db/custom.db`) |
+| **Topology** | Caddy gateway → Next.js app (:3000) · worker (:3001) · realtime (:3003) · PostgreSQL (managed in production) |
 | **Console** | Admin → `operations` section exposes every sweep with **run-now**; `outbox` section shows queue by status |
 | **Scope** | Day-2 operations: monitoring, sweeps, refunds, payouts, SMS triage, backup/restore, rollback |
 
@@ -15,8 +15,8 @@
 cp .env.example .env       # fill provider credentials when available; see src/server/env.ts
 
 # 1) database
-bun run db:push            # prisma db push (schema)
-bun run db:seed            # prisma/seed.ts — dev data (password Dev@12345, dev only)
+bunx prisma db push        # ONLY for an isolated empty dev DB
+bun run db:seed            # DEVELOPMENT ONLY — known-password demo accounts
 
 # 2) app (:3000)
 bun run dev                # development
@@ -39,7 +39,7 @@ caddy run --config Caddyfile
 | Realtime | 3003 | `GET /health` → `{rooms, connections}` | `POST /emit` with `X-Realtime-Secret` |
 | Gateway | :81 (Caddyfile) | proxies default → :3000; `?XTransformPort=3001/3003` → mini-services | — |
 
-Order matters: database first, then app/worker/realtime (the worker and app both open the SQLite file; Caddy last so routing exists before traffic).
+Order matters: PostgreSQL first, then app/worker/realtime, and gateway last. Production requires the reviewed standalone build and safe migration procedure in DEPLOYMENT.md; no SQLite file or demo seed belongs in production.
 
 ## 2. Queue monitoring
 
@@ -107,7 +107,7 @@ Remember: **API acceptance ≠ handset delivery** — customer-facing answers sh
 
 ## 7. Backup & restore
 
-### Logical snapshot (works on BOTH providers — the built-in audited path, R32)
+### Logical snapshot (current PostgreSQL path — built-in audited export, R32)
 
 ```bash
 bun run ops:backup
@@ -142,28 +142,14 @@ bun run ops:restore -- --i-know-this-wipes-live --target <LIVE_URL>
 - The restore is GUARDED: it refuses the live database unless `--i-know-this-wipes-live`, refuses a target whose schema is missing tables, and fails (exit 1) on any per-table count mismatch — never a silent partial recovery.
 - A backup that has never been restored is a hypothesis: rehearse monthly (scratch DB, ~10 s on the dev dataset) and once on production before accepting real traffic (GO_LIVE.md Gate 4.4).
 
-### SQLite (single-writer deployments)
-
-```bash
-# consistent backup (WAL-aware)
-sqlite3 /home/z/my-project/db/custom.db "VACUUM INTO '/backups/ieventplux-$(date +%F-%H%M).db'"
-
-# or: stop app+worker, then copy the trio
-cp db/custom.db db/custom.db-wal db/custom.db-shm /backups/
-```
-
-- Frequency: at least daily plus before any migration/administrative money action.
-- Restore: stop app + worker (realtime can stay), replace `db/custom.db` (and `-wal`/`-shm`) from the backup, restart services, then run a reconciliation sweep and compare `orgFinanceSummary` totals with the last known-good figures.
-- Retention: keep point-in-time copies around every payout batch and fee-version change — they are the ledger's forensic anchor.
-
 ### PostgreSQL (production path)
 
-- `bun run ops:backup` (logical, portable) PLUS `pg_dump` nightly + WAL archiving/PITR; test restores quarterly; the schema needs no SQLite-specific translation (`DATA_MODEL.md` §5).
+- `bun run ops:backup` (logical, portable) PLUS `pg_dump` nightly and managed WAL/PITR where available. Rehearse scratch restores before launch and monthly afterward. NEVER restore over the live database as part of a routine drill.
 
 ## 8. Rollback steps
 
-1. **Code rollback:** the deployment is a standalone build — redeploy the previous build directory (`bun .next/standalone/server.js`), keeping the database untouched. API versioning (`/api/v1`) is the compatibility contract; avoid rolling back across a schema change.
-2. **Schema rollback:** `prisma db push` is forward-only in practice — restore from backup (§7) rather than hand-editing. Before any risky migration: backup + dry-run on a copy.
+1. **Code rollback:** redeploy a previously verified compatible standalone artifact, keeping the live database untouched; validate with `bun run prod:smoke` (read-only). Never point `bun run smoke` at live customer data.
+2. **Schema rollback:** do not run `prisma db push` or restore an old snapshot automatically. Use reviewed migrations and a staging rehearsal; any live database recovery requires an incident decision, approved recovery point and reconciliation of post-backup payments.
 3. **Bad money state:** never UPDATE ledger rows. Post a correcting `ADJUSTMENT` journal via the platform (finance role + elevation) and record an audit note.
 4. **Stuck queue:** stop worker → inspect DEAD jobs → fix cause → restart (stale locks >90 s self-heal on restart).
 5. **Provider incident:** providers being down degrades features gracefully (env.ts stages); no rollback required — monitor `/api/v1/health` until the provider recovers.
