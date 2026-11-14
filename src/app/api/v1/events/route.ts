@@ -22,15 +22,31 @@ const eventCardSelect = {
 export async function GET(req: NextRequest) {
   return handle(async () => {
     const url = new URL(req.url)
-    const { page, pageSize, offset } = pagination(req, 12, 36)
     const mine = url.searchParams.get('mine') === '1'
+    const { page, pageSize, offset } = pagination(req, 12, mine ? 50 : 36)
 
     if (mine) {
       const user = await requireUser()
-      const orgId = url.searchParams.get('orgId')
-      const where: Record<string, unknown> = { orgId: orgId ?? undefined, deletedAt: null }
-      const status = url.searchParams.get('status')
-      if (status && status !== 'ALL') where.status = status
+      const requestedOrgId = url.searchParams.get('orgId')
+      // Critical tenant boundary: the caller controls orgId and "mine" is not
+      // inherently safe. Filter through ACCEPTED session-user memberships
+      // before reading any draft, unlisted or invite-only event.
+      const memberships = await db.membership.findMany({
+        where: { userId: user.id, acceptedAt: { not: null }, org: { deletedAt: null } },
+        select: { orgId: true },
+      })
+      const authorizedIds = memberships.map((membership) => membership.orgId)
+      if (requestedOrgId && !authorizedIds.includes(requestedOrgId)) {
+        throw errors.forbidden('You cannot view events in this organization.')
+      }
+
+      const where = {
+        orgId: requestedOrgId ?? { in: authorizedIds },
+        deletedAt: null,
+        ...(url.searchParams.get('status') && url.searchParams.get('status') !== 'ALL'
+          ? { status: url.searchParams.get('status')! }
+          : {}),
+      }
       const items = await db.event.findMany({
         where,
         orderBy: { createdAt: 'desc' },
