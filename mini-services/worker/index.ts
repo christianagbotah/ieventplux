@@ -133,7 +133,7 @@ async function tick() {
   }
 }
 
-httpServer.listen(PORT, () => {
+httpServer.listen(PORT, process.env.NODE_ENV === 'production' ? '127.0.0.1' : '0.0.0.0', () => {
   console.log(`[worker] ${WORKER_ID} listening on :${PORT}`)
   void tick()
   setInterval(() => void tick(), 5000)
