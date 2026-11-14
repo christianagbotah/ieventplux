@@ -58,7 +58,7 @@ jobs:
         run: bun run typecheck
 
       - name: Security policy unit tests (payments + realtime authorization)
-        run: bun test src/server/hubtel/security-policy.test.ts mini-services/realtime/room-authorization.test.ts
+        run: bun test src/server/hubtel/security-policy.test.ts mini-services/realtime/room-authorization.test.ts src/portal/lib/checkin-policy.test.ts
 
       - name: Push schema + seed
         run: |
