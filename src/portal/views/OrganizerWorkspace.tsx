@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { io } from 'socket.io-client'
+import { connectRealtime } from '../realtime'
 import {
   LayoutDashboard, CalendarPlus, Users, Ticket, Radio, Megaphone, MessageSquare, Wallet, UserCog, CreditCard, Settings,
   ChevronLeft, ChevronRight, ChevronDown, Plus, Loader2, Camera, ScanLine, Search, Play, Square, RefreshCw, KeyRound, Pause, PlayCircle, Trash2, FileText, ShieldAlert, TrendingUp, Repeat, Activity, Vote, HandCoins, Sparkles, Download, Upload, CheckCircle2, Eye, EyeOff, Flag, History, Clock, MapPin, Pencil,
@@ -1760,7 +1760,7 @@ function ChatModerationPanel({ broadcastId, title }: { broadcastId: string; titl
 
   // Live updates: new messages and moderation deltas arrive over the room socket.
   useEffect(() => {
-    const socket = io('/?XTransformPort=3003', { transports: ['websocket', 'polling'], reconnection: true })
+    const socket = connectRealtime()
     socket.on('connect', () => socket.emit('join', { room: `broadcast:${broadcastId}` }))
     socket.on('chat', (message: ModRow) => {
       setMessages((prev) => (prev && prev.some((m) => m.id === message.id) ? prev : [...(prev ?? []).slice(-80), message]))
