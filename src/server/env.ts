@@ -113,9 +113,9 @@ export function envValidation() {
   if (!env.databaseUrl) errors.push('DATABASE_URL is required.')
   if (isProd && !process.env.APP_SECRET) errors.push('APP_SECRET is required in production.')
   if (!isProd && !process.env.APP_SECRET) warnings.push('APP_SECRET not set — using an insecure development default.')
-  if (!checkoutConfigured) warnings.push('HUBTEL_CHECKOUT_CLIENT_ID / SECRET not set — payments run in the isolated development simulator and real charges are impossible.')
+  if (!checkoutConfigured) warnings.push(isProd ? 'HUBTEL_CHECKOUT_CLIENT_ID / SECRET not set — checkout unavailable; production never simulates a successful charge.' : 'HUBTEL_CHECKOUT_CLIENT_ID / SECRET not set — development-only payment simulator active; real charges are impossible.')
   if (!sendMoneyConfigured) warnings.push('HUBTEL_SENDMONEY_* not set — payouts are recorded and tracked but cannot be submitted to a provider.')
-  if (!smsConfigured) warnings.push('HUBTEL_SMS_* / HUBTEL_SMS_SENDER_ID not set — SMS runs in the development simulator (no live messages).')
+  if (!smsConfigured) warnings.push(isProd ? 'HUBTEL_SMS_* / HUBTEL_SMS_SENDER_ID not set — production SMS delivery unavailable; no simulated delivery.' : 'HUBTEL_SMS_* / HUBTEL_SMS_SENDER_ID not set — development-only SMS simulator active.')
   if (!videoConfigured) warnings.push('CF_STREAM_* not set — live delivery uses the clearly-labelled synthetic stream renderer.')
   if (!smtpConfigured) warnings.push('SMTP_* not set — email delivery is queued with truthful "SUPPRESSED" status.')
   return { errors, warnings }
@@ -185,8 +185,8 @@ export async function integrationStatuses(): Promise<IntegrationStatus[]> {
       key: 'ai-concierge',
       name: 'AI concierge (LLM + voice)',
       stage: 'implemented',
-      configured: true,
-      mode: 'real',
+      configured: env.aiEnabled,
+      mode: env.aiEnabled ? 'real' : 'unavailable',
       detail: env.aiEnabled
         ? 'Z.ai SDK chat/ASR/TTS active for the attendee concierge (text + real-time voice conversation).'
         : 'Disabled via AI_CONCIERGE_ENABLED=false.',
