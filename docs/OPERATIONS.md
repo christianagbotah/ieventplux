@@ -121,6 +121,27 @@ bun run ops:backup
 - The script VERIFIES itself: the file is re-read after writing and the line count must equal the counted rows (a mismatch marks the run FAILED).
 - Schedule: at least daily; always immediately before a migration or any administrative money action.
 
+### Restoring a snapshot (`bun run ops:restore`, R33 — rehearsed, not theoretical)
+
+```bash
+# 1. create a scratch database + schema
+#    (managed PG: CREATE DATABASE scratch; then:)
+DATABASE_URL=postgresql://…/scratch bunx prisma db push
+
+# 2. restore the newest snapshot into it (FK-order inserts, count-verified)
+bun run ops:restore -- --target postgresql://…/scratch
+# → inserted N rows across M tables (FK order: User → Organization → …)
+# → verification: every restored table's count matches the dump — restore OK
+
+# 3. promote (real recovery, NOT a rehearsal): stop app+worker, restore into
+#    the LIVE URL with the explicit override, restart, run the reconciliation
+#    sweep (orgFinanceSummary vs last known-good), then smoke.
+bun run ops:restore -- --i-know-this-wipes-live --target <LIVE_URL>
+```
+
+- The restore is GUARDED: it refuses the live database unless `--i-know-this-wipes-live`, refuses a target whose schema is missing tables, and fails (exit 1) on any per-table count mismatch — never a silent partial recovery.
+- A backup that has never been restored is a hypothesis: rehearse monthly (scratch DB, ~10 s on the dev dataset) and once on production before accepting real traffic (GO_LIVE.md Gate 4.4).
+
 ### SQLite (single-writer deployments)
 
 ```bash

@@ -968,3 +968,23 @@ A second session restart again wiped the Postgres cluster and reverted `.env` to
 **The multi-instance proof, executed for real (not design-claimed):** a second full app process was booted on :3004 from a project copy sharing the SAME PostgreSQL instance (Turbopack's per-project lock prevents two `next dev` in one dir; the copy gets its own build dir + its own Prisma client — only the database is shared). Six POST `/auth/password-reset` requests were fired interleaved between the two instances: `:3000 → 200 · :3004 → 200 · :3000 → 200 · :3004 → 200 · :3000 → 200 · :3004 → 429 + Retry-After: 41`. Each instance handled only THREE of the six requests — a per-instance in-memory limiter could never trip at a limit of 5. The single durable bucket row after the run: `pwreset:::1` (both processes resolved the same client IP), `count = 7` (6 proof requests + the header probe), one window. The old limitation is closed with evidence, not reasoning.
 
 Only after this second full pass was the round pushed.
+
+---
+
+## Re-verification round 33 — restore capability, env audit, GO_LIVE (2026-11-14)
+
+| Check | Result |
+|---|---|
+| `bun run ops:restore` (rehearsal run 1) | scratch DB `ieventplux_restore_verify` (created + `prisma db push`): **455 rows / 53 tables inserted in FK order** (`User → Organization → EventSeries → Venue → …`), `verification: every restored table's count matches the dump — restore OK` |
+| restore rehearsal run 2 (after the empty-table truncate fix) | same green result — idempotent |
+| Content-level verification | 14 User rows **byte-identical** to live (email/role/displayName); Order 14/14, Ticket 19/19, PaymentAttempt 13/13, Event 19/19; all three live PAID orders present in the restored copy (incl. smoke purchase ORD-7661303257 created 17 s pre-snapshot) |
+| Guard: `--target <LIVE_URL>` | **REFUSED** ("the target URL is this project's LIVE database… Rehearse into a scratch database") |
+| Guard: no target at all | **REFUSED** ("refuses to guess — pass --target") |
+| Guard: missing-schema target | refused with the `prisma db push` remedy (exercised implicitly by the fresh-scratch flow) |
+| Scratch DB cleanup | `DROP DATABASE ieventplux_restore_verify` — clean |
+| Env audit | `process.env.*` keys in src/ + scripts/ + mini-services diffed vs `.env.example`: 5 ops-tooling vars added; `VIDEO_PROVIDER` removed (never read — provider auto-selects from CF_STREAM_* presence); zero undocumented env keys remain |
+| `bun run smoke` (post-changes) | **11/11 passed** (rate limit 5×200 → 429 + Retry-After 36 s) |
+| `bun run lint` | 0 errors / 16 warnings (one new error in restore.ts caught by lint mid-round and fixed: no-require-imports → `statSync` import) |
+| web `bunx tsc --noEmit` | 0 errors |
+
+**Honest scope note:** no UI changed this round, so browser verification re-uses the R32 Ops Health pass. `next build` remains deliberately un-executed (dev-sandbox rule) — it is Gate 2 of `docs/GO_LIVE.md`, sequenced with a smoke-the-artifact step and rollback path, not silently skipped.

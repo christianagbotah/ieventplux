@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "smoke": "bun run scripts/smoke.ts",
     "ops:backup": "bun run scripts/backup.ts",
+    "ops:restore": "bun run scripts/restore.ts",
     "ops:monitor": "bun run scripts/monitor.ts",
     "db:push": "prisma db push --accept-data-loss",
     "db:postgres": "bash scripts/dev-postgres.sh",

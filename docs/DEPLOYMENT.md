@@ -1,5 +1,9 @@
 # iEventPlux — Deployment Guide
 
+> **Launching for real?** Start at **`docs/GO_LIVE.md`** — the sequenced go-live checklist (staging
+> verification per external → first production build → deployment event → post-deploy proof → mobile
+> on-device → go/no-go). This runbook is Gate 3's reference material.
+
 Deployment targets are kept configurable. Two supported paths: **(A) this sandbox-style single-host deployment** (what is running now, behind the Caddy gateway) and **(B) production VPS with reverse proxy** (runbook + production checklist). Never point either at another application's ports without that environment being supplied in scope.
 
 ## A. What is running now (development topology)
