@@ -1,6 +1,6 @@
 /// <reference types="bun-types" />
 import { describe, expect, test } from 'bun:test'
-import { confirmedAmountMatches, simulatorAllowed } from './security-policy'
+import { confirmedAmountMatches, simulatorAllowed, productionSecretConfigured } from './security-policy'
 
 describe('production simulator isolation', () => {
   test('never simulate in production', () => expect(simulatorAllowed('production')).toBe(false))
@@ -16,5 +16,16 @@ describe('authoritative payment amount', () => {
   test('rejects invalid values', () => {
     expect(confirmedAmountMatches(NaN, 100)).toBe(false)
     expect(confirmedAmountMatches(-1, -1)).toBe(false)
+  })
+})
+
+describe('production app secret gate', () => {
+  test('rejects absent, short and default development secret', () => {
+    expect(productionSecretConfigured(undefined)).toBe(false)
+    expect(productionSecretConfigured('short')).toBe(false)
+    expect(productionSecretConfigured('dev-only-insecure-secret-change-me')).toBe(false)
+  })
+  test('allows properly provisioned value', () => {
+    expect(productionSecretConfigured('7fe4d4821b51425ca3bc0d981020614de3c36a74f')).toBe(true)
   })
 })
