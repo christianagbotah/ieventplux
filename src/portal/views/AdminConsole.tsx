@@ -311,7 +311,14 @@ function Orgs() {
                 <Button size="sm" variant="outline" className="rounded-full" onClick={async () => { await api.post(`/admin/orgs/${o.id}/suspend`, {}); reload() }}>Suspend</Button>
               )}
             </CardContent>
-    interface AdminEventRow {
+          </Card>
+        )
+      })}
+    </div>
+  )
+}
+
+interface AdminEventRow {
   id: string
   title: string
   slug: string
