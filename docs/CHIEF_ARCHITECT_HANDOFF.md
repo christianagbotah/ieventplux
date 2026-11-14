@@ -1,5 +1,10 @@
 # CHIEF ARCHITECT HANDOFF — iEventPlux
 
+> **SUPERSEDED for current state (Rounds 1–33 happened after this handoff).** This document
+> describes the original Stage A–F handoff. For the up-to-date architecture, verified claims,
+> honest gap list and review path, read **`docs/ARCHITECT_REVIEW.md`** (Round 34 review package),
+> then `docs/GO_LIVE.md` and `docs/PROGRESS.md`.
+
 **To:** Chief Architect (ChatGPT independent review pass)
 **From:** Principal Implementation Engineer (z.ai build)
 **Product:** iEventPlux — events discovery, ticketing, social & broadcasting platform for Lightworld Technologies Ltd. (Christian Agbotah), Ghana.
