@@ -1,5 +1,7 @@
 # iEventPlux — Deployment Runbook (PostgreSQL / production standalone)
 
+> **Specific running host:** The Lightworld shared Webuzo VPS deployment completed 2026-11-14 uses *Webuzo-managed Nginx*, dedicated localhost ports **3160/3161/3162** and PostgreSQL **55450**, not the generic Caddy/3000/3001/3003 example below. Refer to [LIVE_VPS_STATUS.md](LIVE_VPS_STATUS.md) for the verified actual host and open launch gates. This generic runbook remains useful only as a reference for a fresh, dedicated VPS.
+
 > **Launch authority:** Complete [GO_LIVE.md](GO_LIVE.md) in order. This runbook is the technical reference for Gate 3; it is **not** evidence that real provider contracts, hosting or live transactions have passed. The old SQLite/sandbox instructions are intentionally superseded.
 
 ## 1. Deployment shape
