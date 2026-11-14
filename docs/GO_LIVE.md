@@ -1,5 +1,7 @@
 # iEventPlux — Go-Live Checklist (the launch procedure)
 
+> **Deployment update (2026-11-14):** The reviewed Round 41 web app and three app services, dedicated PostgreSQL, HTTPS/Cloudflare via Webuzo, and monitoring are now installed and responding on the shared Lightworld VPS. This is a technical **UAT deployment, not a financial GO decision**: the first admin, external provider acceptance, offsite backup, device QA and payment verification are pending. See [LIVE_VPS_STATUS.md](LIVE_VPS_STATUS.md) for actual port, Nginx, DNS and certificate details; the older example Caddy port-3000 deployment is not used on this shared server.
+
 > **How to use this document.** Engineering has synthetic CI evidence (`docs/TEST_REPORT.md`), but Round 35 found
 > release-blocking payment verification and deployment gaps. What remains between "code ready" and "first real customer" is a
 > **launch procedure**, not development. Execute the gates **in order**. Each gate has: commands,
