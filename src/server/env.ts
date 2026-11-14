@@ -86,8 +86,8 @@ export const env: Env = {
     smsClientSecret: process.env.HUBTEL_SMS_CLIENT_SECRET ?? '',
     smsSenderId: process.env.HUBTEL_SMS_SENDER_ID ?? '',
   },
-  paymentsSimulator: paymentsSimFlag === 'auto' ? !checkoutConfigured : boolFromEnv(paymentsSimFlag),
-  smsSimulator: smsSimFlag === 'auto' ? !smsConfigured : boolFromEnv(smsSimFlag),
+  paymentsSimulator: !isProd && (paymentsSimFlag === 'auto' ? !checkoutConfigured : boolFromEnv(paymentsSimFlag)),
+  smsSimulator: !isProd && (smsSimFlag === 'auto' ? !smsConfigured : boolFromEnv(smsSimFlag)),
   videoProvider: videoConfigured ? 'cloudflare-stream' : 'simulator',
   cfStream: { apiToken: process.env.CF_STREAM_API_TOKEN ?? '', accountId: process.env.CF_STREAM_ACCOUNT_ID ?? '' },
   smtp: {
