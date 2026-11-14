@@ -12,6 +12,8 @@ import {
   Image,
   Pressable,
   RefreshControl,
+  ScrollView,
+  TextInput,
   StyleSheet,
   Text,
   View,
@@ -36,6 +38,11 @@ type ListState =
 export default function DiscoverScreen({ navigation }: DiscoverScreenProps) {
   const [state, setState] = useState<ListState>({ status: 'loading' })
   const [refreshing, setRefreshing] = useState(false)
+  const [search, setSearch] = useState('')
+  const [category, setCategory] = useState('all')
+  const [serverResults, setServerResults] = useState<DiscoveryEventCard[] | null>(null)
+  const [searchBusy, setSearchBusy] = useState(false)
+  const [searchError, setSearchError] = useState(false)
 
   const load = useCallback(async () => {
     setState((prev) => (prev.status === 'ready' || prev.status === 'empty' ? prev : { status: 'loading' }))
@@ -66,6 +73,28 @@ export default function DiscoverScreen({ navigation }: DiscoverScreenProps) {
   useEffect(() => {
     void load()
   }, [load])
+
+  // Search the complete server catalogue with debounce, not just the small
+  // homepage rail. Keep a clearly labelled local fallback if connectivity fails.
+  useEffect(() => {
+    const query = search.trim()
+    if (!query && category === 'all') return
+    let cancelled = false
+    const handle = setTimeout(() => {
+      void api.discovery.searchEvents(query, category).then((result) => {
+        if (cancelled) return
+        setServerResults(result.items)
+        setSearchError(false)
+      }).catch(() => {
+        if (cancelled) return
+        setServerResults(null)
+        setSearchError(true)
+      }).finally(() => {
+        if (!cancelled) setSearchBusy(false)
+      })
+    }, 300)
+    return () => { cancelled = true; clearTimeout(handle) }
+  }, [search, category])
 
   useEffect(() => {
     navigation.setOptions({
@@ -122,34 +151,129 @@ export default function DiscoverScreen({ navigation }: DiscoverScreenProps) {
   }
 
   const liveNow = state.home.liveNow.filter((e) => e.broadcasts.some((b) => b.status === 'LIVE'))
+  const query = search.trim().toLocaleLowerCase()
+  const filtered = query.length > 0 || category !== 'all'
+  const fallbackUpcoming = state.home.upcoming.filter((event) => {
+    const matchesCategory = category === 'all' || event.categorySlug === category
+    const searchable = [event.title, event.org.name, event.city ?? '', event.categorySlug ?? ''].join(' ').toLocaleLowerCase()
+    return matchesCategory && (!query || searchable.includes(query))
+  })
+  const visibleUpcoming = filtered ? (serverResults ?? fallbackUpcoming) : state.home.upcoming
+  const featured = state.home.featured[0]
 
   return (
     <FlatList<DiscoveryEventCard>
       style={styles.list}
       contentContainerStyle={styles.listContent}
-      data={state.home.upcoming}
+      data={visibleUpcoming}
       keyExtractor={(item) => item.id}
       ListHeaderComponent={
-        liveNow.length > 0 ? (
-          <View style={styles.liveSection}>
-            <Text style={styles.liveSectionTitle}>Live now</Text>
-            <FlatList
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              data={liveNow}
-              keyExtractor={(item) => item.id}
-              renderItem={({ item }) => (
-                <LiveNowCard
-                  event={item}
-                  onPress={() => {
-                    const live = item.broadcasts.find((b) => b.status === 'LIVE')
-                    if (live) navigation.navigate('Broadcast', { broadcastId: live.id })
-                  }}
-                />
-              )}
-            />
+        <View>
+          <View style={styles.hero}>
+            <Text style={styles.heroKicker}>EVENTS. PEOPLE. EXPERIENCES.</Text>
+            <Text style={styles.heroTitle}>Make room for moments that matter.</Text>
+            <Text style={styles.heroBody}>Discover gatherings across Ghana, reserve your place and keep every ticket close.</Text>
+            <Text style={styles.heroStats}>{state.home.stats.upcomingEvents} upcoming · {state.home.stats.organizers} organizers · {state.home.stats.liveNow} live</Text>
           </View>
-        ) : null
+
+          <View style={styles.searchField}>
+            <Text style={styles.searchIcon} accessibilityElementsHidden>⌕</Text>
+            <TextInput
+              style={styles.searchInput}
+              value={search}
+              onChangeText={(text) => {
+                setSearch(text)
+                setServerResults(null)
+                setSearchError(false)
+                setSearchBusy(Boolean(text.trim() || category !== 'all'))
+              }}
+              placeholder="Search upcoming events or cities"
+              placeholderTextColor={theme.colors.textMuted}
+              autoCorrect={false}
+              returnKeyType="search"
+              accessibilityLabel="Search upcoming events"
+            />
+            {search ? (
+              <Pressable onPress={() => { setSearch(''); setServerResults(null); setSearchError(false); setSearchBusy(category !== 'all') }} accessibilityRole="button" accessibilityLabel="Clear search" style={styles.clearSearch}>
+                <Text style={styles.clearSearchText}>×</Text>
+              </Pressable>
+            ) : null}
+          </View>
+
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryScroll} contentContainerStyle={styles.categoryRow}>
+            {[{ slug: 'all', name: 'All events' }, ...state.home.categories].map((option) => (
+              <Pressable
+                key={option.slug}
+                onPress={() => {
+                  setCategory(option.slug)
+                  setServerResults(null)
+                  setSearchError(false)
+                  setSearchBusy(Boolean(search.trim() || option.slug !== 'all'))
+                }}
+                style={[styles.categoryPill, category === option.slug && styles.categoryPillSelected]}
+                accessibilityRole="button"
+                accessibilityState={{ selected: category === option.slug }}
+                accessibilityLabel={option.name}
+              >
+                <Text style={[styles.categoryText, category === option.slug && styles.categoryTextSelected]}>{option.name}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+
+          {featured && !query && category === 'all' ? (
+            <View style={styles.sectionBlock}>
+              <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Featured experience</Text></View>
+              <FeaturedEventCard event={featured} onPress={() => navigation.navigate('EventDetail', { eventId: featured.id })} />
+            </View>
+          ) : null}
+
+          {liveNow.length > 0 && !query && category === 'all' ? (
+            <View style={styles.liveSection}>
+              <View style={styles.sectionHeading}>
+                <Text style={styles.sectionTitle}>Happening live</Text>
+                <Text style={styles.livePill}>● LIVE</Text>
+              </View>
+              <FlatList
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                data={liveNow}
+                keyExtractor={(item) => item.id}
+                renderItem={({ item }) => (
+                  <LiveNowCard
+                    event={item}
+                    onPress={() => {
+                      const live = item.broadcasts.find((b) => b.status === 'LIVE')
+                      if (live) navigation.navigate('Broadcast', { broadcastId: live.id })
+                    }}
+                  />
+                )}
+              />
+            </View>
+          ) : null}
+
+          <View style={styles.sectionHeading}>
+            <Text style={styles.sectionTitle}>{filtered ? 'Matching events' : 'Coming up'}</Text>
+            <Text style={styles.sectionCount}>{visibleUpcoming.length} events</Text>
+          </View>
+          {filtered && searchBusy ? (
+            <View style={styles.searchStatus}>
+              <ActivityIndicator color={theme.colors.primary} size="small" />
+              <Text style={styles.searchStatusText}>Searching all published events…</Text>
+            </View>
+          ) : null}
+          {filtered && searchError ? (
+            <Text style={styles.searchStatusText} accessibilityRole="alert">Online search is unavailable. Showing only the events already downloaded.</Text>
+          ) : null}
+        </View>
+      }
+      ListEmptyComponent={
+        <View style={styles.filterEmpty}>
+          <Text style={styles.emptyTitle}>No matching events</Text>
+          <Text style={styles.errorBody}>Try another search or category to explore more gatherings.</Text>
+          <Pressable style={styles.retryButton} accessibilityRole="button" onPress={() => { setSearch(''); setCategory('all'); setServerResults(null); setSearchError(false); setSearchBusy(false) }}>
+            <Text style={styles.retryButtonText}>Clear filters</Text>
+          </Pressable>
+        </View>
       }
       renderItem={({ item }) => (
         <EventRow
@@ -161,6 +285,31 @@ export default function DiscoverScreen({ navigation }: DiscoverScreenProps) {
         <RefreshControl refreshing={refreshing} onRefresh={() => void refresh()} tintColor={theme.colors.primary} />
       }
     />
+  )
+}
+
+function FeaturedEventCard({ event, onPress }: { event: DiscoveryEventCard; onPress: () => void }) {
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.featuredCard, pressed && styles.cardPressed]}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`View featured event ${event.title}`}
+    >
+      {event.coverImageUrl ? (
+        <Image source={{ uri: event.coverImageUrl }} style={styles.featuredImage} accessibilityLabel={`${event.title} artwork`} />
+      ) : (
+        <View style={[styles.featuredImage, styles.posterPlaceholder]}>
+          <Text style={styles.posterPlaceholderText}>{event.title}</Text>
+        </View>
+      )}
+      <View style={styles.featuredBody}>
+        <Text style={styles.featuredLabel}>CURATED FOR YOU</Text>
+        <Text style={styles.featuredTitle} numberOfLines={2}>{event.title}</Text>
+        <Text style={styles.featuredMeta} numberOfLines={2}>{formatDate(event.startsAt)} · {event.city ?? 'Location TBA'}</Text>
+        <Text style={styles.featuredAction}>Explore event  ›</Text>
+      </View>
+    </Pressable>
   )
 }
 
@@ -232,13 +381,44 @@ function EventRow({ event, onPress }: { event: DiscoveryEventCard; onPress: () =
 
 const styles = StyleSheet.create({
   list: { backgroundColor: theme.colors.bg },
-  listContent: { padding: theme.spacing.lg },
+  listContent: { padding: theme.spacing.lg, paddingBottom: theme.spacing.xxl },
+  hero: { backgroundColor: theme.colors.primaryDark, borderRadius: 24, padding: 24, marginBottom: 18 },
+  heroKicker: { color: '#a9e6d0', fontSize: 10, fontWeight: '800', letterSpacing: 1.5, marginBottom: 10 },
+  heroTitle: { color: '#ffffff', fontSize: 29, fontWeight: '800', letterSpacing: -0.5, lineHeight: 34 },
+  heroBody: { color: '#cfe9e0', fontSize: 13, lineHeight: 20, marginTop: 12 },
+  heroStats: { color: '#d2f5e8', fontSize: 11, fontWeight: '700', marginTop: 16 },
+  searchField: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.colors.card, borderRadius: 16, borderWidth: 1, borderColor: theme.colors.border, minHeight: 52, marginBottom: 12, paddingHorizontal: 14 },
+  searchIcon: { fontSize: 26, color: theme.colors.primary, marginRight: 8 },
+  searchInput: { flex: 1, fontSize: 15, color: theme.colors.text, paddingVertical: 12 },
+  clearSearch: { minWidth: 36, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  clearSearchText: { color: theme.colors.textMuted, fontSize: 25 },
+  categoryScroll: { marginBottom: 22 },
+  searchStatus: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12 },
+  searchStatusText: { color: theme.colors.textMuted, fontSize: 12, lineHeight: 19, marginBottom: 10 },
+  categoryRow: { gap: 8, paddingBottom: 3 },
+  categoryPill: { borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.card, borderRadius: 99, paddingHorizontal: 15, paddingVertical: 10, minHeight: 42, justifyContent: 'center' },
+  categoryPillSelected: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
+  categoryText: { color: theme.colors.textMuted, fontWeight: '700', fontSize: 12 },
+  categoryTextSelected: { color: '#ffffff' },
+  sectionBlock: { marginBottom: 22 },
+  sectionHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  sectionTitle: { color: theme.colors.text, fontSize: 20, fontWeight: '800', letterSpacing: -0.25 },
+  sectionCount: { color: theme.colors.textMuted, fontSize: 12, fontWeight: '600' },
+  livePill: { color: theme.colors.danger, fontWeight: '800', fontSize: 10 },
+  featuredCard: { borderRadius: 20, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.card, overflow: 'hidden' },
+  featuredImage: { width: '100%', height: 176, resizeMode: 'cover' },
+  featuredBody: { padding: 16 },
+  featuredLabel: { fontSize: 10, fontWeight: '800', color: theme.colors.primary, letterSpacing: 1.1, marginBottom: 5 },
+  featuredTitle: { color: theme.colors.text, fontWeight: '800', fontSize: 19 },
+  featuredMeta: { color: theme.colors.textMuted, fontSize: 12, marginTop: 6 },
+  featuredAction: { color: theme.colors.primary, fontWeight: '800', marginTop: 10, fontSize: 13 },
+  filterEmpty: { alignItems: 'center', padding: theme.spacing.xxl, backgroundColor: theme.colors.card, borderRadius: theme.radius.lg },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: theme.spacing.xl, backgroundColor: theme.colors.bg },
   headerActions: { flexDirection: 'row', alignItems: 'center' },
-  headerAction: { paddingHorizontal: theme.spacing.sm },
-  headerActionText: { color: '#ffffff', fontWeight: '600', fontSize: 14 },
+  headerAction: { paddingHorizontal: theme.spacing.sm, minHeight: 44, justifyContent: 'center' },
+  headerActionText: { color: theme.colors.primaryDark, fontWeight: '700', fontSize: 13 },
   liveSection: { marginBottom: theme.spacing.lg },
-  liveSectionTitle: { color: theme.colors.text, fontSize: 15, fontWeight: '800', marginBottom: theme.spacing.sm },
+  liveSectionTitle: { color: theme.colors.text, fontSize: 19, fontWeight: '800', marginBottom: theme.spacing.sm },
   liveCard: {
     width: 168,
     marginRight: theme.spacing.md,
@@ -277,7 +457,7 @@ const styles = StyleSheet.create({
   poster: { width: 108, height: 108, resizeMode: 'cover' },
   posterPlaceholder: { backgroundColor: theme.colors.primaryDark, alignItems: 'center', justifyContent: 'center', padding: theme.spacing.sm },
   posterPlaceholderText: { color: '#ffffff', fontSize: 11, fontWeight: '600', textAlign: 'center' },
-  cardBody: { flex: 1, padding: theme.spacing.md },
+  cardBody: { flex: 1, padding: theme.spacing.md, justifyContent: 'center' },
   title: { color: theme.colors.text, fontSize: 16, fontWeight: '700' },
   meta: { color: theme.colors.textMuted, fontSize: 12, marginTop: theme.spacing.xs },
   price: { color: theme.colors.primary, fontWeight: '700', marginTop: theme.spacing.xs },

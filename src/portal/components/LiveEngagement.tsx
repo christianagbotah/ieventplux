@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { io } from 'socket.io-client'
+import { connectRealtime } from '../realtime'
 import {
   BarChart3, MessageCircleQuestion, Send, ChevronUp, Pin, EyeOff, Eye, Check,
   Loader2, Plus, X, Radio, ShieldCheck, Vote,
@@ -96,7 +96,7 @@ export default function LiveEngagement({ eventId, slug, live }: { eventId: strin
 
   // Realtime deltas from the event room (best-effort; load() is the fallback).
   useEffect(() => {
-    const socket = io('/?XTransformPort=3003', { transports: ['websocket', 'polling'], reconnection: true })
+    const socket = connectRealtime()
     socket.on('connect', () => socket.emit('join', { room: `event:${eventId}` }))
 
     socket.on('poll:update', ({ poll }: { poll: Poll }) => {

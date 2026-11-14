@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { io } from 'socket.io-client'
+import { connectRealtime } from '../realtime'
 import { Send, Users, Lock, ShieldAlert, ChevronLeft, MessageCircle, History } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -107,8 +107,8 @@ export default function BroadcastView({ id }: { id: string }) {
 
   // Realtime: join the broadcast room for chat + presence.
   useEffect(() => {
-    if (!data) return
-    const socket = io('/?XTransformPort=3003', { transports: ['websocket', 'polling'], reconnection: true })
+    if (!data || !playToken) return
+    const socket = connectRealtime()
     socket.on('connect', () => socket.emit('join', { room: `broadcast:${id}` }))
     socket.on('chat', (message: ChatRow) => {
       setMessages((prev) => (prev.some((m) => m.id === message.id) ? prev : [...prev.slice(-80), message]))
@@ -137,7 +137,7 @@ export default function BroadcastView({ id }: { id: string }) {
     return () => {
       socket.disconnect()
     }
-  }, [data, id, isReplay])
+  }, [data, id, isReplay, playToken])
 
   // Session heartbeat keeps the protected playback token alive.
   useEffect(() => {

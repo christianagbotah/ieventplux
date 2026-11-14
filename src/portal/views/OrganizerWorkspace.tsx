@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { io } from 'socket.io-client'
+import { connectRealtime } from '../realtime'
 import {
   LayoutDashboard, CalendarPlus, Users, Ticket, Radio, Megaphone, MessageSquare, Wallet, UserCog, CreditCard, Settings,
   ChevronLeft, ChevronRight, ChevronDown, Plus, Loader2, Camera, ScanLine, Search, Play, Square, RefreshCw, KeyRound, Pause, PlayCircle, Trash2, FileText, ShieldAlert, TrendingUp, Repeat, Activity, Vote, HandCoins, Sparkles, Download, Upload, CheckCircle2, Eye, EyeOff, Flag, History, Clock, MapPin, Pencil,
@@ -64,6 +64,15 @@ export default function OrganizerWorkspace({ route }: { route: Route }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   useEffect(() => {
+    if (!sidebarOpen) return
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setSidebarOpen(false)
+    }
+    window.addEventListener('keydown', onEscape)
+    return () => window.removeEventListener('keydown', onEscape)
+  }, [sidebarOpen])
+
+  useEffect(() => {
     if (!booted) return // session check still in flight — do not bounce yet
     if (!user) {
       navigate('/signin')
@@ -82,12 +91,20 @@ export default function OrganizerWorkspace({ route }: { route: Route }) {
 
   return (
     <div className="mx-auto flex max-w-7xl gap-0 px-0 py-0 md:gap-6 md:px-4 md:py-6">
+      {sidebarOpen && (
+        <button
+          type="button"
+          aria-label="Close workspace navigation"
+          className="fixed inset-0 z-30 bg-black/60 backdrop-blur-[2px] md:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
       {/* Sidebar (collapsible). R19b: scrolls independently from the main pane —
           internally scrollable (overflow-y-auto + overscroll-contain, no scroll
           chaining) and bounded to the viewport on md+ (max-h under the sticky
           header offset), so long nav lists stay reachable instead of sticking
           out past the fold. */}
-      <aside className={`${sidebarOpen ? 'fixed inset-y-0 left-0 z-40 w-72 translate-x-0' : 'fixed inset-y-0 left-0 z-40 w-72 -translate-x-full'} transition-transform duration-200 border-r border-border/60 bg-card p-4 pt-16 overflow-y-auto overscroll-contain ievx-scrollbar md:sticky md:top-20 md:z-0 md:h-fit md:max-h-[calc(100vh-6rem)] md:w-60 md:translate-x-0 md:rounded-2xl md:border md:pt-4`}>
+      <aside id="organizer-menu" aria-label="Organizer navigation" className={`${sidebarOpen ? 'fixed inset-y-0 left-0 z-40 w-72 translate-x-0' : 'invisible pointer-events-none fixed inset-y-0 left-0 z-40 w-72 -translate-x-full md:visible md:pointer-events-auto'} transition-transform duration-200 border-r border-border/60 bg-card p-4 pt-16 overflow-y-auto overscroll-contain ievx-scrollbar md:sticky md:top-20 md:z-0 md:h-fit md:max-h-[calc(100vh-6rem)] md:w-60 md:translate-x-0 md:rounded-2xl md:border md:pt-4`}>
         <button className="absolute right-3 top-3 rounded-full p-1.5 hover:bg-secondary md:hidden" aria-label="Close sidebar" onClick={() => setSidebarOpen(false)}>
           <ChevronLeft className="h-5 w-5" />
         </button>
@@ -128,9 +145,19 @@ export default function OrganizerWorkspace({ route }: { route: Route }) {
 
       {/* Content */}
       <div className="min-w-0 flex-1 px-4 py-4 md:py-0">
-        <Button variant="outline" size="sm" className="mb-3 rounded-full md:hidden" onClick={() => setSidebarOpen(true)}>
+        <Button variant="outline" size="sm" className="mb-3 rounded-full md:hidden" aria-controls="organizer-menu" aria-expanded={sidebarOpen} onClick={() => setSidebarOpen(true)}>
           <ChevronLeft className="mr-1 h-4 w-4 rotate-180" /> Menu
         </Button>
+        <div className="ievx-surface mb-5 flex flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-5">
+          <div className="min-w-0">
+            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground">Active organization</p>
+            <p className="truncate text-base font-bold tracking-tight">{activeOrg.orgName}</p>
+            <p className="text-xs text-muted-foreground">{humanize(activeOrg.role)} workspace</p>
+          </div>
+          <Button size="sm" className="rounded-full px-4" onClick={() => navigate('/organizer?tab=events&new=1', { replace: true })}>
+            <Plus className="mr-1.5 h-4 w-4" aria-hidden /> New event
+          </Button>
+        </div>
         <div key={section} className="ievx-view-enter">
           {section === 'dashboard' && <Dashboard orgId={activeOrg.orgId} route={route} />}
           {section === 'insights' && <InsightsView orgId={activeOrg.orgId} />}
@@ -1760,7 +1787,7 @@ function ChatModerationPanel({ broadcastId, title }: { broadcastId: string; titl
 
   // Live updates: new messages and moderation deltas arrive over the room socket.
   useEffect(() => {
-    const socket = io('/?XTransformPort=3003', { transports: ['websocket', 'polling'], reconnection: true })
+    const socket = connectRealtime()
     socket.on('connect', () => socket.emit('join', { room: `broadcast:${broadcastId}` }))
     socket.on('chat', (message: ModRow) => {
       setMessages((prev) => (prev && prev.some((m) => m.id === message.id) ? prev : [...(prev ?? []).slice(-80), message]))

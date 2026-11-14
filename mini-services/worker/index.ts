@@ -1,7 +1,7 @@
 /**
  * iEventPlux background worker (:3001).
  *
- * Durable job processing over the SQLite-backed OutboxJob table (the database is
+ * Durable job processing over the PostgreSQL-backed OutboxJob table (the database is
  * the source of truth — a crashed worker loses nothing; locked jobs are reclaimed).
  * Every handler is idempotent, so retries never duplicate paid effects.
  */
@@ -11,6 +11,10 @@ import { db } from '../../src/lib/db'
 
 const PORT = Number(process.env.WORKER_PORT ?? 3001)
 const WORKER_SECRET = process.env.WORKER_SECRET ?? 'dev-worker-secret'
+if (process.env.NODE_ENV === 'production' &&
+    (WORKER_SECRET.length < 32 || WORKER_SECRET === 'dev-worker-secret')) {
+  throw new Error('Production worker requires a unique strong WORKER_SECRET (32+ characters).')
+}
 const WORKER_ID = `worker-${process.pid}-${Math.random().toString(36).slice(2, 6)}`
 
 const httpServer = createServer((req, res) => {

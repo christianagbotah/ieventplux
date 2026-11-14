@@ -248,7 +248,13 @@ export default function OrderView({ reference }: { reference: string }) {
         </div>
 
         <CardContent className="space-y-6 p-6">
-          <button className="flex w-full items-center gap-4 rounded-xl border border-border/70 p-4 text-left ievx-card-hover" onClick={() => navigate(`/event/${order.event.slug}`)}>
+          <div className="ievx-surface flex w-full items-center gap-3 p-3 sm:p-4">
+            <button
+              type="button"
+              className="flex min-w-0 flex-1 items-center gap-3 rounded-xl text-left focus-visible:outline-2 focus-visible:outline-primary"
+              onClick={() => navigate(`/event/${order.event.slug}`)}
+              aria-label={`View event: ${order.event.title}`}
+            >
             <div className="h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-muted">
               {order.event.coverImageUrl && (
                 <img src={order.event.coverImageUrl} alt="" className="h-full w-full object-cover" />
@@ -259,17 +265,18 @@ export default function OrderView({ reference }: { reference: string }) {
               <p className="text-xs text-muted-foreground">{order.event.org.name} · {dateLong(order.event.startsAt, order.event.timezone)}</p>
               {order.event.venue && <p className="text-xs text-muted-foreground">{order.event.venue.name}</p>}
             </div>
+            </button>
             <a
               href={`/api/v1/events/${order.event.id}/ics`}
               download
-              className="efx-underline-slide-link flex shrink-0 flex-col items-center gap-1 self-center px-2 text-xs font-semibold text-primary"
+              className="flex min-h-11 shrink-0 flex-col items-center justify-center gap-1 self-center rounded-xl border border-border bg-secondary/60 px-3 text-xs font-semibold text-primary hover:bg-secondary"
               aria-label="Add this event to your calendar (downloads an .ics file)"
               onClick={(e) => e.stopPropagation()}
             >
               <CalendarPlus className="h-5 w-5" aria-hidden />
               Calendar
             </a>
-          </button>
+          </div>
 
           <div>
             <p className="mb-2 text-xs font-bold uppercase tracking-wide text-muted-foreground">Items</p>

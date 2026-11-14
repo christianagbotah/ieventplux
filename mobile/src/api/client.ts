@@ -493,11 +493,21 @@ export const api = {
   auth: {
     login: (email: string, password: string) =>
       request<LoginResponse>('POST', '/auth/login', { email, password }),
+    requestReset: (email: string) =>
+      request<{ devResetCode?: string | null }>('POST', '/auth/password-reset', { email }),
+    confirmReset: (email: string, code: string, password: string) =>
+      request<{ message?: string }>('POST', '/auth/password-reset-confirm', { email, code, password }),
     me: () => request<MeResponse>('GET', '/auth/me'),
     logout: () => request<{ ok: boolean }>('POST', '/auth/logout'),
   },
   discovery: {
     home: () => request<DiscoveryHome>('GET', '/discovery/home'),
+    searchEvents: (query: string, category: string) => {
+      const params = new URLSearchParams({ page: '1', pageSize: '36' })
+      if (query.trim()) params.set('q', query.trim())
+      if (category !== 'all') params.set('category', category)
+      return request<{ items: DiscoveryEventCard[]; total: number }>('GET', `/events?${params.toString()}`)
+    },
   },
   events: {
     /** `idOrSlug` — the server accepts the event slug or the internal id. */

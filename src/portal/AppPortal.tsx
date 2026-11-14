@@ -1,8 +1,8 @@
 'use client'
 
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react'
-import { Compass, Radio, Film, Search, Ticket, LayoutDashboard, ShieldCheck, LogOut, Bell, Menu, Sparkles, UserRound, Command as CommandIcon } from 'lucide-react'
-import { io } from 'socket.io-client'
+import { Compass, Radio, Film, Search, Ticket, LayoutDashboard, ShieldCheck, LogOut, Bell, Sparkles, UserRound, Command as CommandIcon } from 'lucide-react'
+import { connectRealtime } from './realtime'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -53,6 +53,14 @@ const NAV = [
   { path: '/reels', label: 'Reels', icon: Film },
 ]
 
+const MOBILE_NAV = [
+  { path: '/', label: 'Discover', icon: Compass, tab: '' },
+  { path: '/live', label: 'Live', icon: Radio, tab: '' },
+  { path: '/reels', label: 'Reels', icon: Film, tab: '' },
+  { path: '/me?tab=tickets', label: 'Tickets', icon: Ticket, tab: 'tickets' },
+  { path: '/me?tab=profile', label: 'Account', icon: UserRound, tab: 'profile' },
+]
+
 export default function AppPortal() {
   const route = useRoute()
   const { user, memberships, unread, setUser, setMemberships, setUnread, setRealtimeConnected, setBooted } = usePortal()
@@ -87,18 +95,13 @@ export default function AppPortal() {
   // Realtime notifications over the gateway WebSocket (port ONLY in XTransformPort).
   useEffect(() => {
     if (!user) return
-    const socket = io('/?XTransformPort=3003', {
-      transports: ['websocket', 'polling'],
-      reconnection: true,
-      reconnectionAttempts: 6,
-      reconnectionDelay: 1200,
-      timeout: 10000,
-    })
+    const socket = connectRealtime()
     socket.on('connect', () => {
       setRealtimeConnected(true)
       socket.emit('join', { room: `user:${user.id}` })
     })
     socket.on('disconnect', () => setRealtimeConnected(false))
+    socket.on('room:denied', () => setRealtimeConnected(false))
     socket.on('notification', (payload: { title: string; body: string; link?: string }) => {
       setUnread(usePortal.getState().unread + 1)
       toast({ title: payload.title, description: payload.body })
@@ -197,17 +200,22 @@ export default function AppPortal() {
     <div className="flex min-h-screen flex-col bg-background text-foreground">
       {/* Effects Studio catalog — globally available efx-* classes for every view. */}
       <EffectsRuntime />
-      <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded-lg focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground">
+      {/* A #main anchor would be mistaken for an SPA route by the hash router. */}
+      <button
+        type="button"
+        onClick={() => document.getElementById('main')?.focus()}
+        className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-[100] focus:rounded-xl focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground focus:shadow-xl"
+      >
         Skip to content
-      </a>
+      </button>
 
       <header className="sticky top-0 z-30 border-b border-border/60 ievx-glass">
         <div className="mx-auto flex h-16 max-w-7xl items-center gap-3 px-4">
-          <button className="flex items-center gap-2.5 ievx-press" onClick={() => navigate('/')} aria-label="iEventPlux home">
+          <button type="button" className="flex shrink-0 items-center gap-2.5 ievx-press" onClick={() => navigate('/')} aria-label="iEventPlux home">
             <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-md shadow-primary/25">
               <Ticket className="h-5 w-5" aria-hidden />
             </span>
-            <span className="hidden text-lg font-extrabold tracking-tight sm:block">
+            <span className="hidden text-[15px] font-extrabold tracking-tight min-[380px]:inline sm:text-lg">
               iEvent<span className="efx-animated-gradient-text iefx-subhead" style={{ fontSize: 'inherit', letterSpacing: '-0.01em' }}>Plux</span>
             </span>
           </button>
@@ -254,11 +262,14 @@ export default function AppPortal() {
             </div>
           </form>
 
-          <div className="ml-auto flex items-center gap-1.5 lg:ml-0">
+          <div className="ml-auto flex shrink-0 items-center gap-1 lg:ml-0 lg:gap-1.5">
+            <Button variant="ghost" size="icon" className="rounded-full lg:hidden" aria-label="Search events" onClick={() => navigate('/search')}>
+              <Search className="h-5 w-5" aria-hidden />
+            </Button>
             <Button
               variant="ghost"
               size="icon"
-              className="rounded-full"
+              className="hidden rounded-full sm:inline-flex"
               aria-label="Open command palette (Ctrl+K)"
               title="Command palette (Ctrl+K)"
               onClick={() => setPaletteOpen(true)}
@@ -332,7 +343,7 @@ export default function AppPortal() {
             ) : (
               <>
                 <Button variant="ghost" className="hidden rounded-full sm:flex" onClick={() => navigate('/signin')}>Sign in</Button>
-                <Button className="rounded-full ievx-press" onClick={() => navigate('/register')}>Get started</Button>
+                <Button className="rounded-full px-3 sm:px-4 ievx-press" onClick={() => navigate('/register')}><span className="sm:hidden">Join</span><span className="hidden sm:inline">Get started</span></Button>
               </>
             )}
           </div>
@@ -341,9 +352,9 @@ export default function AppPortal() {
         <ConnectionStatus />
       </header>
 
-      <main id="main" ref={viewRef} className="flex-1 pb-24 md:pb-10">
+      <main id="main" tabIndex={-1} ref={viewRef} className="min-w-0 flex-1 pb-24 outline-none md:pb-10">
         <Suspense fallback={<ViewFallback />}>
-          <div key={route.raw} className="ievx-view-enter">{view}</div>
+          <div key={route.path} className="ievx-view-enter">{view}</div>
         </Suspense>
       </main>
 
@@ -365,19 +376,26 @@ export default function AppPortal() {
       {/* Mobile bottom navigation */}
       <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-border/60 ievx-glass md:hidden" aria-label="Mobile primary">
         <div className="mx-auto flex h-16 max-w-lg items-center justify-around px-2 pb-[env(safe-area-inset-bottom)]">
-          {[...NAV, { path: '/me', label: 'Me', icon: Menu }].map((item) => (
-            <button
-              key={item.path}
-              onClick={() => navigate(item.path)}
-              aria-current={activeNav(item.path) ? 'page' : undefined}
-              className={`flex flex-col items-center gap-1 rounded-xl px-3 py-1.5 text-[10.5px] font-medium ievx-press ${
-                activeNav(item.path) ? 'text-primary' : 'text-muted-foreground'
-              }`}
-            >
-              <item.icon className="h-5 w-5" aria-hidden />
-              {item.label}
-            </button>
-          ))}
+          {MOBILE_NAV.map((item) => {
+            const active = item.path.startsWith('/me')
+              ? route.segments[0] === 'me' && (route.query.get('tab') ?? 'tickets') === item.tab
+              : activeNav(item.path)
+            return (
+              <button
+                key={item.path}
+                type="button"
+                onClick={() => navigate(item.path)}
+                aria-current={active ? 'page' : undefined}
+                aria-label={item.label}
+                className={`flex min-h-12 min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-2xl px-1 py-1.5 text-[11px] font-semibold transition-colors ievx-press ${
+                  active ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+                }`}
+              >
+                <item.icon className="h-5 w-5" aria-hidden />
+                <span className="truncate">{item.label}</span>
+              </button>
+            )
+          })}
         </div>
       </nav>
 

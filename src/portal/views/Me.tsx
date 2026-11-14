@@ -74,6 +74,15 @@ export default function Me({ route }: { route: Route }) {
   // re-render storm — one setState per minute while the view is mounted.
   const [now, setNow] = useState(() => Date.now())
 
+  // Keep deep links and the five-tab mobile navigation in sync without
+  // remounting the entire profile view (which would discard in-progress work).
+  useEffect(() => {
+    const requested = route.query.get('tab') ?? 'tickets'
+    if (['tickets', 'orders', 'saved', 'following', 'notifications', 'profile'].includes(requested)) {
+      setTab((previous) => previous === requested ? previous : requested)
+    }
+  }, [route.raw])
+
   useEffect(() => {
     const id = window.setInterval(() => setNow(Date.now()), 60_000)
     return () => window.clearInterval(id)
@@ -264,7 +273,10 @@ export default function Me({ route }: { route: Route }) {
         )}
       </div>
 
-      <Tabs value={tab} onValueChange={setTab}>
+      <Tabs value={tab} onValueChange={(next) => {
+        setTab(next)
+        navigate(`/me?tab=${next}`, { replace: true })
+      }}>
         <TabsList
           className="efx-underline-slide-nav h-auto w-full rounded-none border-0 bg-transparent"
           style={{ maxWidth: '100%', margin: 0, justifyContent: 'flex-start', flexWrap: 'wrap', gap: '0.4rem 1.4rem', paddingBottom: '0.75rem' }}

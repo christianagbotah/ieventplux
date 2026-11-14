@@ -16,7 +16,7 @@ export class ApiClientError extends Error {
   }
 }
 
-async function request<T>(method: string, path: string, body?: unknown, options?: { formData?: FormData }): Promise<T> {
+async function request<T>(method: string, path: string, body?: unknown, options?: { formData?: FormData; signal?: AbortSignal }): Promise<T> {
   const headers: Record<string, string> = { Accept: 'application/json' }
   let payload: BodyInit | undefined
   if (options?.formData) {
@@ -30,6 +30,7 @@ async function request<T>(method: string, path: string, body?: unknown, options?
     headers,
     body: payload,
     credentials: 'same-origin',
+    signal: options?.signal,
   })
   const text = await res.text()
   let data: unknown = null
@@ -46,7 +47,7 @@ async function request<T>(method: string, path: string, body?: unknown, options?
 }
 
 export const api = {
-  get: <T>(path: string) => request<T>('GET', path),
+  get: <T>(path: string, options?: { signal?: AbortSignal }) => request<T>('GET', path, undefined, options),
   post: <T>(path: string, body?: unknown) => request<T>('POST', path, body ?? {}),
   patch: <T>(path: string, body?: unknown) => request<T>('PATCH', path, body ?? {}),
   delete: <T>(path: string) => request<T>('DELETE', path),

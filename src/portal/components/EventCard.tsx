@@ -62,11 +62,22 @@ export function EventCard({ event, index = 0, footer }: { event: EventCardData; 
   const inventory = inventoryState(event)
   return (
     <Card
-      role="article"
-      aria-label={event.title}
-      className="ievx-card-hover group flex-col gap-0 overflow-hidden rounded-2xl border-border/70 bg-card py-0 cursor-pointer"
+      role="link"
+      tabIndex={0}
+      aria-label={`View event: ${event.title}`}
+      className="ievx-card-hover ievx-event-card group flex-col gap-0 overflow-hidden rounded-2xl border-border/70 bg-card py-0 cursor-pointer"
       style={{ animationDelay: `${Math.min(index * 40, 320)}ms` }}
-      onClick={() => navigate(`/event/${event.slug}`)}
+      onKeyDown={(e) => {
+        if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
+          e.preventDefault()
+          navigate(`/event/${event.slug}`)
+        }
+      }}
+      onClick={(e) => {
+        const target = e.target as HTMLElement
+        if (target.closest('button,a,input,select,textarea,[role="button"]')) return
+        navigate(`/event/${event.slug}`)
+      }}
     >
       {/* R19: landscape 16/10 banner (was portrait 3/4 — tall banners swallowed
           rails and the promoted rail; landscape is the standard event-ticketing
@@ -78,6 +89,7 @@ export function EventCard({ event, index = 0, footer }: { event: EventCardData; 
             alt={`${event.title} artwork`}
             className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
             loading="lazy"
+            decoding="async"
             onError={() => setImgFailed(true)}
           />
         ) : (

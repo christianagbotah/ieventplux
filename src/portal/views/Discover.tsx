@@ -115,10 +115,17 @@ function SponsoredCard({ event, index }: { event: EventCardData; index: number }
   const [imgFailed, setImgFailed] = useState(false)
   return (
     <Card
-      role="article"
-      aria-label={`${event.title} (promoted)`}
-      className="ievx-card-hover group flex-row items-stretch gap-0 overflow-hidden rounded-2xl border-border/70 bg-card py-0 cursor-pointer"
+      role="link"
+      tabIndex={0}
+      aria-label={`View promoted event: ${event.title}`}
+      className="ievx-card-hover ievx-event-card group flex-row items-stretch gap-0 overflow-hidden rounded-2xl border-border/70 bg-card py-0 cursor-pointer"
       style={{ animationDelay: `${Math.min(index * 40, 320)}ms` }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          navigate(`/event/${event.slug}`)
+        }
+      }}
       onClick={() => navigate(`/event/${event.slug}`)}
     >
       <div className="relative w-24 shrink-0 overflow-hidden bg-muted sm:w-36">
@@ -174,6 +181,10 @@ export default function Discover({ route }: { route: Route }) {
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
+  const [listError, setListError] = useState<string | null>(null)
+  const [retryKey, setRetryKey] = useState(0)
+  const [homeError, setHomeError] = useState(false)
+  const [homeRetry, setHomeRetry] = useState(0)
   const [browseAll, setBrowseAll] = useState(false)
   const isSearch = route.segments[0] === 'search'
   const searchQuery = route.query.get('q') ?? ''
@@ -193,36 +204,59 @@ export default function Discover({ route }: { route: Route }) {
 
   useEffect(() => {
     if (isSearch) return
-    void api.get<HomePayload>('/discovery/home').then((data) => {
+    const controller = new AbortController()
+    setHomeError(false)
+    void api.get<HomePayload>('/discovery/home', { signal: controller.signal }).then((data) => {
+      if (controller.signal.aborted) return
       setHome(data)
-      setItems(null)
-    }).catch(() => setHome(null))
-  }, [isSearch])
+    }).catch(() => {
+      if (!controller.signal.aborted) setHomeError(true)
+    })
+    return () => controller.abort()
+  }, [isSearch, homeRetry])
 
   const filterKey = useMemo(() => JSON.stringify(filters), [filters])
 
   const loadList = useCallback(
-    async (targetPage: number) => {
+    async (targetPage: number, signal: AbortSignal) => {
       setLoading(true)
+      setListError(null)
+      if (targetPage === 1) setItems(null)
       try {
-        const result = await api.get<{ items: EventCardData[]; total: number }>(`/events${qs({ ...filters, page: targetPage, pageSize: 12 })}`)
-        setItems(result.items)
+        const result = await api.get<{ items: EventCardData[]; total: number }>(
+          `/events${qs({ ...filters, page: targetPage, pageSize: 12 })}`,
+          { signal },
+        )
+        if (signal.aborted) return
+        // A "load more" action MUST append, not replace the visible first page.
+        setItems((previous) => {
+          if (targetPage === 1) return result.items
+          const seen = new Set((previous ?? []).map((event) => event.id))
+          return [...(previous ?? []), ...result.items.filter((event) => !seen.has(event.id))]
+        })
         setTotal(result.total)
       } catch {
-        setItems([])
-        setTotal(0)
+        if (signal.aborted) return
+        setListError('We could not load events. Check your connection and try again.')
+        if (targetPage === 1) {
+          setItems([])
+          setTotal(0)
+        }
       } finally {
-        setLoading(false)
+        if (!signal.aborted) setLoading(false)
       }
     },
-    [filterKey]  
+    [filterKey],
   )
 
   const browsing = isSearch || browseAll || Boolean(filters.category || filters.city || filters.mode || filters.price || filters.when || filters.q)
 
   useEffect(() => {
-    if (browsing) void loadList(page)
-  }, [browsing, filterKey, page])
+    if (!browsing) return
+    const controller = new AbortController()
+    void loadList(page, controller.signal)
+    return () => controller.abort() // stale search results must never replace newer filters
+  }, [browsing, filterKey, page, loadList, retryKey])
 
   const applyFilter = (key: keyof typeof filters, value: string) => {
     setFilters((f) => ({ ...f, [key]: value }))
@@ -234,6 +268,8 @@ export default function Discover({ route }: { route: Route }) {
     setPage(1)
     setBrowseAll(false)
     setFiltersOpen(false)
+    setListError(null)
+    if (isSearch) navigate('/', { replace: true })
   }
 
   const sponsoredEvents = home?.sponsored ?? []
@@ -525,19 +561,25 @@ export default function Discover({ route }: { route: Route }) {
         )}
 
         {browsing ? (
-          <section aria-label="Search results">
-            <div className="mb-3 flex items-baseline justify-between">
+          <section aria-label="Search results" aria-busy={loading}>
+            <div className="mb-3 flex flex-wrap items-baseline justify-between gap-3">
               <h2 className="text-lg font-bold">
                 {isSearch && searchQuery ? `Results for “${searchQuery}”` : browseAll && !filters.category && !filters.q ? 'All upcoming events' : 'Browse events'}
               </h2>
               <div className="flex items-center gap-3">
-                <p className="text-sm text-muted-foreground">{total} event{total !== 1 ? 's' : ''}</p>
+                <p className="text-sm text-muted-foreground" aria-live="polite">{items?.length ?? 0} of {total} events</p>
                 <Button variant="ghost" size="sm" className="rounded-full" onClick={clearFilters}>
                   <X className="h-3.5 w-3.5" aria-hidden /> Reset
                 </Button>
               </div>
             </div>
-            {loading ? (
+            {listError && (
+              <div role="alert" className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-destructive/25 bg-destructive/5 p-4 text-sm text-foreground">
+                <span>{listError}</span>
+                <Button size="sm" variant="outline" onClick={() => setRetryKey((value) => value + 1)}>Retry</Button>
+              </div>
+            )}
+            {loading && !items?.length ? (
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 {Array.from({ length: 8 }).map((_, i) => <EventCardSkeleton key={i} />)}
               </div>
@@ -546,9 +588,11 @@ export default function Discover({ route }: { route: Route }) {
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                   {items.map((event, i) => <EventCard key={event.id} event={event} index={i} />)}
                 </div>
-                {page * 12 < total && (
-                  <div className="mt-6 text-center">
-                    <Button variant="outline" className="rounded-full" onClick={() => setPage((p) => p + 1)}>Load more</Button>
+                {items.length < total && (
+                  <div className="mt-7 text-center">
+                    <Button variant="outline" size="lg" className="rounded-full px-6" disabled={loading} onClick={() => setPage((p) => p + 1)}>
+                      {loading ? 'Loading more events…' : 'Load more events'}
+                    </Button>
                   </div>
                 )}
               </>
@@ -615,7 +659,13 @@ export default function Discover({ route }: { route: Route }) {
                   </button>
                 </div>
               </div>
-              {home === null ? (
+              {homeError ? (
+                <div role="alert" className="ievx-surface flex flex-col items-center gap-3 p-8 text-center">
+                  <p className="font-semibold">Upcoming events could not be loaded</p>
+                  <p className="text-sm text-muted-foreground">Check your connection and retry.</p>
+                  <Button variant="outline" className="rounded-full" onClick={() => setHomeRetry((value) => value + 1)}>Try again</Button>
+                </div>
+              ) : home === null ? (
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                   {Array.from({ length: 8 }).map((_, i) => <EventCardSkeleton key={i} />)}
                 </div>
