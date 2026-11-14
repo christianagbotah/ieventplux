@@ -51,7 +51,7 @@ Do not run the mutating, demo-user seed smoke suite against this database. Avoid
 
 ## First administrator and remaining launch gates
 
-The production database was created **without demo accounts** and had **zero users** at the HTTPS verification check. The operator should create their initial super-admin in a root SSH/Webuzo interactive terminal:
+The production database was created **without demo accounts** and had **zero users** at the HTTPS verification check. To prevent public registration from creating an account before the one-time SUPER_ADMIN bootstrap, the Webuzo domain include temporarily returns **503** for POST `/api/v1/auth/register`. The homepage, read-only APIs and real-time connection remain available. Remove this exact temporary Nginx location only after the initial administrator is created and SMTP/account-verification delivery is tested. The operator should create their initial super-admin in a root SSH/Webuzo interactive terminal:
 
 ```bash
 bash /root/ieventplux-create-admin.sh
