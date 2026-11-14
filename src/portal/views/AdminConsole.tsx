@@ -697,17 +697,14 @@ function HubtelConnection() {
       <CardHeader className="pb-2">
         <CardTitle className="flex flex-wrap items-center justify-between gap-2 text-base">
           <span className="flex items-center gap-2"><CreditCard className="h-4 w-4 text-primary" /> Hubtel connection</span>
-          <Badge variant={c.paymentsMode === 'REAL' ? 'default' : 'secondary'}>
-            {c.paymentsMode === 'REAL' && (
-              <span aria-hidden="true" className="efx-badge-ping__ping" style={{ position: 'static', width: 7, height: 7, background: 'rgba(16, 185, 129, 0.55)', flex: 'none' }} />
-            )}
-            {c.paymentsMode === 'REAL' ? 'REAL checkout live' : 'simulator active'}
+          <Badge variant={c.paymentsMode === 'UNAVAILABLE' ? 'destructive' : 'secondary'}>
+            {c.paymentsMode === 'REAL' ? 'Credentials configured · verification pending' : c.paymentsMode === 'SIMULATOR' ? 'Development simulator' : 'Checkout unavailable'}
           </Badge>
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-xs text-muted-foreground">
-          Hubtel issues one API client per business account — the saved pair feeds Checkout, Send Money and SMS. Keys are stored server-side and shown masked only.
+          Hubtel issues one API client per business account — the saved pair feeds Checkout, Send Money and SMS. Keys are stored server-side and shown masked only. Configured credentials do not prove real charges or payouts work: complete the provider tests in GO_LIVE.md before accepting customer money.
           Saved keys take effect immediately (no redeploy). Checkout base: <code className="rounded bg-secondary/60 px-1">{c.checkout.base}</code> (source: {c.checkout.source}).
         </p>
         <div className="grid gap-3 sm:grid-cols-2">
