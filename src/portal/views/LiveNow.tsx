@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Radio, Monitor, Play, Users } from 'lucide-react'
+import { Radio, Monitor, Play, Users, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
@@ -28,18 +28,32 @@ interface BroadcastRow {
 export default function LiveNow() {
   const [live, setLive] = useState<BroadcastRow[] | null>(null)
   const [replays, setReplays] = useState<BroadcastRow[] | null>(null)
+  const [loadError, setLoadError] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
+  const [refreshKey, setRefreshKey] = useState(0)
 
   useEffect(() => {
+    const controller = new AbortController()
+    setRefreshing(true)
     void api
-      .get<{ live: BroadcastRow[]; replays: BroadcastRow[] }>('/discovery/live')
+      .get<{ live: BroadcastRow[]; replays: BroadcastRow[] }>('/discovery/live', { signal: controller.signal })
       .then((data) => {
+        if (controller.signal.aborted) return
         setLive(data.live)
         setReplays(data.replays)
+        setLoadError(false)
       })
       .catch(() => {
-        setLive([])
-        setReplays([])
+        if (!controller.signal.aborted) setLoadError(true)
+      }).finally(() => {
+        if (!controller.signal.aborted) setRefreshing(false)
       })
+    return () => controller.abort()
+  }, [refreshKey])
+
+  useEffect(() => {
+    const id = window.setInterval(() => setRefreshKey((current) => current + 1), 60_000)
+    return () => window.clearInterval(id)
   }, [])
 
   const accessLabel = (b: BroadcastRow) =>
@@ -47,18 +61,36 @@ export default function LiveNow() {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8">
-      <div className="mb-8 flex items-center gap-3">
+      <div className="mb-8 flex flex-wrap items-center gap-3">
         <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-destructive/10 text-destructive"><Radio className="h-5 w-5" aria-hidden /></span>
         <div>
-          <h1 className="text-2xl font-extrabold">Live Now</h1>
+          <h1 className="ievx-section-title text-2xl">Live & replays</h1>
           <p className="text-sm text-muted-foreground">Free streams, paid masterclasses and ticket-holder broadcasts.</p>
         </div>
+        <Button
+          variant="outline"
+          size="sm"
+          className="ml-auto rounded-full"
+          disabled={refreshing}
+          onClick={() => setRefreshKey((current) => current + 1)}
+        >
+          <RefreshCw className={`mr-1.5 h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} aria-hidden /> Refresh
+        </Button>
       </div>
+
+      {loadError && (
+        <div role="alert" className="ievx-surface mb-6 flex flex-wrap items-center justify-between gap-3 p-4 text-sm">
+          <span>Live broadcasts could not be refreshed. Showing the last available results, if any.</span>
+          <Button size="sm" variant="outline" onClick={() => setRefreshKey((current) => current + 1)}>Retry</Button>
+        </div>
+      )}
 
       {live !== null && live.length > 0 && (
         <div className="mb-8">
-          <div className="efx-neon-glow-text" style={{ margin: 0, padding: '1rem 1rem', borderRadius: '1rem' }}>
-            <h2 className="efx-neon-glow-text__word">On Air</h2>
+          <div className="ievx-surface flex items-center gap-3 border-destructive/20 bg-destructive/5 px-5 py-4">
+            <span className="ievx-live-dot" aria-hidden />
+            <h2 className="text-lg font-extrabold tracking-tight">On air now</h2>
+            <span className="ml-auto text-sm font-semibold text-muted-foreground">{live.length} broadcast{live.length === 1 ? '' : 's'}</span>
           </div>
         </div>
       )}
@@ -67,6 +99,8 @@ export default function LiveNow() {
         <div className="grid gap-5 md:grid-cols-2">
           {Array.from({ length: 4 }).map((_, i) => <div key={i} className="ievx-skeleton h-56 rounded-2xl" />)}
         </div>
+      ) : live.length === 0 && loadError ? (
+        <EmptyState title="Live broadcasts unavailable" description="The live feed could not be loaded. Please retry." action={<Button variant="outline" className="rounded-full" onClick={() => setRefreshKey((current) => current + 1)}>Retry</Button>} />
       ) : live.length === 0 ? (
         <EmptyState title="No live broadcasts right now" description="Follow organizers to get notified the moment they go live." action={<Button className="rounded-full" onClick={() => navigate('/')}>Discover events</Button>} />
       ) : (
