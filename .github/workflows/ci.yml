@@ -81,6 +81,9 @@ jobs:
       - name: Realtime access smoke (public event, private notification and broadcast)
         run: bun run scripts/realtime-smoke.ts
 
+      - name: Organizer event tenant privacy regression (seeded users)
+        run: bun run scripts/org-event-access-smoke.ts
+
       - name: Smoke suite (golden paths incl. rate-limit proof)
         run: bun run smoke
 
