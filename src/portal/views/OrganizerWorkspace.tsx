@@ -1467,6 +1467,8 @@ function AttendeesView({ orgId }: { orgId: string }) {
   const [stats, setStats] = useState<{ ticketsIssued: number; admitted: number; remaining: number; anomalies: number } | null>(null)
   const [scanMode, setScanMode] = useState(false)
   const [scanValue, setScanValue] = useState('')
+  const [lookupQuery, setLookupQuery] = useState('')
+  const [lookupError, setLookupError] = useState('')
   const [lastResult, setLastResult] = useState<{ result: string; detail: string; ticket?: { holderName: string; ticketType: string } } | null>(null)
   const [offlineQueue, setOfflineQueue] = useState<{ eventId: string; payload: string; clientScanId: string; at: string }[]>([])
   const [scanBusy, setScanBusy] = useState(false)
@@ -1601,11 +1603,27 @@ function AttendeesView({ orgId }: { orgId: string }) {
     }
   }
 
-  const lookup = async (q: string) => {
-    if (!eventId || q.length < 2) return
-    const result = await api.get<{ items: { code: string; holderName: string; status: string; checkedInAt?: string | null }[] }>(`/checkin/lookup?eventId=${eventId}&q=${encodeURIComponent(q)}`).catch(() => null)
-    if (result) setAttendees(result.items as unknown[])
-  }
+  // Debounce server-side lookup. Prevent late results from a previous query
+  // replacing a more recent search or a different selected event.
+  useEffect(() => {
+    const query = lookupQuery.trim()
+    if (!eventId || query.length < 2) return
+    const controller = new AbortController()
+    const timer = window.setTimeout(() => {
+      void api.get<{ items: { id?: string; code: string; holderName: string; status: string; ticketType?: string; checkedInAt?: string | null }[] }>(
+        '/checkin/lookup?eventId=' + encodeURIComponent(eventId) + '&q=' + encodeURIComponent(query),
+        { signal: controller.signal },
+      ).then((response) => {
+        if (controller.signal.aborted) return
+        setAttendees(response.items)
+        setLookupError('')
+      }).catch((error) => {
+        if (controller.signal.aborted) return
+        setLookupError(error instanceof ApiClientError ? error.message : 'Could not search attendees.')
+      })
+    }, 300)
+    return () => { window.clearTimeout(timer); controller.abort() }
+  }, [eventId, lookupQuery])
 
   return (
     <div className="space-y-5">
@@ -1615,7 +1633,7 @@ function AttendeesView({ orgId }: { orgId: string }) {
           {stats && <p className="text-sm text-muted-foreground">{stats.admitted}/{stats.ticketsIssued} admitted · {stats.anomalies} anomalies</p>}
         </div>
         <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-          <Select value={eventId} onValueChange={setEventId}>
+          <Select value={eventId} onValueChange={(value) => { setEventId(value); setLookupQuery(''); setLookupError('') }}>
             <SelectTrigger className="h-11 w-full min-w-0 rounded-xl sm:w-56" aria-label="Select event"><SelectValue /></SelectTrigger>
             <SelectContent>{events.map((e) => <SelectItem key={e.id} value={e.id}>{e.title}</SelectItem>)}</SelectContent>
           </Select>
@@ -1670,14 +1688,23 @@ function AttendeesView({ orgId }: { orgId: string }) {
         <div className="relative flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
           <input
-            className="h-10 w-full rounded-full border border-border bg-card pl-9 pr-4 text-sm outline-none focus:border-primary"
-            placeholder="Manual lookup: name, email or code…"
-            aria-label="Manual attendee lookup"
-            onChange={(e) => void lookup(e.target.value)}
+            className="h-11 w-full rounded-xl border border-border bg-card pl-9 pr-4 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+            placeholder="Search name, email or ticket code…"
+            aria-label="Search attendees"
+            value={lookupQuery}
+            onChange={(event) => {
+              const value = event.target.value
+              setLookupQuery(value)
+              setLookupError('')
+              if (value.trim().length < 2) void refresh()
+            }}
           />
         </div>
       </div>
 
+      {lookupError && (
+        <div role="alert" className="rounded-xl border border-destructive/25 bg-destructive/5 p-3 text-sm">{lookupError}</div>
+      )}
       {attendees === null ? (
         <div role="status" aria-label="Loading attendee list" className="grid gap-2">
           {Array.from({ length: 4 }).map((_, i) => <div key={i} className="ievx-skeleton h-16 rounded-xl" />)}
