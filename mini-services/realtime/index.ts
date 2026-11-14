@@ -14,7 +14,7 @@ import { parseRoomKey } from './room-authorization'
  *
  * This service is deliberately stateless: all durable state lives in the database.
  */
-const PORT = 3003
+const PORT = Number(process.env.REALTIME_PORT ?? 3003)
 const REALTIME_SECRET = process.env.REALTIME_SECRET ?? 'dev-realtime-secret'
 const PUBLIC_ORIGIN = process.env.APP_URL?.replace(/\/$/, '')
 if (process.env.NODE_ENV === 'production' &&
@@ -150,6 +150,6 @@ io.on('connection', (socket) => {
   })
 })
 
-httpServer.listen(PORT, () => {
+httpServer.listen(PORT, process.env.NODE_ENV === 'production' ? '127.0.0.1' : '0.0.0.0', () => {
   console.log(`[realtime] listening on :${PORT} (socket.io path "/")`)
 })
