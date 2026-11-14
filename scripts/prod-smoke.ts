@@ -11,7 +11,7 @@ if (!rawBase) {
   console.error('PROD_SMOKE_BASE_URL is required (e.g. https://events.example.com/api/v1)')
   process.exit(2)
 }
-const base = new URL(rawBase.replace(/\\/$/, '') + '/')
+const base = new URL(rawBase.replace(/[/]$/, '') + '/')
 const loopback = ['127.0.0.1', 'localhost', '[::1]'].includes(base.hostname)
 if (base.protocol !== 'https:' && !(loopback && base.protocol === 'http:')) {
   console.error('Refusing an insecure remote production smoke URL. Use HTTPS.')
