@@ -76,7 +76,7 @@ async function main() {
     const passwordHash = await bcrypt.hash(password, 12)
     const created = await db.$transaction(async (tx) => {
       // Serialize concurrent bootstrap attempts on this PostgreSQL database.
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(32605235)`
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(32605235)::text`
       const count = await tx.user.count()
       if (count !== 0) throw new Error('Production bootstrap REFUSED: database already has users. Use an audited recovery process instead.')
       return tx.user.create({
