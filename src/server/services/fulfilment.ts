@@ -1,4 +1,5 @@
 import { db } from '../../lib/db'
+import { confirmedAmountMatches } from '../hubtel/security-policy'
 import { env } from '../env'
 import { errors } from '../api'
 import { ticketCode } from '../ids'
@@ -277,10 +278,18 @@ export async function applyProviderOutcome(params: {
   outcome: 'SUCCESS' | 'FAILURE' | 'PENDING' | 'UNKNOWN'
   amountMinor: number | null
   providerPaymentId?: string | null
-  source: 'CALLBACK' | 'RECONCILE'
+  source: 'CALLBACK' | 'AUTHENTICATED_STATUS' | 'RECONCILE'
 }): Promise<FulfilOutcome | { outcome: 'NOOP' | 'PENDING' | 'FAILED'; detail: string }> {
   const attempt = await db.paymentAttempt.findUnique({ where: { id: params.attemptId }, include: { order: true } })
   if (!attempt) return { outcome: 'NOOP', detail: 'Attempt not found.' }
+  // A public callback is never evidence of real payment. Real attempts must
+  // enter via an authenticated provider status read (AUTHENTICATED_STATUS or RECONCILE).
+  if (params.source === 'CALLBACK' && attempt.provider !== 'SIMULATOR') {
+    return { outcome: 'REJECTED', detail: 'Unverified callback cannot fulfil a real payment.' }
+  }
+  if (process.env.NODE_ENV === 'production' && attempt.provider === 'SIMULATOR') {
+    return { outcome: 'REJECTED', detail: 'Simulator attempts are forbidden in production.' }
+  }
 
   if (params.providerPaymentId) {
     await db.paymentAttempt.update({ where: { id: attempt.id }, data: { providerPaymentId: params.providerPaymentId } })
@@ -288,7 +297,7 @@ export async function applyProviderOutcome(params: {
 
   if (params.outcome === 'SUCCESS') {
     // Amount verification: never trust a mismatched callback/status payload.
-    if (params.amountMinor !== null && params.amountMinor !== attempt.amountMinor) {
+    if (!confirmedAmountMatches(params.amountMinor, attempt.amountMinor)) {
       await db.paymentAttempt.update({
         where: { id: attempt.id },
         data: { status: 'UNKNOWN', failureReason: `Amount mismatch: expected ${attempt.amountMinor}, provider said ${params.amountMinor}` },
