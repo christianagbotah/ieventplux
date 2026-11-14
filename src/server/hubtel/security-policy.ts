@@ -11,3 +11,9 @@ export function confirmedAmountMatches(receivedMinor: number | null, expectedMin
     receivedMinor === expectedMinor &&
     expectedMinor >= 0
 }
+
+/** The example .env value must NEVER be accepted as a real production signing key. */
+export function productionSecretConfigured(secret: string | undefined): boolean {
+  if (!secret || secret.length < 32) return false
+  return !/dev-only|change-me|changeme|placeholder|dummy/i.test(secret)
+}
