@@ -144,6 +144,7 @@ jobs:
       PAYMENTS_SIMULATOR: auto
       SMS_SIMULATOR: auto
       NEXT_TELEMETRY_DISABLED: "1"
+      PROD_SMOKE_BASE_URL: http://127.0.0.1:3100/api/v1
     steps:
       - uses: actions/checkout@v4
 
@@ -177,6 +178,9 @@ jobs:
           echo "Production artifact did not reach the expected healthy state."
           tail -100 production.log || true
           exit 1
+
+      - name: Read-only production smoke (no demo accounts or payment mutation)
+        run: bun run prod:smoke
 
       - name: Upload production boot logs on failure
         if: failure()
