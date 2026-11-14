@@ -43,7 +43,17 @@ bunx prisma db push
 
 **Never** run `bun run db:seed` on production. It creates known-password demonstration accounts. **Never** use `bun run db:push` in production; its package script passes `--accept-data-loss`. This repository has no committed Prisma migration history at the Round 34 handoff. For subsequent schema changes, create and review migration SQL in development, rehearse on a staging copy, take/verify a backup, then use a controlled migration procedure. Do not use `db push` as an unattended upgrade.
 
-Create the first real platform administrator via a reviewed and audited one-time bootstrap process; do not copy seed credentials into live infrastructure. This bootstrap is a **release blocker until implemented and verified**.
+Create the initial administrator with the **interactive, no-demo-seed** bootstrap script, on the empty live database only:
+
+```bash
+# `.env` already securely configured; no password on CLI or in environment.
+export BOOTSTRAP_ADMIN_EMAIL=admin@yourdomain.com
+export BOOTSTRAP_ADMIN_NAME="Platform Administrator"
+bun run ops:bootstrap-admin  # prompts twice for a new hidden 16+-character password
+unset BOOTSTRAP_ADMIN_EMAIL BOOTSTRAP_ADMIN_NAME
+```
+
+The script requires production mode, a non-placeholder APP_SECRET, PostgreSQL, a real TTY, and **zero existing users**, enforced under a PostgreSQL advisory transaction lock. It creates only one SUPER_ADMIN account and refuses a repeat. Exercise this procedure against an **empty staging database first**, then check administrator login; it remains **unverified on real infrastructure** until the launch gate is signed off.
 
 ## 5. Build and run
 
