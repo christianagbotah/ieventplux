@@ -8,7 +8,12 @@
  *  - The development simulators can never be forced on in production.
  */
 
+import { productionSecretConfigured } from './hubtel/security-policy'
+
 const isProd = process.env.NODE_ENV === 'production'
+if (isProd && !productionSecretConfigured(process.env.APP_SECRET)) {
+  throw new Error('Production startup refused: APP_SECRET must be a unique high-entropy value (32+ characters), not the development example.')
+}
 
 function boolFromEnv(v: string | undefined): boolean {
   return v === '1' || v === 'true' || v === 'yes'
