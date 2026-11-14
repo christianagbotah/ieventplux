@@ -906,25 +906,28 @@ export default function EventDetail({ slug }: { slug: string }) {
       </div>
 
       {/* Buy dialog */}
-      <Dialog open={buyOpen} onOpenChange={setBuyOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Select tickets</DialogTitle>
+      <Dialog open={buyOpen} onOpenChange={(open) => { if (!placing) setBuyOpen(open) }}>
+        <DialogContent className="flex max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] max-w-xl flex-col gap-0 overflow-hidden p-0 sm:max-h-[90dvh]">
+          <DialogHeader className="shrink-0 border-b border-border/70 px-5 py-4">
+            <DialogTitle className="text-lg font-extrabold">Choose your tickets</DialogTitle>
+            <p className="text-sm text-muted-foreground">Select a ticket type and quantity. Availability is checked when you reserve.</p>
           </DialogHeader>
-          <div className="max-h-[50vh] space-y-3 overflow-y-auto ievx-scrollbar pr-1">
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4 ievx-scrollbar sm:px-5">
             {saleable.map((tt) => {
               const qty = buyQty[tt.id] ?? 0
               const max = Math.min(tt.perBuyerLimit, tt.quota > 0 ? tt.quota - tt.soldCount - tt.reservedCount : tt.perBuyerLimit)
               return (
-                <div key={tt.id} className="flex items-center justify-between gap-3 rounded-xl border border-border/70 p-3">
+                <div key={tt.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/70 bg-card p-3 sm:flex-nowrap">
                   <div className="min-w-0">
                     <p className="text-sm font-semibold">{tt.name}</p>
                     <p className="text-xs text-muted-foreground">{tt.priceMinor === 0 ? 'Free' : money(tt.priceMinor)} each{tt.perBuyerLimit ? ` · max ${tt.perBuyerLimit}` : ''}</p>
+                    {tt.quota > 0 && <p className="mt-1 text-[11px] text-muted-foreground">{Math.max(0, tt.quota - tt.soldCount - tt.reservedCount)} seats remaining</p>}
+                    {tt.includesVirtualAccess && <Badge variant="secondary" className="mt-1 text-[10px]">Includes online access</Badge>}
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Button variant="outline" size="icon" className="h-8 w-8 rounded-full" aria-label={`Remove one ${tt.name}`} disabled={qty === 0} onClick={() => setBuyQty((q) => ({ ...q, [tt.id]: Math.max(0, qty - 1) }))}>−</Button>
-                    <span className="w-6 text-center font-bold" aria-live="polite">{qty}</span>
-                    <Button variant="outline" size="icon" className="h-8 w-8 rounded-full" aria-label={`Add one ${tt.name}`} disabled={qty >= max} onClick={() => setBuyQty((q) => ({ ...q, [tt.id]: qty + 1 }))}>+</Button>
+                  <div className="ml-auto flex shrink-0 items-center gap-2">
+                    <Button variant="outline" size="icon" className="h-11 w-11 rounded-full" aria-label={`Remove one ${tt.name}`} disabled={qty === 0} onClick={() => setBuyQty((q) => ({ ...q, [tt.id]: Math.max(0, qty - 1) }))}>−</Button>
+                    <span className="w-8 text-center font-bold tabular-nums" aria-live="polite">{qty}</span>
+                    <Button variant="outline" size="icon" className="h-11 w-11 rounded-full" aria-label={`Add one ${tt.name}`} disabled={qty >= max} onClick={() => setBuyQty((q) => ({ ...q, [tt.id]: qty + 1 }))}>+</Button>
                   </div>
                 </div>
               )
@@ -938,7 +941,7 @@ export default function EventDetail({ slug }: { slug: string }) {
                   </div>
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="phone">Phone for ticket SMS (optional)</Label>
+                  <Label htmlFor="phone">Phone for ticket notifications (optional)</Label>
                   <div className="efx-glow-focus-input" style={{ maxWidth: '100%', margin: 0 }}>
                     <input id="phone" className="efx-glow-focus-input__field" value={buyerPhone} onChange={(e) => setBuyerPhone(e.target.value)} placeholder="+233 24 000 0000" inputMode="tel" />
                   </div>
@@ -946,10 +949,10 @@ export default function EventDetail({ slug }: { slug: string }) {
               </div>
             )}
           </div>
-          <DialogFooter className="flex-col gap-2 sm:flex-col">
-            <div className="flex w-full items-center justify-between text-sm">
-              <span className="text-muted-foreground">Total</span>
-              <span className="text-lg font-extrabold text-primary">{selectedTotal === 0 ? 'Free' : money(selectedTotal)}</span>
+          <DialogFooter className="shrink-0 flex-col gap-3 border-t border-border/70 bg-card px-4 py-4 sm:flex-col sm:px-5">
+            <div className="flex w-full items-center justify-between gap-3 text-sm">
+              <span className="text-muted-foreground">Estimated ticket subtotal</span>
+              <span className="text-lg font-extrabold tabular-nums text-primary" aria-live="polite">{selectedTotal === 0 ? 'Free' : money(selectedTotal)}</span>
             </div>
             <button
               type="button"
@@ -958,9 +961,13 @@ export default function EventDetail({ slug }: { slug: string }) {
               disabled={checkoutDisabled}
               onClick={() => void placeOrder()}
             >
-              {placing ? 'Reserving…' : selectedTotal === 0 ? 'Confirm free RSVP' : `Checkout · ${money(selectedTotal)}`}
+              {placing ? 'Reserving…' : selectedTotal === 0 ? 'Confirm free RSVP' : 'Continue to secure checkout'}
             </button>
-            <p className="text-center text-[11px] text-muted-foreground">Tickets are held for 15 minutes after you continue.</p>
+            <p className="text-center text-xs leading-relaxed text-muted-foreground">
+              {selectedTotal === 0
+                ? 'Your free registration is confirmed only after the server issues tickets.'
+                : 'Final total includes applicable processing fees and discount codes, calculated by the server. Reservations expire if payment is not completed.'}
+            </p>
           </DialogFooter>
         </DialogContent>
       </Dialog>
