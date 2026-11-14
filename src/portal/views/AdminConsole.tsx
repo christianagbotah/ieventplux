@@ -481,13 +481,6 @@ function EventsAdmin() {
   )
 }
 
-}
-        </tbody>
-      </table>
-    </div>
-  )
-}
-
 function Moderation() {
   const { toast } = useToast()
   const [data, reload, loading] = useAdmin<{ items: { id: string; targetType: string; targetId: string; reason: string; details?: string | null; status: string; createdAt: string; reporter?: { displayName: string; email: string } | null }[] }>('/admin/moderation')
