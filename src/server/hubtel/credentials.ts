@@ -156,7 +156,7 @@ export interface HubtelCredentialsView {
   checkout: { clientIdMasked: string; clientSecretMasked: string; base: string; source: CredSource; configured: boolean }
   sendMoney: { clientIdMasked: string; clientSecretMasked: string; accountIdMasked: string; source: CredSource; configured: boolean }
   sms: { clientIdMasked: string; clientSecretMasked: string; senderIdMasked: string; source: CredSource; configured: boolean }
-  paymentsMode: 'SIMULATOR' | 'REAL'
+  paymentsMode: 'SIMULATOR' | 'REAL' | 'UNAVAILABLE'
 }
 
 /** Admin-facing masked view (GET /admin/hubtel). Secrets are never included. */
@@ -186,7 +186,7 @@ export function hubtelCredentialsView(creds: ResolvedHubtelCreds): HubtelCredent
       source: creds.sources.sms,
       configured: smsConfigured,
     },
-    paymentsMode: paymentsSimulatorActive(creds) ? 'SIMULATOR' : 'REAL',
+    paymentsMode: paymentsSimulatorActive(creds) ? 'SIMULATOR' : checkoutConfigured ? 'REAL' : 'UNAVAILABLE',
   }
 }
 
