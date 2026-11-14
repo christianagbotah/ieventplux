@@ -16,6 +16,11 @@ import { parseRoomKey } from './room-authorization'
  */
 const PORT = 3003
 const REALTIME_SECRET = process.env.REALTIME_SECRET ?? 'dev-realtime-secret'
+const PUBLIC_ORIGIN = process.env.APP_URL?.replace(/\/$/, '')
+if (process.env.NODE_ENV === 'production' &&
+    (REALTIME_SECRET.length < 32 || REALTIME_SECRET === 'dev-realtime-secret' || !PUBLIC_ORIGIN?.startsWith('https://'))) {
+  throw new Error('Production realtime requires a unique strong REALTIME_SECRET (32+ characters) and an HTTPS APP_URL.')
+}
 
 const httpServer = createServer((req, res) => {
   const url = new URL(req.url ?? '/', `http://localhost:${PORT}`)
@@ -54,14 +59,22 @@ const httpServer = createServer((req, res) => {
 })
 
 const io = new Server(httpServer, {
-  // Gateway note: clients connect with io('/?XTransformPort=3003') (relative URL,
-  // port ONLY in the XTransformPort query). The engine.io path stays at its
-  // default ('/socket.io/') so this service can also serve plain HTTP endpoints
-  // (/health, /emit) on the same port — Caddy forwards both by query param.
+  // In production the gateway forwards /socket.io/* directly to :3003.
+  // Only the sandbox preview uses the allowlisted XTransformPort=3003 query.
   cors: {
-    origin: process.env.NODE_ENV === 'production' ? (process.env.APP_URL || false) : true,
+    origin: process.env.NODE_ENV === 'production' ? (PUBLIC_ORIGIN || false) : true,
     credentials: true,
     methods: ['GET', 'POST'],
+  },
+  // Socket.IO's CORS configuration alone does not protect WebSocket upgrades.
+  // Reject unexpected browser Origins before accepting handshake requests.
+  allowRequest: (req, callback) => {
+    const origin = req.headers.origin
+    if (process.env.NODE_ENV === 'production' && origin && origin !== PUBLIC_ORIGIN) {
+      callback('Untrusted realtime origin', false)
+      return
+    }
+    callback(null, true)
   },
   pingTimeout: 60000,
   pingInterval: 25000,
