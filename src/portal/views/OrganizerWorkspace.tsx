@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { io } from 'socket.io-client'
 import {
   LayoutDashboard, CalendarPlus, Users, Ticket, Radio, Megaphone, MessageSquare, Wallet, UserCog, CreditCard, Settings,
-  ChevronLeft, ChevronRight, ChevronDown, Plus, Loader2, Camera, ScanLine, Search, Play, Square, RefreshCw, KeyRound, Pause, PlayCircle, Trash2, FileText, ShieldAlert, TrendingUp, Repeat, Activity, Vote, HandCoins, Sparkles, Download, Upload, CheckCircle2, Eye, EyeOff, Flag, History, Clock,
+  ChevronLeft, ChevronRight, ChevronDown, Plus, Loader2, Camera, ScanLine, Search, Play, Square, RefreshCw, KeyRound, Pause, PlayCircle, Trash2, FileText, ShieldAlert, TrendingUp, Repeat, Activity, Vote, HandCoins, Sparkles, Download, Upload, CheckCircle2, Eye, EyeOff, Flag, History, Clock, MapPin, Pencil,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -36,6 +36,7 @@ interface OrgEvent {
   endsAt: string
   city?: string | null
   categorySlug: string
+  venueId?: string | null
   coverImageUrl?: string | null
   summary?: string | null
   seriesId?: string | null
@@ -779,6 +780,7 @@ function EventEditor({ orgId, event, onClose }: { orgId: string; event: OrgEvent
     mode: event?.mode ?? 'PHYSICAL',
     visibility: 'PUBLIC',
     city: event?.city ?? '',
+    venueId: event?.venueId ?? '',
     startsAt: toLocalInput(event?.startsAt ?? defaultStart()),
     endsAt: toLocalInput(event?.endsAt ?? defaultEnd()),
     coverImageUrl: event?.coverImageUrl ?? '',
@@ -811,11 +813,12 @@ function EventEditor({ orgId, event, onClose }: { orgId: string; event: OrgEvent
 
   useEffect(() => {
     if (event) {
-      void api.get<{ event: { description: string; visibility: string; accessibilityInfo?: string | null; attendanceRules?: string | null; ageGuidance?: string | null; refundPolicy?: string | null } }>(`/events/${event.id}`).then((d) => {
+      void api.get<{ event: { description: string; visibility: string; venueId?: string | null; accessibilityInfo?: string | null; attendanceRules?: string | null; ageGuidance?: string | null; refundPolicy?: string | null } }>(`/events/${event.id}`).then((d) => {
         setForm((f) => ({
           ...f,
           description: d.event.description,
           visibility: d.event.visibility,
+          venueId: d.event.venueId ?? '',
           accessibilityInfo: d.event.accessibilityInfo ?? '',
           attendanceRules: d.event.attendanceRules ?? '',
           ageGuidance: d.event.ageGuidance ?? '',
@@ -834,11 +837,21 @@ function EventEditor({ orgId, event, onClose }: { orgId: string; event: OrgEvent
       .catch(() => setCats(null))
   }, [])
 
+  // R31: the org's venue directory feeds the picker — reusable places with
+  // address/map/accessibility, rendered on the public event page.
+  const [venues, setVenues] = useState<{ id: string; name: string; city?: string | null; capacity?: number | null }[] | null>(null)
+  useEffect(() => {
+    void api.get<{ venues: { id: string; name: string; city?: string | null; capacity?: number | null }[] }>(`/orgs/${orgId}/venues`)
+      .then((d) => setVenues(d.venues))
+      .catch(() => setVenues([]))
+  }, [orgId])
+
   const save = async () => {
     setBusy(true)
     try {
       const payload = {
         ...form,
+        venueId: form.venueId || null,
         startsAt: new Date(form.startsAt).toISOString(),
         endsAt: new Date(form.endsAt).toISOString(),
       }
@@ -923,6 +936,7 @@ function EventEditor({ orgId, event, onClose }: { orgId: string; event: OrgEvent
     { key: 'categorySlug', label: 'Category' },
     { key: 'coverImageUrl', label: 'Poster image' },
     { key: 'city', label: 'City' },
+    { key: 'venueId', label: 'Venue' },
     { key: 'directionsUrl', label: 'Directions link' },
     { key: 'contactEmail', label: 'Contact email' },
     { key: 'contactPhone', label: 'Contact phone' },
@@ -1007,6 +1021,21 @@ function EventEditor({ orgId, event, onClose }: { orgId: string; event: OrgEvent
               <Label htmlFor="city">City</Label>
               <Input id="city" value={form.city} onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))} placeholder="Accra" />
             </div>
+            {form.mode !== 'VIRTUAL' && (
+              <div className="space-y-1.5">
+                <Label htmlFor="venue">Venue</Label>
+                <Select value={form.venueId || 'none'} onValueChange={(v) => setForm((f) => ({ ...f, venueId: v === 'none' ? '' : v }))}>
+                  <SelectTrigger id="venue" aria-label="Venue"><SelectValue placeholder="Pick a venue" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None — city only</SelectItem>
+                    {(venues ?? []).map((v) => (
+                      <SelectItem key={v.id} value={v.id}>{v.name}{v.city ? ` · ${v.city}` : ''}{v.capacity ? ` (cap ${v.capacity.toLocaleString()})` : ''}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-muted-foreground">Reusable places from Settings → Venues — the public event page renders their address and map link.</p>
+              </div>
+            )}
             <div className="space-y-1.5">
               <Label htmlFor="startsAt">Starts (local, Africa/Accra)</Label>
               <Input id="startsAt" type="datetime-local" value={form.startsAt} onChange={(e) => setForm((f) => ({ ...f, startsAt: e.target.value }))} />
@@ -2510,8 +2539,10 @@ function SettingsView({ orgId, role }: { orgId: string; role: string }) {
     <div className="space-y-5">
       <div>
         <h1 className="efx-animated-gradient-text iefx-page-title font-extrabold">Settings</h1>
-        <p className="text-sm text-muted-foreground">Public profile, contacts and payout destination.</p>
+        <p className="text-sm text-muted-foreground">Public profile, contacts, venues and payout destination.</p>
       </div>
+
+      <VenuesCard orgId={orgId} canManage={canManage || role === 'EVENT_MANAGER'} />
 
       <Card className="rounded-2xl">
         <CardHeader className="pb-2">
@@ -2551,6 +2582,205 @@ function SettingsView({ orgId, role }: { orgId: string; role: string }) {
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+/* ── R31: Venue directory — the reusable places an org hosts at ─────────── */
+
+type VenueRow = {
+  id: string
+  name: string
+  address?: string | null
+  city?: string | null
+  region?: string | null
+  country: string
+  capacity?: number | null
+  mapsUrl?: string | null
+  accessibilityInfo?: string | null
+  directionsNote?: string | null
+  eventCount: number
+}
+
+function VenuesCard({ orgId, canManage }: { orgId: string; canManage: boolean }) {
+  const { toast } = useToast()
+  const [venues, setVenues] = useState<VenueRow[] | null>(null)
+  const [editing, setEditing] = useState<VenueRow | null>(null)
+  const [creating, setCreating] = useState(false)
+  const [busy, setBusy] = useState('')
+
+  const load = useCallback(async () => {
+    try {
+      const d = await api.get<{ venues: VenueRow[] }>(`/orgs/${orgId}/venues`)
+      setVenues(d.venues)
+    } catch {
+      setVenues([])
+    }
+  }, [orgId])
+
+  useEffect(() => {
+    void load()
+  }, [load])
+
+  const remove = async (v: VenueRow) => {
+    setBusy(v.id)
+    try {
+      await api.delete(`/orgs/${orgId}/venues/${v.id}`)
+      toast({ title: 'Venue deleted' })
+      void load()
+    } catch (err) {
+      toast({ description: err instanceof ApiClientError ? err.message : 'Could not delete.', variant: 'destructive' })
+    } finally {
+      setBusy('')
+    }
+  }
+
+  return (
+    <Card className="rounded-2xl">
+      <CardHeader className="pb-2">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <MapPin className="h-4 w-4 text-primary" /> Venues
+          {venues !== null && <Badge variant="secondary" className="text-[10px]">{venues.length}</Badge>}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <p className="text-sm text-muted-foreground">Reusable places for your events — name, address, map link and accessibility notes render on every event hosted here.</p>
+        {venues === null ? (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" aria-hidden /> Loading venues…</div>
+        ) : venues.length === 0 ? (
+          <p className="rounded-lg bg-secondary/50 px-3 py-2 text-xs text-muted-foreground">No venues yet — add your church hall, auditorium or meeting spot once and pick it on every event.</p>
+        ) : (
+          <div className="space-y-1.5">
+            {venues.map((v) => (
+              <div key={v.id} className="flex flex-wrap items-center gap-2 rounded-lg bg-secondary/40 px-3 py-2 text-sm">
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium">{v.name} <span className="text-xs font-normal text-muted-foreground">· {v.city ?? '—'}{v.capacity ? ` · cap ${v.capacity.toLocaleString()}` : ''} · {v.eventCount} event{v.eventCount === 1 ? '' : 's'}</span></p>
+                  {(v.address ?? v.mapsUrl) && (
+                    <p className="truncate text-xs text-muted-foreground">
+                      {v.address ?? ''}
+                      {v.mapsUrl && <a className="ml-1 underline decoration-dotted hover:text-primary" href={v.mapsUrl} target="_blank" rel="noreferrer">map</a>}
+                    </p>
+                  )}
+                </div>
+                {canManage && (
+                  <div className="flex gap-1.5">
+                    <Button size="sm" variant="outline" className="h-7 rounded-full" onClick={() => setEditing(v)}><Pencil className="h-3 w-3" aria-hidden /><span className="sr-only">Edit {v.name}</span></Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 rounded-full text-destructive"
+                      disabled={v.eventCount > 0 || busy === v.id}
+                      title={v.eventCount > 0 ? `Linked to ${v.eventCount} event${v.eventCount === 1 ? '' : 's'} — unlink them first` : 'Delete this venue'}
+                      onClick={() => void remove(v)}
+                    >
+                      {busy === v.id ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden /> : <Trash2 className="h-3 w-3" aria-hidden />}
+                      <span className="sr-only">Delete {v.name}</span>
+                    </Button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+        {canManage && (
+          <Button size="sm" className="rounded-full" onClick={() => setCreating(true)}><Plus className="mr-1 h-4 w-4" aria-hidden /> Add venue</Button>
+        )}
+        {!canManage && venues !== null && venues.length > 0 && (
+          <p className="text-[11px] text-muted-foreground">Pick these from the event editor — managing them needs an admin or event-manager role.</p>
+        )}
+
+        {creating && <VenueDialog orgId={orgId} onClose={() => setCreating(false)} onSaved={() => { setCreating(false); void load() }} />}
+        {editing && <VenueDialog orgId={orgId} venue={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); void load() }} />}
+      </CardContent>
+    </Card>
+  )
+}
+
+function VenueDialog({ orgId, venue, onClose, onSaved }: {
+  orgId: string
+  venue?: VenueRow
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const { toast } = useToast()
+  const [busy, setBusy] = useState(false)
+  const [form, setForm] = useState({
+    name: venue?.name ?? '',
+    address: venue?.address ?? '',
+    city: venue?.city ?? '',
+    region: venue?.region ?? '',
+    capacity: venue?.capacity != null ? String(venue.capacity) : '',
+    mapsUrl: venue?.mapsUrl ?? '',
+    accessibilityInfo: venue?.accessibilityInfo ?? '',
+    directionsNote: venue?.directionsNote ?? '',
+  })
+
+  const save = async () => {
+    setBusy(true)
+    try {
+      const payload = {
+        name: form.name.trim(),
+        address: form.address.trim() || null,
+        city: form.city.trim() || null,
+        region: form.region.trim() || null,
+        capacity: form.capacity.trim() ? Number(form.capacity) : null,
+        mapsUrl: form.mapsUrl.trim() || null,
+        accessibilityInfo: form.accessibilityInfo.trim() || null,
+        directionsNote: form.directionsNote.trim() || null,
+      }
+      if (venue) await api.patch(`/orgs/${orgId}/venues/${venue.id}`, payload)
+      else await api.post(`/orgs/${orgId}/venues`, payload)
+      toast({ title: venue ? 'Venue saved' : 'Venue added', description: 'Pick it from the event editor anytime.' })
+      onSaved()
+    } catch (err) {
+      toast({ description: err instanceof ApiClientError ? err.message : 'Could not save the venue.', variant: 'destructive' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto ievx-scrollbar">
+        <DialogHeader>
+          <DialogTitle>{venue ? `Edit: ${venue.name}` : 'Add venue'}</DialogTitle>
+        </DialogHeader>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label htmlFor="v-name">Name</Label>
+            <Input id="v-name" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="Lightworld Cathedral — Main Auditorium" />
+          </div>
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label htmlFor="v-address">Address</Label>
+            <Input id="v-address" value={form.address} onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))} placeholder="12 Liberation Road, North Kaneshie" />
+          </div>
+          <div className="space-y-1.5"><Label htmlFor="v-city">City</Label><Input id="v-city" value={form.city} onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))} placeholder="Accra" /></div>
+          <div className="space-y-1.5"><Label htmlFor="v-region">Region</Label><Input id="v-region" value={form.region} onChange={(e) => setForm((f) => ({ ...f, region: e.target.value }))} placeholder="Greater Accra" /></div>
+          <div className="space-y-1.5">
+            <Label htmlFor="v-capacity">Capacity</Label>
+            <Input id="v-capacity" inputMode="numeric" value={form.capacity} onChange={(e) => setForm((f) => ({ ...f, capacity: e.target.value.replace(/\D/g, '') }))} placeholder="e.g. 3000" />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="v-maps">Map link (https)</Label>
+            <Input id="v-maps" value={form.mapsUrl} onChange={(e) => setForm((f) => ({ ...f, mapsUrl: e.target.value }))} placeholder="https://maps.google.com/…" />
+          </div>
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label htmlFor="v-access">Accessibility notes</Label>
+            <Input id="v-access" value={form.accessibilityInfo} onChange={(e) => setForm((f) => ({ ...f, accessibilityInfo: e.target.value }))} placeholder="Ramp at the east gate, reserved seating…" />
+          </div>
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label htmlFor="v-directions">Directions note</Label>
+            <Input id="v-directions" value={form.directionsNote} onChange={(e) => setForm((f) => ({ ...f, directionsNote: e.target.value }))} placeholder="Landmarks, parking, trotro routes…" />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" className="rounded-full" onClick={onClose}>Cancel</Button>
+          <Button className="rounded-full" disabled={busy || form.name.trim().length < 3} onClick={() => void save()}>
+            {busy && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" aria-hidden />}
+            {venue ? 'Save changes' : 'Add venue'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 

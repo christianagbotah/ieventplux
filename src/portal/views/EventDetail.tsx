@@ -521,8 +521,9 @@ export default function EventDetail({ slug }: { slug: string }) {
                       <p className="text-xs uppercase tracking-wide text-muted-foreground">Venue</p>
                       <p className="font-semibold">{event.venue?.name ?? 'Online broadcast'}</p>
                       {event.venue?.address && <p className="text-sm text-muted-foreground">{event.venue.address}{event.venue.city ? `, ${event.venue.city}` : ''}</p>}
-                      {event.directionsUrl && (
-                        <a className="mt-1 inline-flex items-center gap-1 text-sm font-medium text-primary" href={event.directionsUrl} target="_blank" rel="noopener noreferrer">
+                      {event.venue?.accessibilityInfo && <p className="text-sm text-muted-foreground"><span className="font-medium">Accessibility:</span> {event.venue.accessibilityInfo}</p>}
+                      {(event.directionsUrl ?? event.venue?.mapsUrl) && (
+                        <a className="mt-1 inline-flex items-center gap-1 text-sm font-medium text-primary" href={(event.directionsUrl ?? event.venue?.mapsUrl) ?? undefined} target="_blank" rel="noopener noreferrer">
                           <span className="efx-underline-slide-link" style={{ fontSize: '0.875rem', color: 'inherit' }}>Get directions</span> <ExternalLink className="h-3.5 w-3.5" />
                         </a>
                       )}

@@ -892,3 +892,26 @@ Date: 2026-11-14 · Postgres LIVE (R26 stack) · all services on :3000/:3001/:30
 **Server-side paths the mobile screens ride on (all previously browser-verified, re-confirmed live this session):** `/broadcasts/{id}/detail|play|heartbeat|chat` (R27 golden paths incl. ROOM_FULL gate and read-only ENDED transcripts), `/checkin/scan|sync` (conflict preservation), `/orders`, `/tickets{,/:id}` (QR credential). The mobile screens implement the identical entitlement/capacity/heartbeat semantics as the web client; the only NEW consumer path (roster) is curl-verified above.
 
 **Web hygiene through the session:** dev.log free of runtime/prisma errors; home + admin orgs render clean at 390×844 (zero console/page errors beyond the known Radix Dialog aria warnings); the approve-after-reject screenshot is `docs-assets/round30-orgs-approve-now-390.png`.
+
+## Re-verification round 31 — Venue directory + category taxonomy (the last zero-writer models)
+
+**Admin Taxonomy (new 13th section, `#/admin?tab=taxonomy`, Super Admin):**
+- Initial render: "10 active of 10" with true per-category counts (church-service 4, concert 3, conference 3, ministry 2, workshop 2, bootcamp/wedding/community/festival/sports-health 1 each); every in-use category's Delete button disabled with an honest title ("In use by N events — deactivate instead").
+- **Create cycle (live):** "Cinema Night" (Sparkles icon, order 11) → row appears "/cinema-night · 0 events · order 11"; the public homepage chip row renders "Cinema Night" on the next load; dialog Create button disabled until a ≥3-char name.
+- **Defect found & fixed live:** first create attempt 400'd ("Could not derive a slug") — the endpoint derived the slug from a never-sent `body.slug` field. Fixed to name-derivation; re-run created the category successfully.
+- **Guards (in-page fetch matrix):** duplicate create → 409 "A category with slug \"church-service\" already exists."; delete of an in-use category → 409 "used by 4 events — deactivate it instead".
+- **Edit cycle:** rename "Cinema Night" → "Cinema Nights" + color #10b981 → #f59e0b — name and color update, **slug stays /cinema-night** (immutable by design; the dialog says so).
+- **Deactivate cycle:** Deactivate → "Inactive" badge + button flips to Activate; the homepage chip disappears (empty Cinema filter result); Activate returns it.
+- Mobile 390×844 + desktop 1280×800 verified; screenshots round31-taxonomy-{390,1280}.png.
+
+**Organizer Venues (Settings tab, `accra@eventco.dev` OWNER):**
+- The card renders the seeded venue honestly: "Laboma Beach Resort · Accra · cap 5,000 · 2 events" with address + map link; Delete disabled ("Linked to 2 events").
+- **Create:** "Labadi Beach Pavilion" (address, city, region, capacity 250, https map link, accessibility + directions notes) → row appears "· cap 250 · 0 events" with Delete enabled.
+- **Event → venue golden path:** event editor now carries a Venue picker (hidden for VIRTUAL); "Sunset Praise & Worship Night" created with Labadi selected (API confirms venueId); the public event page renders the full venue card — name, "Labadi Beach Road, La, Accra", "Accessibility: Beachside ramp access, shaded seating", and a Get directions link off the venue's mapsUrl. Editing the event re-hydrates the picker ("Labadi Beach Pavilion · Accra (cap 250)").
+- **PATCH clear/restore:** clearing the venue to "None — city only" and saving → API returns venueId null (this exposed and then verified the blank-description 500 fix); re-selecting and saving → venue restored.
+- **Venue edit:** capacity 250 → 300 saved and re-rendered ("cap 300 · 1 event"); the venue's Delete button flips to disabled once linked ("Linked to 1 event — unlink them first").
+- Mobile 390×844 settings screenshot: round31-venues-settings-390.png; desktop event page: round31-event-venue-1280.png.
+
+**Defect fixed mid-round (pre-existing, exposed by the venue-clear save):** `PATCH /events/[id]` coerced empty strings to `null` for every text field — any event with a blank description 500'd (`PrismaClientValidationError: Argument 'description' must not be null`; two 500s in the network log before the fix, 200 after). title/description/categorySlug now coerce to `''` (the POST contract); optional fields still null out.
+
+**Hygiene:** zero console/page errors beyond the known Radix Dialog aria warnings; dev.log clean apart from the two intentionally-reproduced 500s above. Cleanup verified: 4 seed venues, 10 seed categories, no live test events; the taxonomy view re-reads "10 active of 10" after reload. Static: `bun run lint` 0 errors / 16 warnings (below the 17 baseline); `bunx tsc --noEmit` 0 errors.

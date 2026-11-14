@@ -1,14 +1,16 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, type ComponentType, type CSSProperties } from 'react'
 import {
-  ShieldCheck, Users, Building2, CalendarDays, Flag, Percent, CreditCard, Wallet, RotateCw, Bell, ScrollText, Plug, Settings2, Landmark, Loader2, Check, X, Play,
+  ShieldCheck, Users, Building2, CalendarDays, Flag, Percent, CreditCard, Wallet, RotateCw, Bell, ScrollText, Plug, Settings2, Landmark, Loader2, Check, X, Play, Tags, Church, Music, Presentation, Wrench, Code2, Heart, Users as UsersIcon, Sparkles, PartyPopper, Activity, Calendar, Trash2, Pencil, Plus,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useToast } from '@/hooks/use-toast'
 import { api, ApiClientError } from '../api'
@@ -29,6 +31,7 @@ const SECTIONS = [
   { key: 'integrations', label: 'Integrations', icon: Plug },
   { key: 'sms', label: 'SMS Log', icon: Bell },
   { key: 'audit', label: 'Audit Log', icon: ScrollText },
+  { key: 'taxonomy', label: 'Taxonomy', icon: Tags },
   { key: 'sweeps', label: 'Operations', icon: Settings2 },
 ]
 
@@ -128,6 +131,7 @@ export default function AdminConsole({ route }: { route: Route }) {
             {section === 'integrations' && <Integrations />}
             {section === 'sms' && <SmsLog />}
             {section === 'audit' && <AuditLog />}
+            {section === 'taxonomy' && <Taxonomy />}
             {section === 'sweeps' && <Sweeps />}
           </div>
         </div>
@@ -857,6 +861,229 @@ function AuditLog() {
         </div>
       ))}
     </div>
+  )
+}
+
+/* ───────────────────────────── Taxonomy (R31) ───────────────────────────── */
+
+// Icon slugs the public surfaces render (Discover chips fall back to Sparkles
+// for anything unknown — the select only offers the known set).
+const CATEGORY_ICON_CHOICES: { slug: string; label: string; Icon: ComponentType<{ className?: string; style?: CSSProperties }> }[] = [
+  { slug: 'calendar', label: 'Calendar', Icon: Calendar },
+  { slug: 'church', label: 'Church', Icon: Church },
+  { slug: 'music', label: 'Music', Icon: Music },
+  { slug: 'presentation', label: 'Presentation', Icon: Presentation },
+  { slug: 'wrench', label: 'Wrench', Icon: Wrench },
+  { slug: 'code', label: 'Code', Icon: Code2 },
+  { slug: 'heart', label: 'Heart', Icon: Heart },
+  { slug: 'users', label: 'Users', Icon: UsersIcon },
+  { slug: 'sparkles', label: 'Sparkles', Icon: Sparkles },
+  { slug: 'party-popper', label: 'Party popper', Icon: PartyPopper },
+  { slug: 'activity', label: 'Activity', Icon: Activity },
+]
+
+const CategoryIconPreview = ({ icon, color }: { icon: string; color?: string | null }) => {
+  const found = CATEGORY_ICON_CHOICES.find((c) => c.slug === icon)
+  const Icon = found?.Icon ?? Sparkles
+  return <Icon className="h-4 w-4" style={color ? { color } : undefined} aria-hidden />
+}
+
+type AdminCategory = {
+  id: string
+  name: string
+  slug: string
+  icon: string
+  color: string
+  sortOrder: number
+  active: boolean
+  eventCount: number
+}
+
+function Taxonomy() {
+  const { toast } = useToast()
+  const [data, reload, loading] = useAdmin<{ items: AdminCategory[] }>('/admin/categories')
+  const [creating, setCreating] = useState(false)
+  const [editing, setEditing] = useState<AdminCategory | null>(null)
+
+  const toggleActive = async (c: AdminCategory) => {
+    try {
+      await api.post(`/admin/categories/${c.id}/update`, { active: !c.active })
+      toast({ title: c.active ? 'Category deactivated' : 'Category activated', description: c.active ? 'It disappears from discovery filters and the event editor; existing events keep their label.' : 'It is selectable again everywhere.' })
+      reload()
+    } catch (err) {
+      toast({ description: err instanceof ApiClientError ? err.message : 'Action failed.', variant: 'destructive' })
+    }
+  }
+
+  const remove = async (c: AdminCategory) => {
+    try {
+      await api.post(`/admin/categories/${c.id}/delete`, {})
+      toast({ title: 'Category deleted' })
+      reload()
+    } catch (err) {
+      toast({ description: err instanceof ApiClientError ? err.message : 'Delete failed.', variant: 'destructive' })
+    }
+  }
+
+  if (loading) return <AdminLoader label="Loading categories…" />
+  if (!data) return <EmptyState title="Taxonomy unavailable" description="Super administrator role required." />
+
+  const activeCount = data.items.filter((c) => c.active).length
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm text-muted-foreground">
+          {activeCount} active of {data.items.length} — new categories are live immediately in discovery filters, homepage chips and the event editor.
+        </p>
+        <Button size="sm" className="rounded-full" onClick={() => setCreating(true)}><Plus className="mr-1 h-4 w-4" aria-hidden /> New category</Button>
+      </div>
+      {data.items.map((c) => (
+        <Card key={c.id} className="rounded-2xl">
+          <CardContent className="flex flex-wrap items-center gap-3 p-4">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border/70 bg-secondary/40">
+              <CategoryIconPreview icon={c.icon} color={c.color} />
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="font-semibold">{c.name}</p>
+                {!c.active && <Badge variant="secondary" className="text-[10px]">Inactive</Badge>}
+              </div>
+              <p className="text-xs text-muted-foreground">/{c.slug} · {c.eventCount} event{c.eventCount === 1 ? '' : 's'} · order {c.sortOrder} · <span className="font-mono">{c.color}</span></p>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              <Button size="sm" variant="outline" className="rounded-full" onClick={() => setEditing(c)}><Pencil className="mr-1 h-3.5 w-3.5" aria-hidden /> Edit</Button>
+              <Button size="sm" variant="outline" className="rounded-full" onClick={() => void toggleActive(c)}>{c.active ? 'Deactivate' : 'Activate'}</Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="rounded-full text-destructive"
+                disabled={c.eventCount > 0}
+                title={c.eventCount > 0 ? `In use by ${c.eventCount} event${c.eventCount === 1 ? '' : 's'} — deactivate instead` : 'Delete this category'}
+                onClick={() => void remove(c)}
+              >
+                <Trash2 className="h-3.5 w-3.5" aria-hidden />
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      ))}
+
+      {creating && (
+        <CategoryDialog
+          onClose={() => setCreating(false)}
+          onSubmit={async (form) => {
+            await api.post('/admin/categories', form)
+            setCreating(false)
+            toast({ title: 'Category created', description: 'Live immediately across discovery.' })
+            reload()
+          }}
+        />
+      )}
+      {editing && (
+        <CategoryDialog
+          category={editing}
+          onClose={() => setEditing(null)}
+          onSubmit={async (form) => {
+            await api.post(`/admin/categories/${editing.id}/update`, form)
+            setEditing(null)
+            toast({ title: 'Category updated' })
+            reload()
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+function CategoryDialog({ category, onClose, onSubmit }: {
+  category?: AdminCategory
+  onClose: () => void
+  onSubmit: (form: { name: string; icon: string; color: string; sortOrder: number }) => Promise<void>
+}) {
+  const { toast } = useToast()
+  const [busy, setBusy] = useState(false)
+  const [form, setForm] = useState({
+    name: category?.name ?? '',
+    icon: category?.icon ?? 'calendar',
+    color: category?.color ?? '#10b981',
+    sortOrder: String(category?.sortOrder ?? 0),
+  })
+  const preview = CATEGORY_ICON_CHOICES.find((c) => c.slug === form.icon)
+
+  const submit = async () => {
+    setBusy(true)
+    try {
+      await onSubmit({ name: form.name.trim(), icon: form.icon, color: form.color, sortOrder: Number(form.sortOrder) || 0 })
+    } catch (err) {
+      toast({ description: err instanceof ApiClientError ? err.message : 'Could not save.', variant: 'destructive' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>{category ? `Edit: ${category.name}` : 'New category'}</DialogTitle>
+        </DialogHeader>
+        <div className="grid gap-4">
+          {category && (
+            <div className="rounded-lg bg-secondary/50 px-3 py-2 text-xs text-muted-foreground">
+              Slug <span className="font-mono">/{category.slug}</span> is immutable — events reference it directly.
+            </div>
+          )}
+          <div className="space-y-1.5">
+            <Label htmlFor="cat-name">Name</Label>
+            <Input id="cat-name" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="Cinema Night" />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="cat-icon">Icon</Label>
+            <div className="flex items-center gap-2">
+              <Select value={form.icon} onValueChange={(v) => setForm((f) => ({ ...f, icon: v }))}>
+                <SelectTrigger id="cat-icon" className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {CATEGORY_ICON_CHOICES.map((c) => (
+                    <SelectItem key={c.slug} value={c.slug}>
+                      <span className="flex items-center gap-2"><c.Icon className="h-3.5 w-3.5" /> {c.label}</span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border/70 bg-secondary/40">
+                {preview ? <preview.Icon className="h-4 w-4" style={{ color: form.color }} /> : <Sparkles className="h-4 w-4" />}
+              </span>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="cat-color">Color</Label>
+              <div className="flex items-center gap-2">
+                <input
+                  id="cat-color"
+                  type="color"
+                  className="h-9 w-12 cursor-pointer rounded-lg border border-border/70 bg-card p-1"
+                  value={form.color}
+                  onChange={(e) => setForm((f) => ({ ...f, color: e.target.value }))}
+                />
+                <span className="font-mono text-xs text-muted-foreground">{form.color}</span>
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="cat-sort">Sort order</Label>
+              <Input id="cat-sort" inputMode="numeric" value={form.sortOrder} onChange={(e) => setForm((f) => ({ ...f, sortOrder: e.target.value.replace(/\D/g, '') }))} placeholder="0" />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" className="rounded-full" onClick={onClose}>Cancel</Button>
+            <Button className="rounded-full" disabled={busy || form.name.trim().length < 3} onClick={() => void submit()}>
+              {busy && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" aria-hidden />}
+              {category ? 'Save changes' : 'Create'}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 

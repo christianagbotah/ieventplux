@@ -9,7 +9,7 @@ import { sweepOnce } from '@/server/jobs/handlers'
  * Platform administration API (staff-only, narrowly scoped, audited):
  *
  * GET  overview | users | orgs | events | moderation | fees | plans | payments | refunds | payouts | sms | audit | integrations | outbox | settings | categories
- * POST orgs/:id/verify | events/:id/suspend | moderation/:id/action | fees | plans | payouts/:id/submit|paid|fail | refunds/:id/process|approve|reject | settings | sweeps/:kind
+ * POST orgs/:id/verify | events/:id/suspend | moderation/:id/action | fees | plans | payouts/:id/submit|paid|fail | refunds/:id/process|approve|reject | settings | sweeps/:kind | categories (create) | categories/:id/update|delete
  */
 type RouteContext = { params: Promise<{ sections: string[] }> }
 
@@ -145,8 +145,11 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
     }
 
     if (root === 'categories') {
-      const items = await db.category.findMany({ orderBy: { sortOrder: 'asc' } })
-      return jsonOk({ items })
+      // R31: taxonomy management — every category carries its true usage count
+      // (ALL non-deleted events, not just public ones: admins act on reality).
+      const items = await db.category.findMany({ orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }] })
+      const counts = await db.event.groupBy({ by: ['categorySlug'], where: { deletedAt: null }, _count: true })
+      return jsonOk({ items: items.map((c) => ({ ...c, eventCount: counts.find((x) => x.categorySlug === c.slug)?._count ?? 0 })) })
     }
 
     if (root === 'ledger') {
@@ -405,6 +408,75 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
       if (!kind) throw errors.badRequest('Unknown sweep.')
       const result = await sweepOnce(kind)
       return jsonOk({ sweep: kind, result })
+    }
+
+    // ── Round 31: taxonomy (categories) management — the last zero-writer ──
+    // models get real write paths. Slugs are IMMUTABLE once created (events
+    // reference the slug string; a rename would orphan them) and a category
+    // in use cannot be deleted — deactivate it instead.
+    if (root === 'categories' && !id) {
+      if (!platformCan(user.role, 'admin:settings')) throw errors.forbidden('Super administrator role required for taxonomy changes.')
+      rateLimit(req, 'taxonomy', 20, 60_000)
+      const name = sanitizeText(body.name, 60)
+      if (name.length < 3) throw errors.badRequest('Category name is required (at least 3 characters).')
+      // Slug: explicit if provided, otherwise derived from the name.
+      const rawSlug = typeof body.slug === 'string' && body.slug.trim() ? body.slug : name
+      const slug = rawSlug.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '').slice(0, 40)
+      if (slug.length < 2) throw errors.badRequest('Could not derive a slug from that name — use letters and digits.')
+      const existing = await db.category.findUnique({ where: { slug } })
+      if (existing) throw errors.conflict(`A category with slug "${slug}" already exists.`)
+      const color = sanitizeText(body.color, 7)
+      const category = await db.category.create({
+        data: {
+          name,
+          slug,
+          icon: sanitizeText(body.icon, 40) || 'calendar',
+          color: /^#[0-9a-fA-F]{6}$/.test(color) ? color : '#10b981',
+          sortOrder: Math.max(0, Math.min(999, Math.round(Number(body.sortOrder ?? 0)))),
+          active: body.active === undefined ? true : Boolean(body.active),
+        },
+      })
+      const { audit } = await import('@/server/audit')
+      await audit({ actorUserId: user.id, actorLabel: user.email, action: 'category.create', entityType: 'Category', entityId: category.id, after: { slug, name } })
+      return jsonOk({ category, note: 'Live immediately — discovery filters, homepage chips and the event editor read the catalog in real time.' })
+    }
+
+    if (root === 'categories' && id && (op === 'update' || op === 'delete')) {
+      if (!platformCan(user.role, 'admin:settings')) throw errors.forbidden('Super administrator role required for taxonomy changes.')
+      rateLimit(req, 'taxonomy', 20, 60_000)
+      const category = await db.category.findUnique({ where: { id } })
+      if (!category) throw errors.notFound('Category not found.')
+      const { audit } = await import('@/server/audit')
+
+      if (op === 'delete') {
+        const inUse = await db.event.count({ where: { categorySlug: category.slug, deletedAt: null } })
+        if (inUse > 0) throw errors.conflict(`This category is used by ${inUse} event${inUse === 1 ? '' : 's'} — deactivate it instead (inactive categories vanish from filters and the event editor, while existing events keep their label).`)
+        await db.category.delete({ where: { id } })
+        await audit({ actorUserId: user.id, actorLabel: user.email, action: 'category.delete', entityType: 'Category', entityId: id, before: { slug: category.slug, name: category.name } })
+        return jsonOk({ deleted: true })
+      }
+
+      const data: Record<string, unknown> = {}
+      if (body.slug !== undefined && String(body.slug) !== category.slug) {
+        throw errors.badRequest('The slug is immutable — events reference it directly. Create a new category and deactivate this one instead.')
+      }
+      if (body.name !== undefined) {
+        const name = sanitizeText(body.name, 60)
+        if (name.length < 3) throw errors.badRequest('Category name is required (at least 3 characters).')
+        data.name = name
+      }
+      if (body.icon !== undefined) data.icon = sanitizeText(body.icon, 40) || 'calendar'
+      if (body.color !== undefined) {
+        const color = sanitizeText(body.color, 7)
+        if (!/^#[0-9a-fA-F]{6}$/.test(color)) throw errors.badRequest('Color must be a #RRGGBB hex value.')
+        data.color = color
+      }
+      if (body.sortOrder !== undefined) data.sortOrder = Math.max(0, Math.min(999, Math.round(Number(body.sortOrder) || 0)))
+      if (body.active !== undefined) data.active = Boolean(body.active)
+      if (Object.keys(data).length === 0) throw errors.badRequest('Nothing to update.')
+      const updated = await db.category.update({ where: { id }, data })
+      await audit({ actorUserId: user.id, actorLabel: user.email, action: 'category.update', entityType: 'Category', entityId: id, before: { active: category.active, name: category.name }, after: { fields: Object.keys(data) } })
+      return jsonOk({ category: updated })
     }
 
     if (root === 'users' && id && op === 'suspend') {

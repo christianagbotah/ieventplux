@@ -404,7 +404,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
       if (!source.seriesId) throw errors.badRequest('This event is not part of a series.')
 
       const fields = Array.isArray(body.fields) ? body.fields.map(String) : []
-      const WHITELIST = ['title', 'summary', 'description', 'categorySlug', 'coverImageUrl', 'city', 'directionsUrl', 'contactEmail', 'contactPhone', 'accessibilityInfo', 'attendanceRules', 'ageGuidance', 'refundPolicy'] as const
+      const WHITELIST = ['title', 'summary', 'description', 'categorySlug', 'coverImageUrl', 'city', 'venueId', 'directionsUrl', 'contactEmail', 'contactPhone', 'accessibilityInfo', 'attendanceRules', 'ageGuidance', 'refundPolicy'] as const
       const picked = fields.filter((f) => (WHITELIST as readonly string[]).includes(f))
       const adoptTime = Boolean(body.adoptTime)
       if (picked.length === 0 && !adoptTime) throw errors.badRequest('Pick at least one field to apply (or time-of-day).')

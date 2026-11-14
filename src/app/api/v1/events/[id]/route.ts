@@ -100,7 +100,15 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
       ['refundPolicy', 500], ['coverImageUrl', 300], ['directionsUrl', 300],
     ]
     for (const [field, max] of textFields) {
-      if (body[field] !== undefined) data[field] = sanitizeText(body[field], max) || null
+      if (body[field] === undefined) continue
+      // R31 defect fix: title/description/categorySlug are NON-NULLABLE columns —
+      // an empty value must coerce to '' (the POST contract), never null. The old
+      // `|| null` made any save with a blank description 500 (Prisma validation).
+      if (field === 'title' || field === 'description' || field === 'categorySlug') {
+        data[field] = sanitizeText(body[field], max) || ''
+      } else {
+        data[field] = sanitizeText(body[field], max) || null
+      }
     }
     if (body.tags !== undefined) data.tags = JSON.stringify(parseTags(body.tags))
     if (body.mode && ['PHYSICAL', 'VIRTUAL', 'HYBRID'].includes(String(body.mode))) data.mode = String(body.mode)
