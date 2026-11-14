@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -310,46 +311,170 @@ function Orgs() {
                 <Button size="sm" variant="outline" className="rounded-full" onClick={async () => { await api.post(`/admin/orgs/${o.id}/suspend`, {}); reload() }}>Suspend</Button>
               )}
             </CardContent>
-          </Card>
-        )
-      })}
-    </div>
-  )
+    interface AdminEventRow {
+  id: string
+  title: string
+  slug: string
+  status: string
+  visibility: string
+  org: { name: string }
+  _count: { tickets: number }
 }
 
 function EventsAdmin() {
   const { toast } = useToast()
-  const [data, reload, loading] = useAdmin<{ items: { id: string; title: string; slug: string; status: string; visibility: string; org: { name: string }; _count: { tickets: number } }[] }>('/admin/events')
-
-  const suspend = async (id: string) => {
-    await api.post(`/admin/events/${id}/suspend`, { reason: 'Suspended by platform moderation.' }).catch(() => {})
-    toast({ title: 'Event suspended', description: 'Ticket holders are notified; financial history preserved.' })
-    reload()
+  const [data, reload, loading] = useAdmin<{ items: AdminEventRow[] }>('/admin/events')
+  const [query, setQuery] = useState('')
+  const [status, setStatus] = useState('ALL')
+  const [pending, setPending] = useState<AdminEventRow | null>(null)
+  const [reason, setReason] = useState('')
+  const [busy, setBusy] = useState(false)
+  const canSuspend = (event: AdminEventRow) => ['PUBLISHED', 'LIVE', 'SCHEDULED'].includes(event.status)
+  const confirmSuspend = async () => {
+    if (!pending || reason.trim().length < 10 || busy) return
+    setBusy(true)
+    try {
+      await api.post('/admin/events/' + pending.id + '/suspend', { reason: reason.trim() })
+      toast({ title: 'Event suspended', description: 'Event status updated; any notifications are handled by the delivery queue.' })
+      setPending(null)
+      setReason('')
+      reload()
+    } catch (error) {
+      toast({
+        title: 'Suspension failed',
+        description: error instanceof ApiClientError ? error.message : 'The event was not changed.',
+        variant: 'destructive',
+      })
+    } finally {
+      setBusy(false)
+    }
   }
 
   if (loading) return <AdminLoader label="Loading events…" />
-  if (!data) return <EmptyState title="Events unavailable" />
+  if (!data) return <EmptyState title="Events unavailable" description="The event list could not be loaded." action={<Button variant="outline" onClick={reload}>Retry</Button>} />
+  const items = data.items.filter((event) => {
+    const term = query.trim().toLowerCase()
+    return (status === 'ALL' || event.status === status) &&
+      (!term || [event.title, event.org.name, event.slug].some((value) => value.toLowerCase().includes(term)))
+  })
+  const confirmButton = (event: AdminEventRow) => canSuspend(event) ? (
+    <Button
+      type="button"
+      size="sm"
+      variant="outline"
+      className="rounded-full text-destructive hover:bg-destructive/10"
+      onClick={() => { setPending(event); setReason('') }}
+      aria-label={'Suspend event: ' + event.title}
+    >
+      Suspend
+    </Button>
+  ) : null
+
   return (
-    <div className="overflow-x-auto rounded-2xl border border-border/70">
-      <table className="w-full min-w-[680px] text-sm">
-        <thead className="bg-secondary/60 text-left text-xs uppercase tracking-wide text-muted-foreground">
-          <tr><th className="p-3">Event</th><th className="p-3">Organizer</th><th className="p-3">Status</th><th className="p-3">Visibility</th><th className="p-3">Tickets</th><th className="p-3" /></tr>
-        </thead>
-        <tbody>
-          {data.items.map((e) => (
-            <tr key={e.id} className="border-t border-border/50 hover:bg-secondary/30">
-              <td className="p-3"><button className="font-medium hover:text-primary" onClick={() => navigate(`/event/${e.slug}`)}>{e.title}</button></td>
-              <td className="p-3 text-xs">{e.org.name}</td>
-              <td className="p-3"><Badge variant={statusTone(e.status) === 'success' ? 'default' : 'secondary'} className="capitalize text-[10px]">{humanize(e.status)}</Badge></td>
-              <td className="p-3 text-xs">{humanize(e.visibility)}</td>
-              <td className="p-3">{e._count.tickets}</td>
-              <td className="p-3">
-                {['PUBLISHED', 'LIVE', 'SCHEDULED'].includes(e.status) && (
-                  <Button size="sm" variant="outline" className="rounded-full text-destructive" onClick={() => void suspend(e.id)}>Suspend</Button>
-                )}
-              </td>
-            </tr>
-          ))}
+    <div className="space-y-4">
+      <div>
+        <h2 className="ievx-section-title">Event oversight</h2>
+        <p className="mt-1 text-sm text-muted-foreground">Review published and pending event listings. Suspensions require a recorded reason.</p>
+      </div>
+      <div className="ievx-surface grid gap-3 p-3 sm:grid-cols-[minmax(0,1fr)_175px]">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+          <Input
+            className="h-11 rounded-xl pl-9"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search events and organizers…"
+            aria-label="Search platform events"
+          />
+        </div>
+        <Select value={status} onValueChange={setStatus}>
+          <SelectTrigger className="h-11 w-full rounded-xl" aria-label="Filter platform events by status"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {['ALL', 'DRAFT', 'PUBLISHED', 'SCHEDULED', 'LIVE', 'CANCELLED', 'ENDED', 'SUSPENDED'].map((value) => (
+              <SelectItem key={value} value={value}>{value === 'ALL' ? 'All statuses' : humanize(value)}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <p className="text-xs text-muted-foreground" aria-live="polite">{items.length} of {data.items.length} loaded events</p>
+      {items.length === 0 ? (
+        <EmptyState title="No events match" description="Try a different search or clear the status filter." action={<Button variant="outline" onClick={() => { setQuery(''); setStatus('ALL') }}>Clear filters</Button>} />
+      ) : (
+        <>
+          <div className="grid gap-3 md:hidden">
+            {items.map((event) => (
+              <article key={event.id} className="ievx-surface space-y-3 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <button type="button" className="text-left font-semibold text-primary hover:underline" onClick={() => navigate('/event/' + event.slug)}>{event.title}</button>
+                    <p className="mt-1 text-xs text-muted-foreground">{event.org.name}</p>
+                  </div>
+                  <Badge variant={statusTone(event.status) === 'success' ? 'default' : 'secondary'}>{humanize(event.status)}</Badge>
+                </div>
+                <div className="flex items-end justify-between gap-2 border-t border-border/70 pt-3">
+                  <div className="text-xs text-muted-foreground">
+                    <p>Visibility: {humanize(event.visibility)}</p>
+                    <p>Tickets: {event._count.tickets.toLocaleString()}</p>
+                  </div>
+                  {confirmButton(event)}
+                </div>
+              </article>
+            ))}
+          </div>
+          <div className="hidden overflow-x-auto rounded-2xl border border-border/70 md:block">
+            <table className="w-full min-w-[680px] text-sm">
+              <thead className="bg-secondary/60 text-left text-xs uppercase tracking-wide text-muted-foreground">
+                <tr><th scope="col" className="p-3">Event</th><th scope="col" className="p-3">Organizer</th><th scope="col" className="p-3">Status</th><th scope="col" className="p-3">Visibility</th><th scope="col" className="p-3">Tickets</th><th scope="col" className="p-3">Actions</th></tr>
+              </thead>
+              <tbody>
+                {items.map((event) => (
+                  <tr key={event.id} className="border-t border-border/50 hover:bg-secondary/30">
+                    <td className="p-3"><button type="button" className="max-w-52 text-left font-medium text-primary hover:underline" onClick={() => navigate('/event/' + event.slug)}>{event.title}</button></td>
+                    <td className="p-3 text-xs">{event.org.name}</td>
+                    <td className="p-3"><Badge variant={statusTone(event.status) === 'success' ? 'default' : 'secondary'}>{humanize(event.status)}</Badge></td>
+                    <td className="p-3 text-xs">{humanize(event.visibility)}</td>
+                    <td className="p-3 tabular-nums">{event._count.tickets}</td>
+                    <td className="p-3">{confirmButton(event)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+
+      <Dialog open={Boolean(pending)} onOpenChange={(open) => { if (!open && !busy) { setPending(null); setReason('') } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirm event suspension</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Suspending <strong>{pending?.title}</strong> can interrupt ticket sales or a live broadcast. Financial history is retained.
+          </p>
+          <div className="space-y-1.5">
+            <Label htmlFor="event-suspend-reason">Reason (at least 10 characters)</Label>
+            <Textarea
+              id="event-suspend-reason"
+              value={reason}
+              onChange={(event) => setReason(event.target.value)}
+              rows={3}
+              maxLength={500}
+              placeholder="State the moderation or compliance reason…"
+            />
+          </div>
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button variant="outline" disabled={busy} onClick={() => { setPending(null); setReason('') }}>Cancel</Button>
+            <Button variant="destructive" disabled={busy || reason.trim().length < 10} onClick={() => void confirmSuspend()}>
+              {busy ? 'Suspending…' : 'Suspend event'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}
+
+}
         </tbody>
       </table>
     </div>
