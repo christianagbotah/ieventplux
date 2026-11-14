@@ -52,10 +52,10 @@ function assertVerdict(actual: string, expected: string, name: string) {
 
 async function main() {
   if (process.env.NODE_ENV === 'production') throw new Error('Realtime integration smoke is development/CI-only.')
-  const users = await db.user.findMany({ select: { id: true, email: true }, take: 10 })
-  const admin = users.find((user) => user.email === 'admin@ieventplux.dev')
-  const other = users.find((user) => user.id !== admin?.id)
-  if (!admin || !other) throw new Error('Seeded development users are required.')
+  const admin = await db.user.findUnique({ where: { email: 'admin@ieventplux.dev' }, select: { id: true, email: true } })
+  if (!admin) throw new Error('Seeded development admin account is required.')
+  const other = await db.user.findFirst({ where: { id: { not: admin.id } }, select: { id: true } })
+  if (!other) throw new Error('At least two development users are required.')
   const broadcast = await db.liveBroadcast.findFirst({ select: { id: true } })
   const publicEvent = await db.event.findFirst({ where: { visibility: 'PUBLIC', status: { in: ['PUBLISHED', 'LIVE'] } }, select: { id: true } })
   if (!broadcast || !publicEvent) throw new Error('Seeded public event and broadcast required.')
