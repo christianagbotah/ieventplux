@@ -2,7 +2,7 @@
 
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react'
 import { Compass, Radio, Film, Search, Ticket, LayoutDashboard, ShieldCheck, LogOut, Bell, Menu, Sparkles, UserRound, Command as CommandIcon } from 'lucide-react'
-import { io } from 'socket.io-client'
+import { connectRealtime } from './realtime'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -87,18 +87,13 @@ export default function AppPortal() {
   // Realtime notifications over the gateway WebSocket (port ONLY in XTransformPort).
   useEffect(() => {
     if (!user) return
-    const socket = io('/?XTransformPort=3003', {
-      transports: ['websocket', 'polling'],
-      reconnection: true,
-      reconnectionAttempts: 6,
-      reconnectionDelay: 1200,
-      timeout: 10000,
-    })
+    const socket = connectRealtime()
     socket.on('connect', () => {
       setRealtimeConnected(true)
       socket.emit('join', { room: `user:${user.id}` })
     })
     socket.on('disconnect', () => setRealtimeConnected(false))
+    socket.on('room:denied', () => setRealtimeConnected(false))
     socket.on('notification', (payload: { title: string; body: string; link?: string }) => {
       setUnread(usePortal.getState().unread + 1)
       toast({ title: payload.title, description: payload.body })
