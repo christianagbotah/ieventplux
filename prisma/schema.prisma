@@ -1,13 +1,17 @@
-// iEventPlux — Prisma schema (SQLite development deployment; designed to be portable to PostgreSQL)
+// iEventPlux — PostgreSQL schema. The release targets both CI Debian and the Lightworld RHEL VPS.
 // Conventions:
 //  - Money: integer minor units (GHS pesewas) + ISO currency code string. Never floats.
-//  - Enums: string fields validated at the application boundary (zod) because SQLite lacks enums.
+//  - Enums: string fields validated at the application boundary (zod).
 //  - JSON payloads: String fields holding JSON, parsed/serialized at the service layer.
 //  - Times: DateTime stored in UTC; events additionally carry an IANA timezone name.
 //  - Soft deletion: deletedAt where retention rules require it. Financial history is never deleted.
 
 generator client {
   provider = "prisma-client-js"
+  // Bun reports OpenSSL 1.1 on the RHEL VPS while Node 22 reports OpenSSL 3.
+  // Generate both engines so web, background worker and realtime all boot.
+  // "native" keeps local development and Debian CI binaries working.
+  binaryTargets = ["native", "rhel-openssl-1.1.x", "rhel-openssl-3.0.x"]
 }
 
 datasource db {
