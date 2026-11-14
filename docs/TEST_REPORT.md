@@ -859,3 +859,18 @@ Date: 2026-11-14 · Postgres LIVE (R26 stack) · all services on :3000/:3001/:30
 - All R28 test artifacts removed (invitations NHYGVXJ_/50O5WWEN/BOARD25 + their RSVPs, ama's order/ticket, the "Guest seat" ticket type, the GOING interest, the 7 INVITATION test notifications) — final state matches the canonical seed, plus one seed fix: **DONOR2026 now carries `guestsUsed: 1`** (the seed previously claimed a seat with akua's APPROVED rsvp without counting it — 0/2 with a seat taken).
 - `bun run lint`: 0 errors / **17 warnings (baseline held** — the two new load effects wrapped in async IIFEs). `bunx tsc --noEmit`: 0 errors. `/api/v1/health`: healthy, database up.
 - Push note: R27 had ended blocked on a wiped PAT; the user re-provided one this session — R27 `9751c0e` and R28 pushed to `origin/main` (runbook: `credential.helper store` + `chmod 600 ~/.git-credentials`).
+
+## Re-verification round 29 — Admin organization approval: Reject/Approve decision states (user-reported bug)
+
+**The report:** clicking Reject on an organization left both Approve/Reject buttons rendered and the status still reading "pending". **Reproduced against live data first** — `accra-events-co` sat at `org=PENDING_VERIFICATION, v=REJECTED` (evidence of an earlier real reject click) while the admin card still rendered "Pending Verification" + both buttons: the REJECT write path was working; only the UI ignored the decision.
+
+- **Fixed-state rendering (the user's exact scenario):** admin Organizations at 390×844 — the REJECTED org now shows the destructive **"Rejected"** badge, **no Approve/Reject buttons**, and "Declined — the organizer must resubmit documents before a new review."; the three APPROVED orgs show "Verified" + Suspend.
+- **Resubmission → decision cycle (two role sessions through the app UI, no curl):**
+  - Organizer (`accra@eventco.dev`) workspace Settings → "Verification evidence" → Submit for review → DB flips to `v=PENDING, evidence=1`.
+  - Super Admin Organizations → the row reads **"Pending Review"** + "submitted just now" + the Approve/Reject pair (the only state the buttons are offered in).
+  - **Reject clicked in-UI** → row updates after reload() to "Rejected" badge, buttons gone, decline note present, toast "Organization rejected"; DB confirms `v=REJECTED`, `decidedAt/reviewerId/notes` written.
+  - Resubmit again → **Approve clicked in-UI** → row updates to **"Verified"** + Suspend button; DB confirms `org=ACTIVE, verifiedAt set`.
+- **Honesty details:** evidence-less pending rows note "No documents submitted yet."; relative submission time on every row; orgs that are ACTIVE or SUSPENDED never offer decision buttons.
+- **Sweeps & hygiene:** 390×844 and 1280×800; footer intact; zero console/page errors (only the pre-existing Radix Dialog aria warnings); dev.log free of prisma/runtime errors through the whole session.
+- **Cleanup:** the demo org was restored to its seed state (`PENDING_VERIFICATION` / `PENDING`, notes "Awaiting business registration documents.") so the verification workflow remains demonstrable — final state matches the canonical seed.
+- Static: `bun run lint` 0 errors / 17 warnings (baseline); `bunx tsc --noEmit` 0 errors. Screenshots: `docs-assets/round29-orgs-{rejected-390,approved-1280,pending-desktop-1280}.png`.

@@ -216,9 +216,20 @@ function Overview() {
   )
 }
 
+type AdminOrg = {
+  id: string
+  name: string
+  slug: string
+  status: string
+  city?: string | null
+  verifiedAt?: string | null
+  verification?: { status: string; evidence: string; submittedAt: string } | null
+  _count: { events: number }
+}
+
 function Orgs() {
   const { toast } = useToast()
-  const [data, reload, loading] = useAdmin<{ items: { id: string; name: string; slug: string; status: string; city?: string | null; verifiedAt?: string | null; verification?: { status: string } | null; _count: { events: number } }[] }>('/admin/orgs')
+  const [data, reload, loading] = useAdmin<{ items: AdminOrg[] }>('/admin/orgs')
 
   const verify = async (id: string, decision: 'APPROVE' | 'REJECT') => {
     try {
@@ -234,28 +245,62 @@ function Orgs() {
   if (!data) return <EmptyState title="Organizations unavailable" />
   return (
     <div className="space-y-3">
-      {data.items.map((o) => (
-        <Card key={o.id} className="rounded-2xl">
-          <CardContent className="flex flex-wrap items-center gap-3 p-4">
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <p className="font-semibold">{o.name}</p>
-                <Badge variant={o.status === 'ACTIVE' ? 'default' : 'secondary'} className="capitalize text-[10px]">{humanize(o.status)}</Badge>
+      {data.items.map((o) => {
+        // Decision state machine: the admin list must reflect the VERIFICATION
+        // decision, not just the org lifecycle status. On REJECT the org row
+        // intentionally resets to PENDING_VERIFICATION (so the organizer can
+        // resubmit) — surfacing that raw status here made a decided case look
+        // still-pending and re-rendered both decision buttons forever.
+        // - PENDING  → decision buttons (the only state a decision is asked for)
+        // - REJECTED → destructive badge, no buttons until organizer resubmits
+        // - APPROVED → verified badge (+ Suspend when the org is active)
+        const vStatus = o.verification?.status ?? 'PENDING'
+        const decidedRejected = vStatus === 'REJECTED'
+        const decidedApproved = vStatus === 'APPROVED'
+        const awaitingDecision = !decidedRejected && !decidedApproved && o.status !== 'ACTIVE' && o.status !== 'SUSPENDED'
+        let evidenceCount = 0
+        try {
+          const arr = JSON.parse(o.verification?.evidence ?? '[]')
+          if (Array.isArray(arr)) evidenceCount = arr.length
+        } catch { evidenceCount = 0 }
+        return (
+          <Card key={o.id} className="rounded-2xl">
+            <CardContent className="flex flex-wrap items-center gap-3 p-4">
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="font-semibold">{o.name}</p>
+                  {decidedRejected ? (
+                    <Badge variant="destructive" className="text-[10px]">Rejected</Badge>
+                  ) : decidedApproved ? (
+                    <Badge variant="default" className="text-[10px]">Verified</Badge>
+                  ) : (
+                    <Badge variant="secondary" className="text-[10px]">{o.status === 'SUSPENDED' ? 'Suspended' : 'Pending Review'}</Badge>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {o.city ?? '—'} · {o._count.events} events · /{o.slug}
+                  {o.verification?.submittedAt ? ` · submitted ${relative(o.verification.submittedAt)}` : ''}
+                </p>
+                {decidedRejected && (
+                  <p className="mt-1 text-xs text-destructive">Declined — the organizer must resubmit documents before a new review.</p>
+                )}
+                {awaitingDecision && evidenceCount === 0 && (
+                  <p className="mt-1 text-xs text-muted-foreground">No documents submitted yet.</p>
+                )}
               </div>
-              <p className="text-xs text-muted-foreground">{o.city ?? '—'} · {o._count.events} events · /{o.slug}</p>
-            </div>
-            {o.status !== 'ACTIVE' && o.verification?.status !== 'APPROVED' && (
-              <div className="flex gap-1.5">
-                <Button size="sm" className="rounded-full" onClick={() => void verify(o.id, 'APPROVE')}><Check className="mr-1 h-3.5 w-3.5" /> Approve</Button>
-                <Button size="sm" variant="outline" className="rounded-full text-destructive" onClick={() => void verify(o.id, 'REJECT')}><X className="mr-1 h-3.5 w-3.5" /> Reject</Button>
-              </div>
-            )}
-            {o.status === 'ACTIVE' && (
-              <Button size="sm" variant="outline" className="rounded-full" onClick={async () => { await api.post(`/admin/orgs/${o.id}/suspend`, {}); reload() }}>Suspend</Button>
-            )}
-          </CardContent>
-        </Card>
-      ))}
+              {awaitingDecision && (
+                <div className="flex gap-1.5">
+                  <Button size="sm" className="rounded-full" onClick={() => void verify(o.id, 'APPROVE')}><Check className="mr-1 h-3.5 w-3.5" /> Approve</Button>
+                  <Button size="sm" variant="outline" className="rounded-full text-destructive" onClick={() => void verify(o.id, 'REJECT')}><X className="mr-1 h-3.5 w-3.5" /> Reject</Button>
+                </div>
+              )}
+              {o.status === 'ACTIVE' && (
+                <Button size="sm" variant="outline" className="rounded-full" onClick={async () => { await api.post(`/admin/orgs/${o.id}/suspend`, {}); reload() }}>Suspend</Button>
+              )}
+            </CardContent>
+          </Card>
+        )
+      })}
     </div>
   )
 }
