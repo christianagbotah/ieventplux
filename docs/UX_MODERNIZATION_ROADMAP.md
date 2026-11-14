@@ -22,13 +22,13 @@ A consistent, premium events marketplace for Ghana with polished discovery, tick
 |---|---|---|
 | Global shell and navigation | Five clear mobile tabs; mobile search entry; skip-content keyboard fix; persistent view state; modern responsive token system | Browser UAT across breakpoints and assistive tech; notification and unread assertions |
 | Discover & search | Append-on-pagination (no losing earlier cards), cancellation of stale searches, retryable empty/error states, keyboard-operable promoted cards | Search now queries server full catalogue (first page, 36 results) with offline fallback; next: additional pages, sorting, map/distance filters, search telemetry and reliable no-results analytics |
-| Event card and details | Keyboard event cards; shared focus and imagery styling | Complete detail mobile UX audit; ticket purchase summary, event share/calendar/venue, long names, invitations, accessible modal |
+| Event card and details | Keyboard event cards, Round 38 ticket picker with better mobile scrolling/quantity actions, server-calculated-fee disclosure and private venue/broadcast redaction | Visual fee/checkout UAT, sharing/calendar/venue, long names and modal keyboard audit |
 | Checkout / order | Separate event and calendar actions in order confirmation (no nested button/link) | Real Hubtel provider test; checkout return errors, retries, refunds and reconciliation; explicit in-progress verification states |
 | Sign in / recovery | Web and mobile eye toggles, responsive card styling, web accessible reset Dialog, native password-reset flow; demo one-click sign-in hidden on production | Real SMTP reset email, password-manager and accessibility audit, mobile session persistence on hardware |
 | Live / broadcasts | Safe authorized Socket.IO room join; production-safe client path; refreshable live listings with accurate fetch-error states | Real stream ingest/playback, entitlement access on browsers/devices, viewer caps and moderation load test |
 | Reels, social, reviews | Retained existing functional implementations and common shell/token upgrades | Gesture, auto-play, keyboard/video captions, permission and performance UAT |
-| Organizer workspace | Accessible mobile backdrop/Escape, active organization header, shortcut to create event | Comprehensive event form audit, sticky actions, mobile tables, analytics, settlement states, permissions and role journeys |
-| Platform admin | Usable mobile section selector; payment-credential badge never claims unverified live checkout | Audit all 14 panels, empty/error states, table responsiveness, admin role separation, irreversible action confirmations |
+| Organizer workspace | Accessible drawer/active-org summary; Round 38 adds responsive, searchable Orders and Attendees with safer QR scanning | Event editor, protected durable offline scan queue, finance/studio/reports, role journeys and responsive UAT |
+| Platform admin | Mobile section selector and truthful provider badge; Round 38 Event oversight adds mobile cards, search/filter and reason-required suspension confirmation | Audit remaining admin finance/refund/payout panels, table responsiveness, permissions, irreversible action confirmations |
 | Native mobile | Evergreen theme, neutral nav, redesigned Discover hero/featured/categories/search, password visibility and reset flow | Physical Android/iOS passes, offline ticket wallet/check-in sync, deep-link/back stack, Play/App Store compliance |
 | Realtime & service gateway | Session-bound notification rooms, playback/pass checking, public/private event access, origin checks, startup secret guards, allowlisted preview ports | Multi-user adversarial browser/WebSocket load testing and proxy deployment rehearsal |
 | Operational launch | Round 35 production build+read-only smoke retained; CI now tests realtime auth | Real providers, stage/prod URL, migration baseline, real admin bootstrap, physical mobile, scratch restore, security/load audits |
@@ -82,3 +82,9 @@ The web CI pipeline has lint, Next TypeScript, a PostgreSQL-backed development s
 ---
 
 *This is a tracked engineering plan, not a claim that all views were manually accepted. Add proof links as each acceptance check is completed.*
+
+### Round 38 implementation notes
+
+- **Tenant security:** organizer event listings are now server-scoped to accepted memberships, including no-`orgId` listing; event detail no longer leaks internal broadcast metadata or private invite-only addresses. Automated adversarial seed scenarios added.
+- **Scanner limitation:** offline admission attempts are queued in the current browser tab only and are **not durable after refresh**. Until an encrypted persistent offline queue and offline roster verification are built and tested, staff must keep the tab open and reconcile before leaving the venue.
+- **Acceptance remains:** mobile cards and ticket picker have code updates but require real browser/device screenshots and keyboard/assistive-tech tests.

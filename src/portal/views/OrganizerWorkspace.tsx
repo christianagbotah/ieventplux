@@ -24,6 +24,7 @@ import { money, dateLong, timeRange, humanize, statusTone, relative, moneyToInpu
 import { PlayerSim } from '../components/PlayerSim'
 import { EmptyState } from '../components/EventCard'
 import { flash } from '../animate'
+import { scanMayQueueOffline } from '../lib/checkin-policy'
 
 interface OrgEvent {
   id: string
@@ -1267,59 +1268,190 @@ function defaultEnd(): string {
 
 // ── Orders ──────────────────────────────────────────────────────────────────
 
+interface OrgOrderRow {
+  reference: string
+  status: string
+  kind: string
+  totalMinor: number
+  buyerName: string
+  buyerEmail: string
+  createdAt: string
+  items: { qty: number; ticketType: { name: string } }[]
+}
+
 function OrdersView({ orgId }: { orgId: string }) {
   const [events, setEvents] = useState<OrgEvent[]>([])
   const [eventId, setEventId] = useState('')
-  const [orders, setOrders] = useState<unknown[] | null>(null)
+  const [orders, setOrders] = useState<OrgOrderRow[] | null>(null)
+  const [total, setTotal] = useState(0)
+  const [page, setPage] = useState(1)
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState('ALL')
+  const [error, setError] = useState('')
+  const [retry, setRetry] = useState(0)
 
   useEffect(() => {
-    void api.get<{ items: OrgEvent[] }>(`/events?mine=1&orgId=${orgId}&pageSize=50`).then((d) => {
-      setEvents(d.items)
-      if (d.items[0]) setEventId(d.items[0].id)
+    const controller = new AbortController()
+    setEvents([])
+    setEventId('')
+    setOrders(null)
+    setPage(1)
+    void api.get<{ items: OrgEvent[] }>(
+      '/events?mine=1&orgId=' + encodeURIComponent(orgId) + '&pageSize=50',
+      { signal: controller.signal },
+    ).then((data) => {
+      if (controller.signal.aborted) return
+      setEvents(data.items)
+      setEventId(data.items[0]?.id ?? '')
+    }).catch(() => {
+      if (!controller.signal.aborted) setError('Could not load organization events.')
     })
+    return () => controller.abort()
   }, [orgId])
 
   useEffect(() => {
-    if (!eventId) return
+    if (!eventId) {
+      setOrders([])
+      return
+    }
+    const controller = new AbortController()
     setOrders(null)
-    void api.get<{ items: unknown[] }>(`/events/${eventId}/orders?pageSize=50`).then((d) => setOrders(d.items)).catch(() => setOrders([]))
-  }, [eventId])
+    setError('')
+    void api.get<{ items: OrgOrderRow[]; total: number }>(
+      '/events/' + encodeURIComponent(eventId) + '/orders?page=' + page + '&pageSize=50',
+      { signal: controller.signal },
+    ).then((data) => {
+      if (controller.signal.aborted) return
+      setOrders(data.items)
+      setTotal(data.total)
+    }).catch((err) => {
+      if (controller.signal.aborted) return
+      setOrders([])
+      setError(err instanceof ApiClientError ? err.message : 'Could not load orders.')
+    })
+    return () => controller.abort()
+  }, [eventId, page, retry])
+
+  const filteredOrders = (orders ?? []).filter((order) => {
+    const term = search.trim().toLowerCase()
+    return (statusFilter === 'ALL' || order.status === statusFilter) &&
+      (!term || [order.reference, order.buyerName, order.buyerEmail, ...order.items.map((i) => i.ticketType.name)]
+        .some((value) => value.toLowerCase().includes(term)))
+  })
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="efx-animated-gradient-text iefx-page-title font-extrabold">Orders</h1>
-        <Select value={eventId} onValueChange={setEventId}>
-          <SelectTrigger className="w-64 rounded-xl" aria-label="Select event"><SelectValue placeholder="Select event" /></SelectTrigger>
+    <div className="space-y-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="ievx-section-title">Orders</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Review reservations, payment status and ticket sales for your events.</p>
+        </div>
+        <Select value={eventId} onValueChange={(value) => { setEventId(value); setPage(1); setSearch(''); setStatusFilter('ALL') }}>
+          <SelectTrigger className="h-11 w-full rounded-xl sm:w-64" aria-label="Select an event for order history">
+            <SelectValue placeholder="Select event" />
+          </SelectTrigger>
           <SelectContent>
-            {events.map((e) => <SelectItem key={e.id} value={e.id}>{e.title}</SelectItem>)}
+            {events.map((event) => <SelectItem key={event.id} value={event.id}>{event.title}</SelectItem>)}
           </SelectContent>
         </Select>
       </div>
-      {orders === null ? (
-        Array.from({ length: 4 }).map((_, i) => <div key={i} className="ievx-skeleton h-20 rounded-2xl" />)
-      ) : (orders as { reference: string; status: string; kind: string; totalMinor: number; buyerName: string; buyerEmail: string; createdAt: string; items: { qty: number; ticketType: { name: string } }[] }[]).length === 0 ? (
-        <EmptyState title="No orders for this event yet" />
-      ) : (
-        <div className="overflow-x-auto rounded-2xl border border-border/70">
-          <table className="w-full min-w-[640px] text-sm">
-            <thead className="bg-secondary/60 text-left text-xs uppercase tracking-wide text-muted-foreground">
-              <tr><th className="p-3">Reference</th><th className="p-3">Buyer</th><th className="p-3">Items</th><th className="p-3">Total</th><th className="p-3">Status</th><th className="p-3">Placed</th></tr>
-            </thead>
-            <tbody>
-              {(orders as { reference: string; status: string; kind: string; totalMinor: number; buyerName: string; buyerEmail: string; createdAt: string; items: { qty: number; ticketType: { name: string } }[] }[]).map((o) => (
-                <tr key={o.reference} className="border-t border-border/50 hover:bg-secondary/30">
-                  <td className="p-3 font-mono text-xs">{o.reference}</td>
-                  <td className="p-3"><p className="font-medium">{o.buyerName}</p><p className="text-xs text-muted-foreground">{o.buyerEmail}</p></td>
-                  <td className="p-3 text-xs">{o.items.map((i) => `${i.qty}× ${i.ticketType.name}`).join(', ')}</td>
-                  <td className="p-3 font-semibold">{o.totalMinor === 0 ? 'Free' : money(o.totalMinor)}</td>
-                  <td className="p-3"><Badge variant={statusTone(o.status) === 'success' ? 'default' : 'secondary'} className="capitalize text-[10px]">{humanize(o.status)}</Badge></td>
-                  <td className="p-3 text-xs text-muted-foreground">{relative(o.createdAt)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      <div className="ievx-surface grid gap-3 p-3 sm:grid-cols-[minmax(0,1fr)_180px_auto] sm:items-center">
+        <div className="relative min-w-0">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+          <Input
+            className="h-11 rounded-xl pl-9"
+            aria-label="Search orders on the loaded page"
+            placeholder="Search reference, buyer or ticket…"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
         </div>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="h-11 w-full rounded-xl" aria-label="Filter orders by status">
+            <SelectValue placeholder="All statuses" />
+          </SelectTrigger>
+          <SelectContent>
+            {['ALL', 'PAID', 'PENDING_PAYMENT', 'EXPIRED', 'REFUNDED', 'PARTIALLY_REFUNDED', 'EXCEPTION_REVIEW'].map((status) => (
+              <SelectItem key={status} value={status}>{status === 'ALL' ? 'All statuses' : humanize(status)}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Button variant="outline" size="sm" className="h-11 rounded-xl" disabled={!eventId} onClick={() => setRetry((value) => value + 1)} aria-label="Refresh orders">
+          <RefreshCw className="mr-1.5 h-4 w-4" aria-hidden /> Refresh
+        </Button>
+      </div>
+
+      {error && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-4" role="alert">
+          <p className="text-sm">{error}</p>
+          <Button size="sm" variant="outline" onClick={() => setRetry((value) => value + 1)}>Retry</Button>
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground" aria-live="polite">
+        <span>{filteredOrders.length} visible on page {page} · {total.toLocaleString()} total orders</span>
+        {(search || statusFilter !== 'ALL') && <span>Filters apply to the loaded page</span>}
+      </div>
+
+      {orders === null ? (
+        <div className="grid gap-3 sm:grid-cols-2" role="status" aria-label="Loading orders">
+          {Array.from({ length: 4 }).map((_, i) => <div key={i} className="ievx-skeleton h-28 rounded-2xl" />)}
+        </div>
+      ) : filteredOrders.length === 0 ? (
+        <EmptyState
+          title={search || statusFilter !== 'ALL' ? 'No orders match the current filters' : 'No orders for this event yet'}
+          description={search || statusFilter !== 'ALL' ? 'Try clearing the search or choosing a different status.' : 'Orders will appear here when attendees reserve tickets.'}
+        />
+      ) : (
+        <>
+          <div className="grid gap-3 md:hidden" aria-label="Event orders">
+            {filteredOrders.map((order) => (
+              <article key={order.reference} className="ievx-surface space-y-3 p-4">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="break-all font-mono text-xs font-semibold text-primary">{order.reference}</p>
+                    <p className="mt-1 font-semibold">{order.buyerName || 'Buyer'}</p>
+                    <p className="break-all text-xs text-muted-foreground">{order.buyerEmail}</p>
+                  </div>
+                  <Badge variant={statusTone(order.status) === 'success' ? 'default' : 'secondary'} className="shrink-0 text-[11px]">{humanize(order.status)}</Badge>
+                </div>
+                <div className="border-t border-border/70 pt-3 text-xs text-muted-foreground">
+                  {order.items.map((item) => item.qty + '× ' + item.ticketType.name).join(', ')}
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-bold tabular-nums">{order.totalMinor === 0 ? 'Free' : money(order.totalMinor)}</span>
+                  <span className="text-xs text-muted-foreground">{relative(order.createdAt)}</span>
+                </div>
+              </article>
+            ))}
+          </div>
+          <div className="hidden overflow-x-auto rounded-2xl border border-border/70 md:block">
+            <table className="w-full min-w-[670px] text-sm">
+              <thead className="bg-secondary/60 text-left text-xs uppercase tracking-wide text-muted-foreground">
+                <tr><th scope="col" className="p-3">Reference</th><th scope="col" className="p-3">Buyer</th><th scope="col" className="p-3">Tickets</th><th scope="col" className="p-3">Total</th><th scope="col" className="p-3">Status</th><th scope="col" className="p-3">Placed</th></tr>
+              </thead>
+              <tbody>
+                {filteredOrders.map((order) => (
+                  <tr key={order.reference} className="border-t border-border/50 hover:bg-secondary/30">
+                    <td className="p-3 font-mono text-xs">{order.reference}</td>
+                    <td className="p-3"><p className="font-medium">{order.buyerName}</p><p className="break-all text-xs text-muted-foreground">{order.buyerEmail}</p></td>
+                    <td className="p-3 text-xs">{order.items.map((item) => item.qty + '× ' + item.ticketType.name).join(', ')}</td>
+                    <td className="p-3 font-semibold tabular-nums">{order.totalMinor === 0 ? 'Free' : money(order.totalMinor)}</td>
+                    <td className="p-3"><Badge variant={statusTone(order.status) === 'success' ? 'default' : 'secondary'}>{humanize(order.status)}</Badge></td>
+                    <td className="p-3 text-xs text-muted-foreground">{relative(order.createdAt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+      {total > 50 && (
+        <nav aria-label="Order history pages" className="flex items-center justify-between gap-3">
+          <Button variant="outline" disabled={page <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>Previous</Button>
+          <span className="text-xs text-muted-foreground">Page {page} of {Math.ceil(total / 50)}</span>
+          <Button variant="outline" disabled={page * 50 >= total} onClick={() => setPage((value) => value + 1)}>Next</Button>
+        </nav>
       )}
     </div>
   )
@@ -1335,10 +1467,15 @@ function AttendeesView({ orgId }: { orgId: string }) {
   const [stats, setStats] = useState<{ ticketsIssued: number; admitted: number; remaining: number; anomalies: number } | null>(null)
   const [scanMode, setScanMode] = useState(false)
   const [scanValue, setScanValue] = useState('')
+  const [lookupQuery, setLookupQuery] = useState('')
+  const [lookupError, setLookupError] = useState('')
   const [lastResult, setLastResult] = useState<{ result: string; detail: string; ticket?: { holderName: string; ticketType: string } } | null>(null)
-  const [offlineQueue, setOfflineQueue] = useState<{ payload: string; clientScanId: string; at: string }[]>([])
+  const [offlineQueue, setOfflineQueue] = useState<{ eventId: string; payload: string; clientScanId: string; at: string }[]>([])
+  const [scanBusy, setScanBusy] = useState(false)
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const scanIdRef = useRef(0)
+  const scanBusyRef = useRef(false)
+  const recentScanRef = useRef<{ payload: string; at: number } | null>(null)
 
   useEffect(() => {
     void api.get<{ items: OrgEvent[] }>(`/events?mine=1&orgId=${orgId}&status=ALL&pageSize=50`).then((d) => {
@@ -1363,26 +1500,39 @@ function AttendeesView({ orgId }: { orgId: string }) {
 
   // Manual + camera scan submission (declared before the camera effect that calls it).
   const submitScan = async (payload: string) => {
-    if (!eventId || !payload.trim()) return
-    const clientScanId = `web-${Date.now()}-${scanIdRef.current++}`
+    const code = payload.trim()
+    if (!eventId || !code || scanBusyRef.current) return
+    if (recentScanRef.current?.payload === code && Date.now() - recentScanRef.current.at < 5000) return
+    scanBusyRef.current = true
+    setScanBusy(true)
+    recentScanRef.current = { payload: code, at: Date.now() }
+    const targetEventId = eventId
+    const clientScanId = 'web-' + Date.now() + '-' + scanIdRef.current++
     try {
-      const result = await api.post<{ result: string; detail: string; ticket?: { holderName: string; ticketType: string } }>(`/checkin/scan`, {
-        eventId,
-        payload: payload.trim(),
+      const result = await api.post<{ result: string; detail: string; ticket?: { holderName: string; ticketType: string } }>('/checkin/scan', {
+        eventId: targetEventId,
+        payload: code,
         clientScanId,
       })
       setLastResult(result)
       setScanValue('')
       await refresh()
     } catch (err) {
-      if (err instanceof ApiClientError) {
-        // Offline mode: queue locally (durable local scan queue; conflicts preserved on sync).
-        setOfflineQueue((q) => [...q, { payload: payload.trim(), clientScanId, at: new Date().toISOString() }])
-        setLastResult({ result: 'QUEUED_OFFLINE', detail: 'Queued locally — will sync with conflict detection when back online.', ticket: undefined })
+      // HTTP 400/401/403/409/429 errors are authoritative server decisions,
+      // NOT evidence that this device is offline. Never queue rejected codes.
+      const networkFailure = scanMayQueueOffline(err, typeof navigator === 'undefined' ? true : navigator.onLine)
+      if (networkFailure) {
+        setOfflineQueue((queue) => [...queue, { eventId: targetEventId, payload: code, clientScanId, at: new Date().toISOString() }])
+        setLastResult({ result: 'QUEUED_OFFLINE', detail: 'Network unavailable. Scan queued in this browser tab; keep the tab open until you sync.' })
         setScanValue('')
       } else {
-        toast({ description: 'Scan failed.', variant: 'destructive' })
+        const detail = err instanceof ApiClientError ? err.message : 'Could not verify this ticket.'
+        setLastResult({ result: 'ERROR', detail })
+        toast({ description: detail, variant: 'destructive' })
       }
+    } finally {
+      scanBusyRef.current = false
+      setScanBusy(false)
     }
   }
 
@@ -1426,26 +1576,54 @@ function AttendeesView({ orgId }: { orgId: string }) {
     }
   }, [scanMode])
 
+  const activeOfflineQueue = offlineQueue.filter((scan) => scan.eventId === eventId)
   const syncOffline = async () => {
-    if (offlineQueue.length === 0 || !eventId) return
+    if (activeOfflineQueue.length === 0 || !eventId) return
+    const batch = activeOfflineQueue.slice(0, 200)
     try {
       const result = await api.post<{ synced: number; results: { result: string; detail: string }[] }>('/checkin/sync', {
         eventId,
-        scans: offlineQueue.map((s) => ({ payload: s.payload, clientScanId: s.clientScanId, capturedOfflineAt: s.at })),
+        scans: batch.map((scan) => ({ payload: scan.payload, clientScanId: scan.clientScanId, capturedOfflineAt: scan.at })),
       })
-      toast({ title: `Synced ${result.synced} offline scan(s)`, description: 'Any conflicts were preserved for review — never discarded.' })
-      setOfflineQueue([])
+      const processedIds = new Set(batch.slice(0, result.synced).map((scan) => scan.clientScanId))
+      // Remove ONLY scans that the server says it processed. Preserve the rest
+      // for a later retry, and never sync another event's scans into this event.
+      setOfflineQueue((queue) => queue.filter((scan) => !(scan.eventId === eventId && processedIds.has(scan.clientScanId))))
+      const conflicts = result.results.filter((entry) => ['CONFLICT', 'DUPLICATE', 'INVALID'].includes(entry.result)).length
+      toast({
+        title: 'Synced ' + result.synced + ' offline scans',
+        description: conflicts > 0 ? conflicts + ' scans need review (duplicates/conflicts/invalid).' : 'All returned results reconciled.',
+      })
       await refresh()
-    } catch {
-      toast({ description: 'Still offline — scans remain queued.', variant: 'destructive' })
+    } catch (err) {
+      toast({
+        description: err instanceof ApiClientError ? err.message + ' Scans remain queued in this tab.' : 'Still offline — scans remain queued in this tab.',
+        variant: 'destructive',
+      })
     }
   }
 
-  const lookup = async (q: string) => {
-    if (!eventId || q.length < 2) return
-    const result = await api.get<{ items: { code: string; holderName: string; status: string; checkedInAt?: string | null }[] }>(`/checkin/lookup?eventId=${eventId}&q=${encodeURIComponent(q)}`).catch(() => null)
-    if (result) setAttendees(result.items as unknown[])
-  }
+  // Debounce server-side lookup. Prevent late results from a previous query
+  // replacing a more recent search or a different selected event.
+  useEffect(() => {
+    const query = lookupQuery.trim()
+    if (!eventId || query.length < 2) return
+    const controller = new AbortController()
+    const timer = window.setTimeout(() => {
+      void api.get<{ items: { id?: string; code: string; holderName: string; status: string; ticketType?: string; checkedInAt?: string | null }[] }>(
+        '/checkin/lookup?eventId=' + encodeURIComponent(eventId) + '&q=' + encodeURIComponent(query),
+        { signal: controller.signal },
+      ).then((response) => {
+        if (controller.signal.aborted) return
+        setAttendees(response.items)
+        setLookupError('')
+      }).catch((error) => {
+        if (controller.signal.aborted) return
+        setLookupError(error instanceof ApiClientError ? error.message : 'Could not search attendees.')
+      })
+    }, 300)
+    return () => { window.clearTimeout(timer); controller.abort() }
+  }, [eventId, lookupQuery])
 
   return (
     <div className="space-y-5">
@@ -1454,9 +1632,9 @@ function AttendeesView({ orgId }: { orgId: string }) {
           <h1 className="efx-animated-gradient-text iefx-page-title font-extrabold">Attendees & Check-in</h1>
           {stats && <p className="text-sm text-muted-foreground">{stats.admitted}/{stats.ticketsIssued} admitted · {stats.anomalies} anomalies</p>}
         </div>
-        <div className="flex gap-2">
-          <Select value={eventId} onValueChange={setEventId}>
-            <SelectTrigger className="w-56 rounded-xl" aria-label="Select event"><SelectValue /></SelectTrigger>
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+          <Select value={eventId} onValueChange={(value) => { setEventId(value); setLookupQuery(''); setLookupError('') }}>
+            <SelectTrigger className="h-11 w-full min-w-0 rounded-xl sm:w-56" aria-label="Select event"><SelectValue /></SelectTrigger>
             <SelectContent>{events.map((e) => <SelectItem key={e.id} value={e.id}>{e.title}</SelectItem>)}</SelectContent>
           </Select>
           {eventId && (
@@ -1466,8 +1644,11 @@ function AttendeesView({ orgId }: { orgId: string }) {
               </a>
             </Button>
           )}
-          <Button variant={scanMode ? 'default' : 'outline'} className="rounded-full" onClick={() => setScanMode((s) => !s)}>
+          <Button variant={scanMode ? 'default' : 'outline'} className="h-11 rounded-full" onClick={() => setScanMode((s) => !s)}>
             <ScanLine className="mr-1.5 h-4 w-4" /> {scanMode ? 'Close scanner' : 'Scan tickets'}
+          </Button>
+          <Button variant="outline" size="icon" className="h-11 w-11 rounded-full" aria-label="Refresh attendee list" disabled={!eventId} onClick={() => void refresh()}>
+            <RefreshCw className="h-4 w-4" aria-hidden />
           </Button>
         </div>
       </div>
@@ -1483,7 +1664,7 @@ function AttendeesView({ orgId }: { orgId: string }) {
             </div>
             <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); void submitScan(scanValue) }}>
               <Input value={scanValue} onChange={(e) => setScanValue(e.target.value)} placeholder="…or paste/scan ticket code (TKT-…)" aria-label="Ticket code" />
-              <Button type="submit" className="rounded-full ievx-press" disabled={!scanValue.trim()}>Admit</Button>
+              <Button type="submit" className="rounded-full ievx-press" disabled={!scanValue.trim() || scanBusy}>{scanBusy ? 'Checking…' : 'Admit'}</Button>
             </form>
             {lastResult && (
               <div className={`rounded-xl p-3 text-sm ${lastResult.result === 'ADMITTED' ? 'bg-primary/10 text-primary' : lastResult.result === 'DUPLICATE' ? 'bg-amber-500/10 text-amber-800' : lastResult.result === 'CONFLICT' ? 'bg-destructive/10 text-destructive' : 'bg-secondary'}`}>
@@ -1492,13 +1673,13 @@ function AttendeesView({ orgId }: { orgId: string }) {
                 {lastResult.ticket && <p className="mt-0.5 text-xs opacity-80">{lastResult.ticket.holderName} · {lastResult.ticket.ticketType}</p>}
               </div>
             )}
-            {offlineQueue.length > 0 && (
+            {activeOfflineQueue.length > 0 && (
               <div className="flex items-center justify-between rounded-xl bg-amber-500/10 p-3">
-                <p className="text-sm text-amber-800"><Camera className="mr-1.5 inline h-4 w-4" />{offlineQueue.length} offline scan(s) queued</p>
+                <p className="text-sm text-amber-800"><Camera className="mr-1.5 inline h-4 w-4" />{activeOfflineQueue.length} offline scan(s) queued</p>
                 <Button size="sm" variant="outline" className="rounded-full" onClick={() => void syncOffline()}><RefreshCw className="mr-1 h-3.5 w-3.5" /> Sync now</Button>
               </div>
             )}
-            <p className="text-[11px] text-muted-foreground">Offline scanning queues locally and syncs with conflict preservation — duplicate admissions surface as CONFLICT, never silently dropped.</p>
+            <p className="text-[11px] text-muted-foreground">Scans are queued only for network failures, in this browser tab. Keep it open until syncing; closing or reloading the tab loses unsubmitted scans. Server errors never become offline admissions.</p>
           </CardContent>
         </Card>
       )}
@@ -1507,35 +1688,68 @@ function AttendeesView({ orgId }: { orgId: string }) {
         <div className="relative flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
           <input
-            className="h-10 w-full rounded-full border border-border bg-card pl-9 pr-4 text-sm outline-none focus:border-primary"
-            placeholder="Manual lookup: name, email or code…"
-            aria-label="Manual attendee lookup"
-            onChange={(e) => void lookup(e.target.value)}
+            className="h-11 w-full rounded-xl border border-border bg-card pl-9 pr-4 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+            placeholder="Search name, email or ticket code…"
+            aria-label="Search attendees"
+            value={lookupQuery}
+            onChange={(event) => {
+              const value = event.target.value
+              setLookupQuery(value)
+              setLookupError('')
+              if (value.trim().length < 2) void refresh()
+            }}
           />
         </div>
       </div>
 
+      {lookupError && (
+        <div role="alert" className="rounded-xl border border-destructive/25 bg-destructive/5 p-3 text-sm">{lookupError}</div>
+      )}
       {attendees === null ? (
-        Array.from({ length: 4 }).map((_, i) => <div key={i} className="ievx-skeleton h-14 rounded-xl" />)
-      ) : (
-        <div className="overflow-x-auto rounded-2xl border border-border/70">
-          <table className="w-full min-w-[560px] text-sm">
-            <thead className="bg-secondary/60 text-left text-xs uppercase tracking-wide text-muted-foreground">
-              <tr><th className="p-3">Ticket</th><th className="p-3">Attendee</th><th className="p-3">Type</th><th className="p-3">Status</th><th className="p-3">Checked in</th></tr>
-            </thead>
-            <tbody>
-              {(attendees as { id: string; code: string; holderName: string; ticketType: string; status: string; checkedInAt?: string | null }[]).map((a) => (
-                <tr key={a.id} className="border-t border-border/50 hover:bg-secondary/30">
-                  <td className="p-3 font-mono text-xs">{a.code}</td>
-                  <td className="p-3 font-medium">{a.holderName}</td>
-                  <td className="p-3 text-xs">{a.ticketType}</td>
-                  <td className="p-3"><Badge variant={a.status === 'CHECKED_IN' ? 'default' : a.status === 'VALID' ? 'secondary' : 'outline'} className="capitalize text-[10px]">{humanize(a.status)}</Badge></td>
-                  <td className="p-3 text-xs text-muted-foreground">{a.checkedInAt ? relative(a.checkedInAt) : '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div role="status" aria-label="Loading attendee list" className="grid gap-2">
+          {Array.from({ length: 4 }).map((_, i) => <div key={i} className="ievx-skeleton h-16 rounded-xl" />)}
         </div>
+      ) : attendees.length === 0 ? (
+        <EmptyState title="No matching attendees" description="Try a different ticket code or attendee name, or refresh the selected event." />
+      ) : (
+        <>
+          <div className="mb-2 text-xs text-muted-foreground" aria-live="polite">{attendees.length} attendees shown</div>
+          <div className="grid gap-3 md:hidden">
+            {(attendees as { id?: string; code: string; holderName: string; ticketType?: string; status: string; checkedInAt?: string | null }[]).map((attendee) => (
+              <article key={attendee.id ?? attendee.code} className="ievx-surface space-y-3 p-4">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-semibold">{attendee.holderName}</p>
+                    <p className="mt-1 break-all font-mono text-xs text-primary">{attendee.code}</p>
+                  </div>
+                  <Badge variant={attendee.status === 'CHECKED_IN' ? 'default' : attendee.status === 'VALID' ? 'secondary' : 'outline'}>{humanize(attendee.status)}</Badge>
+                </div>
+                <div className="flex justify-between gap-3 border-t border-border/70 pt-3 text-xs">
+                  <span className="text-muted-foreground">{attendee.ticketType ?? 'Ticket'}</span>
+                  <span className="text-right text-muted-foreground">{attendee.checkedInAt ? relative(attendee.checkedInAt) : 'Not checked in'}</span>
+                </div>
+              </article>
+            ))}
+          </div>
+          <div className="hidden overflow-x-auto rounded-2xl border border-border/70 md:block">
+            <table className="w-full min-w-[560px] text-sm">
+              <thead className="bg-secondary/60 text-left text-xs uppercase tracking-wide text-muted-foreground">
+                <tr><th scope="col" className="p-3">Ticket</th><th scope="col" className="p-3">Attendee</th><th scope="col" className="p-3">Type</th><th scope="col" className="p-3">Status</th><th scope="col" className="p-3">Checked in</th></tr>
+              </thead>
+              <tbody>
+                {(attendees as { id?: string; code: string; holderName: string; ticketType?: string; status: string; checkedInAt?: string | null }[]).map((attendee) => (
+                  <tr key={attendee.id ?? attendee.code} className="border-t border-border/50 hover:bg-secondary/30">
+                    <td className="p-3 break-all font-mono text-xs">{attendee.code}</td>
+                    <td className="p-3 font-medium">{attendee.holderName}</td>
+                    <td className="p-3 text-xs">{attendee.ticketType ?? '—'}</td>
+                    <td className="p-3"><Badge variant={attendee.status === 'CHECKED_IN' ? 'default' : attendee.status === 'VALID' ? 'secondary' : 'outline'}>{humanize(attendee.status)}</Badge></td>
+                    <td className="p-3 text-xs text-muted-foreground">{attendee.checkedInAt ? relative(attendee.checkedInAt) : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </div>
   )

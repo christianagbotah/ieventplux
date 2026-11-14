@@ -71,7 +71,7 @@ export interface OrgMembershipInfo {
 /** Resolve the caller's membership for the given organization (server-side only). */
 export async function membershipFor(userId: string, orgId: string): Promise<OrgMembershipInfo | null> {
   const m = await db.membership.findFirst({
-    where: { userId, orgId, org: { deletedAt: null } },
+    where: { userId, orgId, acceptedAt: { not: null }, org: { deletedAt: null } },
     include: { org: true },
   })
   if (!m) return null
@@ -79,7 +79,7 @@ export async function membershipFor(userId: string, orgId: string): Promise<OrgM
 }
 
 export async function membershipsOf(userId: string): Promise<OrgMembershipInfo[]> {
-  const rows = await db.membership.findMany({ where: { userId, org: { deletedAt: null } }, include: { org: true } })
+  const rows = await db.membership.findMany({ where: { userId, acceptedAt: { not: null }, org: { deletedAt: null } }, include: { org: true } })
   return rows.map((m) => ({ orgId: m.orgId, role: m.role as OrgRole, orgName: m.org.name, orgSlug: m.org.slug, orgStatus: m.org.status }))
 }
 
