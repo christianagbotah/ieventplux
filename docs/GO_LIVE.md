@@ -91,7 +91,7 @@ Rehearsed in pieces (embedded PG init, monitor, backup/restore all ran for real)
 on real infrastructure. Sequence (details in DEPLOYMENT.md):
 
 1. VPS provisioned (Ubuntu LTS, non-root user, firewall: 22/80/443 only).
-2. Managed PostgreSQL created; `DATABASE_URL` points at it; **on an empty database only**, run `bunx prisma db push` WITHOUT `--accept-data-loss`. Do **not** run `bun run db:seed`: it creates known-password demo accounts. Establish, review, test and audit a real administrator bootstrap procedure before opening the site. No committed Prisma migrations existed at the Round 34 handoff; schema upgrades require reviewed migration SQL and a restore rehearsal.
+2. Managed PostgreSQL created; `DATABASE_URL` points at it; **on an empty database only**, run `bunx prisma db push` WITHOUT `--accept-data-loss`. Do **not** run `bun run db:seed`: it creates known-password demo accounts. Run the `bun run ops:bootstrap-admin` one-time, interactive administrator bootstrap against the deliberately EMPTY production database (see DEPLOYMENT.md §4), after testing the same workflow on a separate empty staging database. Verify first login; never supply known demonstration passwords or run a demo seed. No committed Prisma migrations existed at the Round 34 handoff; schema upgrades require reviewed migration SQL and a restore rehearsal.
 3. `APP_SECRET` = fresh 64-char random; `NODE_ENV=production` (boot guard refuses to start without
    `APP_SECRET`; simulators are refused in production — if you see a simulator warning here, stop).
 4. systemd units (copy each; `WorkingDirectory` = repo checkout):
@@ -157,7 +157,7 @@ with `database: up` and zero validation errors.
 
 ## Gate 6 — Go / No-Go
 
-**GO requires ALL of:** Gate 0 rows pass · Round 35 payment-security fixes reviewed and on `main` · Gate 1 all five externals verified (staging → production swap confirmed) · Gate 2 production build artifact healthy · a separately verified, non-demo admin bootstrap · Gate 3 four services under systemd · Gate 4 all six checks pass on production · explicit go/no-go decision recorded by the organizer.
+**GO requires ALL of:** Gate 0 rows pass · Round 35 payment-security fixes reviewed and on `main` · Gate 1 all five externals verified (staging → production swap confirmed) · Gate 2 production build artifact healthy · a separately verified interactive admin bootstrap (`ops:bootstrap-admin`), with no demo identities · Gate 3 four services under systemd · Gate 4 all six checks pass on production · explicit go/no-go decision recorded by the organizer.
 
 **Launch may proceed WITHOUT mobile stores** (web-first launch is legitimate — the mobile apps follow
 when Gate 5 completes).
