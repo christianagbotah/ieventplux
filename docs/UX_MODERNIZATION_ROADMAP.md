@@ -21,7 +21,7 @@ A consistent, premium events marketplace for Ghana with polished discovery, tick
 | Surface | Round 36 changes (implemented in PR #2) | Further acceptance work |
 |---|---|---|
 | Global shell and navigation | Five clear mobile tabs; mobile search entry; skip-content keyboard fix; persistent view state; modern responsive token system | Browser UAT across breakpoints and assistive tech; notification and unread assertions |
-| Discover & search | Append-on-pagination (no losing earlier cards), cancellation of stale searches, retryable empty/error states, keyboard-operable promoted cards | Full catalogue API search vs native local catalogue filtering; sorting, map/distance filters, proper no-results analytics |
+| Discover & search | Append-on-pagination (no losing earlier cards), cancellation of stale searches, retryable empty/error states, keyboard-operable promoted cards | Search now queries server full catalogue (first page, 36 results) with offline fallback; next: additional pages, sorting, map/distance filters, search telemetry and reliable no-results analytics |
 | Event card and details | Keyboard event cards; shared focus and imagery styling | Complete detail mobile UX audit; ticket purchase summary, event share/calendar/venue, long names, invitations, accessible modal |
 | Checkout / order | Separate event and calendar actions in order confirmation (no nested button/link) | Real Hubtel provider test; checkout return errors, retries, refunds and reconciliation; explicit in-progress verification states |
 | Sign in / recovery | Web and mobile eye toggles, responsive card styling, web accessible reset Dialog, native password-reset flow; demo one-click sign-in hidden on production | Real SMTP reset email, password-manager and accessibility audit, mobile session persistence on hardware |
@@ -61,7 +61,7 @@ The web CI pipeline has lint, Next TypeScript, a PostgreSQL-backed development s
 - [ ] Organizer Events, Orders, Attendees, Streaming, Promotions, Finance and Billing UI: one-row filters where possible, mobile card alternatives for wide tables, visible action buttons, error/empty/loading states.
 - [ ] Admin 14 sections: mobile controls, search/filter/sort, bulk actions only with permission, keyboard and confirmation coverage.
 - [ ] Event detail and ticket picker: clear CTA, price/fees summary, date/time/venue, stock/waitlist, accessibility and buyer error recovery.
-- [ ] Native Android/iOS device build and physical check-in/QR/network handoff checks.
+- [ ] Native Android/iOS device build and physical check-in/QR/network handoff checks; mobile search now queries up to 36 published events per request with a cached-home fallback, and needs explicit pagination/large catalogue performance QA.
 
 ### P2 — Polish, growth and scale
 
