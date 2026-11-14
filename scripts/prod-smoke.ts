@@ -51,6 +51,12 @@ async function main() {
     if (!item || item.mode === 'simulated') throw new Error(`Unsafe provider state for ${key}`)
   }
   console.log('PASS health: app/database healthy, zero config errors, payment/SMS not simulated')
+  // Safe GET only: synthetic checkout must be inaccessible in production.
+  const simulatorRes = await fetch(new URL('payments/simulator/production-probe', base), {
+    method: 'GET', redirect: 'error', signal: AbortSignal.timeout(10_000),
+  })
+  if (simulatorRes.status !== 403) throw new Error(`Payment simulator route returned HTTP ${simulatorRes.status}; expected 403`)
+  console.log('PASS simulator endpoint: HTTP 403 (disabled)')
   await getJson('discovery/home')
   console.log('PASS public discovery: HTTP 200 with JSON')
   await getJson('openapi')
