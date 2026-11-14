@@ -1,10 +1,11 @@
 'use client'
 
 import { useState } from 'react'
-import { Church, Ticket, ShieldCheck, Loader2 } from 'lucide-react'
+import { Church, Ticket, ShieldCheck, Loader2, Eye, EyeOff } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useToast } from '@/hooks/use-toast'
 import { api, ApiClientError } from '../api'
 import { navigate } from '../router'
@@ -16,6 +17,9 @@ export default function AuthView({ mode }: { mode: 'signin' | 'register' }) {
   const { setUser, setMemberships } = usePortal()
   const [busy, setBusy] = useState(false)
   const [resetOpen, setResetOpen] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
+  const [showResetPassword, setShowResetPassword] = useState(false)
+  const [resetBusy, setResetBusy] = useState(false)
   const [resetEmail, setResetEmail] = useState('')
   const [resetCode, setResetCode] = useState('')
   const [resetCodeSent, setResetCodeSent] = useState<string | null>(null)
@@ -104,16 +108,22 @@ export default function AuthView({ mode }: { mode: 'signin' | 'register' }) {
   }
 
   const requestReset = async () => {
+    if (resetBusy) return
+    setResetBusy(true)
     try {
       const res = await api.post<{ devResetCode: string | null }>('/auth/password-reset', { email: resetEmail })
       setResetCodeSent(res.devResetCode ?? 'sent')
       toast({ description: res.devResetCode ? `DEV: reset code is ${res.devResetCode}` : 'If that account exists, a reset code has been sent.' })
     } catch (err) {
       toast({ description: err instanceof ApiClientError ? err.message : 'Could not start reset.', variant: 'destructive' })
+    } finally {
+      setResetBusy(false)
     }
   }
 
   const confirmReset = async () => {
+    if (resetBusy) return
+    setResetBusy(true)
     try {
       await api.post('/auth/password-reset-confirm', { email: resetEmail, code: resetCode, password: newPassword })
       toast({ title: 'Password updated', description: 'Sign in with your new password.' })
@@ -121,6 +131,8 @@ export default function AuthView({ mode }: { mode: 'signin' | 'register' }) {
       navigate('/signin')
     } catch (err) {
       toast({ description: err instanceof ApiClientError ? err.message : 'Could not reset password.', variant: 'destructive' })
+    } finally {
+      setResetBusy(false)
     }
   }
 
@@ -160,7 +172,7 @@ export default function AuthView({ mode }: { mode: 'signin' | 'register' }) {
         </ul>
       </div>
 
-      <div className="rounded-2xl border border-border/70 bg-card p-6 shadow-sm sm:p-8">
+      <div className="ievx-surface p-6 sm:p-8">
         <h2 className="text-xl font-bold">{mode === 'signin' ? 'Sign in' : 'Create your account'}</h2>
         <p className="mt-1 text-sm text-muted-foreground">
           {mode === 'signin' ? 'Use your email and password.' : 'It takes less than a minute.'}
@@ -210,12 +222,13 @@ export default function AuthView({ mode }: { mode: 'signin' | 'register' }) {
               <label htmlFor="phone" className="efx-floating-label-input__label">Phone (optional — for ticket SMS)</label>
             </div>
           )}
-          <div className="efx-floating-label-input" style={{ maxWidth: '100%', margin: '0 0 0.35rem' }}>
+          <div className="efx-floating-label-input relative" style={{ maxWidth: '100%', margin: '0 0 0.35rem' }}>
             <input
               id="password"
               name="password"
-              type="password"
+              type={showPassword ? 'text' : 'password'}
               className="efx-floating-label-input__field"
+              style={{ paddingRight: '3.5rem' }}
               placeholder=" "
               required
               minLength={8}
@@ -224,6 +237,16 @@ export default function AuthView({ mode }: { mode: 'signin' | 'register' }) {
               autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
             />
             <label htmlFor="password" className="efx-floating-label-input__label">Password</label>
+            <button
+              type="button"
+              className="absolute right-2 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-xl text-muted-foreground hover:bg-secondary hover:text-foreground"
+              onClick={() => setShowPassword((value) => !value)}
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+              aria-pressed={showPassword}
+              title={showPassword ? 'Hide password' : 'Show password'}
+            >
+              {showPassword ? <EyeOff className="h-4.5 w-4.5" aria-hidden /> : <Eye className="h-4.5 w-4.5" aria-hidden />}
+            </button>
           </div>
           {mode === 'signin' && (
             <div className="mb-3 flex justify-end">
@@ -259,7 +282,7 @@ export default function AuthView({ mode }: { mode: 'signin' | 'register' }) {
             Platform staff: sign in with your staff email — you will land straight in the admin console.
           </p>
         )}
-        {mode === 'signin' && (
+        {process.env.NODE_ENV !== 'production' && mode === 'signin' && (
           <div className="mt-5 rounded-xl border border-border/70 bg-secondary/40 p-3.5">
             <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Demo accounts — one-click sign-in (dev seed)</p>
             <div className="mt-2 flex flex-wrap gap-1.5">
@@ -282,26 +305,42 @@ export default function AuthView({ mode }: { mode: 'signin' | 'register' }) {
         )}
       </div>
 
-      {resetOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-label="Password reset">
-          <div className="w-full max-w-md rounded-2xl bg-card p-6 shadow-xl ievx-scale">
-            <h3 className="text-lg font-bold">Reset your password</h3>
-            <p className="mt-1 text-sm text-muted-foreground">We will send a reset code to your email. All sessions are revoked after a reset.</p>
-            <div className="mt-4 space-y-3">
-              <Input placeholder="your@email.com" value={resetEmail} onChange={(e) => setResetEmail(e.target.value)} aria-label="Email" />
-              <Button className="w-full rounded-xl" onClick={() => void requestReset()}>Send reset code</Button>
-              {resetCodeSent && (
-                <>
-                  <Input placeholder="6-digit code" value={resetCode} onChange={(e) => setResetCode(e.target.value)} aria-label="Reset code" />
-                  <Input type="password" placeholder="New password (min 8 chars)" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} aria-label="New password" />
-                  <Button className="w-full rounded-xl" onClick={() => void confirmReset()}>Set new password</Button>
-                </>
-              )}
-              <Button variant="ghost" className="w-full" onClick={() => setResetOpen(false)}>Close</Button>
-            </div>
+      <Dialog open={resetOpen} onOpenChange={setResetOpen}>
+        <DialogContent className="w-[calc(100vw-2rem)] max-w-md rounded-2xl">
+          <DialogHeader>
+            <DialogTitle>Reset your password</DialogTitle>
+            <DialogDescription>
+              We will send a reset code to your email. All existing sessions are revoked after a successful reset.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Input type="email" autoComplete="email" placeholder="you@example.com" value={resetEmail} onChange={(e) => setResetEmail(e.target.value)} aria-label="Password reset email" />
+            <Button className="w-full rounded-xl" disabled={resetBusy || !resetEmail.trim()} onClick={() => void requestReset()}>
+              {resetBusy ? 'Sending…' : 'Send reset code'}
+            </Button>
+            {resetCodeSent && (
+              <>
+                <Input inputMode="numeric" autoComplete="one-time-code" placeholder="6-digit code" value={resetCode} onChange={(e) => setResetCode(e.target.value)} aria-label="Reset code" />
+                <div className="relative">
+                  <Input type={showResetPassword ? 'text' : 'password'} autoComplete="new-password" minLength={8} className="pr-12" placeholder="New password (min 8 chars)" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} aria-label="New password" />
+                  <button
+                    type="button"
+                    className="absolute right-1 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-muted-foreground hover:bg-secondary"
+                    onClick={() => setShowResetPassword((value) => !value)}
+                    aria-label={showResetPassword ? 'Hide new password' : 'Show new password'}
+                    aria-pressed={showResetPassword}
+                  >
+                    {showResetPassword ? <EyeOff className="h-4 w-4" aria-hidden /> : <Eye className="h-4 w-4" aria-hidden />}
+                  </button>
+                </div>
+                <Button className="w-full rounded-xl" disabled={resetBusy || resetCode.trim().length < 4 || newPassword.length < 8} onClick={() => void confirmReset()}>
+                  {resetBusy ? 'Updating…' : 'Set new password'}
+                </Button>
+              </>
+            )}
           </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
