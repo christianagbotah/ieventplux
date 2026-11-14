@@ -79,37 +79,38 @@
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  /* Round 36 — deep evergreen surfaces instead of flat grayscale. */
+  --background: oklch(0.16 0.019 174);
+  --foreground: oklch(0.96 0.008 160);
+  --card: oklch(0.215 0.02 174);
+  --card-foreground: oklch(0.96 0.008 160);
+  --popover: oklch(0.23 0.022 174);
+  --popover-foreground: oklch(0.97 0.006 160);
+  --primary: oklch(0.76 0.13 161);
+  --primary-foreground: oklch(0.16 0.025 174);
+  --secondary: oklch(0.27 0.025 174);
+  --secondary-foreground: oklch(0.94 0.008 160);
+  --muted: oklch(0.27 0.019 174);
+  --muted-foreground: oklch(0.75 0.019 161);
+  --accent: oklch(0.34 0.048 75);
+  --accent-foreground: oklch(0.95 0.057 90);
+  --destructive: oklch(0.68 0.21 27);
+  --border: oklch(0.75 0.025 160 / 21%);
+  --input: oklch(0.8 0.02 160 / 24%);
+  --ring: oklch(0.76 0.13 161);
+  --chart-1: oklch(0.7 0.14 160);
+  --chart-2: oklch(0.81 0.13 80);
+  --chart-3: oklch(0.73 0.13 210);
+  --chart-4: oklch(0.75 0.16 30);
+  --chart-5: oklch(0.7 0.14 290);
+  --sidebar: oklch(0.19 0.019 174);
+  --sidebar-foreground: oklch(0.96 0.008 160);
+  --sidebar-primary: oklch(0.76 0.13 161);
+  --sidebar-primary-foreground: oklch(0.16 0.025 174);
+  --sidebar-accent: oklch(0.28 0.03 174);
+  --sidebar-accent-foreground: oklch(0.94 0.008 160);
+  --sidebar-border: oklch(0.75 0.025 160 / 21%);
+  --sidebar-ring: oklch(0.76 0.13 161);
 }
 
 @layer base {
@@ -515,4 +516,72 @@
 @media (prefers-reduced-motion: reduce) {
   .ievx-view-enter, .ievx-fade, .ievx-scale, .ievx-skeleton, .ievx-live-dot, .ievx-voice-bar, .ievx-poll-fill--lead::after { animation: none !important; }
   .ievx-card-hover, .ievx-press { transition: none !important; }
+}
+
+
+/* ───── Round 36: accessible, cohesive enterprise portal foundation ───── */
+
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 5rem;
+}
+body {
+  font-feature-settings: "ss01" on, "cv11" on;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow-wrap: break-word;
+}
+:where(button, a, [role="button"], [role="link"], input, textarea, select, [tabindex]):focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+}
+:where(button, a, [role="button"], [role="link"], select) {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+:where(input, select, textarea) {
+  min-width: 0;
+}
+@media (max-width: 767px) {
+  :where(input, select, textarea) {
+    font-size: max(16px, 1em);
+  }
+}
+.ievx-event-card:focus-visible {
+  outline: 3px solid var(--ring);
+  outline-offset: 3px;
+  box-shadow: 0 16px 44px -22px oklch(0.45 0.11 170 / 38%);
+}
+.ievx-surface {
+  border: 1px solid var(--border);
+  background: var(--card);
+  border-radius: 1.25rem;
+  box-shadow: 0 14px 42px -34px oklch(0.22 0.05 165 / 34%);
+}
+.ievx-section-title {
+  font-size: clamp(1.2rem, 2.2vw, 1.5rem);
+  font-weight: 800;
+  line-height: 1.25;
+  letter-spacing: -0.025em;
+}
+.ievx-page-enter {
+  animation: ievx-fade-up 0.24s cubic-bezier(0.2, 0.7, 0.4, 1) backwards;
+}
+.dark .ievx-glass {
+  background: oklch(0.19 0.02 174 / 90%);
+  border-color: oklch(0.75 0.025 160 / 18%);
+}
+.dark .ievx-skeleton {
+  background: linear-gradient(90deg, oklch(0.25 0.021 174) 25%, oklch(0.3 0.025 174) 50%, oklch(0.25 0.021 174) 75%);
+  background-size: 800px 100%;
+}
+.dark .ievx-scrollbar::-webkit-scrollbar-thumb { background: oklch(0.48 0.025 165); }
+:where(section[id], div[id]) { scroll-margin-top: 5.5rem; }
+#browse { scroll-margin-top: 5rem; }
+@media (hover: none) {
+  .ievx-card-hover:hover { transform: none; box-shadow: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto !important; }
+  .ievx-page-enter { animation: none !important; }
 }
