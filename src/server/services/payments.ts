@@ -1,4 +1,5 @@
 import { db } from '../../lib/db'
+import { confirmedAmountMatches } from '../hubtel/security-policy'
 import { env } from '../env'
 import { errors } from '../api'
 import { paymentReference } from '../ids'
@@ -166,6 +167,37 @@ export async function processProviderEvent(providerEventId: string) {
     parsed = { outcome: 'UNKNOWN', amountMinor: null }
   }
 
+  // The public callback endpoint has no cryptographic authentication. For REAL
+  // Hubtel attempts, the worker MUST verify the status using our server-side
+  // credentials; never issue a ticket or activate a subscription from callback
+  // fields alone. Unconfirmed callbacks remain in the audit log and the
+  // reconciliation sweep will retry even when callbackCount > 0.
+  if (attempt.provider === 'HUBTEL') {
+    const { checkTransactionStatus } = await import('../hubtel/payments')
+    const verified = await checkTransactionStatus(attempt.reference, attempt.providerToken)
+    if (!verified.ok || verified.outcome === 'PENDING' || verified.outcome === 'UNKNOWN') {
+      await db.providerEvent.update({
+        where: { id: pe.id },
+        data: { status: 'PROCESSED', processedAt: new Date(), errorNote: 'Untrusted callback deferred: no authoritative provider outcome. Reconciliation required.' },
+      })
+      return { outcome: 'AWAITING_AUTHENTICATED_STATUS' }
+    }
+    if (verified.outcome === 'SUCCESS' && !confirmedAmountMatches(verified.amountMinor, attempt.amountMinor)) {
+      await db.providerEvent.update({
+        where: { id: pe.id },
+        data: { status: 'REJECTED', errorNote: 'Authenticated status lacked an exact matching amount. No fulfilment.' },
+      })
+      return { outcome: 'REJECTED_PROVIDER_AMOUNT' }
+    }
+    parsed = { outcome: verified.outcome, amountMinor: verified.amountMinor }
+  } else if (process.env.NODE_ENV === 'production') {
+    await db.providerEvent.update({
+      where: { id: pe.id },
+      data: { status: 'REJECTED', errorNote: 'Simulator callback rejected in production.' },
+    })
+    return { outcome: 'SIMULATOR_REJECTED' }
+  }
+
   // Subscription invoice payments (no order attached).
   if (!attempt.orderId) {
     const result = await applySubscriptionPayment({ attemptId: attempt.id, outcome: parsed.outcome, amountMinor: parsed.amountMinor, providerPaymentId: pe.providerPaymentId })
@@ -179,7 +211,7 @@ export async function processProviderEvent(providerEventId: string) {
     outcome: parsed.outcome,
     amountMinor: parsed.amountMinor,
     providerPaymentId: pe.providerPaymentId,
-    source: 'CALLBACK',
+    source: attempt.provider === 'HUBTEL' ? 'AUTHENTICATED_STATUS' : 'CALLBACK',
   })
   await db.providerEvent.update({ where: { id: pe.id }, data: { status: 'PROCESSED', processedAt: new Date() } })
   return { outcome }
@@ -198,7 +230,7 @@ export async function applySubscriptionPayment(params: {
   if (!invoice) return 'FAILED'
 
   if (params.outcome === 'SUCCESS') {
-    if (params.amountMinor !== null && params.amountMinor !== attempt.amountMinor) {
+    if (!confirmedAmountMatches(params.amountMinor, attempt.amountMinor)) {
       await db.paymentAttempt.update({ where: { id: attempt.id }, data: { status: 'UNKNOWN', failureReason: 'Amount mismatch' } })
       return 'REJECTED'
     }
@@ -247,7 +279,7 @@ export async function reconcilePayments() {
       status: { in: ['REDIRECTED', 'PENDING'] },
       initiatedAt: { lt: cutoff },
       reconcileCheckCount: { lt: settings.maxReconcileChecks },
-      callbackCount: 0,
+      // Callback receipt is not proof of payment; pending real attempts still need polling.
     },
     take: 25,
   })
@@ -267,6 +299,14 @@ export async function reconcilePayments() {
       } else {
         results.push({ reference: attempt.reference, outcome: 'STILL_PENDING' })
       }
+      continue
+    }
+    if (status.outcome === 'SUCCESS' && !confirmedAmountMatches(status.amountMinor, attempt.amountMinor)) {
+      await db.paymentAttempt.update({
+        where: { id: attempt.id },
+        data: { status: 'UNKNOWN', failureReason: 'Authenticated payment status had missing or mismatched amount.' },
+      })
+      results.push({ reference: attempt.reference, outcome: 'REJECTED_PROVIDER_AMOUNT' })
       continue
     }
     const { applyProviderOutcome } = await import('./fulfilment')

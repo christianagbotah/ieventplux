@@ -1,4 +1,5 @@
 import { env } from '../env'
+import { simulatorAllowed } from './security-policy'
 import { paymentsSimulatorActive, resolveHubtelCreds, type ProbeResult, type ResolvedHubtelCreds } from './credentials'
 
 /**
@@ -56,6 +57,9 @@ export async function initiateCheckout(input: InitiateCheckoutInput, creds?: Res
   if (paymentsSimulatorActive(resolved)) {
     // Isolated development simulator: same DB-level workflow, provider boundary simulated.
     return { ok: true, provider: 'SIMULATOR', token: input.reference }
+  }
+  if (!resolved.checkout.clientId || !resolved.checkout.clientSecret) {
+    return { ok: false, provider: 'HUBTEL', error: 'Hubtel Checkout credentials are not configured. Real checkout is unavailable.' }
   }
   try {
     const res = await fetch(`${resolved.checkout.base}/items/initiate`, {
@@ -155,6 +159,9 @@ export async function checkTransactionStatus(reference: string, token?: string |
     // via the simulator panel (or reconciliation marks them UNKNOWN after max checks).
     return { ok: true, outcome: 'PENDING', amountMinor: null, providerPaymentId: null }
   }
+  if (!resolved.checkout.clientId || !resolved.checkout.clientSecret) {
+    return { ok: false, outcome: 'UNKNOWN', amountMinor: null, providerPaymentId: null, error: 'Hubtel Checkout credentials are not configured.' }
+  }
   try {
     const path = token ?? reference
     const res = await fetch(`${resolved.checkout.base}/items/${encodeURIComponent(path)}`, {
@@ -191,7 +198,7 @@ export interface PayoutSubmission {
 
 export async function submitPayout(params: { reference: string; amountMinor: number; momoNumber: string; recipientName: string; currency: string }, creds?: ResolvedHubtelCreds): Promise<PayoutSubmission> {
   const resolved = creds ?? (await resolveHubtelCreds())
-  if (paymentsSimulatorActive(resolved)) {
+  if (simulatorAllowed(process.env.NODE_ENV) && paymentsSimulatorActive(resolved)) {
     // Dev simulator (round 15): the transfer "leaves" instantly and the payout
     // status poll job transitions SUBMITTED → PAID after a short synthetic
     // delay, so the whole payout lifecycle is exercisable without credentials.
@@ -242,7 +249,7 @@ export interface SendMoneyStatusResult {
 
 export async function checkSendMoneyStatus(providerRef: string, creds?: ResolvedHubtelCreds): Promise<SendMoneyStatusResult> {
   const resolved = creds ?? (await resolveHubtelCreds())
-  if (providerRef.startsWith('SIM-')) {
+  if (providerRef.startsWith('SIM-') && simulatorAllowed(process.env.NODE_ENV)) {
     // Simulator: synthetic completion delay mirrors the SMS simulator behaviour.
     return { ok: true, outcome: 'SUCCESS', httpStatus: null, detail: 'Simulated transfer completion (dev simulator)' }
   }

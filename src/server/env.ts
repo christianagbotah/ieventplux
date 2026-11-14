@@ -8,7 +8,12 @@
  *  - The development simulators can never be forced on in production.
  */
 
+import { productionSecretConfigured } from './hubtel/security-policy'
+
 const isProd = process.env.NODE_ENV === 'production'
+if (isProd && !productionSecretConfigured(process.env.APP_SECRET)) {
+  throw new Error('Production startup refused: APP_SECRET must be a unique high-entropy value (32+ characters), not the development example.')
+}
 
 function boolFromEnv(v: string | undefined): boolean {
   return v === '1' || v === 'true' || v === 'yes'
@@ -86,8 +91,8 @@ export const env: Env = {
     smsClientSecret: process.env.HUBTEL_SMS_CLIENT_SECRET ?? '',
     smsSenderId: process.env.HUBTEL_SMS_SENDER_ID ?? '',
   },
-  paymentsSimulator: paymentsSimFlag === 'auto' ? !checkoutConfigured : boolFromEnv(paymentsSimFlag),
-  smsSimulator: smsSimFlag === 'auto' ? !smsConfigured : boolFromEnv(smsSimFlag),
+  paymentsSimulator: !isProd && (paymentsSimFlag === 'auto' ? !checkoutConfigured : boolFromEnv(paymentsSimFlag)),
+  smsSimulator: !isProd && (smsSimFlag === 'auto' ? !smsConfigured : boolFromEnv(smsSimFlag)),
   videoProvider: videoConfigured ? 'cloudflare-stream' : 'simulator',
   cfStream: { apiToken: process.env.CF_STREAM_API_TOKEN ?? '', accountId: process.env.CF_STREAM_ACCOUNT_ID ?? '' },
   smtp: {
@@ -128,10 +133,12 @@ export async function integrationStatuses(): Promise<IntegrationStatus[]> {
       name: 'Hubtel Online Checkout (collections)',
       stage: 'implemented',
       configured: view.checkout.configured,
-      mode: checkoutSim ? 'simulated' : 'real',
+      mode: checkoutSim ? 'simulated' : view.checkout.configured ? 'real' : 'unavailable',
       detail: view.checkout.configured
         ? `Real adapter active (initiate/callback/reconciliation paths) · credentials source: ${view.checkout.source}. Sandbox verification with the connection probe still pending.`
-        : 'Credentials absent — isolated dev simulator active. Orders, callbacks, reconciliation and ledger all run for real against the database; only the provider boundary is simulated. Save Hubtel keys in Admin → Integrations to switch.',
+        : isProd
+          ? 'Credentials absent — live checkout UNAVAILABLE. Production never falls back to a payment simulator.'
+          : 'Credentials absent — isolated dev simulator active. Orders, callbacks, reconciliation and ledger run locally against the database; only the provider boundary is simulated. Save Hubtel keys in Admin → Integrations to switch.',
     },
     {
       key: 'hubtel-sendmoney',
@@ -148,10 +155,12 @@ export async function integrationStatuses(): Promise<IntegrationStatus[]> {
       name: 'Hubtel SMS',
       stage: 'implemented',
       configured: view.sms.configured,
-      mode: smsSim ? 'simulated' : 'real',
+      mode: smsSim ? 'simulated' : view.sms.configured ? 'real' : 'unavailable',
       detail: view.sms.configured
         ? `Real adapter active (send + delivery status) · credentials source: ${view.sms.source}. Verify the approved sender ID with the provider before live sends.`
-        : 'Credentials absent — dev simulator marks messages ACCEPTED→DELIVERED locally. API acceptance is never shown as confirmed handset delivery.',
+        : isProd
+          ? 'Credentials absent — live SMS UNAVAILABLE. Production never simulates delivery.'
+          : 'Credentials absent — dev simulator marks messages ACCEPTED→DELIVERED locally. API acceptance is never shown as confirmed handset delivery.',
     },
     {
       key: 'cloudflare-stream',

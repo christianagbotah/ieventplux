@@ -1,6 +1,6 @@
 # iEventPlux — Architect Review Report
 
-**Purpose:** a single self-contained review package for an architect assessing this repository on GitHub.
+> **Round 35 critical addendum (14 November 2026):** This report is a frozen assessment of Round 34, **not a current launch authorization**. A subsequent source-code audit identified a live-payment callback trust weakness, automatic production simulator fallback, a missing production-build CI gate, unsafe production smoke/development seed guidance, and stale SQLite deployment instructions. Corrective code, tests, and revised launch guides are proposed in [Round 35 PR #1](https://github.com/christianagbotah/ieventplux/pull/1). Follow [GO_LIVE.md](GO_LIVE.md) and [DEPLOYMENT.md](DEPLOYMENT.md), not this report's previous "launch procedure only" conclusion. Third-party live verification remains required.\n\n**Purpose:** a single self-contained review package for an architect assessing this repository on GitHub.
 **State at write time:** commit `7693367` (Round 33), branch `main`, in sync with `origin/main`, CI **success** on the last three pushed commits.
 **Reviewer shortcut:** if you read only one more document after this one, read `docs/GO_LIVE.md` (the launch procedure) and `docs/TEST_REPORT.md` (the evidence).
 

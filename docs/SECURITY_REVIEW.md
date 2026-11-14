@@ -53,13 +53,13 @@ Scripted verification exercised the isolation matrix (detailed evidence in `TEST
 |---|---|
 | Client-tampered prices | **Server-side pricing only** — totals computed from `TicketType.priceMinor` inside the order transaction; buyers submit quantities, never amounts |
 | Replay/double-charge | Unique per-attempt provider references persisted **before** any async processing; `ProviderEvent.dedupKey @unique`; `PaymentAttempt` status guards |
-| Forged callbacks (amount tampering) | Amount comparison against the attempt amount; mismatch → attempt UNKNOWN + event REJECTED (simulator `forged-amount` scenario verifies rejection) |
+| Forged/unverified callbacks | The public callback is only a notification, never financial authority. For real Hubtel attempts, the worker performs an authenticated server-to-server status check and requires an exact non-null integer amount before fulfilling orders or subscriptions. Unknown/unverified outcomes remain pending for reconciliation. This **code-level fix still requires testing with real Hubtel credentials**. |
 | Duplicate fulfilment | Order-status re-read inside the fulfilment transaction + unique ticket codes + ledger idempotency key `order-payment:{orderId}:{attemptId}` |
 | Duplicate *payments* | Second success → auto RefundCase + `EXCEPTION_REVIEW` — money never silently absorbed |
 | Ledger tampering | Append-only; journals immutable; corrections are reversal journals; unbalanced journals throw; DR=CR enforced |
 | Payout double-pay | Failed payouts reverse via `payout-reversal:{id}` and **retry with the same reference**; settlement holds block double-disposal of the same funds |
 | Refund abuse | Only FINANCE_ADMIN/SUPER_ADMIN with elevation process refunds; repeat/refunded-again cases blocked; unused tickets revoked before money moves |
-| Simulators in production | `env.ts` throws at startup if `PAYMENTS_SIMULATOR`/`SMS_SIMULATOR` are forced on with `NODE_ENV=production` |
+| Simulators in production | Round 35: forced flags throw, automatic fallback is disabled, checkout/SMS without credentials report unavailable, synthetic payout completions are prohibited, and the public simulator checkout URL returns 403. |
 
 ## 5. Private data rules
 
@@ -76,9 +76,9 @@ Scripted verification exercised the isolation matrix (detailed evidence in `TEST
 | Dev verification codes | DEV-labelled and only when SMTP is absent — never in production |
 | AI concierge | server-side only; conversations scoped to the authenticated user |
 
-## 6. Rate limits (per instance, per IP)
+## 6. Rate limits (PostgreSQL-backed, multi-instance; keyed by IP)
 
-Implemented in `src/server/api.ts` (`rateLimit`) — enforced on:
+Implemented in `src/server/api.ts` (`rateLimit`) using the shared PostgreSQL `RateLimitBucket` (multi-instance proof in R32) — enforced on:
 
 | Scope | Limit | Window |
 |---|---|---|

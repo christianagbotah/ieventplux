@@ -24,9 +24,9 @@
 | Adapter | `src/server/hubtel/payments.ts` (`initiateCheckout`, `parseCallback`, `checkTransactionStatus`, round 14: `probeCheckoutConnection`) + `src/server/hubtel/credentials.ts` (per-request credential resolution: admin-saved DB values override env) |
 | Endpoints used | `POST {HUBTEL_CHECKOUT_BASE}/items/initiate` (Basic auth, JSON: token, description, callbackUrl, returnUrl, cancellationUrl, amount, generateInvoice) · `GET {HUBTEL_CHECKOUT_BASE}/items/{token}` (status check) · callback receiver `POST /api/v1/payments/callback` (our side) |
 | Base URL default | `https://pay.hubtel.com` (env-overridable) |
-| Contract rules honoured | ResponseCode `0000` = success; failure codes `0001`–`0005`; 5-minute reconciliation rule; **no signature in the v1 callback contract — none invented**; final state via authenticated server-to-server verification + amount comparison; case-tolerant field parsing (PascalCase/camelCase) |
+| Contract rules honoured | ResponseCode `0000` = success; failure codes `0001`–`0005`; 5-minute reconciliation rule; **no signature in the v1 callback contract — none invented**; Round 35 enforces authenticated server-to-server verification and a non-null exact amount match BEFORE order/subscription fulfilment; case-tolerant field parsing (PascalCase/camelCase) |
 | Credentials needed | Env: `HUBTEL_CHECKOUT_CLIENT_ID`, `HUBTEL_CHECKOUT_CLIENT_SECRET` — **or** (round 14) saved by a super admin in Admin → Integrations → Hubtel connection (stored in `PlatformSetting`, write-only through the API, returned masked only). Hubtel issues ONE API client per business account, so the admin form feeds Checkout, Send Money and SMS together |
-| Dev behaviour without credentials | Isolated simulator at `/api/v1/payments/simulator/{reference}` (6 scenarios); simulator cannot be forced on in production (env.ts throws). **Round 14: the simulator gate is dynamic** — saving complete checkout keys in the admin console switches checkout to the real provider immediately, no redeploy |
+| Dev behaviour without credentials | Isolated simulator at `/api/v1/payments/simulator/{reference}` (6 scenarios); simulator cannot run in production, including automatic credential-absent fallback (Round 35). **Round 14: the simulator gate is dynamic** — saving complete checkout keys in the admin console switches checkout to the real provider immediately, no redeploy |
 | Round-14 connection probe | `POST /api/v1/admin/hubtel/probe` performs ONE real GHS 1.00 initiate (`probe-{ts}` reference, unpaid sessions expire at the provider — nothing is charged). Verdicts are empirical and persisted: `AUTH_OK_CONTRACT_OK` (2xx + recognized checkoutUrl) · `AUTH_OK_SHAPE_DIFFERS` (authenticated but response shape unknown — calibrate from the persisted snippet) · `AUTH_REJECTED` (401/403) · `ENDPOINT_NOT_FOUND` (404/405 — path/base needs calibration) · `HTTP_{n}` / `UNREACHABLE` / `NOT_CONFIGURED` |
 | Remaining to verify | Field names in the initiate response (`checkoutUrl`/`url`/`data.url` all accepted — confirm which is canonical), status-check path shape, failure-code table, callback field casing — the probe's persisted snippet gives the evidence the moment credentials exist |
 
@@ -56,7 +56,7 @@
 
 | | |
 |---|---|
-| Integration point | `src/server/env.ts` (`VIDEO_PROVIDER`, `CF_STREAM_*`), `src/server/services/broadcasts.ts` (ingest keys, playback tokens, entitlements) |
+| Integration point | `src/server/env.ts` (automatic Cloudflare selection from `CF_STREAM_*`, no `VIDEO_PROVIDER` flag), `src/server/services/broadcasts.ts` (ingest keys, playback tokens, entitlements) |
 | Current mode | `simulator` — synthetic canvas stream renderer, entitlement-gated and clearly labelled (`src/portal/components/PlayerSim.tsx`); ingest keys are generated and shown once but not live |
 | Credentials needed | `CF_STREAM_API_TOKEN`, `CF_STREAM_ACCOUNT_ID` |
 | Planned usage (per brief) | Live ingest (RTMP/WebRTC for OBS/vMix and phone cameras), signed/protected playback, replays; pricing assumptions in `docs/COST_MODEL.md` |
@@ -95,7 +95,7 @@ Read and re-checked at implementation time; **re-verify all of these when creden
 | Realtime (socket.io) | `implemented` (live in-process) | Rooms `broadcast:{id}` + `user:{id}`; authenticated `/emit` ingress with `REALTIME_SECRET`; authorization in the API layer |
 | Worker + OutboxJob queue | `implemented` (live in-process) | Claim/lock/stale-reclaim; bounded retries → DEAD; idempotent handlers |
 | AI concierge (z-ai-web-dev-sdk) | `implemented` | LLM chat + ASR/TTS voice turn; server-side only; real DB context; disable via `AI_CONCIERGE_ENABLED=false` |
-| SQLite database | `implemented` (deployment database) | PostgreSQL is the production path (`docs/ARCHITECTURE.md` §7) |
+| PostgreSQL database | `implemented` (dev and production data model) | Embedded user-space PostgreSQL in development; managed PostgreSQL required for production. SQLite is historical only. |
 
 ## 8. Sandbox verification protocol (execute when credentials arrive)
 
