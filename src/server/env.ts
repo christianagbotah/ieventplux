@@ -128,10 +128,12 @@ export async function integrationStatuses(): Promise<IntegrationStatus[]> {
       name: 'Hubtel Online Checkout (collections)',
       stage: 'implemented',
       configured: view.checkout.configured,
-      mode: checkoutSim ? 'simulated' : 'real',
+      mode: checkoutSim ? 'simulated' : view.checkout.configured ? 'real' : 'unavailable',
       detail: view.checkout.configured
         ? `Real adapter active (initiate/callback/reconciliation paths) · credentials source: ${view.checkout.source}. Sandbox verification with the connection probe still pending.`
-        : 'Credentials absent — isolated dev simulator active. Orders, callbacks, reconciliation and ledger all run for real against the database; only the provider boundary is simulated. Save Hubtel keys in Admin → Integrations to switch.',
+        : isProd
+          ? 'Credentials absent — live checkout UNAVAILABLE. Production never falls back to a payment simulator.'
+          : 'Credentials absent — isolated dev simulator active. Orders, callbacks, reconciliation and ledger run locally against the database; only the provider boundary is simulated. Save Hubtel keys in Admin → Integrations to switch.',
     },
     {
       key: 'hubtel-sendmoney',
@@ -148,10 +150,12 @@ export async function integrationStatuses(): Promise<IntegrationStatus[]> {
       name: 'Hubtel SMS',
       stage: 'implemented',
       configured: view.sms.configured,
-      mode: smsSim ? 'simulated' : 'real',
+      mode: smsSim ? 'simulated' : view.sms.configured ? 'real' : 'unavailable',
       detail: view.sms.configured
         ? `Real adapter active (send + delivery status) · credentials source: ${view.sms.source}. Verify the approved sender ID with the provider before live sends.`
-        : 'Credentials absent — dev simulator marks messages ACCEPTED→DELIVERED locally. API acceptance is never shown as confirmed handset delivery.',
+        : isProd
+          ? 'Credentials absent — live SMS UNAVAILABLE. Production never simulates delivery.'
+          : 'Credentials absent — dev simulator marks messages ACCEPTED→DELIVERED locally. API acceptance is never shown as confirmed handset delivery.',
     },
     {
       key: 'cloudflare-stream',
