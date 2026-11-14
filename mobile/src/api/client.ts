@@ -493,6 +493,10 @@ export const api = {
   auth: {
     login: (email: string, password: string) =>
       request<LoginResponse>('POST', '/auth/login', { email, password }),
+    requestReset: (email: string) =>
+      request<{ devResetCode?: string | null }>('POST', '/auth/password-reset', { email }),
+    confirmReset: (email: string, code: string, password: string) =>
+      request<{ message?: string }>('POST', '/auth/password-reset-confirm', { email, code, password }),
     me: () => request<MeResponse>('GET', '/auth/me'),
     logout: () => request<{ ok: boolean }>('POST', '/auth/logout'),
   },
