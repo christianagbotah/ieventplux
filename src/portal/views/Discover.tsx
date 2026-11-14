@@ -115,10 +115,17 @@ function SponsoredCard({ event, index }: { event: EventCardData; index: number }
   const [imgFailed, setImgFailed] = useState(false)
   return (
     <Card
-      role="article"
-      aria-label={`${event.title} (promoted)`}
-      className="ievx-card-hover group flex-row items-stretch gap-0 overflow-hidden rounded-2xl border-border/70 bg-card py-0 cursor-pointer"
+      role="link"
+      tabIndex={0}
+      aria-label={`View promoted event: ${event.title}`}
+      className="ievx-card-hover ievx-event-card group flex-row items-stretch gap-0 overflow-hidden rounded-2xl border-border/70 bg-card py-0 cursor-pointer"
       style={{ animationDelay: `${Math.min(index * 40, 320)}ms` }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          navigate(`/event/${event.slug}`)
+        }
+      }}
       onClick={() => navigate(`/event/${event.slug}`)}
     >
       <div className="relative w-24 shrink-0 overflow-hidden bg-muted sm:w-36">
