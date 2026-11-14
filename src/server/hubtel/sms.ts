@@ -28,6 +28,9 @@ export async function sendSms(params: { to: string; body: string; purpose: strin
   if (smsSimulatorActive(creds)) {
     return { ok: true, provider: 'SIMULATOR', messageId: `SIM-${Date.now()}-${Math.random().toString(36).slice(2, 8)}` }
   }
+  if (!creds.sms.clientId || !creds.sms.clientSecret || !creds.sms.senderId) {
+    return { ok: false, provider: 'HUBTEL', error: 'SMS_UNAVAILABLE: Hubtel SMS credentials or approved sender ID are not configured.' }
+  }
   try {
     const res = await fetch(`${creds.sms.base}/v1/messages/send`, {
       method: 'POST',
@@ -64,6 +67,9 @@ export async function checkSmsDelivery(messageId: string): Promise<{ ok: boolean
   if (smsSimulatorActive(creds)) {
     // Dev simulator: acceptance then simulated handset delivery (explicitly not a real delivery report).
     return { ok: true, state: 'ACCEPTED' }
+  }
+  if (!creds.sms.clientId || !creds.sms.clientSecret || !creds.sms.senderId) {
+    return { ok: false, state: 'UNKNOWN', detail: 'Hubtel SMS credentials are not configured.' }
   }
   try {
     const res = await fetch(`${creds.sms.base}/v1/messages/${encodeURIComponent(messageId)}`, {
