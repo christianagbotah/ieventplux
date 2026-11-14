@@ -949,7 +949,7 @@ The session restart had left the app running against a dead datasource (`.env` a
 
 ### What remains honestly open
 
-- The GitHub Actions workflow is authored with every command locally verified, but **has not executed on GitHub's runners yet** — watch the first run (`.github/workflows/ci.yml`).
+- ~~The GitHub Actions workflow … has not executed on GitHub's runners yet~~ **CLOSED 2026-11-14:** the push of this commit triggered CI **run #1** on GitHub's runners — both jobs green (`mobile`: bun test + tsc; `web`: lint + tsc + schema-push/seed on a GitHub-hosted PostgreSQL service + real stack boot + smoke suite + ops tools). Run conclusion: **success**.
 - Mobile on-device runtime remains externally blocked (no device/emulator exists in this sandbox) — now covered by the 40 logic tests as the maximum verifiable substitute.
 
 ### Re-verification after a SECOND sandbox reset (same round, pre-push)
