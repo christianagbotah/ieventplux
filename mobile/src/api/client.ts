@@ -502,6 +502,12 @@ export const api = {
   },
   discovery: {
     home: () => request<DiscoveryHome>('GET', '/discovery/home'),
+    searchEvents: (query: string, category: string) => {
+      const params = new URLSearchParams({ page: '1', pageSize: '36' })
+      if (query.trim()) params.set('q', query.trim())
+      if (category !== 'all') params.set('category', category)
+      return request<{ items: DiscoveryEventCard[]; total: number }>('GET', `/events?${params.toString()}`)
+    },
   },
   events: {
     /** `idOrSlug` — the server accepts the event slug or the internal id. */
