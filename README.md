@@ -16,7 +16,7 @@ Built for Lightworld Technologies Ltd. — Accra, Ghana. Prices in Ghana cedis (
 | Background worker | `:3001` | Durable outbox queue: payment reconciliation, reservations expiry, reminders, lifecycle, SMS delivery polling |
 | Realtime service | `:3003` | socket.io: live chat, viewer presence, notification push |
 | Mobile (source scaffold) | `mobile/` | Expo/React Native — **not device-tested**; see `mobile/README.md` |
-| Database | SQLite via Prisma | 56 models, integer minor-unit money, portable schema |
+| Database | PostgreSQL via Prisma | 69 models, integer-minor-unit money; isolated development PG or managed production PG |
 
 **Important integration status (honest):** Hubtel Checkout + SMS adapters are implemented against the documented v1 contracts but **not sandbox-verified** (no credentials were supplied). Without credentials the platform runs an **isolated development payment/SMS simulator** — every order, callback, reconciliation, ticket, ledger journal and delivery state is real against the database; only the provider boundary is simulated and clearly labelled. Payouts (Hubtel Send Money) and live video (Cloudflare Stream) are **externally blocked** — recorded and tracked, never faked. See `docs/PROVIDER_CAPABILITIES.md`.
 
@@ -24,8 +24,10 @@ Built for Lightworld Technologies Ltd. — Accra, Ghana. Prices in Ghana cedis (
 
 ```bash
 bun install
-bun run db:push          # create schema
-bun run db:seed          # deterministic dev data (synthetic identities + media)
+cp .env.example .env      # point DATABASE_URL at an isolated PostgreSQL database
+# in the z.ai sandbox only: bun run db:postgres (embedded PG)
+bunx prisma db push      # first-time schema in an isolated dev DB
+bun run db:seed          # DEVELOPMENT ONLY: creates known-password demo accounts
 bun run dev              # web + API on :3000
 
 # separate terminals (mini-services):
@@ -61,7 +63,7 @@ Copy `.env.example` → `.env`. Every variable is documented; typed startup vali
 ## Repo map
 
 ```
-prisma/schema.prisma     56-model data model        src/server/           domain services + Hubtel adapters + jobs
+prisma/schema.prisma     69-model PostgreSQL data model        src/server/           domain services + Hubtel adapters + jobs
 prisma/seed.ts           deterministic dev seed     src/portal/           single-page frontend (jQuery transitions)
 src/app/api/v1/          REST API routes            mini-services/        worker (:3001) + realtime (:3003)
 src/data/css-effects.ts  38-effect CSS library      mobile/               Expo source scaffold
@@ -78,7 +80,7 @@ docs/                    full documentation suite   docs-assets/          verifi
 |---|---|
 | `bun run dev` | Next.js app on :3000 (auto-reload) |
 | `bun run lint` | ESLint (clean; warnings only) |
-| `bun run db:push` / `db:seed` | Schema push / dev seed |
+| `bun run db:push` / `db:seed` | **Development only**: schema push (accepts data loss) / known-password demo seed; never run on production |
 | `bunx tsc --noEmit` | Type check (clean) |
 
-© Lightworld Technologies Ltd. — iEventPlux is a working development build, **not** a production-ready claim. See `docs/CHIEF_ARCHITECT_HANDOFF.md` for the honest completion assessment.
+© Lightworld Technologies Ltd. — iEventPlux is a working development build, **not** a production-ready claim. See [current architect review](docs/ARCHITECT_REVIEW.md), [go-live blockers](docs/GO_LIVE.md), and [PostgreSQL deployment runbook](docs/DEPLOYMENT.md). Round 35 introduced mandatory authenticated provider verification for real-money callbacks and a production build CI gate; neither replaces real provider testing.
