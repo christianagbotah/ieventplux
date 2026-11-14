@@ -63,7 +63,7 @@ export default function AdminConsole({ route }: { route: Route }) {
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-6">
+    <div className="mx-auto max-w-7xl px-4 py-6 sm:py-8">
       <div className="efx-glassmorphism-card mb-5">
         <div className="efx-glassmorphism-card__backdrop" aria-hidden="true" />
         <div className="efx-glassmorphism-card__panel">
@@ -77,35 +77,34 @@ export default function AdminConsole({ route }: { route: Route }) {
         </div>
       </div>
 
-      {/* Mobile: horizontal chip row (scrollable). Desktop: sticky sidebar below. */}
-      <div className="ievx-scrollbar mb-5 flex gap-1.5 overflow-x-auto rounded-2xl bg-secondary/60 p-1.5 md:hidden">
-        {SECTIONS.map((s) => (
-          <button
-            key={s.key}
-            onClick={() => goSection(s.key)}
-            className={`flex shrink-0 items-center gap-1.5 rounded-xl px-3.5 py-2 text-sm font-medium transition-colors ${
-              section === s.key ? 'bg-card text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground'
-            }`}
-            aria-current={section === s.key ? 'page' : undefined}
-          >
-            <s.icon className="h-4 w-4" aria-hidden />
-            {s.label}
-          </button>
-        ))}
+      {/* Fourteen admin sections require a usable mobile chooser, not a
+          horizontally-scrolling row whose most important actions are hidden. */}
+      <div className="sticky top-16 z-20 mb-5 rounded-2xl border border-border bg-card/95 p-3 shadow-sm backdrop-blur md:hidden">
+        <label htmlFor="admin-section" className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-muted-foreground">Admin section</label>
+        <Select value={section} onValueChange={goSection}>
+          <SelectTrigger id="admin-section" aria-label="Choose administration section" className="h-11 w-full rounded-xl">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {SECTIONS.map((entry) => (
+              <SelectItem key={entry.key} value={entry.key}>{entry.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="flex items-start gap-6">
         {/* Desktop sidebar — R19b pattern: sticky under the header, independently
             scrollable (overflow contained, no scroll chaining), viewport-bounded
             so all 12 sections stay reachable on short screens. */}
-        <aside className="hidden md:sticky md:top-20 md:block md:h-fit md:max-h-[calc(100vh-6rem)] md:w-52 md:shrink-0 md:overflow-y-auto md:overscroll-contain ievx-scrollbar md:rounded-2xl md:border md:border-border/60 md:bg-card md:p-2">
+        <aside className="hidden md:sticky md:top-20 md:block md:h-fit md:max-h-[calc(100vh-6rem)] md:w-56 md:shrink-0 md:overflow-y-auto md:overscroll-contain ievx-scrollbar md:rounded-2xl md:border md:border-border/60 md:bg-card md:p-2">
           <p className="mb-1 px-2.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Sections</p>
           <nav aria-label="Admin sections" className="flex flex-col gap-0.5">
             {SECTIONS.map((s) => (
               <button
                 key={s.key}
                 onClick={() => goSection(s.key)}
-                className={`flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-sm font-medium transition-colors ${
+                className={`flex min-h-10 w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-sm font-medium transition-colors ${
                   section === s.key ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
                 }`}
                 aria-current={section === s.key ? 'page' : undefined}
