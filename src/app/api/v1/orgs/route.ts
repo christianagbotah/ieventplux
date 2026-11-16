@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { handle, jsonOk, requireUser, readJson, errors, sanitizeText } from '@/server/api'
 import { db } from '@/lib/db'
 import { getSession } from '@/server/auth'
+import { organizationFields } from '@/server/org-metadata'
 
 /** POST /api/v1/orgs — create an organization (creator becomes OWNER; starts unverified). */
 export async function POST(req: NextRequest) {
@@ -20,7 +21,8 @@ export async function POST(req: NextRequest) {
         description: sanitizeText(body.description, 2000) || null,
         country: sanitizeText(body.country, 2).toUpperCase() || 'GH',
         city: sanitizeText(body.city, 60) || null,
-        contactEmail: sanitizeText(body.contactEmail, 160) || user.email,
+        ...organizationFields(body),
+        contactEmail: organizationFields(body).contactEmail ?? user.email,
         contactPhone: sanitizeText(body.contactPhone, 24) || null,
         ownerId: user.id,
         status: 'PENDING_VERIFICATION',
