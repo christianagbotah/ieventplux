@@ -16,11 +16,23 @@ function check(condition: unknown, message: string) {
   console.log('PASS ' + message)
 }
 async function login(email: string): Promise<string> {
-  const response = await fetch(base + '/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) })
-  check(response.status === 200, 'seeded login for ' + email)
-  const cookie = response.headers.getSetCookie?.()[0] ?? response.headers.get('set-cookie') ?? ''
-  check(cookie.startsWith('ievx_session='), 'signed session cookie')
-  return cookie.split(';')[0]
+  // CI runs other authenticated privacy suites first. Respect the real shared
+  // login limiter and its Retry-After instead of weakening production policy.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const response = await fetch(base + '/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) })
+    if (response.status === 429) {
+      const retry = Number(response.headers.get('retry-after') || '60')
+      if (attempt === 2 || !Number.isFinite(retry)) throw new Error('Dev-seed login rate limit did not clear.')
+      console.log('CI login limiter reached; respecting retry-after window.')
+      await Bun.sleep(Math.min(75, Math.max(1, retry + 1)) * 1000)
+      continue
+    }
+    check(response.status === 200, 'seeded login for ' + email)
+    const cookie = response.headers.getSetCookie?.()[0] ?? response.headers.get('set-cookie') ?? ''
+    check(cookie.startsWith('ievx_session='), 'signed session cookie')
+    return cookie.split(';')[0]
+  }
+  throw new Error('Login retry exhausted.')
 }
 async function call(method: string, url: string, cookie?: string, body?: BodyInit) {
   return fetch(base + url, { method, headers: cookie ? { Cookie: cookie } : {}, body })
