@@ -2,6 +2,8 @@ import { NextRequest } from 'next/server'
 import { handle, jsonOk, requireUser, readJson, errors, jsonList, pagination, sanitizeText, rateLimit } from '@/server/api'
 import { db } from '@/lib/db'
 import { membershipFor, orgCan, ORG_ROLES } from '@/server/permissions'
+import { organizationFields } from '@/server/org-metadata'
+import { parseEvidence } from '@/server/kyc-storage'
 
 type RouteContext = { params: Promise<{ id: string; action: string }> }
 
@@ -18,6 +20,18 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
     const user = await requireUser()
     const membership = await membershipFor(user.id, id)
     if (!membership) throw errors.forbidden('You are not a member of this organization.')
+
+    if (action === 'settings') {
+      const org = await db.organization.findUnique({
+        where: { id }, select: {
+          id: true, name: true, slug: true, tagline: true, description: true,
+          logoUrl: true, city: true, address: true, contactEmail: true, contactPhone: true,
+          website: true, mapsUrl: true, latitude: true, longitude: true, socialLinks: true,
+        },
+      })
+      if (!org) throw errors.notFound('Organization unavailable.')
+      return jsonOk({ org: { ...org, socialLinks: JSON.parse(org.socialLinks || '{}') } })
+    }
 
     if (action === 'team') {
       if (!orgCan(membership.role, 'org:manage_team') && !orgCan(membership.role, 'orders:view')) throw errors.forbidden('Team management requires an admin role.')
@@ -205,10 +219,13 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
 
     if (action === 'verification-submit') {
       const evidence = sanitizeText(body.evidence, 1000)
+      const previous = await db.organizerVerification.findUnique({ where: { orgId: id }, select: { evidence: true } })
+      const documents = parseEvidence(previous?.evidence).filter((item) => item.type === 'kyc')
+      const updatedEvidence = [...documents, ...(evidence ? [{ type: 'notes' as const, ref: evidence, at: new Date().toISOString() }] : [])]
       const v = await db.organizerVerification.upsert({
         where: { orgId: id },
-        create: { orgId: id, status: 'PENDING', evidence: JSON.stringify([{ type: 'notes', ref: evidence }]) },
-        update: { status: 'PENDING', evidence: JSON.stringify([{ type: 'notes', ref: evidence }]), submittedAt: new Date() },
+        create: { orgId: id, status: 'PENDING', evidence: JSON.stringify(updatedEvidence) },
+        update: { status: 'PENDING', evidence: JSON.stringify(updatedEvidence), submittedAt: new Date() },
       })
       return jsonOk({ verification: v, note: 'Documents received. Platform finance review follows.' })
     }
@@ -221,7 +238,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
       if (body.city !== undefined) data.city = sanitizeText(body.city, 60) || null
       if (body.contactEmail !== undefined) data.contactEmail = sanitizeText(body.contactEmail, 160) || null
       if (body.contactPhone !== undefined) data.contactPhone = sanitizeText(body.contactPhone, 24) || null
-      if (body.website !== undefined) data.website = sanitizeText(body.website, 200) || null
+      Object.assign(data, organizationFields(body))
       if (body.coverUrl !== undefined && String(body.coverUrl).startsWith('/')) data.coverUrl = String(body.coverUrl)
       // Payout destination changes are audited (restriction documented in PAYMENTS_AND_SETTLEMENTS.md).
       if (body.payoutMomoNumber !== undefined) {

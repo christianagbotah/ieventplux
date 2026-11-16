@@ -25,7 +25,10 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
       org: {
         id: org.id, name: org.name, slug: org.slug, tagline: org.tagline, description: org.description,
         logoUrl: org.logoUrl, coverUrl: org.coverUrl, orgType: org.orgType, city: org.city, country: org.country,
-        website: org.website, contactEmail: org.contactEmail, verifiedAt: org.verifiedAt, verified: Boolean(org.verifiedAt),
+        website: org.website, contactEmail: org.contactEmail, contactPhone: org.contactPhone,
+        address: org.address, mapsUrl: org.mapsUrl, latitude: org.latitude, longitude: org.longitude,
+        socialLinks: JSON.parse(org.socialLinks || '{}'),
+        verifiedAt: org.verifiedAt, verified: Boolean(org.verifiedAt),
       },
       events, followers, following, clips,
     })

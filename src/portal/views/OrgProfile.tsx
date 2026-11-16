@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { ShieldCheck, MapPin, Users, ChevronLeft, Bookmark } from 'lucide-react'
+import { ShieldCheck, MapPin, Users, ChevronLeft, Bookmark, Globe, Mail, Phone, ExternalLink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
@@ -25,6 +25,12 @@ interface OrgProfilePayload {
     country: string
     website?: string | null
     contactEmail?: string | null
+    contactPhone?: string | null
+    address?: string | null
+    mapsUrl?: string | null
+    latitude?: number | null
+    longitude?: number | null
+    socialLinks?: Record<string, string>
     verifiedAt?: string | null
     verified: boolean
   }
@@ -106,8 +112,8 @@ export default function OrgProfile({ slug }: { slug: string }) {
         </Button>
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div className="flex items-end gap-4">
-            <span className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl border-4 border-background bg-primary text-2xl font-extrabold text-primary-foreground shadow-lg">
-              {data.org.name.slice(0, 2).toUpperCase()}
+            <span className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl border-4 border-background bg-primary text-2xl font-extrabold text-primary-foreground shadow-lg">
+              {data.org.logoUrl ? <img src={data.org.logoUrl} alt={data.org.name + ' logo'} className="h-full w-full object-contain bg-white" /> : data.org.name.slice(0, 2).toUpperCase()}
             </span>
             <div>
               <div className="flex items-center gap-2">
@@ -203,24 +209,28 @@ export default function OrgProfile({ slug }: { slug: string }) {
           </section>
         )}
 
-        {data.org.contactEmail && (
-          <p className="mt-10 text-xs text-muted-foreground">
-            Support contact: {data.org.contactEmail}
-            {data.org.website && (
-              <>
-                {' '}·{' '}
-                <a
-                  className="efx-underline-slide-link"
-                  href={data.org.website}
-                  target="_blank"
-                  rel="noreferrer"
-                  style={{ fontSize: 'inherit', color: 'inherit', fontWeight: 600, paddingBottom: '1px' }}
-                >
-                  {data.org.website}
-                </a>
-              </>
-            )}
-          </p>
+        {(data.org.contactEmail || data.org.contactPhone || data.org.website || data.org.address || data.org.mapsUrl || data.org.latitude != null || Object.keys(data.org.socialLinks ?? {}).length > 0) && (
+          <Card className="mt-8 rounded-xl">
+            <CardContent className="space-y-3 p-4">
+              <h2 className="text-sm font-bold">Contact, location & social media</h2>
+              <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm">
+                {data.org.contactEmail && <a href={'mailto:' + data.org.contactEmail} className="inline-flex items-center gap-1.5 text-primary hover:underline"><Mail className="h-4 w-4" /> {data.org.contactEmail}</a>}
+                {data.org.contactPhone && <a href={'tel:' + data.org.contactPhone} className="inline-flex items-center gap-1.5 text-primary hover:underline"><Phone className="h-4 w-4" /> {data.org.contactPhone}</a>}
+                {data.org.website?.startsWith('https://') && <a href={data.org.website} rel="noopener noreferrer" target="_blank" className="inline-flex items-center gap-1.5 text-primary hover:underline"><Globe className="h-4 w-4" /> Website <ExternalLink className="h-3 w-3" /></a>}
+                {data.org.address && <span className="inline-flex items-center gap-1.5"><MapPin className="h-4 w-4" /> {data.org.address}</span>}
+                {(data.org.mapsUrl?.startsWith('https://') || (data.org.latitude != null && data.org.longitude != null)) && (
+                  <a href={data.org.mapsUrl?.startsWith('https://') ? data.org.mapsUrl : 'https://www.google.com/maps/search/?api=1&query=' + data.org.latitude + ',' + data.org.longitude} rel="noopener noreferrer" target="_blank" className="inline-flex items-center gap-1.5 text-primary hover:underline"><MapPin className="h-4 w-4" /> Open location in Google Maps <ExternalLink className="h-3 w-3" /></a>
+                )}
+              </div>
+              {Object.entries(data.org.socialLinks ?? {}).filter(([, url]) => typeof url === 'string' && url.startsWith('https://')).length > 0 && (
+                <div className="flex flex-wrap items-center gap-2 border-t pt-3">
+                  {Object.entries(data.org.socialLinks ?? {}).filter(([, url]) => typeof url === 'string' && url.startsWith('https://')).map(([platform, url]) => (
+                    <a key={platform} href={url} target="_blank" rel="noopener noreferrer" className="rounded-full border px-3 py-1.5 text-xs font-medium capitalize text-primary hover:bg-secondary">{platform === 'x' ? 'X / Twitter' : platform} <ExternalLink className="ml-1 inline h-3 w-3" /></a>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         )}
       </div>
     </div>

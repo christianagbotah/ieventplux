@@ -123,6 +123,10 @@ model Organization {
   country       String    @default("GH")
   city          String?
   address       String?
+  mapsUrl       String?
+  latitude      Float?
+  longitude     Float?
+  socialLinks   String    @default("{}") // Public social platform links (validated JSON)
   contactEmail  String?
   contactPhone  String?
   website       String?
