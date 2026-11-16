@@ -80,8 +80,14 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
     }
 
     if (action === 'verification') {
-      const v = await db.organizerVerification.findUnique({ where: { orgId: id } })
-      return jsonOk({ verification: v, orgStatus: membership.orgStatus })
+      // Team members may view the lifecycle status but never raw KYC evidence,
+      // uploader identities, review internals, or other private documents.
+      const canManage = orgCan(membership.role, 'org:manage')
+      const v = await db.organizerVerification.findUnique({
+        where: { orgId: id },
+        select: { status: true, submittedAt: true, ...(canManage ? { notes: true } : {}) },
+      })
+      return jsonOk({ verification: v, orgStatus: membership.orgStatus }, { headers: { 'Cache-Control': 'private, no-store' } })
     }
 
     if (action === 'events') {
@@ -218,16 +224,31 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     }
 
     if (action === 'verification-submit') {
+      if (!orgCan(membership.role, 'org:manage')) throw errors.forbidden('Only organization owners and admins may submit verification notes.')
       const evidence = sanitizeText(body.evidence, 1000)
-      const previous = await db.organizerVerification.findUnique({ where: { orgId: id }, select: { evidence: true } })
-      const documents = parseEvidence(previous?.evidence).filter((item) => item.type === 'kyc')
-      const updatedEvidence = [...documents, ...(evidence ? [{ type: 'notes' as const, ref: evidence, at: new Date().toISOString() }] : [])]
-      const v = await db.organizerVerification.upsert({
-        where: { orgId: id },
-        create: { orgId: id, status: 'PENDING', evidence: JSON.stringify(updatedEvidence) },
-        update: { status: 'PENDING', evidence: JSON.stringify(updatedEvidence), submittedAt: new Date() },
-      })
-      return jsonOk({ verification: v, note: 'Documents received. Platform finance review follows.' })
+      if (evidence.length < 5) throw errors.badRequest('Enter at least five characters for the verification note.')
+      let updated = false
+      // Optimistic compare-and-set prevents a note submission from silently
+      // deleting documents uploaded at the same time by another admin.
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const previous = await db.organizerVerification.findUnique({ where: { orgId: id }, select: { status: true, evidence: true } })
+        if (!previous) throw errors.notFound('Verification case not found.')
+        if (previous.status === 'APPROVED') throw errors.conflict('Approved verification cannot be resubmitted without platform review.')
+        const records = parseEvidence(previous.evidence)
+        if (records.filter((item) => item.type === 'notes').length >= 20) {
+          throw errors.badRequest('Maximum verification notes reached; contact platform support.')
+        }
+        const result = await db.organizerVerification.updateMany({
+          where: { orgId: id, evidence: previous.evidence, status: { not: 'APPROVED' } },
+          data: { status: 'PENDING', evidence: JSON.stringify([...records, { type: 'notes', ref: evidence, at: new Date().toISOString() }]), submittedAt: new Date() },
+        })
+        if (result.count === 1) { updated = true; break }
+      }
+      if (!updated) throw errors.conflict('Verification documents changed; refresh and retry.')
+      const { audit } = await import('@/server/audit')
+      await audit({ actorUserId: user.id, actorLabel: user.email, action: 'org.kyc.note_submit', entityType: 'Organization', entityId: id })
+      const v = await db.organizerVerification.findUnique({ where: { orgId: id }, select: { status: true, submittedAt: true } })
+      return jsonOk({ verification: v, note: 'Private verification note submitted for manual review.' })
     }
 
     if (action === 'settings') {

@@ -57,8 +57,8 @@ jobs:
       - name: Typecheck
         run: bun run typecheck
 
-      - name: Security policy unit tests (payments + realtime authorization)
-        run: bun test src/server/hubtel/security-policy.test.ts mini-services/realtime/room-authorization.test.ts src/portal/lib/checkin-policy.test.ts
+      - name: Security policy unit tests (payments, realtime, check-in and private KYC)
+        run: bun test src/server/hubtel/security-policy.test.ts mini-services/realtime/room-authorization.test.ts src/portal/lib/checkin-policy.test.ts src/server/kyc-storage.test.ts
 
       - name: Push schema + seed
         run: |
@@ -91,6 +91,9 @@ jobs:
         run: |
           bun run ops:monitor -- --once
           bun run ops:backup
+
+      - name: KYC privacy and manual approval regression (synthetic documents, seeded users only)
+        run: bun run scripts/kyc-access-smoke.ts
 
       - name: Upload stack logs on failure
         if: failure()

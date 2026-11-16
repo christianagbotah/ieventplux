@@ -2790,7 +2790,8 @@ function SettingsView({ orgId, role }: { orgId: string; role: string }) {
   const submitVerification = async () => {
     try {
       await api.post(`/orgs/${orgId}/verification-submit`, { evidence })
-      toast({ title: 'Documents submitted', description: 'Platform finance review follows.' })
+      toast({ title: 'Review note submitted', description: 'The note is visible to authorized reviewers.' })
+      setEvidence('')
       setVerification({ status: 'PENDING' })
     } catch (err) {
       toast({ description: err instanceof ApiClientError ? err.message : 'Could not submit.', variant: 'destructive' })
@@ -2840,11 +2841,13 @@ function SettingsView({ orgId, role }: { orgId: string; role: string }) {
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-sm text-muted-foreground">Upload company registration records (where applicable), a government ID and a selfie. Finance administrators review them manually. Paid ticket sales also require a live payment provider.</p>
-          <VerificationDocuments orgId={orgId} onSubmitted={() => setVerification({ status: 'PENDING' })} />
-          {verification?.status !== 'APPROVED' && (
+          {canManage ? <VerificationDocuments orgId={orgId} onSubmitted={() => setVerification({ status: 'PENDING' })} /> : (
+            <p className="text-xs text-muted-foreground">Only organization owners and administrators may access private identity documents.</p>
+          )}
+          {canManage && verification?.status !== 'APPROVED' && (
             <div className="space-y-2">
-              <Textarea value={evidence} onChange={(e) => setEvidence(e.target.value)} placeholder="Optional verification notes for the reviewer…" aria-label="Verification evidence" />
-              <Button className="rounded-full" onClick={() => void submitVerification()} disabled={evidence.trim().length < 5}>Submit for review</Button>
+              <Textarea value={evidence} onChange={(e) => setEvidence(e.target.value)} placeholder="Optional private notes for the manual reviewer…" aria-label="Private verification note" />
+              <Button className="rounded-full" onClick={() => void submitVerification()} disabled={evidence.trim().length < 5}>Send note to reviewer</Button>
             </div>
           )}
         </CardContent>

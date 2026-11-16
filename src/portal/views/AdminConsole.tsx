@@ -237,7 +237,7 @@ type AdminOrg = {
   mapsUrl?: string | null
   logoUrl?: string | null
   verifiedAt?: string | null
-  verification?: { status: string; evidence: string; submittedAt: string } | null
+  verification?: { status: string; evidenceCount?: number; submittedAt: string } | null
   _count: { events: number }
 }
 
@@ -246,15 +246,35 @@ function Orgs() {
   const { user } = usePortal()
   const canReviewKyc = user?.role === 'SUPER_ADMIN' || user?.role === 'FINANCE_ADMIN'
   const [reviewOrgId, setReviewOrgId] = useState<string | null>(null)
+  const [reviewDecision, setReviewDecision] = useState<{ id: string; name: string; decision: 'APPROVE' | 'REJECT' } | null>(null)
+  const [reviewAttested, setReviewAttested] = useState(false)
+  const [reviewNotes, setReviewNotes] = useState('')
+  const [reviewBusy, setReviewBusy] = useState(false)
   const [data, reload, loading] = useAdmin<{ items: AdminOrg[] }>('/admin/orgs')
 
-  const verify = async (id: string, decision: 'APPROVE' | 'REJECT') => {
+  const beginReview = (org: AdminOrg, decision: 'APPROVE' | 'REJECT') => {
+    setReviewOrgId(org.id) // Show the document list before review.
+    setReviewDecision({ id: org.id, name: org.name, decision })
+    setReviewAttested(false)
+    setReviewNotes('')
+  }
+
+  const submitDecision = async () => {
+    if (!reviewDecision || reviewBusy) return
+    setReviewBusy(true)
     try {
-      await api.post(`/admin/orgs/${id}/verify`, { decision, notes: decision === 'APPROVE' ? 'Documents verified by platform finance.' : 'Documents insufficient.' })
-      toast({ title: `Organization ${decision === 'APPROVE' ? 'verified' : 'rejected'}` })
+      await api.post(`/admin/orgs/${reviewDecision.id}/verify`, {
+        decision: reviewDecision.decision,
+        reviewerAttested: reviewAttested,
+        notes: reviewNotes.trim(),
+      })
+      toast({ title: `Organization ${reviewDecision.decision === 'APPROVE' ? 'verified' : 'rejected'}` })
+      setReviewDecision(null)
       reload()
     } catch (err) {
-      toast({ description: err instanceof ApiClientError ? err.message : 'Action failed.', variant: 'destructive' })
+      toast({ description: err instanceof ApiClientError ? err.message : 'Verification decision failed.', variant: 'destructive' })
+    } finally {
+      setReviewBusy(false)
     }
   }
 
@@ -277,11 +297,7 @@ function Orgs() {
         const decidedRejected = vStatus === 'REJECTED'
         const decidedApproved = vStatus === 'APPROVED'
         const awaitingDecision = !decidedRejected && !decidedApproved && o.status !== 'ACTIVE' && o.status !== 'SUSPENDED'
-        let evidenceCount = 0
-        try {
-          const arr = JSON.parse(o.verification?.evidence ?? '[]')
-          if (Array.isArray(arr)) evidenceCount = arr.length
-        } catch { evidenceCount = 0 }
+        const evidenceCount = o.verification?.evidenceCount ?? 0
         return (
           <Card key={o.id} className="rounded-2xl">
             <CardContent className="flex flex-wrap items-center gap-3 p-4">
@@ -325,12 +341,12 @@ function Orgs() {
               )}
               {canReviewKyc && awaitingDecision && (
                 <div className="flex gap-1.5">
-                  <Button size="sm" className="rounded-full" onClick={() => void verify(o.id, 'APPROVE')}><Check className="mr-1 h-3.5 w-3.5" /> Approve</Button>
-                  <Button size="sm" variant="outline" className="rounded-full text-destructive" onClick={() => void verify(o.id, 'REJECT')}><X className="mr-1 h-3.5 w-3.5" /> Reject</Button>
+                  <Button size="sm" className="rounded-full" onClick={() => beginReview(o, 'APPROVE')}><Check className="mr-1 h-3.5 w-3.5" /> Approve</Button>
+                  <Button size="sm" variant="outline" className="rounded-full text-destructive" onClick={() => beginReview(o, 'REJECT')}><X className="mr-1 h-3.5 w-3.5" /> Reject</Button>
                 </div>
               )}
               {canReviewKyc && decidedRejected && (
-                <Button size="sm" variant="outline" className="rounded-full" title="Reverse the earlier rejection and verify this organization now" onClick={() => void verify(o.id, 'APPROVE')}><Check className="mr-1 h-3.5 w-3.5" /> Approve now</Button>
+                <Button size="sm" variant="outline" className="rounded-full" title="Reverse the earlier rejection and verify this organization now" onClick={() => beginReview(o, 'APPROVE')}><Check className="mr-1 h-3.5 w-3.5" /> Approve now</Button>
               )}
               {o.status === 'ACTIVE' && (
                 <Button size="sm" variant="outline" className="rounded-full" onClick={async () => { await api.post(`/admin/orgs/${o.id}/suspend`, {}); reload() }}>Suspend</Button>
@@ -340,6 +356,33 @@ function Orgs() {
           </Card>
         )
       })}
+      <Dialog open={Boolean(reviewDecision)} onOpenChange={(open) => { if (!open && !reviewBusy) setReviewDecision(null) }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{reviewDecision?.decision === 'APPROVE' ? 'Approve organization verification' : 'Reject organization verification'}</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm font-semibold">{reviewDecision?.name}</p>
+          {reviewDecision?.decision === 'APPROVE' ? (
+            <label className="flex items-start gap-2 rounded-lg border border-border p-3 text-sm">
+              <input type="checkbox" className="mt-1 h-4 w-4 accent-primary" checked={reviewAttested} onChange={(event) => setReviewAttested(event.target.checked)} />
+              <span>I personally inspected the submitted ID, selfie, and required registration documents and confirmed they reasonably match the organizer's records. I understand that this is a manual review, not automated biometric verification.</span>
+            </label>
+          ) : (
+            <p className="text-xs text-muted-foreground">Provide clear correction instructions. These notes are visible to authorized organization administrators.</p>
+          )}
+          <div className="space-y-1.5">
+            <label htmlFor="kyc-review-notes" className="text-sm font-semibold">{reviewDecision?.decision === 'APPROVE' ? 'Review notes (optional)' : 'Rejection reason (required)'}</label>
+            <Textarea id="kyc-review-notes" value={reviewNotes} maxLength={500} rows={3} onChange={(event) => setReviewNotes(event.target.value)} placeholder={reviewDecision?.decision === 'APPROVE' ? 'What did you inspect?' : 'Explain which document needs correcting or replacing…'} />
+          </div>
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button type="button" variant="outline" disabled={reviewBusy} onClick={() => setReviewDecision(null)}>Cancel</Button>
+            <Button type="button" disabled={reviewBusy || (reviewDecision?.decision === 'APPROVE' ? !reviewAttested : reviewNotes.trim().length < 10)} onClick={() => void submitDecision()}>
+              {reviewBusy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : null}
+              {reviewDecision?.decision === 'APPROVE' ? 'Confirm manual approval' : 'Submit rejection'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
