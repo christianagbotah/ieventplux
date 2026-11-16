@@ -230,6 +230,12 @@ type AdminOrg = {
   slug: string
   status: string
   city?: string | null
+  address?: string | null
+  contactEmail?: string | null
+  contactPhone?: string | null
+  website?: string | null
+  mapsUrl?: string | null
+  logoUrl?: string | null
   verifiedAt?: string | null
   verification?: { status: string; evidence: string; submittedAt: string } | null
   _count: { events: number }
@@ -237,6 +243,9 @@ type AdminOrg = {
 
 function Orgs() {
   const { toast } = useToast()
+  const { user } = usePortal()
+  const canReviewKyc = user?.role === 'SUPER_ADMIN' || user?.role === 'FINANCE_ADMIN'
+  const [reviewOrgId, setReviewOrgId] = useState<string | null>(null)
   const [data, reload, loading] = useAdmin<{ items: AdminOrg[] }>('/admin/orgs')
 
   const verify = async (id: string, decision: 'APPROVE' | 'REJECT') => {
@@ -278,6 +287,7 @@ function Orgs() {
             <CardContent className="flex flex-wrap items-center gap-3 p-4">
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
+                  {o.logoUrl && <img src={o.logoUrl} alt="" className="h-10 w-10 rounded-lg border bg-white object-contain" />}
                   <p className="font-semibold">{o.name}</p>
                   {decidedRejected ? (
                     <Badge variant="destructive" className="text-[10px]">Rejected</Badge>
@@ -291,6 +301,14 @@ function Orgs() {
                   {o.city ?? '—'} · {o._count.events} events · /{o.slug}
                   {o.verification?.submittedAt ? ` · submitted ${relative(o.verification.submittedAt)}` : ''}
                 </p>
+                <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs">
+                  {o.contactEmail && <a href={'mailto:' + o.contactEmail} className="text-primary underline">{o.contactEmail}</a>}
+                  {o.contactPhone && <span>{o.contactPhone}</span>}
+                  {o.website?.startsWith('https://') && <a href={o.website} target="_blank" rel="noopener noreferrer" className="text-primary underline">Website</a>}
+                  {o.mapsUrl?.startsWith('https://') && <a href={o.mapsUrl} target="_blank" rel="noopener noreferrer" className="text-primary underline">Google Maps</a>}
+                  {o.address && <span>{o.address}</span>}
+                  <button type="button" className="text-primary underline" onClick={() => navigate('/org/' + o.slug)}>Public profile</button>
+                </div>
                 {decidedRejected && (
                   <p className="mt-1 text-xs text-muted-foreground">
                     <span className="text-destructive">Declined —</span> the organizer must resubmit for a new review, or approve now to reverse this decision.
@@ -300,18 +318,24 @@ function Orgs() {
                   <p className="mt-1 text-xs text-muted-foreground">No documents submitted yet.</p>
                 )}
               </div>
-              {awaitingDecision && (
+              {canReviewKyc && (
+                <Button size="sm" variant="outline" className="rounded-full" onClick={() => setReviewOrgId((previous) => previous === o.id ? null : o.id)}>
+                  <ShieldCheck className="mr-1 h-3.5 w-3.5" /> {reviewOrgId === o.id ? 'Hide KYC' : 'Review KYC'}
+                </Button>
+              )}
+              {canReviewKyc && awaitingDecision && (
                 <div className="flex gap-1.5">
                   <Button size="sm" className="rounded-full" onClick={() => void verify(o.id, 'APPROVE')}><Check className="mr-1 h-3.5 w-3.5" /> Approve</Button>
                   <Button size="sm" variant="outline" className="rounded-full text-destructive" onClick={() => void verify(o.id, 'REJECT')}><X className="mr-1 h-3.5 w-3.5" /> Reject</Button>
                 </div>
               )}
-              {decidedRejected && (
+              {canReviewKyc && decidedRejected && (
                 <Button size="sm" variant="outline" className="rounded-full" title="Reverse the earlier rejection and verify this organization now" onClick={() => void verify(o.id, 'APPROVE')}><Check className="mr-1 h-3.5 w-3.5" /> Approve now</Button>
               )}
               {o.status === 'ACTIVE' && (
                 <Button size="sm" variant="outline" className="rounded-full" onClick={async () => { await api.post(`/admin/orgs/${o.id}/suspend`, {}); reload() }}>Suspend</Button>
               )}
+              {canReviewKyc && reviewOrgId === o.id && <div className="w-full border-t pt-3"><VerificationDocuments orgId={o.id} reviewerMode /></div>}
             </CardContent>
           </Card>
         )
