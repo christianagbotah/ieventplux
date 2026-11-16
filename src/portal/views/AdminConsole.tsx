@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState, type ComponentType, type CSSProperties } from 'react'
+import { useCallback, useEffect, useRef, useState, type ComponentType, type CSSProperties } from 'react'
 import {
   Search, ShieldCheck, Users, Building2, CalendarDays, Flag, Percent, CreditCard, Wallet, RotateCw, Bell, ScrollText, Plug, Settings2, Landmark, Loader2, Check, X, Play, Tags, Church, Music, Presentation, Wrench, Code2, Heart, Users as UsersIcon, Sparkles, PartyPopper, Activity, Calendar, Trash2, Pencil, Plus, HeartPulse, Database, ShieldAlert, Archive,
 } from 'lucide-react'
@@ -49,22 +49,28 @@ export default function AdminConsole({ route }: { route: Route }) {
     if (!isPlatformStaff(user)) navigate('/')
   }, [user, booted])
 
-  if (!user || !isPlatformStaff(user)) return null
-
-  // R22: deep-linking — the hash query is the single source of truth for the
-  // active section (derived, not mirrored in state): every click replace-pushes
-  // /admin?tab=… so refresh, back and shared links land on the intended section
-  // (same convention as the organizer workspace); an invalid or missing tab
-  // deterministically falls back to the overview.
+  // Desktop has an independent, viewport-height content scroller; the sidebar
+  // never moves when a section is opened. Mobile still scrolls the document.
+  const contentRef = useRef<HTMLDivElement>(null)
   const rawTab = route.query.get('tab') ?? 'overview'
   const section = SECTIONS.some((s) => s.key === rawTab) ? rawTab : 'overview'
 
+  useEffect(() => {
+    if (window.innerWidth >= 768) contentRef.current?.scrollTo(0, 0)
+    else window.scrollTo(0, 0)
+  }, [section])
+
+  if (!user || !isPlatformStaff(user)) return null
+
   const goSection = (key: string) => {
+    // Also reset a click on the already-active section.
+    if (window.innerWidth >= 768) contentRef.current?.scrollTo(0, 0)
+    else window.scrollTo(0, 0)
     navigate(`/admin?tab=${key}`, { replace: true })
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-6 sm:py-8">
+    <div className="mx-auto max-w-7xl px-4 py-6 sm:py-8 md:flex md:h-full md:min-h-0 md:flex-col md:overflow-hidden md:py-4">
       <div className="efx-glassmorphism-card mb-5">
         <div className="efx-glassmorphism-card__backdrop" aria-hidden="true" />
         <div className="efx-glassmorphism-card__panel">
@@ -94,11 +100,11 @@ export default function AdminConsole({ route }: { route: Route }) {
         </Select>
       </div>
 
-      <div className="flex items-start gap-6">
+      <div className="flex items-start gap-6 md:min-h-0 md:flex-1 md:overflow-hidden">
         {/* Desktop sidebar — R19b pattern: sticky under the header, independently
             scrollable (overflow contained, no scroll chaining), viewport-bounded
             so all 12 sections stay reachable on short screens. */}
-        <aside className="hidden md:sticky md:top-20 md:block md:h-fit md:max-h-[calc(100vh-6rem)] md:w-56 md:shrink-0 md:overflow-y-auto md:overscroll-contain ievx-scrollbar md:rounded-2xl md:border md:border-border/60 md:bg-card md:p-2">
+        <aside className="hidden md:relative md:top-auto md:block md:h-full md:max-h-none md:w-56 md:shrink-0 md:overflow-y-auto md:overscroll-contain ievx-scrollbar md:rounded-2xl md:border md:border-border/60 md:bg-card md:p-2">
           <p className="mb-1 px-2.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Sections</p>
           <nav aria-label="Admin sections" className="flex flex-col gap-0.5">
             {SECTIONS.map((s) => (
@@ -119,7 +125,7 @@ export default function AdminConsole({ route }: { route: Route }) {
 
         {/* min-w-0 (R19b lesson): keeps grid children from blowing out the now
             narrower content column. */}
-        <div className="min-w-0 flex-1">
+        <div ref={contentRef} className="min-w-0 flex-1 md:h-full md:overflow-y-auto md:overscroll-contain md:pb-8 md:pr-2 ievx-scrollbar">
           <div key={section} className="ievx-view-enter">
             {section === 'overview' && <Overview />}
             {section === 'orgs' && <Orgs />}
