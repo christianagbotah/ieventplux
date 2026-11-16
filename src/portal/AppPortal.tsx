@@ -63,6 +63,8 @@ const MOBILE_NAV = [
 
 export default function AppPortal() {
   const route = useRoute()
+  // Workspace pages own two viewport-bounded scroll panes; public pages retain document scrolling.
+  const workspaceMode = route.segments[0] === 'admin' || route.segments[0] === 'organizer'
   const { user, memberships, unread, setUser, setMemberships, setUnread, setRealtimeConnected, setBooted } = usePortal()
   const { toast } = useToast()
   const viewRef = useRef<HTMLDivElement>(null)
@@ -352,9 +354,9 @@ export default function AppPortal() {
         <ConnectionStatus />
       </header>
 
-      <main id="main" tabIndex={-1} ref={viewRef} className="min-w-0 flex-1 pb-24 outline-none md:pb-10">
+      <main id="main" tabIndex={-1} ref={viewRef} className={`min-w-0 flex-1 pb-24 outline-none ${workspaceMode ? 'md:h-[calc(100dvh-4rem)] md:min-h-0 md:flex-none md:overflow-hidden md:pb-0' : 'md:pb-10'}`}>
         <Suspense fallback={<ViewFallback />}>
-          <div key={route.path} className="ievx-view-enter">{view}</div>
+          <div key={route.path} className={`ievx-view-enter ${workspaceMode ? 'md:h-full' : ''}`}>{view}</div>
         </Suspense>
       </main>
 
@@ -362,7 +364,7 @@ export default function AppPortal() {
           R19b: pr-20 clears the fixed voice-concierge FAB (56px + right-4 + gap = 80px) — at page bottom it
           overlapped and blocked the right edge of the footer link row. R20: the dev-only Effects Studio
           footer link was removed with its menu entries; the /effects route stays reachable by direct URL. */}
-      <footer className="mt-auto border-t border-border/60 bg-card pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0">
+      <footer className={`mt-auto border-t border-border/60 bg-card pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0 ${workspaceMode ? 'md:hidden' : ''}`}>
         <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-6 pr-20 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
           <p>© {new Date().getFullYear()} iEventPlux · Lightworld Technologies Ltd. · Accra, Ghana</p>
           <p className="flex flex-wrap items-center gap-x-3 gap-y-1">

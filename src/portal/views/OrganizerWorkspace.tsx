@@ -63,6 +63,14 @@ export default function OrganizerWorkspace({ route }: { route: Route }) {
   const { user, memberships, activeOrgId, setActiveOrg, booted } = usePortal()
   const [section, setSection] = useState(route.query.get('tab') ?? 'dashboard')
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const contentRef = useRef<HTMLDivElement>(null)
+
+  // Switch tabs at the top of the content pane without moving the desktop sidebar.
+  // On small screens retain the browser's natural document scrolling.
+  useEffect(() => {
+    if (window.innerWidth >= 768) contentRef.current?.scrollTo(0, 0)
+    else window.scrollTo(0, 0)
+  }, [section, activeOrgId])
 
   useEffect(() => {
     if (!sidebarOpen) return
@@ -91,7 +99,7 @@ export default function OrganizerWorkspace({ route }: { route: Route }) {
   const activeOrg = memberships.find((m) => m.orgId === activeOrgId) ?? memberships[0]
 
   return (
-    <div className="mx-auto flex max-w-7xl gap-0 px-0 py-0 md:gap-6 md:px-4 md:py-6">
+    <div className="mx-auto flex max-w-7xl gap-0 px-0 py-0 md:h-full md:min-h-0 md:gap-6 md:overflow-hidden md:px-4 md:py-4">
       {sidebarOpen && (
         <button
           type="button"
@@ -105,7 +113,7 @@ export default function OrganizerWorkspace({ route }: { route: Route }) {
           chaining) and bounded to the viewport on md+ (max-h under the sticky
           header offset), so long nav lists stay reachable instead of sticking
           out past the fold. */}
-      <aside id="organizer-menu" aria-label="Organizer navigation" className={`${sidebarOpen ? 'fixed inset-y-0 left-0 z-40 w-72 translate-x-0' : 'invisible pointer-events-none fixed inset-y-0 left-0 z-40 w-72 -translate-x-full md:visible md:pointer-events-auto'} transition-transform duration-200 border-r border-border/60 bg-card p-4 pt-16 overflow-y-auto overscroll-contain ievx-scrollbar md:sticky md:top-20 md:z-0 md:h-fit md:max-h-[calc(100vh-6rem)] md:w-60 md:translate-x-0 md:rounded-2xl md:border md:pt-4`}>
+      <aside id="organizer-menu" aria-label="Organizer navigation" className={`${sidebarOpen ? 'fixed inset-y-0 left-0 z-40 w-72 translate-x-0' : 'invisible pointer-events-none fixed inset-y-0 left-0 z-40 w-72 -translate-x-full md:visible md:pointer-events-auto'} transition-transform duration-200 border-r border-border/60 bg-card p-4 pt-16 overflow-y-auto overscroll-contain ievx-scrollbar md:relative md:top-auto md:z-0 md:h-full md:max-h-none md:w-60 md:translate-x-0 md:rounded-2xl md:border md:pt-4`}>
         <button className="absolute right-3 top-3 rounded-full p-1.5 hover:bg-secondary md:hidden" aria-label="Close sidebar" onClick={() => setSidebarOpen(false)}>
           <ChevronLeft className="h-5 w-5" />
         </button>
@@ -127,6 +135,8 @@ export default function OrganizerWorkspace({ route }: { route: Route }) {
             <button
               key={item.key}
               onClick={() => {
+                if (window.innerWidth >= 768) contentRef.current?.scrollTo(0, 0)
+                else window.scrollTo(0, 0)
                 setSection(item.key)
                 setSidebarOpen(false)
                 navigate(`/organizer?tab=${item.key}`, { replace: true })
@@ -145,7 +155,7 @@ export default function OrganizerWorkspace({ route }: { route: Route }) {
       </aside>
 
       {/* Content */}
-      <div className="min-w-0 flex-1 px-4 py-4 md:py-0">
+      <div ref={contentRef} className="min-w-0 flex-1 px-4 py-4 md:h-full md:overflow-y-auto md:overscroll-contain md:py-0 md:pr-2 md:pb-8 ievx-scrollbar">
         <Button variant="outline" size="sm" className="mb-3 rounded-full md:hidden" aria-controls="organizer-menu" aria-expanded={sidebarOpen} onClick={() => setSidebarOpen(true)}>
           <ChevronLeft className="mr-1 h-4 w-4 rotate-180" /> Menu
         </Button>
