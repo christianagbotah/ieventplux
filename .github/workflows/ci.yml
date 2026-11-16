@@ -84,6 +84,9 @@ jobs:
       - name: Organizer event tenant privacy regression (seeded users)
         run: bun run scripts/org-event-access-smoke.ts
 
+      - name: KYC privacy and manual approval regression (synthetic documents, seeded users only)
+        run: bun run scripts/kyc-access-smoke.ts
+
       - name: Smoke suite (golden paths incl. rate-limit proof)
         run: bun run smoke
 
