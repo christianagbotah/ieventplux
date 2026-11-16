@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { handle, jsonOk, requireUser, readJson, errors, jsonList, pagination, sanitizeText, rateLimit } from '@/server/api'
 import { db } from '@/lib/db'
 import { membershipFor, orgCan, ORG_ROLES } from '@/server/permissions'
+import { organizationFields } from '@/server/org-metadata'
 
 type RouteContext = { params: Promise<{ id: string; action: string }> }
 
@@ -18,6 +19,18 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
     const user = await requireUser()
     const membership = await membershipFor(user.id, id)
     if (!membership) throw errors.forbidden('You are not a member of this organization.')
+
+    if (action === 'settings') {
+      const org = await db.organization.findUnique({
+        where: { id }, select: {
+          id: true, name: true, slug: true, tagline: true, description: true,
+          logoUrl: true, city: true, address: true, contactEmail: true, contactPhone: true,
+          website: true, mapsUrl: true, latitude: true, longitude: true, socialLinks: true,
+        },
+      })
+      if (!org) throw errors.notFound('Organization unavailable.')
+      return jsonOk({ org: { ...org, socialLinks: JSON.parse(org.socialLinks || '{}') } })
+    }
 
     if (action === 'team') {
       if (!orgCan(membership.role, 'org:manage_team') && !orgCan(membership.role, 'orders:view')) throw errors.forbidden('Team management requires an admin role.')
@@ -221,7 +234,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
       if (body.city !== undefined) data.city = sanitizeText(body.city, 60) || null
       if (body.contactEmail !== undefined) data.contactEmail = sanitizeText(body.contactEmail, 160) || null
       if (body.contactPhone !== undefined) data.contactPhone = sanitizeText(body.contactPhone, 24) || null
-      if (body.website !== undefined) data.website = sanitizeText(body.website, 200) || null
+      Object.assign(data, organizationFields(body))
       if (body.coverUrl !== undefined && String(body.coverUrl).startsWith('/')) data.coverUrl = String(body.coverUrl)
       // Payout destination changes are audited (restriction documented in PAYMENTS_AND_SETTLEMENTS.md).
       if (body.payoutMomoNumber !== undefined) {
