@@ -54,6 +54,6 @@ export async function GET(req: NextRequest, ctx: Context) {
     if (!org || org.deletedAt || org.logoUrl !== '/api/v1/orgs/' + id + '/logo') throw errors.notFound('Logo not found.')
     const data = await readFile(filePath(id)).catch(() => null)
     if (!data) throw errors.notFound('Logo not found.')
-    return new NextResponse(new Uint8Array(data), { headers: { 'Content-Type': 'image/webp', 'Cache-Control': 'public, max-age=300', 'X-Content-Type-Options': 'nosniff' } })
+    return new NextResponse(new Uint8Array(data), { headers: { 'Content-Type': 'image/webp', 'Cache-Control': 'public, no-cache, max-age=0, must-revalidate', 'X-Content-Type-Options': 'nosniff' } })
   })
 }
