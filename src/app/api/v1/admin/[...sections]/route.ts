@@ -59,7 +59,16 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
 
     if (root === 'orgs') {
       const { page, pageSize, offset } = pagination(req, 25, 100)
-      const items = await db.organization.findMany({ include: { verification: true, _count: { select: { events: true, memberships: true } } }, orderBy: { createdAt: 'desc' }, skip: offset, take: pageSize })
+      const items = await db.organization.findMany({
+        select: {
+          id: true, name: true, slug: true, orgType: true, status: true, city: true,
+          logoUrl: true, address: true, contactEmail: true, contactPhone: true,
+          website: true, mapsUrl: true, verifiedAt: true,
+          verification: { select: { status: true, submittedAt: true, evidence: platformCan(user.role, 'admin:finance') } },
+          _count: { select: { events: true, memberships: true } },
+        },
+        orderBy: { createdAt: 'desc' }, skip: offset, take: pageSize,
+      })
       const total = await db.organization.count()
       return jsonList(items, total, page, pageSize)
     }
