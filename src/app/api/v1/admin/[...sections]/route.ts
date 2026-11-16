@@ -70,7 +70,22 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
         orderBy: { createdAt: 'desc' }, skip: offset, take: pageSize,
       })
       const total = await db.organization.count()
-      return jsonList(items, total, page, pageSize)
+      // Raw identity evidence and uploader identifiers must never be returned
+      // inside the broad admin organization list, even to finance reviewers.
+      const safeItems = items.map((org) => {
+        const { verification, ...safeOrg } = org
+        return {
+          ...safeOrg,
+          verification: verification ? {
+            status: verification.status,
+            submittedAt: verification.submittedAt,
+            ...(platformCan(user.role, 'admin:finance') ? {
+              evidenceCount: parseEvidence(verification.evidence).filter((item) => item.type === 'kyc').length,
+            } : {}),
+          } : null,
+        }
+      })
+      return jsonList(safeItems, total, page, pageSize)
     }
 
     if (root === 'events') {
