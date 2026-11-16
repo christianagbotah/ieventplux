@@ -38,6 +38,7 @@ export async function POST(req: NextRequest, ctx: Context) {
     if (!(file instanceof File)) throw errors.badRequest('Select a document or selfie image.')
     const v = await db.organizerVerification.findUnique({ where: { orgId: id } })
     if (!v) throw errors.notFound('Verification case not found.')
+    if (v.status === 'APPROVED') throw errors.conflict('This organization is already verified. Contact platform support to request a new verification review.')
     const previous = parseEvidence(v.evidence)
     if (previous.filter((e) => e.type === 'kyc').length >= 10) throw errors.badRequest('Maximum 10 verification documents reached.')
     const safe = await prepareKycFile(file, kind)
@@ -55,7 +56,7 @@ export async function POST(req: NextRequest, ctx: Context) {
         data: { evidence: JSON.stringify([...previous, document]), submittedAt: new Date(), status: 'PENDING', notes: null },
       })
       const { audit } = await import('@/server/audit')
-      await audit({ actorUserId: user.id, actorLabel: user.email, action: 'org.kyc.document_upload', entityType: 'Organization', entityId: id, after: { documentId: docId, kind, bytes: document.size } })
+      await audit({ actorUserId: user.id, actorLabel: user.email, action: 'org.kyc.document_upload', entityType: 'Organization', entityId: id, after: { documentId: docId, kind, bytes: document.size } }).catch((err) => { console.error('[kyc] failed to audit upload', err) })
     } catch (error) {
       await deleteKycFile(id, docId)
       throw error
