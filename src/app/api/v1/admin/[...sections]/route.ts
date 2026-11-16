@@ -4,6 +4,7 @@ import { db } from '@/lib/db'
 import { platformCan } from '@/server/permissions'
 import { integrationStatuses, envValidation, env } from '@/server/env'
 import { sweepOnce } from '@/server/jobs/handlers'
+import { parseEvidence } from '@/server/kyc-storage'
 
 /**
  * Platform administration API (staff-only, narrowly scoped, audited):
@@ -222,6 +223,16 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
       if (!decision) throw errors.badRequest('decision must be APPROVE or REJECT.')
       const v = await db.organizerVerification.findUnique({ where: { orgId: id } })
       if (!v) throw errors.notFound('Verification case not found.')
+      if (decision === 'APPROVED') {
+        const organization = await db.organization.findUnique({ where: { id }, select: { orgType: true } })
+        const kinds = new Set(parseEvidence(v.evidence).filter((entry) => entry.type === 'kyc').map((entry) => entry.kind))
+        if (!kinds.has('GOVERNMENT_ID') || !kinds.has('SELFIE')) {
+          throw errors.badRequest('Upload a government ID and a selfie before approving identity verification.')
+        }
+        if (organization?.orgType === 'COMPANY' && !kinds.has('BUSINESS_REGISTRATION')) {
+          throw errors.badRequest('Company registration documents are required before approval.')
+        }
+      }
       await db.organizerVerification.update({ where: { id: v.id }, data: { status: decision, reviewerId: user.id, decidedAt: new Date(), notes: sanitizeText(body.notes, 500) || v.notes } })
       await db.organization.update({ where: { id }, data: { status: decision === 'APPROVED' ? 'ACTIVE' : 'PENDING_VERIFICATION', verifiedAt: decision === 'APPROVED' ? new Date() : null } })
       const { audit } = await import('@/server/audit')
