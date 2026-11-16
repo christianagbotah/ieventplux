@@ -36,11 +36,6 @@ export async function POST(req: NextRequest, ctx: Context) {
     const kind = validKycKind(form.get('kind'))
     const file = form.get('file')
     if (!(file instanceof File)) throw errors.badRequest('Select a document or selfie image.')
-    const v = await db.organizerVerification.findUnique({ where: { orgId: id } })
-    if (!v) throw errors.notFound('Verification case not found.')
-    if (v.status === 'APPROVED') throw errors.conflict('This organization is already verified. Contact platform support to request a new verification review.')
-    const previous = parseEvidence(v.evidence)
-    if (previous.filter((e) => e.type === 'kyc').length >= 10) throw errors.badRequest('Maximum 10 verification documents reached.')
     const safe = await prepareKycFile(file, kind)
     const docId = newDocumentId()
     const document: KycDocument = {
@@ -49,18 +44,31 @@ export async function POST(req: NextRequest, ctx: Context) {
       mime: safe.mime, size: safe.buffer.length,
       uploadedAt: new Date().toISOString(), uploadedBy: user.id,
     }
+    // Store encrypted bytes before publishing any metadata. On a failed or
+    // concurrent metadata update, securely remove the unreferenced blob.
     await saveEncryptedKyc(id, docId, safe.buffer)
+    let committed = false
     try {
-      await db.organizerVerification.update({
-        where: { orgId: id },
-        data: { evidence: JSON.stringify([...previous, document]), submittedAt: new Date(), status: 'PENDING', notes: null },
-      })
-      const { audit } = await import('@/server/audit')
-      await audit({ actorUserId: user.id, actorLabel: user.email, action: 'org.kyc.document_upload', entityType: 'Organization', entityId: id, after: { documentId: docId, kind, bytes: document.size } }).catch((err) => { console.error('[kyc] failed to audit upload', err) })
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const previous = await db.organizerVerification.findUnique({ where: { orgId: id }, select: { evidence: true, status: true } })
+        if (!previous) throw errors.notFound('Verification case not found.')
+        if (previous.status === 'APPROVED') throw errors.conflict('This organization is already verified. Contact platform support to request a new verification review.')
+        const records = parseEvidence(previous.evidence)
+        if (records.filter((entry) => entry.type === 'kyc').length >= 10) throw errors.badRequest('Maximum 10 verification documents reached.')
+        const outcome = await db.organizerVerification.updateMany({
+          where: { orgId: id, evidence: previous.evidence, status: { not: 'APPROVED' } },
+          data: { evidence: JSON.stringify([...records, document]), submittedAt: new Date(), status: 'PENDING', notes: null },
+        })
+        if (outcome.count === 1) { committed = true; break }
+      }
+      if (!committed) throw errors.conflict('Verification documents changed. Refresh and retry your upload.')
     } catch (error) {
       await deleteKycFile(id, docId)
       throw error
     }
+    const { audit } = await import('@/server/audit')
+    await audit({ actorUserId: user.id, actorLabel: user.email, action: 'org.kyc.document_upload', entityType: 'Organization', entityId: id, after: { documentId: docId, kind, bytes: document.size } })
+      .catch((err) => { console.error('[kyc] failed to audit upload', err) })
     return jsonOk({ document: kycMetadata(document), note: 'Document stored privately for manual review. Upload does not itself confirm identity.' }, { status: 201, headers: { 'Cache-Control': 'no-store' } })
   })
 }
