@@ -3,6 +3,7 @@ import { handle, jsonOk, requireUser, readJson, errors, jsonList, pagination, sa
 import { db } from '@/lib/db'
 import { membershipFor, orgCan, ORG_ROLES } from '@/server/permissions'
 import { organizationFields } from '@/server/org-metadata'
+import { parseEvidence } from '@/server/kyc-storage'
 
 type RouteContext = { params: Promise<{ id: string; action: string }> }
 
@@ -218,10 +219,13 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
 
     if (action === 'verification-submit') {
       const evidence = sanitizeText(body.evidence, 1000)
+      const previous = await db.organizerVerification.findUnique({ where: { orgId: id }, select: { evidence: true } })
+      const documents = parseEvidence(previous?.evidence).filter((item) => item.type === 'kyc')
+      const updatedEvidence = [...documents, ...(evidence ? [{ type: 'notes' as const, ref: evidence, at: new Date().toISOString() }] : [])]
       const v = await db.organizerVerification.upsert({
         where: { orgId: id },
-        create: { orgId: id, status: 'PENDING', evidence: JSON.stringify([{ type: 'notes', ref: evidence }]) },
-        update: { status: 'PENDING', evidence: JSON.stringify([{ type: 'notes', ref: evidence }]), submittedAt: new Date() },
+        create: { orgId: id, status: 'PENDING', evidence: JSON.stringify(updatedEvidence) },
+        update: { status: 'PENDING', evidence: JSON.stringify(updatedEvidence), submittedAt: new Date() },
       })
       return jsonOk({ verification: v, note: 'Documents received. Platform finance review follows.' })
     }
