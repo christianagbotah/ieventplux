@@ -64,7 +64,7 @@ describe('upload validation and sanitization', () => {
   })
   test('images become bounded WebP without source metadata', async () => {
     const png = await sharp({ create: { width: 480, height: 300, channels: 3, background: '#aaaaaa' } }).png().toBuffer()
-    const file = new File([png], 'example.png', { type: 'image/png' })
+    const file = new File([Uint8Array.from(png)], 'example.png', { type: 'image/png' })
     const out = await prepareKycFile(file, 'SELFIE')
     expect(out.mime).toBe('image/webp')
     expect(out.buffer.length).toBeGreaterThan(0)
