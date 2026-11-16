@@ -1,5 +1,15 @@
 import { errors, sanitizeText } from '@/server/api'
 
+export interface OrganizationProfileFields {
+  address?: string | null
+  contactEmail?: string | null
+  website?: string | null
+  mapsUrl?: string | null
+  latitude?: number | null
+  longitude?: number | null
+  socialLinks?: string
+}
+
 /** Validate and normalize externally visible organization metadata. */
 export const SOCIAL_KEYS = ['facebook', 'instagram', 'tiktok', 'youtube', 'x', 'linkedin', 'whatsapp'] as const
 type SocialKey = typeof SOCIAL_KEYS[number]
@@ -27,8 +37,8 @@ function coordinate(value: unknown, label: string, minimum: number, maximum: num
   if (!Number.isFinite(number) || number < minimum || number > maximum) throw errors.badRequest(label + ' must be between ' + minimum + ' and ' + maximum + '.')
   return Math.round(number * 1_000_000) / 1_000_000
 }
-export function organizationFields(body: Record<string, unknown>): Record<string, string | number | null> {
-  const data: Record<string, string | number | null> = {}
+export function organizationFields(body: Record<string, unknown>): OrganizationProfileFields {
+  const data: OrganizationProfileFields = {}
   if (body.address !== undefined) data.address = sanitizeText(body.address, 300) || null
   if (body.contactEmail !== undefined) {
     const email = sanitizeText(body.contactEmail, 160).trim().toLowerCase()
