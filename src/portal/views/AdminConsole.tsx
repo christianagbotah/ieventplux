@@ -19,6 +19,7 @@ import { navigate, type Route } from '../router'
 import { usePortal, isPlatformStaff } from '../store'
 import { money, relative, humanize, statusTone } from '../format'
 import { EmptyState } from '../components/EventCard'
+import { VerificationDocuments } from '../components/VerificationDocuments'
 
 const SECTIONS = [
   { key: 'overview', label: 'Overview', icon: ShieldCheck },
@@ -70,23 +71,18 @@ export default function AdminConsole({ route }: { route: Route }) {
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-6 sm:py-8 md:flex md:h-full md:min-h-0 md:flex-col md:overflow-hidden md:py-4">
-      <div className="efx-glassmorphism-card mb-5">
-        <div className="efx-glassmorphism-card__backdrop" aria-hidden="true" />
-        <div className="efx-glassmorphism-card__panel">
-          <div className="flex flex-wrap items-center gap-3">
-            <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/15 text-white"><ShieldCheck className="h-5 w-5" aria-hidden /></span>
-            <div>
-              <h1 className="efx-glassmorphism-card__title text-xl">Platform Administration</h1>
-              <p className="text-xs text-white/75">{humanize(user.role)} · actions are audited · privileged finance requires re-authentication</p>
-            </div>
-          </div>
+    <div className="mx-auto max-w-7xl px-4 py-4 sm:py-5 md:flex md:h-full md:min-h-0 md:flex-col md:overflow-hidden md:py-2">
+      <div className="mb-3 flex items-center gap-2.5 rounded-xl border border-border/70 bg-card px-3 py-2">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"><ShieldCheck className="h-4 w-4" aria-hidden /></span>
+        <div className="min-w-0">
+          <h1 className="text-sm font-bold leading-tight sm:text-base">Platform Administration</h1>
+          <p className="text-[11px] text-muted-foreground">{humanize(user.role)} · Admin actions are audited</p>
         </div>
       </div>
 
       {/* Fourteen admin sections require a usable mobile chooser, not a
           horizontally-scrolling row whose most important actions are hidden. */}
-      <div className="sticky top-16 z-20 mb-5 rounded-2xl border border-border bg-card/95 p-3 shadow-sm backdrop-blur md:hidden">
+      <div className="sticky top-[52px] z-20 mb-3 rounded-2xl border border-border bg-card/95 p-3 shadow-sm backdrop-blur md:hidden">
         <label htmlFor="admin-section" className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-muted-foreground">Admin section</label>
         <Select value={section} onValueChange={goSection}>
           <SelectTrigger id="admin-section" aria-label="Choose administration section" className="h-11 w-full rounded-xl">
