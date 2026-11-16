@@ -98,7 +98,7 @@ async function main() {
     check(deleted.status === 200, 'owner can revoke incorrect identity upload before approval')
     check((await call('GET', documentUrl, owner)).status === 404, 'revoked document is no longer downloadable')
     let stillPresent = true
-    try { await access(privateDocumentPath(org.id, documentId)) } catch { stillPresent = false }
+    try { await access(privateDocumentPath(org.id, documentId!)) } catch { stillPresent = false }
     check(!stillPresent, 'encrypted test blob removed from active storage')
     documentId = null
   } finally {
