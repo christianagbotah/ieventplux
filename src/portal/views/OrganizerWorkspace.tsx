@@ -25,6 +25,8 @@ import { PlayerSim } from '../components/PlayerSim'
 import { EmptyState } from '../components/EventCard'
 import { flash } from '../animate'
 import { scanMayQueueOffline } from '../lib/checkin-policy'
+import { OrganizationIdentityFields, emptyOrgFields } from '../components/OrganizationIdentityFields'
+import { VerificationDocuments } from '../components/VerificationDocuments'
 
 interface OrgEvent {
   id: string
@@ -2750,11 +2752,40 @@ function SettingsView({ orgId, role }: { orgId: string; role: string }) {
   const { toast } = useToast()
   const [verification, setVerification] = useState<{ status: string; notes?: string | null } | null>(null)
   const [evidence, setEvidence] = useState('')
-  const [form, setForm] = useState({ tagline: '', description: '', city: '', contactEmail: '', contactPhone: '', website: '', payoutMomo: '', payoutName: '' })
+  const [form, setForm] = useState({ ...emptyOrgFields, payoutMomo: '', payoutName: '' })
+  const [logoFile, setLogoFile] = useState<File | null>(null)
+  const [logoUrl, setLogoUrl] = useState<string | null>(null)
+  const [loadingProfile, setLoadingProfile] = useState(true)
 
   useEffect(() => {
     void api.get<{ verification: { status: string; notes?: string | null } | null }>(`/orgs/${orgId}/verification`).then((d) => setVerification(d.verification))
   }, [orgId])
+
+  useEffect(() => {
+    let cancelled = false
+    setLoadingProfile(true)
+    void api.get<{ org: {
+      tagline?: string | null; description?: string | null; city?: string | null;
+      address?: string | null; contactEmail?: string | null; contactPhone?: string | null;
+      website?: string | null; mapsUrl?: string | null; latitude?: number | null; longitude?: number | null;
+      socialLinks?: Record<string, string>; logoUrl?: string | null;
+    } }>('/orgs/' + orgId + '/settings').then(({ org }) => {
+      if (cancelled) return
+      setForm((previous) => ({
+        ...previous,
+        tagline: org.tagline ?? '', description: org.description ?? '', city: org.city ?? '',
+        address: org.address ?? '', contactEmail: org.contactEmail ?? '',
+        contactPhone: org.contactPhone ?? '', website: org.website ?? '', mapsUrl: org.mapsUrl ?? '',
+        latitude: org.latitude == null ? '' : String(org.latitude),
+        longitude: org.longitude == null ? '' : String(org.longitude),
+        socialLinks: { ...emptyOrgFields.socialLinks, ...org.socialLinks },
+      }))
+      setLogoUrl(org.logoUrl ?? null)
+    }).catch(() => {
+      if (!cancelled) toast({ title: 'Could not load saved profile', description: 'Please refresh before editing.', variant: 'destructive' })
+    }).finally(() => { if (!cancelled) setLoadingProfile(false) })
+    return () => { cancelled = true }
+  }, [orgId, toast])
 
   const submitVerification = async () => {
     try {
@@ -2768,17 +2799,22 @@ function SettingsView({ orgId, role }: { orgId: string; role: string }) {
 
   const saveSettings = async () => {
     try {
-      await api.post(`/orgs/${orgId}/settings`, {
-        tagline: form.tagline || undefined,
-        description: form.description || undefined,
-        city: form.city || undefined,
-        contactEmail: form.contactEmail || undefined,
-        contactPhone: form.contactPhone || undefined,
-        website: form.website || undefined,
+      await api.post('/orgs/' + orgId + '/settings', {
+        tagline: form.tagline, description: form.description, city: form.city,
+        address: form.address, contactEmail: form.contactEmail, contactPhone: form.contactPhone,
+        website: form.website, mapsUrl: form.mapsUrl,
+        latitude: form.latitude, longitude: form.longitude, socialLinks: form.socialLinks,
         payoutMomoNumber: form.payoutMomo || undefined,
         payoutRecipientName: form.payoutName || undefined,
       })
-      toast({ title: 'Settings saved', description: 'Payout destination changes are audited.' })
+      if (logoFile) {
+        const data = new FormData()
+        data.append('file', logoFile)
+        const response = await api.upload<{ logoUrl: string }>('/orgs/' + orgId + '/logo', data)
+        setLogoUrl(response.logoUrl + '?v=' + Date.now())
+        setLogoFile(null)
+      }
+      toast({ title: 'Organization profile saved', description: 'Saved values and public links are updated.' })
     } catch (err) {
       toast({ description: err instanceof ApiClientError ? err.message : 'Could not save.', variant: 'destructive' })
     }
@@ -2790,7 +2826,7 @@ function SettingsView({ orgId, role }: { orgId: string; role: string }) {
     <div className="space-y-5">
       <div>
         <h1 className="efx-animated-gradient-text iefx-page-title font-extrabold">Settings</h1>
-        <p className="text-sm text-muted-foreground">Public profile, contacts, venues and payout destination.</p>
+        <p className="text-sm text-muted-foreground">Public profile, map, social links, logo, verification and payout destination.</p>
       </div>
 
       <VenuesCard orgId={orgId} canManage={canManage || role === 'EVENT_MANAGER'} />
@@ -2803,14 +2839,11 @@ function SettingsView({ orgId, role }: { orgId: string; role: string }) {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <p className="text-sm text-muted-foreground">
-            {verification?.status === 'APPROVED'
-              ? 'Your organization is verified — paid ticket sales and payouts are unlocked.'
-              : 'Paid ticket sales require verification (registration + payout details). Free RSVP events work immediately.'}
-          </p>
+          <p className="text-sm text-muted-foreground">Upload company registration records (where applicable), a government ID and a selfie. Finance administrators review them manually. Paid ticket sales also require a live payment provider.</p>
+          <VerificationDocuments orgId={orgId} onSubmitted={() => setVerification({ status: 'PENDING' })} />
           {verification?.status !== 'APPROVED' && (
             <div className="space-y-2">
-              <Textarea value={evidence} onChange={(e) => setEvidence(e.target.value)} placeholder="Describe your registration documents / GH card / bank details reference…" aria-label="Verification evidence" />
+              <Textarea value={evidence} onChange={(e) => setEvidence(e.target.value)} placeholder="Optional verification notes for the reviewer…" aria-label="Verification evidence" />
               <Button className="rounded-full" onClick={() => void submitVerification()} disabled={evidence.trim().length < 5}>Submit for review</Button>
             </div>
           )}
@@ -2819,17 +2852,17 @@ function SettingsView({ orgId, role }: { orgId: string; role: string }) {
 
       <Card className="rounded-2xl">
         <CardHeader className="pb-2"><CardTitle className="text-base">Organization profile</CardTitle></CardHeader>
-        <CardContent className="space-y-3">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1.5"><Label htmlFor="tagline">Tagline</Label><Input id="tagline" value={form.tagline} onChange={(e) => setForm((f) => ({ ...f, tagline: e.target.value }))} /></div>
-            <div className="space-y-1.5"><Label htmlFor="ocity">City</Label><Input id="ocity" value={form.city} onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))} /></div>
-            <div className="space-y-1.5"><Label htmlFor="oemail">Contact email</Label><Input id="oemail" value={form.contactEmail} onChange={(e) => setForm((f) => ({ ...f, contactEmail: e.target.value }))} /></div>
-            <div className="space-y-1.5"><Label htmlFor="ophone">Contact phone</Label><Input id="ophone" value={form.contactPhone} onChange={(e) => setForm((f) => ({ ...f, contactPhone: e.target.value }))} /></div>
-            <div className="space-y-1.5 sm:col-span-2"><Label htmlFor="oweb">Website</Label><Input id="oweb" value={form.website} onChange={(e) => setForm((f) => ({ ...f, website: e.target.value }))} /></div>
-            <div className="space-y-1.5"><Label htmlFor="momo">Payout MoMo number</Label><Input id="momo" value={form.payoutMomo} onChange={(e) => setForm((f) => ({ ...f, payoutMomo: e.target.value }))} placeholder="+233 …" inputMode="tel" /></div>
-            <div className="space-y-1.5"><Label htmlFor="pname">Payout recipient name</Label><Input id="pname" value={form.payoutName} onChange={(e) => setForm((f) => ({ ...f, payoutName: e.target.value }))} /></div>
-          </div>
-          <Button className="rounded-full" disabled={!canManage} onClick={() => void saveSettings()}>{canManage ? 'Save settings' : 'Admin role required'}</Button>
+        <CardContent className="space-y-4">
+          {loadingProfile ? <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading saved organization details…</div> : (
+            <>
+              <OrganizationIdentityFields value={form} onChange={(details) => setForm((previous) => ({ ...previous, ...details }))} logoUrl={logoUrl} logoFile={logoFile} onLogoFile={setLogoFile} />
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5"><Label htmlFor="momo">Payout MoMo number</Label><Input id="momo" value={form.payoutMomo} onChange={(e) => setForm((previous) => ({ ...previous, payoutMomo: e.target.value }))} inputMode="tel" placeholder="+233..." /></div>
+                <div className="space-y-1.5"><Label htmlFor="pname">Payout recipient name</Label><Input id="pname" value={form.payoutName} onChange={(e) => setForm((previous) => ({ ...previous, payoutName: e.target.value }))} /></div>
+              </div>
+              <Button className="rounded-full" disabled={!canManage} onClick={() => void saveSettings()}>{canManage ? 'Save organization profile' : 'Admin role required'}</Button>
+            </>
+          )}
         </CardContent>
       </Card>
     </div>
