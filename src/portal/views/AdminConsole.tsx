@@ -237,7 +237,7 @@ type AdminOrg = {
   mapsUrl?: string | null
   logoUrl?: string | null
   verifiedAt?: string | null
-  verification?: { status: string; evidence: string; submittedAt: string } | null
+  verification?: { status: string; evidenceCount?: number; submittedAt: string } | null
   _count: { events: number }
 }
 
@@ -297,11 +297,7 @@ function Orgs() {
         const decidedRejected = vStatus === 'REJECTED'
         const decidedApproved = vStatus === 'APPROVED'
         const awaitingDecision = !decidedRejected && !decidedApproved && o.status !== 'ACTIVE' && o.status !== 'SUSPENDED'
-        let evidenceCount = 0
-        try {
-          const arr = JSON.parse(o.verification?.evidence ?? '[]')
-          if (Array.isArray(arr)) evidenceCount = arr.length
-        } catch { evidenceCount = 0 }
+        const evidenceCount = o.verification?.evidenceCount ?? 0
         return (
           <Card key={o.id} className="rounded-2xl">
             <CardContent className="flex flex-wrap items-center gap-3 p-4">
