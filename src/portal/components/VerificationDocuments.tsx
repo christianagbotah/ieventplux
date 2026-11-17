@@ -1,21 +1,27 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useToast } from '@/hooks/use-toast'
-import { FileText, Camera, ShieldCheck, Loader2, Download, RefreshCw, Trash2 } from 'lucide-react'
+import { FileText, Camera, ShieldCheck, Loader2, Download, RefreshCw, Trash2, Eye, CheckCircle2, AlertCircle, CreditCard } from 'lucide-react'
 import { api, ApiClientError } from '../api'
+import { kycRequirements, type IdentityDocumentSide, type IdentityDocumentKind } from '@/server/kyc-requirements'
 
-type KycKind = 'BUSINESS_REGISTRATION' | 'GOVERNMENT_ID' | 'SELFIE'
-type Document = { id: string; kind: KycKind; filename: string; mime: string; size: number; uploadedAt: string }
+type KycKind = IdentityDocumentKind
+type Document = { id: string; kind: KycKind; side?: IdentityDocumentSide | null; filename: string; mime: string; size: number; uploadedAt: string }
 const LABELS: Record<KycKind, string> = {
   BUSINESS_REGISTRATION: 'Company / organization registration',
-  GOVERNMENT_ID: 'National ID / passport / driving licence',
+  GOVERNMENT_ID: 'Government-issued ID',
   SELFIE: 'Selfie for manual identity review',
 }
+const labelFor = (doc: Document) => doc.kind === 'GOVERNMENT_ID'
+  ? 'Government ID — ' + (doc.side === 'BACK' ? 'back' : 'front' + (doc.side ? '' : ' (earlier upload)'))
+  : LABELS[doc.kind]
+
 export function VerificationDocuments({ orgId, reviewerMode = false, onSubmitted }: {
   orgId: string
   reviewerMode?: boolean
@@ -23,46 +29,63 @@ export function VerificationDocuments({ orgId, reviewerMode = false, onSubmitted
 }) {
   const { toast } = useToast()
   const [documents, setDocuments] = useState<Document[]>([])
+  const [orgType, setOrgType] = useState('INDIVIDUAL')
   const [status, setStatus] = useState('')
   const [reviewNote, setReviewNote] = useState<string | null>(null)
-  const [fileNonce, setFileNonce] = useState(0)
+  const [nonce, setNonce] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [kind, setKind] = useState<KycKind>('BUSINESS_REGISTRATION')
   const [file, setFile] = useState<File | null>(null)
+  const [frontFile, setFrontFile] = useState<File | null>(null)
+  const [backFile, setBackFile] = useState<File | null>(null)
+  const [preview, setPreview] = useState<Document | null>(null)
   const [consent, setConsent] = useState(false)
   const [busy, setBusy] = useState(false)
+
   const load = useCallback(async () => {
     try {
-      const payload = await api.get<{ documents: Document[]; status: string; reviewNote?: string | null }>('/orgs/' + orgId + '/kyc')
+      const payload = await api.get<{ documents: Document[]; orgType: string; status: string; reviewNote?: string | null }>('/orgs/' + orgId + '/kyc')
       setDocuments(payload.documents)
+      setOrgType(payload.orgType)
       setStatus(payload.status)
       setReviewNote(payload.reviewNote ?? null)
+      setLoadError('')
     } catch (error) {
-      toast({ description: error instanceof ApiClientError ? error.message : 'Could not load verification documents.', variant: 'destructive' })
+      const msg = error instanceof ApiClientError ? error.message : 'Could not load verification documents.'
+      setLoadError(msg)
+      toast({ title: 'Documents unavailable', description: msg, variant: 'destructive' })
     } finally { setLoading(false) }
   }, [orgId, toast])
   useEffect(() => { void load() }, [load])
-  const upload = async () => {
-    if (!file || !consent || busy) return
+
+  const requirements = useMemo(() => kycRequirements(orgType, documents), [orgType, documents])
+  const missing = requirements.filter((req) => !req.complete)
+  const fileUrl = (doc: Document) => '/api/v1/orgs/' + encodeURIComponent(orgId) + '/kyc/' + encodeURIComponent(doc.id)
+
+  const upload = async (selected: File | null, side?: IdentityDocumentSide) => {
+    if (!selected || !consent || busy || documents.length >= 10) return
     setBusy(true)
     try {
       const body = new FormData()
-      body.append('file', file)
+      body.append('file', selected)
       body.append('kind', kind)
+      if (side) body.append('side', side)
       body.append('consent', 'yes')
       await api.upload('/orgs/' + orgId + '/kyc', body)
-      setFile(null)
-      setFileNonce((v) => v + 1)
-      setConsent(false)
-      toast({ title: 'Document secured', description: 'Submitted for restricted manual verification. No identity decision has been made.' })
+      if (side === 'FRONT') setFrontFile(null)
+      else if (side === 'BACK') setBackFile(null)
+      else setFile(null)
+      setNonce((value) => value + 1)
+      toast({ title: (side ? 'ID ' + side.toLowerCase() : LABELS[kind]) + ' uploaded', description: 'Encrypted and available to authorized manual reviewers.' })
       await load()
       onSubmitted?.()
     } catch (error) {
-      toast({ title: 'Upload failed', description: error instanceof ApiClientError ? error.message : 'Try again.', variant: 'destructive' })
+      toast({ title: 'Secure upload failed', description: error instanceof ApiClientError ? error.message : 'Please try again.', variant: 'destructive' })
     } finally { setBusy(false) }
   }
   const remove = async (documentId: string) => {
-    if (busy || !window.confirm('Remove this verification document? You can upload a corrected copy. Encrypted backup copies expire under the backup retention policy.')) return
+    if (busy || !window.confirm('Remove this verification document? You can upload a corrected copy. Encrypted backup copies expire under the retention policy.')) return
     setBusy(true)
     try {
       await api.delete('/orgs/' + orgId + '/kyc/' + documentId)
@@ -74,51 +97,110 @@ export function VerificationDocuments({ orgId, reviewerMode = false, onSubmitted
     } finally { setBusy(false) }
   }
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="flex items-center gap-2 text-sm font-semibold"><ShieldCheck className="h-4 w-4 text-primary" /> Private KYC documents</p>
-        <Badge variant="secondary">{status || 'PENDING'}</Badge>
+        <p className="flex items-center gap-2 text-sm font-semibold"><ShieldCheck className="size-4 text-primary" /> Private KYC documents</p>
+        <Badge variant="secondary">{status || (loading ? 'Checking…' : 'PENDING')}</Badge>
       </div>
-      <p className="text-xs text-muted-foreground">
-        Documents are stored encrypted outside the public website and accessed only by organization administrators or authorized finance reviewers. Selfies are reviewed manually, not automatically matched.
+      <p className="text-xs leading-relaxed text-muted-foreground">
+        Documents remain encrypted outside the public website. Only organization administrators and authorized finance reviewers can view them. Review is manual; no biometric face matching is performed.
       </p>
-      {reviewNote && status === 'REJECTED' && <p className="rounded-lg border border-amber-400/30 bg-amber-50/60 p-3 text-xs text-amber-950 dark:bg-amber-950/20 dark:text-amber-200"><strong>Reviewer instructions:</strong> {reviewNote}</p>}
-      {loading ? <span className="flex items-center gap-2 text-xs text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading documents…</span> : documents.length === 0 ? (
-        <p className="rounded-lg bg-secondary/50 px-3 py-2 text-xs text-muted-foreground">No documents uploaded yet.</p>
-      ) : (
-        <div className="space-y-1.5">
-          {documents.map((doc) => (
-            <div className="flex items-center gap-2 rounded-lg border p-2" key={doc.id}>
-              {doc.kind === 'SELFIE' ? <Camera className="h-4 w-4 shrink-0" /> : <FileText className="h-4 w-4 shrink-0" />}
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-xs font-semibold">{LABELS[doc.kind]}</p>
-                <p className="truncate text-[11px] text-muted-foreground">{doc.filename} · {Math.ceil(doc.size / 1024).toLocaleString()} KB</p>
+      {reviewNote && status === 'REJECTED' && <p className="rounded-lg border border-amber-400/30 bg-amber-50/70 p-3 text-xs text-amber-950 dark:bg-amber-950/20 dark:text-amber-200"><strong>Reviewer instructions:</strong> {reviewNote}</p>}
+      {loading ? <p className="flex items-center gap-2 text-xs text-muted-foreground"><Loader2 className="size-4 animate-spin" /> Loading secure evidence…</p>
+        : loadError ? <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{loadError}<Button type="button" variant="outline" size="sm" className="ml-3" onClick={() => void load()}>Retry</Button></div>
+        : (
+          <>
+            <div className="rounded-xl border border-border bg-secondary/30 p-3">
+              <p className="mb-2 text-xs font-bold uppercase tracking-wide text-foreground">Verification checklist</p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {requirements.map((req) => (
+                  <div key={req.key} className="flex items-center gap-2 text-xs">
+                    {req.complete ? <CheckCircle2 className="size-4 shrink-0 text-emerald-600" aria-hidden /> : <AlertCircle className="size-4 shrink-0 text-amber-600" aria-hidden />}
+                    <span className={req.complete ? 'text-foreground' : 'font-semibold text-amber-800 dark:text-amber-200'}>{req.label}</span>
+                    <span className="ml-auto text-[10px] text-muted-foreground">{req.complete ? 'Uploaded' : 'Missing'}</span>
+                  </div>
+                ))}
               </div>
-              <a href={'/api/v1/orgs/' + orgId + '/kyc/' + doc.id} className="inline-flex items-center gap-1 rounded-md border px-2 py-1.5 text-xs hover:bg-secondary" aria-label={'Download ' + LABELS[doc.kind]}><Download className="h-3.5 w-3.5" /> Download</a>
-              {!reviewerMode && status !== 'APPROVED' && (
-                <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => void remove(doc.id)} aria-label={'Remove ' + LABELS[doc.kind]} className="h-8 px-2 text-destructive"><Trash2 className="h-3.5 w-3.5" /></Button>
-              )}
+              {missing.length > 0 && <p className="mt-2 text-xs text-muted-foreground">{missing.length} required item{missing.length === 1 ? '' : 's'} outstanding. Approval is unavailable until all evidence is uploaded and manually inspected.</p>}
             </div>
-          ))}
-        </div>
-      )}
-      {!reviewerMode && status !== 'APPROVED' && (
-        <div className="space-y-3 rounded-xl border p-3">
-          <label htmlFor="kyc-kind" className="text-xs font-semibold">Document category</label>
-          <select id="kyc-kind" value={kind} onChange={(e) => { setKind(e.target.value as KycKind); setFile(null) }} className="block h-10 w-full rounded-md border bg-background px-3 text-sm">
+            {documents.length === 0 ? <p className="rounded-lg border border-dashed px-3 py-3 text-xs text-muted-foreground">No documents uploaded yet.</p> : (
+              <div className="space-y-2">
+                {documents.map((doc) => (
+                  <div key={doc.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card p-3">
+                    {doc.kind === 'SELFIE' ? <Camera className="size-4 shrink-0 text-muted-foreground" aria-hidden /> : <FileText className="size-4 shrink-0 text-muted-foreground" aria-hidden />}
+                    <div className="min-w-[110px] flex-1">
+                      <p className="truncate text-xs font-semibold">{labelFor(doc)}</p>
+                      <p className="truncate text-[11px] text-muted-foreground">{doc.filename} · {Math.ceil(doc.size / 1024).toLocaleString()} KB · {doc.mime === 'application/pdf' ? 'PDF' : 'Image'}</p>
+                    </div>
+                    <Button type="button" size="sm" variant="outline" className="h-8 gap-1.5" onClick={() => setPreview(doc)} aria-label={'View ' + labelFor(doc)}>
+                      <Eye className="size-3.5" aria-hidden /> View
+                    </Button>
+                    <a href={fileUrl(doc)} className="inline-flex h-8 items-center gap-1 rounded-md border border-border px-2.5 text-xs hover:bg-secondary" aria-label={'Download ' + labelFor(doc)}><Download className="size-3.5" aria-hidden /> <span className="hidden sm:inline">Download</span></a>
+                    {!reviewerMode && status !== 'APPROVED' && (
+                      <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => void remove(doc.id)} aria-label={'Remove ' + labelFor(doc)} className="h-8 px-2 text-destructive"><Trash2 className="size-3.5" aria-hidden /></Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+
+      {!reviewerMode && !loading && !loadError && status !== 'APPROVED' && (
+        <div className="space-y-3 rounded-xl border border-border p-4">
+          <p className="text-sm font-semibold">Upload verification evidence</p>
+          <label htmlFor="kyc-kind" className="block text-xs font-semibold">Document category</label>
+          <select id="kyc-kind" value={kind} onChange={(e) => { setKind(e.target.value as KycKind); setFile(null); setFrontFile(null); setBackFile(null) }} className="block h-10 w-full rounded-lg border border-border bg-background px-3 text-sm">
             {(Object.keys(LABELS) as KycKind[]).map((value) => <option key={value} value={value}>{LABELS[value]}</option>)}
           </select>
-          <label htmlFor="kyc-file" className="block text-xs font-semibold">{kind === 'SELFIE' ? 'Take or choose a selfie' : 'Choose a document'}</label>
-          <Input key={kind + '-' + fileNonce} id="kyc-file" type="file" accept={kind === 'SELFIE' ? 'image/jpeg,image/png,image/webp' : 'application/pdf,image/jpeg,image/png,image/webp'} capture={kind === 'SELFIE' ? 'user' : undefined} onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-          <p className="text-[11px] text-muted-foreground">PDF, PNG, JPG, WebP. Maximum 8 MB per file (10 files per organization). On phones, the selfie field can open the front camera. Your uploaded documents are never shown on public profiles.</p>
-          <label className="flex items-start gap-2 text-xs">
-            <Checkbox checked={consent} onCheckedChange={(v) => setConsent(v === true)} />
-            I am authorized to submit these documents and consent to encrypted storage for manual organization and identity verification. I understand that withdrawn documents may remain in encrypted backups until those backups expire.
+          {kind === 'GOVERNMENT_ID' ? (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {(['FRONT', 'BACK'] as const).map((side) => {
+                const selected = side === 'FRONT' ? frontFile : backFile
+                const alreadyUploaded = documents.some((doc) => doc.kind === 'GOVERNMENT_ID' && (side === 'FRONT' ? !doc.side || doc.side === 'FRONT' : doc.side === 'BACK'))
+                return <div key={side} className="space-y-2 rounded-lg border border-border p-3">
+                  <label htmlFor={'kyc-id-' + side} className="flex items-center gap-2 text-xs font-semibold">
+                    <CreditCard className="size-4" aria-hidden /> ID {side.toLowerCase()}
+                    {alreadyUploaded && <span className="ml-auto text-[10px] text-emerald-700 dark:text-emerald-300">Uploaded</span>}
+                  </label>
+                  <Input key={side + '-' + nonce} id={'kyc-id-' + side} type="file" accept="application/pdf,image/jpeg,image/png,image/webp" onChange={(event) => side === 'FRONT' ? setFrontFile(event.target.files?.[0] ?? null) : setBackFile(event.target.files?.[0] ?? null)} />
+                  <Button type="button" size="sm" variant="outline" className="w-full" disabled={!selected || !consent || busy || documents.length >= 10} onClick={() => void upload(selected, side)}>{busy ? <Loader2 className="size-4 animate-spin" /> : <ShieldCheck className="size-4" />} Upload {side.toLowerCase()}</Button>
+                </div>
+              })}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <label htmlFor="kyc-file" className="block text-xs font-semibold">{kind === 'SELFIE' ? 'Take or select a selfie' : 'Select registration document'}</label>
+              <Input key={kind + '-' + nonce} id="kyc-file" type="file" accept={kind === 'SELFIE' ? 'image/jpeg,image/png,image/webp' : 'application/pdf,image/jpeg,image/png,image/webp'} capture={kind === 'SELFIE' ? 'user' : undefined} onChange={(event) => setFile(event.target.files?.[0] ?? null)} />
+              <Button type="button" size="sm" disabled={!file || !consent || busy || documents.length >= 10} onClick={() => void upload(file)}>{busy ? <Loader2 className="size-4 animate-spin" /> : <ShieldCheck className="size-4" />} Secure upload</Button>
+            </div>
+          )}
+          <p className="text-[11px] leading-relaxed text-muted-foreground">Accepted: PDF, PNG, JPG, WebP; up to 8 MB per document and 10 documents per organization. On a phone, the selfie field can open the front camera.</p>
+          <label className="flex items-start gap-2 text-xs leading-relaxed">
+            <Checkbox checked={consent} onCheckedChange={(value) => setConsent(value === true)} />
+            <span>I am authorized to submit these documents and consent to encrypted storage for manual identity verification. Removed documents may remain in encrypted backups until backup retention expires.</span>
           </label>
-          <Button size="sm" type="button" disabled={!file || !consent || busy || documents.length >= 10} onClick={() => void upload()}>{busy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-1.5 h-4 w-4" />} Secure upload</Button>
-          <Button size="sm" type="button" variant="ghost" onClick={() => void load()}><RefreshCw className="mr-1.5 h-3.5 w-3.5" /> Refresh list</Button>
+          <Button type="button" variant="ghost" size="sm" onClick={() => void load()}><RefreshCw className="size-3.5" /> Refresh evidence</Button>
         </div>
       )}
+
+      <Dialog open={Boolean(preview)} onOpenChange={(open) => { if (!open) setPreview(null) }}>
+        <DialogContent className="flex max-h-[92dvh] max-w-4xl flex-col gap-3 overflow-hidden p-4 sm:p-5">
+          <DialogHeader>
+            <DialogTitle className="pr-8 text-base">{preview ? labelFor(preview) : 'Document preview'}</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground">Private in-browser preview. Access is restricted and logged. Close this window when finished reviewing.</p>
+          {preview && (preview.mime === 'application/pdf'
+            ? <iframe key={preview.id} src={fileUrl(preview) + '?preview=1'} title={'Secure preview of ' + labelFor(preview)} className="h-[65dvh] min-h-[260px] w-full rounded-lg border bg-muted" />
+            : <div className="flex min-h-[240px] max-h-[70dvh] items-center justify-center overflow-auto rounded-lg border bg-muted/40 p-2">
+                <img key={preview.id} src={fileUrl(preview) + '?preview=1'} alt={'Private preview of ' + labelFor(preview)} className="max-h-[65dvh] max-w-full object-contain" />
+              </div>
+          )}
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setPreview(null)}>Close preview</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
