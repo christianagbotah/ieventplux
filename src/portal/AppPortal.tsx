@@ -373,7 +373,7 @@ export default function AppPortal() {
           R19b: pr-20 clears the fixed voice-concierge FAB (56px + right-4 + gap = 80px) — at page bottom it
           overlapped and blocked the right edge of the footer link row. R20: the dev-only Effects Studio
           footer link was removed with its menu entries; the /effects route stays reachable by direct URL. */}
-      <footer className={`mt-auto border-t border-border/60 bg-card pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0 ${workspaceMode ? 'md:hidden' : ''}`}>
+      <footer className={`mt-auto border-t border-border/60 bg-card pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0 ${workspaceMode ? 'hidden' : ''}`}>
         <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-6 pr-20 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
           <p>© {new Date().getFullYear()} iEventPlux · Lightworld Technologies Ltd. · Accra, Ghana</p>
           <p className="flex flex-wrap items-center gap-x-3 gap-y-1">
