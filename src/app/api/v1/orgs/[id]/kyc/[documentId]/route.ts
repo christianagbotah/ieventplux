@@ -8,7 +8,7 @@ import { parseEvidence, readEncryptedKyc, privateDocumentPath, type KycDocument 
 type Context = { params: Promise<{ id: string; documentId: string }> }
 export async function GET(req: NextRequest, ctx: Context) {
   return handle(async () => {
-    void req
+    const preview = req.nextUrl.searchParams.get('preview') === '1'
     const { id, documentId } = await ctx.params
     const user = await requireUser()
     const membership = await membershipFor(user.id, id)
@@ -25,14 +25,17 @@ export async function GET(req: NextRequest, ctx: Context) {
     const response = new NextResponse(new Uint8Array(plaintext), {
       headers: {
         'Content-Type': doc.mime,
-        'Content-Disposition': 'attachment; filename="kyc-' + documentId + '.' + ext + '"',
+        'Content-Disposition': (preview ? 'inline' : 'attachment') + '; filename="kyc-' + documentId + '.' + ext + '"',
         'Cache-Control': 'private, no-store, no-cache, must-revalidate',
         'X-Content-Type-Options': 'nosniff',
-        'Content-Security-Policy': "default-src 'none'; sandbox",
+        'Content-Security-Policy': "sandbox; default-src 'none'; object-src 'none'; frame-ancestors 'self'",
+        'X-Frame-Options': 'SAMEORIGIN',
+        'Cross-Origin-Resource-Policy': 'same-origin',
+        'Referrer-Policy': 'no-referrer',
       },
     })
     const { audit } = await import('@/server/audit')
-    await audit({ actorUserId: user.id, actorLabel: user.email, action: 'org.kyc.document_download', entityType: 'Organization', entityId: id, after: { documentId } })
+    await audit({ actorUserId: user.id, actorLabel: user.email, action: preview ? 'org.kyc.document_preview' : 'org.kyc.document_download', entityType: 'Organization', entityId: id, after: { documentId } })
     return response
   })
 }
