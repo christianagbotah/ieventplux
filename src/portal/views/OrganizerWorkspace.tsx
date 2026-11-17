@@ -27,6 +27,8 @@ import { flash } from '../animate'
 import { scanMayQueueOffline } from '../lib/checkin-policy'
 import { OrganizationIdentityFields, emptyOrgFields } from '../components/OrganizationIdentityFields'
 import { VerificationDocuments } from '../components/VerificationDocuments'
+import { WorkspaceNavigation } from '../components/WorkspaceNavigation'
+import { WorkspaceMetric } from '../components/WorkspaceMetric'
 
 interface OrgEvent {
   id: string
@@ -46,25 +48,26 @@ interface OrgEvent {
 }
 
 const NAV = [
-  { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { key: 'insights', label: 'Insights', icon: TrendingUp },
-  { key: 'events', label: 'Events', icon: CalendarPlus },
-  { key: 'orders', label: 'Orders', icon: Ticket },
-  { key: 'attendees', label: 'Attendees & Check-in', icon: Users },
-  { key: 'studio', label: 'Streaming Studio', icon: Radio },
-  { key: 'live', label: 'Live Room', icon: Activity },
-  { key: 'promotions', label: 'Promotions', icon: Megaphone },
-  { key: 'messages', label: 'Messaging', icon: MessageSquare },
-  { key: 'finance', label: 'Finance & Payouts', icon: Wallet },
-  { key: 'team', label: 'Team', icon: UserCog },
-  { key: 'billing', label: 'Subscription', icon: CreditCard },
-  { key: 'settings', label: 'Settings', icon: Settings },
+  { key: 'dashboard', group: 'Overview', label: 'Dashboard', icon: LayoutDashboard },
+  { key: 'insights', group: 'Overview', label: 'Insights', icon: TrendingUp },
+  { key: 'events', group: 'Events & tickets', label: 'Events', icon: CalendarPlus },
+  { key: 'orders', group: 'Events & tickets', label: 'Orders', icon: Ticket },
+  { key: 'attendees', group: 'Events & tickets', label: 'Attendees & Check-in', icon: Users },
+  { key: 'studio', group: 'Production', label: 'Streaming Studio', icon: Radio },
+  { key: 'live', group: 'Production', label: 'Live Room', icon: Activity },
+  { key: 'promotions', group: 'Engagement', label: 'Promotions', icon: Megaphone },
+  { key: 'messages', group: 'Engagement', label: 'Messaging', icon: MessageSquare },
+  { key: 'finance', group: 'Business', label: 'Finance & Payouts', icon: Wallet },
+  { key: 'team', group: 'Business', label: 'Team', icon: UserCog },
+  { key: 'billing', group: 'Business', label: 'Subscription', icon: CreditCard },
+  { key: 'settings', group: 'Business', label: 'Settings', icon: Settings },
 ]
 
 export default function OrganizerWorkspace({ route }: { route: Route }) {
   const { user, memberships, activeOrgId, setActiveOrg, booted } = usePortal()
   const [section, setSection] = useState(route.query.get('tab') ?? 'dashboard')
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const contentRef = useRef<HTMLDivElement>(null)
 
   // Switch tabs at the top of the content pane without moving the desktop sidebar.
@@ -101,7 +104,7 @@ export default function OrganizerWorkspace({ route }: { route: Route }) {
   const activeOrg = memberships.find((m) => m.orgId === activeOrgId) ?? memberships[0]
 
   return (
-    <div className="mx-auto flex max-w-7xl gap-0 px-0 py-0 md:h-full md:min-h-0 md:gap-5 md:overflow-hidden md:px-4 md:py-2">
+    <div className="ievx-workspace-shell mx-auto max-w-[1600px] px-0 py-0 md:gap-4 md:overflow-hidden md:px-5 md:py-4">
       {sidebarOpen && (
         <button
           type="button"
@@ -110,65 +113,86 @@ export default function OrganizerWorkspace({ route }: { route: Route }) {
           onClick={() => setSidebarOpen(false)}
         />
       )}
-      {/* Sidebar (collapsible). R19b: scrolls independently from the main pane —
-          internally scrollable (overflow-y-auto + overscroll-contain, no scroll
-          chaining) and bounded to the viewport on md+ (max-h under the sticky
-          header offset), so long nav lists stay reachable instead of sticking
-          out past the fold. */}
-      <aside id="organizer-menu" aria-label="Organizer navigation" className={`${sidebarOpen ? 'fixed inset-y-0 left-0 z-40 w-72 translate-x-0' : 'invisible pointer-events-none fixed inset-y-0 left-0 z-40 w-72 -translate-x-full md:visible md:pointer-events-auto'} transition-transform duration-200 border-r border-border/60 bg-card p-4 pt-16 overflow-y-auto overscroll-contain ievx-scrollbar md:relative md:top-auto md:z-0 md:h-full md:max-h-none md:w-60 md:translate-x-0 md:rounded-2xl md:border md:pt-4`}>
-        <button className="absolute right-3 top-3 rounded-full p-1.5 hover:bg-secondary md:hidden" aria-label="Close sidebar" onClick={() => setSidebarOpen(false)}>
-          <ChevronLeft className="h-5 w-5" />
+      {/* Persistent desktop navigation and accessible mobile drawer. */}
+      <aside
+        id="organizer-menu"
+        aria-label="Organizer navigation"
+        className={`ievx-workspace-sidebar ievx-scrollbar overflow-y-auto overscroll-contain
+          ${sidebarOpen ? 'fixed inset-y-0 left-0 z-40 w-72 translate-x-0' : 'invisible pointer-events-none fixed inset-y-0 left-0 z-40 w-72 -translate-x-full md:visible md:pointer-events-auto'}
+          border-r p-3 pt-14 transition-transform duration-200 md:relative md:top-auto md:z-0 md:h-full md:max-h-none md:translate-x-0 md:rounded-[14px] md:border md:p-2.5
+          ${sidebarCollapsed ? 'md:w-[72px]' : 'md:w-[248px]'}`}
+      >
+        <button className="absolute right-3 top-3 rounded-lg p-1.5 hover:bg-secondary md:hidden" aria-label="Close sidebar" onClick={() => setSidebarOpen(false)}>
+          <ChevronLeft className="h-5 w-5" aria-hidden />
         </button>
-        <p className="mb-1 px-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Workspace</p>
-        <Select value={activeOrg.orgId} onValueChange={(v) => setActiveOrg(v)}>
-          <SelectTrigger className="mb-3 w-full rounded-xl" aria-label="Active organization"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {memberships.map((m) => (
-              <SelectItem key={m.orgId} value={m.orgId}>{m.orgName} · {humanize(m.role)}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <nav
-          className="efx-underline-slide-nav"
-          aria-label="Organizer sections"
-          style={{ maxWidth: 'none', margin: 0, padding: 0, flexDirection: 'column', alignItems: 'stretch', justifyContent: 'flex-start', gap: '0.125rem', borderBottom: 'none' }}
-        >
-          {NAV.map((item) => (
-            <button
-              key={item.key}
-              onClick={() => {
-                if (window.innerWidth >= 768) contentRef.current?.scrollTo(0, 0)
-                else window.scrollTo(0, 0)
-                setSection(item.key)
-                setSidebarOpen(false)
-                navigate(`/organizer?tab=${item.key}`, { replace: true })
-              }}
-              className={`efx-underline-slide-nav__link flex w-full items-center gap-2.5 text-left text-sm ${
-                section === item.key ? 'efx-underline-slide-nav__link--active' : ''
-              }`}
-              style={{ padding: '0.625rem 0.75rem' }}
-              aria-current={section === item.key ? 'page' : undefined}
-            >
-              <item.icon className="h-4 w-4 shrink-0" aria-hidden />
-              {item.label}
-            </button>
-          ))}
-        </nav>
-      </aside>
-
-      {/* Content */}
-      <div ref={contentRef} className="min-w-0 flex-1 px-4 py-4 md:h-full md:overflow-y-auto md:overscroll-contain md:py-0 md:pr-2 md:pb-8 ievx-scrollbar">
-        <Button variant="outline" size="sm" className="mb-3 rounded-full md:hidden" aria-controls="organizer-menu" aria-expanded={sidebarOpen} onClick={() => setSidebarOpen(true)}>
-          <ChevronLeft className="mr-1 h-4 w-4 rotate-180" /> Menu
-        </Button>
-        <div className="ievx-surface mb-3 flex flex-wrap items-center justify-between gap-2 px-3 py-2">
-          <div className="min-w-0">
-            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground">Active organization</p>
-            <p className="truncate text-sm font-bold tracking-tight">{activeOrg.orgName}</p>
-            <p className="text-xs text-muted-foreground">{humanize(activeOrg.role)} workspace</p>
+        <div className="ievx-workspace-sidebar-brand">
+          <span className="ievx-workspace-brand-icon"><LayoutDashboard className="size-[18px]" aria-hidden /></span>
+          {(!sidebarCollapsed || sidebarOpen) && <div className="ievx-workspace-brand-copy">
+            <strong>Organizer Studio</strong><small>Manage events & attendees</small>
+          </div>}
+        </div>
+        {(!sidebarCollapsed || sidebarOpen) && (
+          <div className="mt-3 px-1">
+            <p className="ievx-workspace-eyebrow mb-1.5">Active organization</p>
+            <Select value={activeOrg.orgId} onValueChange={(v) => { setActiveOrg(v); setSidebarOpen(false) }}>
+              <SelectTrigger className="min-h-10 w-full rounded-lg text-xs" aria-label="Active organization"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {memberships.map((m) => (
+                  <SelectItem key={m.orgId} value={m.orgId}>{m.orgName} · {humanize(m.role)}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-          <Button size="sm" className="rounded-full px-4" onClick={() => navigate('/organizer?tab=events&new=1', { replace: true })}>
-            <Plus className="mr-1.5 h-4 w-4" aria-hidden /> New event
+        )}
+        <WorkspaceNavigation
+          title="Workspace sections"
+          items={NAV}
+          active={section}
+          collapsed={sidebarCollapsed && !sidebarOpen}
+          onToggleCollapse={() => setSidebarCollapsed((value) => !value)}
+          onSelect={(key) => {
+            if (window.innerWidth >= 768) contentRef.current?.scrollTo(0, 0)
+            else window.scrollTo(0, 0)
+            setSection(key)
+            setSidebarOpen(false)
+            navigate(`/organizer?tab=${key}`, { replace: true })
+          }}
+        />
+        {(!sidebarCollapsed || sidebarOpen) && (
+          <div className="ievx-workspace-sidebar-footer">
+            <p className="text-[11px] font-semibold">{activeOrg.orgName}</p>
+            <p className="mt-1 text-[10px]">{humanize(activeOrg.role)} access · {memberships.length} organization{memberships.length === 1 ? '' : 's'}</p>
+          </div>
+        )}
+      </aside>
+      {/* Independent content area. The title/action toolbar is never oversized. */}
+      <div ref={contentRef} className="ievx-workspace-content ievx-scrollbar min-w-0 flex-1 px-3 py-3 pb-7 sm:px-5 md:px-1 md:py-0 md:pb-8">
+        <div className="ievx-workspace-toolbar">
+          <div className="flex min-w-0 items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="mr-1 size-9 rounded-lg md:hidden"
+              aria-controls="organizer-menu"
+              aria-label="Open organizer navigation"
+              aria-expanded={sidebarOpen}
+              onClick={() => setSidebarOpen(true)}
+            >
+              <LayoutDashboard className="size-[18px]" aria-hidden />
+            </Button>
+            <div className="min-w-0">
+              <p className="ievx-workspace-eyebrow truncate">{activeOrg.orgName} / {humanize(activeOrg.role)}</p>
+              <h1 className="ievx-workspace-toolbar-title">{NAV.find((item) => item.key === section)?.label ?? 'Dashboard'}</h1>
+            </div>
+          </div>
+          <Button
+            size="sm"
+            className="shrink-0 rounded-lg"
+            onClick={() => navigate('/organizer?tab=events&new=1', { replace: true })}
+          >
+            <Plus className="size-4" aria-hidden />
+            <span className="hidden min-[380px]:inline">New event</span>
           </Button>
         </div>
         <div key={section} className="ievx-view-enter">
