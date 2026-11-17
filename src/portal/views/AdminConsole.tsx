@@ -172,15 +172,18 @@ function AdminLoader({ label }: { label: string }) {
 }
 
 function StatGrid({ stats }: { stats: { label: string; value: string; tone?: string }[] }) {
+  const icons = [Users, Building2, CalendarDays, CreditCard, Wallet, TrendingUp, Landmark, ShieldAlert]
   return (
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-      {stats.map((s) => (
-        <Card key={s.label} className="rounded-2xl">
-          <CardContent className="p-4">
-            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{s.label}</p>
-            <p className={`mt-1 text-xl font-extrabold ${s.tone ?? ''}`}>{s.value}</p>
-          </CardContent>
-        </Card>
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      {stats.map((stat, index) => (
+        <WorkspaceMetric
+          key={stat.label}
+          icon={icons[index] ?? Activity}
+          label={stat.label}
+          value={stat.value}
+          description={index === 4 ? 'Across confirmed ticket orders' : index === 5 ? 'Recorded platform fees' : undefined}
+          status={stat.tone === 'text-destructive' ? 'danger' : stat.tone === 'text-amber-600' ? 'warning' : 'neutral'}
+        />
       ))}
     </div>
   )
