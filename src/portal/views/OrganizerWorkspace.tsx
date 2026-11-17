@@ -23,7 +23,6 @@ import { usePortal } from '../store'
 import { money, dateLong, timeRange, humanize, statusTone, relative, moneyToInputValue, moneyFromCedis, initials } from '../format'
 import { PlayerSim } from '../components/PlayerSim'
 import { EmptyState } from '../components/EventCard'
-import { flash } from '../animate'
 import { scanMayQueueOffline } from '../lib/checkin-policy'
 import { OrganizationIdentityFields, emptyOrgFields } from '../components/OrganizationIdentityFields'
 import { VerificationDocuments } from '../components/VerificationDocuments'
@@ -249,36 +248,19 @@ function Dashboard({ orgId, route }: { orgId: string; route: Route }) {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="efx-animated-gradient-text iefx-page-title font-extrabold">Dashboard</h1>
-          <p className="text-sm text-muted-foreground">{data.counts.published} published · {data.counts.draft} drafts · {data.counts.live} live now</p>
+          <h2 className="ievx-workspace-heading">Event performance</h2>
+          <p className="mt-1 text-sm text-muted-foreground">{data.counts.published} published · {data.counts.draft} drafts · {data.counts.live} live now</p>
         </div>
       </div>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {cards.map((c) => c.label === 'Gross sales' ? (
-          /* R19b: compact glass variant — the inner panel extends to a slim inset
-             (adapter .iefx-gross-card shrinks the catalog's 1.75rem outer padding)
-             and the fonts were minimized (value 3xl→xl, title →0.7rem) to match the
-             sibling stat cards. */
-          <div key={c.label} className="efx-glassmorphism-card iefx-gross-card" ref={(el) => { if (el) void flash(el) }}>
-            <div className="efx-glassmorphism-card__backdrop" aria-hidden="true" />
-            <div className="efx-glassmorphism-card__panel">
-              <div className="mb-1 flex items-center gap-1.5">
-                <c.icon className="h-4 w-4 shrink-0 text-white/85" aria-hidden />
-                <p className="efx-glassmorphism-card__title uppercase">{c.label}</p>
-              </div>
-              <p className="text-xl font-extrabold leading-6 text-white">{c.value}</p>
-            </div>
-          </div>
-        ) : (
-          <Card key={c.label} className="ievx-card-hover rounded-2xl" ref={(el) => { if (el) void flash(el) }}>
-            <CardContent className="flex items-center gap-3 p-5">
-              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10"><c.icon className="h-5 w-5 text-primary" aria-hidden /></span>
-              <div>
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">{c.label}</p>
-                <p className="text-lg font-extrabold">{c.value}</p>
-              </div>
-            </CardContent>
-          </Card>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {cards.map((metric) => (
+          <WorkspaceMetric
+            key={metric.label}
+            label={metric.label}
+            value={metric.value}
+            icon={metric.icon}
+            description={metric.label === 'Gross sales' ? 'Confirmed ticket revenue' : metric.label === 'Available payout' ? 'Subject to verified settlement' : undefined}
+          />
         ))}
       </div>
       {/* R23: verification state surfaced on the dashboard — previously invisible
