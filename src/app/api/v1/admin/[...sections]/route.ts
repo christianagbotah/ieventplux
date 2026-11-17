@@ -5,6 +5,7 @@ import { platformCan } from '@/server/permissions'
 import { integrationStatuses, envValidation, env } from '@/server/env'
 import { sweepOnce } from '@/server/jobs/handlers'
 import { parseEvidence } from '@/server/kyc-storage'
+import { missingKycRequirements } from '@/server/kyc-requirements'
 
 /**
  * Platform administration API (staff-only, narrowly scoped, audited):
@@ -261,12 +262,10 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
         if (organization.status === 'SUSPENDED') throw errors.conflict('Suspended organizations require a separate reinstatement review.')
         if (v.status === 'APPROVED') throw errors.conflict('Verification is already approved.')
         if (decision === 'APPROVED') {
-          const kinds = new Set(parseEvidence(v.evidence).filter((entry) => entry.type === 'kyc').map((entry) => entry.kind))
-          if (!kinds.has('GOVERNMENT_ID') || !kinds.has('SELFIE')) {
-            throw errors.badRequest('Upload a government ID and a selfie before approving identity verification.')
-          }
-          if (organization.orgType === 'COMPANY' && !kinds.has('BUSINESS_REGISTRATION')) {
-            throw errors.badRequest('Company registration documents are required before approval.')
+          const evidence = parseEvidence(v.evidence).filter((entry) => entry.type === 'kyc')
+          const missing = missingKycRequirements(organization.orgType, evidence)
+          if (missing.length > 0) {
+            throw errors.badRequest('Missing required verification documents: ' + missing.map((item) => item.label).join(', ') + '. Upload and inspect all items before approval.')
           }
         }
         const changed = await tx.organizerVerification.updateMany({
