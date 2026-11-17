@@ -6,7 +6,7 @@ import path from 'node:path'
 import sharp from 'sharp'
 import {
   deleteKycFile, newDocumentId, parseEvidence, prepareKycFile,
-  privateDocumentPath, readEncryptedKyc, safeFileLabel, saveEncryptedKyc,
+  privateDocumentPath, readEncryptedKyc, safeFileLabel, saveEncryptedKyc, validKycSide,
 } from './kyc-storage'
 
 const ORG = 'synthetic-test-organization'
@@ -57,7 +57,15 @@ describe('encrypted verification documents', () => {
 })
 
 describe('upload validation and sanitization', () => {
-  test('fake PDF and PDF selfie are rejected', async () => {
+  test('ID front/back selection is explicit, selfies have no side', () => {
+    expect(validKycSide('GOVERNMENT_ID', 'FRONT')).toBe('FRONT')
+    expect(validKycSide('GOVERNMENT_ID', 'BACK')).toBe('BACK')
+    expect(() => validKycSide('GOVERNMENT_ID', null)).toThrow()
+    expect(() => validKycSide('GOVERNMENT_ID', 'OBVERSE')).toThrow()
+    expect(validKycSide('SELFIE', null)).toBeNull()
+    expect(validKycSide('BUSINESS_REGISTRATION', null)).toBeNull()
+  })
+    test('fake PDF and PDF selfie are rejected', async () => {
     const fake = new File(['not a pdf'], 'fake.pdf', { type: 'application/pdf' })
     await expect(prepareKycFile(fake, 'GOVERNMENT_ID')).rejects.toThrow()
     await expect(prepareKycFile(fake, 'SELFIE')).rejects.toThrow()
