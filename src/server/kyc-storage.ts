@@ -5,11 +5,14 @@ import sharp from 'sharp'
 import { env } from '@/server/env'
 import { errors, sanitizeText } from '@/server/api'
 
+import type { IdentityDocumentSide } from './kyc-requirements'
+
 export type KycKind = 'BUSINESS_REGISTRATION' | 'GOVERNMENT_ID' | 'SELFIE'
 export interface KycDocument {
   type: 'kyc'
   id: string
   kind: KycKind
+  side?: IdentityDocumentSide | null // legacy documents have no side and count as front
   filename: string
   mime: string
   size: number
@@ -73,11 +76,16 @@ export async function deleteKycFile(orgId: string, id: string) {
   await unlink(privateDocumentPath(orgId, id)).catch(() => {})
 }
 export function kycMetadata(document: KycDocument) {
-  return { id: document.id, kind: document.kind, filename: document.filename, mime: document.mime, size: document.size, uploadedAt: document.uploadedAt }
+  return { id: document.id, kind: document.kind, side: document.side ?? null, filename: document.filename, mime: document.mime, size: document.size, uploadedAt: document.uploadedAt }
 }
 export function validKycKind(value: unknown): KycKind {
   if (value === 'BUSINESS_REGISTRATION' || value === 'GOVERNMENT_ID' || value === 'SELFIE') return value
   throw errors.badRequest('Choose registration documents, government ID, or selfie.')
+}
+export function validKycSide(kind: KycKind, value: unknown): IdentityDocumentSide | null {
+  if (kind !== 'GOVERNMENT_ID') return null
+  if (value === 'FRONT' || value === 'BACK') return value
+  throw errors.badRequest('Choose the front or back side of the government ID before uploading.')
 }
 export function safeFileLabel(value: unknown): string {
   return sanitizeText(value, 100).replace(/[\/\\<>]/g, '') || 'Verification document'
