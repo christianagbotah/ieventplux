@@ -28,7 +28,6 @@ interface WorkspaceNavigationProps {
 export function WorkspaceNavigation({
   items, active, onSelect, collapsed = false, onToggleCollapse, title, id,
 }: WorkspaceNavigationProps) {
-  let previousGroup = ''
   return (
     <div className="ievx-workspace-navigation">
       <div className="ievx-workspace-navigation-head">
@@ -46,9 +45,8 @@ export function WorkspaceNavigation({
         )}
       </div>
       <nav id={id} className="ievx-workspace-navigation-list" aria-label={title}>
-        {items.map((item) => {
-          const showGroup = item.group !== previousGroup
-          previousGroup = item.group
+        {items.map((item, index) => {
+          const showGroup = index === 0 || item.group !== items[index - 1].group
           const selected = item.key === active
           return (
             <div key={item.key} className="min-w-0">
