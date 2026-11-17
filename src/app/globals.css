@@ -626,7 +626,9 @@ body {
 .ievx-brand-name { color: var(--ievx-ink); letter-spacing: -.055em; }
 .ievx-application-bar [aria-current="page"] { font-weight: 700; }
 .ievx-workspace {
-  min-height: 100%;
+  /* Preserve the main pane's viewport-bounded height on desktop; a 100% min-height
+     here overrides the responsive md:min-h-0 and makes both panes scroll the page. */
+  min-height: 0;
   background: var(--ievx-canvas);
   color: var(--ievx-ink);
 }
@@ -698,13 +700,13 @@ body {
 .ievx-workspace-group-label--compact { text-align: center; padding: 10px 0 4px; font-size: 16px; }
 .ievx-workspace-nav-item {
   width: 100%;
-  min-height: 39px;
+  min-height: 41px;
   display: flex; align-items: center; gap: 11px;
   border: 1px solid transparent;
   border-radius: 9px;
   padding: 8px 11px;
   text-align: left;
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 560;
   line-height: 1.35;
   color: var(--ievx-ink-soft);
