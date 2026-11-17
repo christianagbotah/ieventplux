@@ -686,6 +686,9 @@ body {
   border-radius: 8px;
 }
 .ievx-workspace-collapse:hover { color: var(--ievx-teal); background: var(--ievx-teal-soft); }
+@media (max-width: 767px) {
+  .ievx-workspace-collapse { display: none; }
+}
 .ievx-workspace-navigation-list { display: flex; flex-direction: column; gap: 1px; }
 .ievx-workspace-group-label {
   font-size: 10px; font-weight: 750; letter-spacing: .09em;
