@@ -211,18 +211,18 @@ export default function AppPortal() {
         Skip to content
       </button>
 
-      <header className="sticky top-0 z-30 border-b border-border/60 ievx-glass">
-        <div className="mx-auto flex h-[52px] max-w-7xl items-center gap-2 px-3 sm:px-4">
+      <header className="ievx-application-bar sticky top-0 z-30">
+        <div className="mx-auto flex h-[52px] max-w-[1600px] items-center gap-2 px-3 sm:px-5 lg:px-7">
           <button type="button" className="flex shrink-0 items-center gap-2.5 ievx-press" onClick={() => navigate('/')} aria-label="iEventPlux home">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-md shadow-primary/25">
+            <span className="ievx-brand-mark flex h-8 w-8 items-center justify-center rounded-lg">
               <Ticket className="h-5 w-5" aria-hidden />
             </span>
-            <span className="hidden text-[15px] font-extrabold tracking-tight min-[380px]:inline sm:text-lg">
-              iEvent<span className="efx-animated-gradient-text iefx-subhead" style={{ fontSize: 'inherit', letterSpacing: '-0.01em' }}>Plux</span>
+            <span className="ievx-brand-name hidden text-[16px] font-extrabold min-[380px]:inline sm:text-[17px]">
+              iEvent<span className="text-primary">Plux</span>
             </span>
           </button>
 
-          <nav className="hidden items-center gap-1 md:flex" aria-label="Primary">
+          <nav className={`hidden items-center gap-1 md:flex ${workspaceMode ? 'md:hidden' : ''}`} aria-label="Primary">
             {NAV.map((item) => (
               <button
                 key={item.path}
@@ -244,7 +244,7 @@ export default function AppPortal() {
           </nav>
 
           <form
-            className="ml-auto hidden max-w-xs flex-1 items-center lg:flex"
+            className={`ml-auto hidden max-w-xs flex-1 items-center ${workspaceMode ? '' : 'lg:flex'}`}
             role="search"
             onSubmit={(e) => {
               e.preventDefault()
@@ -264,14 +264,23 @@ export default function AppPortal() {
             </div>
           </form>
 
-          <div className="ml-auto flex shrink-0 items-center gap-1 lg:ml-0 lg:gap-1.5">
+          {workspaceMode && (
+            <button
+              type="button"
+              onClick={() => navigate('/')}
+              className="ml-auto hidden items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground md:inline-flex"
+            >
+              <Compass className="size-4" aria-hidden /> Browse events
+            </button>
+          )}
+          <div className={`ml-auto flex shrink-0 items-center gap-1 lg:gap-1.5 ${workspaceMode ? 'md:ml-2' : 'lg:ml-0'}`}>
             <Button variant="ghost" size="icon" className="rounded-full lg:hidden" aria-label="Search events" onClick={() => navigate('/search')}>
               <Search className="h-5 w-5" aria-hidden />
             </Button>
             <Button
               variant="ghost"
               size="icon"
-              className="hidden rounded-full sm:inline-flex"
+              className="hidden rounded-lg sm:inline-flex"
               aria-label="Open command palette (Ctrl+K)"
               title="Command palette (Ctrl+K)"
               onClick={() => setPaletteOpen(true)}
@@ -281,7 +290,7 @@ export default function AppPortal() {
             <ThemeToggle />
             {user ? (
               <>
-                <Button variant="ghost" size="icon" className="relative rounded-full" aria-label={`Notifications${unread ? ` (${unread} unread)` : ''}`} onClick={() => navigate('/me?tab=notifications')}>
+                <Button variant="ghost" size="icon" className="relative rounded-lg" aria-label={`Notifications${unread ? ` (${unread} unread)` : ''}`} onClick={() => navigate('/me?tab=notifications')}>
                   <Bell className="h-5 w-5" />
                   {/* Effects Studio: badge-ping ring behind the unread counter. */}
                   {unread > 0 && (
@@ -293,7 +302,7 @@ export default function AppPortal() {
                 </Button>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <button className="flex items-center gap-2 rounded-full border border-border/70 bg-card p-1 pr-3 ievx-press" aria-label="Account menu">
+                    <button className="flex items-center gap-2 rounded-lg border border-border/70 bg-card p-1 pr-3 transition-colors hover:border-primary/30 ievx-press" aria-label="Account menu">
                       <Avatar className="h-8 w-8">
                         <AvatarFallback className="bg-primary/15 text-xs font-bold text-primary">{initials(user.displayName)}</AvatarFallback>
                       </Avatar>
@@ -354,7 +363,7 @@ export default function AppPortal() {
         <ConnectionStatus />
       </header>
 
-      <main id="main" tabIndex={-1} ref={viewRef} className={`min-w-0 flex-1 pb-24 outline-none ${workspaceMode ? 'md:h-[calc(100dvh-3.25rem)] md:min-h-0 md:flex-none md:overflow-hidden md:pb-0' : 'md:pb-10'}`}>
+      <main id="main" tabIndex={-1} ref={viewRef} className={`min-w-0 flex-1 outline-none ${workspaceMode ? 'ievx-workspace pb-6 md:h-[calc(100dvh-3.25rem)] md:min-h-0 md:flex-none md:overflow-hidden md:pb-0' : 'ievx-public pb-24 md:pb-10'}`}>
         <Suspense fallback={<ViewFallback />}>
           <div key={route.path} className={`ievx-view-enter ${workspaceMode ? 'md:h-full' : ''}`}>{view}</div>
         </Suspense>
@@ -376,7 +385,7 @@ export default function AppPortal() {
       </footer>
 
       {/* Mobile bottom navigation */}
-      <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-border/60 ievx-glass md:hidden" aria-label="Mobile primary">
+      <nav className={`${workspaceMode ? 'hidden' : 'fixed'} inset-x-0 bottom-0 z-30 border-t border-border/60 ievx-glass md:hidden`} aria-label="Mobile primary">
         <div className="mx-auto flex h-16 max-w-lg items-center justify-around px-2 pb-[env(safe-area-inset-bottom)]">
           {MOBILE_NAV.map((item) => {
             const active = item.path.startsWith('/me')
@@ -401,7 +410,7 @@ export default function AppPortal() {
         </div>
       </nav>
 
-      <VoiceAssistant />
+      {!workspaceMode && <VoiceAssistant />}
 
       <CommandPalette
         open={paletteOpen}

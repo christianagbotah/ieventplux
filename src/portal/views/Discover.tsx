@@ -278,111 +278,66 @@ export default function Discover({ route }: { route: Route }) {
 
   return (
     <div>
-      {/* Hero */}
+      {/* Editorial hero — focused discovery, clear actions, no visual-effects overload. */}
       {!browsing && (
-        <section className="relative border-b border-border/60">
-          <div className="mx-auto max-w-7xl px-4 py-6 sm:py-10">
-            <div className="efx-aurora-bg iefx-stage iefx-stage--hero">
-              {/* Brand artwork, dimmed so the aurora ribbons stay the lead act */}
-              <img
-                src="/images/hero-banner.png"
-                alt=""
-                className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-25"
-              />
-              <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#031a15] via-[#031a15]/80 to-[#031a15]/25" aria-hidden />
-              <div className="efx-aurora-bg__content" style={{ zIndex: 1 }}>
-                <span className="efx-aurora-bg__kicker">ACCRA · GHANA · TICKETING, SOCIAL & BROADCASTING</span>
-                <h1 className="efx-animated-gradient-text iefx-headline max-w-2xl">
-                  Discover your next gathering.
-                  <br className="hidden sm:block" />{' '}
-                  Attend in person or live online.
+        <section className="border-b border-border/40">
+          <div className="mx-auto max-w-[1500px] px-3 py-4 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
+            <div className="ievx-hero-panel">
+              <div className="relative z-10 w-full">
+                <span className="ievx-hero-kicker">
+                  <span className="size-2 rounded-full bg-[#7cdec4]" aria-hidden />
+                  Discover events across Ghana
+                </span>
+                <h1 className="ievx-hero-title">
+                  Be where the moments happen.
+                  <span className="block text-[#b2e7d5]">Discover. Attend. Connect.</span>
                 </h1>
-                <p className="efx-aurora-bg__meta max-w-xl" style={{ marginTop: '1rem' }}>
-                  Church services, concerts, conferences, workshops and community moments — with secure mobile-money checkout,
-                  QR tickets and protected live broadcasts.
+                <p className="ievx-hero-copy">
+                  From church gatherings to conferences, concerts and community events.
+                  Find your next experience, save events and follow the organizers you trust.
                 </p>
-                {/* CTA set (round 18b): ONE compact row of four actions on phones/tablets —
-                    the earlier edge-aligned grid let oversized CTAs swallow the hero.
-                    Tight pills + short labels below sm, fuller copy ≥sm, roomy auto
-                    row ≥lg; flex-wrap stays as a graceful fallback for ultra-narrow
-                    viewports (sizing is tuned to hold a single line at 390px). */}
-                <div className="iefx-hero-cta mt-5 flex flex-wrap items-center gap-1.5 sm:gap-2 lg:mt-6 lg:gap-3">
+                <div className="mt-5 flex flex-wrap items-center gap-2.5">
                   <button
                     type="button"
-                    className="efx-neon-pulse-button whitespace-nowrap"
-                    aria-label={primaryEvent ? `View featured event: ${primaryEvent.title}` : 'Browse the event grid'}
+                    className="ievx-hero-action"
+                    aria-label={primaryEvent ? `View featured event: ${primaryEvent.title}` : 'Browse the event catalogue'}
                     onClick={() => {
-                      if (primaryEvent) {
-                        navigate(`/event/${primaryEvent.slug}`)
-                      } else {
+                      if (primaryEvent) navigate(`/event/${primaryEvent.slug}`)
+                      else {
                         setBrowseAll(true)
                         setPage(1)
                         document.getElementById('browse')?.scrollIntoView({ behavior: 'smooth' })
                       }
                     }}
                   >
-                    <span className="sm:hidden">{primaryEvent ? 'Featured' : 'Browse'}</span>
-                    <span className="hidden sm:inline lg:hidden">{primaryEvent ? 'Featured event' : 'Browse events'}</span>
-                    <span className="hidden lg:inline">{primaryEvent ? 'View featured event' : 'Browse all events'}</span>
-                    <ArrowRight className="h-3.5 w-3.5 sm:h-4 sm:w-4" aria-hidden />
+                    {primaryEvent ? 'Explore featured event' : 'Browse events'} <ArrowRight className="size-4" aria-hidden />
                   </button>
-                  <Button variant="outline" className="ievx-press h-8 gap-1 rounded-full bg-card/70 px-2.5 text-xs sm:h-9 sm:gap-1.5 sm:px-3.5 sm:text-sm lg:h-11 lg:gap-2 lg:px-5" onClick={() => setPlannerOpen(true)}>
-                    <CalendarCheck className="size-3.5 sm:size-4" aria-hidden />
-                    <span className="sm:hidden">Plan</span>
-                    <span className="hidden sm:inline lg:hidden">Plan weekend</span>
-                    <span className="hidden lg:inline">Plan my weekend</span>
-                  </Button>
-                  <Button variant="outline" className="ievx-press h-8 gap-1 rounded-full bg-card/70 px-2.5 text-xs sm:h-9 sm:gap-1.5 sm:px-3.5 sm:text-sm lg:h-11 lg:gap-2 lg:px-5" onClick={() => document.getElementById('ai-search')?.scrollIntoView({ behavior: 'smooth' })}>
-                    <Wand2 className="size-3.5 sm:size-4" aria-hidden />
-                    <span className="sm:hidden">AI</span>
-                    <span className="hidden sm:inline lg:hidden">Ask AI</span>
-                    <span className="hidden lg:inline">Ask AI to find events</span>
-                  </Button>
-                  <Button variant="outline" className="ievx-press h-8 gap-1 rounded-full bg-card/70 px-2.5 text-xs sm:h-9 sm:gap-1.5 sm:px-3.5 sm:text-sm lg:h-11 lg:gap-2 lg:px-5" onClick={() => navigate('/live')}>
-                    <Radio className="size-3.5 sm:size-4" aria-hidden />
-                    <span className="sm:hidden">Live</span>
-                    <span className="hidden sm:inline">Watch live</span>
-                  </Button>
+                  <button type="button" className="ievx-hero-action ievx-hero-action-secondary" onClick={() => navigate('/live')}>
+                    <Radio className="size-4" aria-hidden /> Live events
+                  </button>
+                  <button type="button" className="rounded-lg px-3 py-2.5 text-xs font-semibold text-[#d4efe5] underline-offset-4 hover:underline" onClick={() => setPlannerOpen(true)}>
+                    <CalendarCheck className="mr-1.5 inline size-4" aria-hidden /> Plan your weekend
+                  </button>
+                  <button type="button" className="rounded-lg px-3 py-2.5 text-xs font-semibold text-[#d4efe5] underline-offset-4 hover:underline" onClick={() => document.getElementById('ai-search')?.scrollIntoView({ behavior: 'smooth' })}>
+                    <Wand2 className="mr-1.5 inline size-4" aria-hidden /> Ask AI
+                  </button>
                 </div>
-                {/* Quick links — the fastest paths into the catalogue */}
-                <div className="mt-4 flex flex-wrap items-center gap-x-1 gap-y-2 text-sm">
-                  <span className="pr-1 text-xs font-medium uppercase tracking-wide" style={{ color: 'rgba(226, 232, 240, 0.72)' }}>Quick find:</span>
+                <div className="ievx-hero-quick">
+                  <span className="mr-1 text-[11px] font-semibold text-[#b9d6d1]">Quick filters</span>
                   {[
                     { label: 'Today', filter: () => applyFilter('when', 'TODAY') },
                     { label: 'This weekend', filter: () => applyFilter('when', 'THIS_WEEKEND') },
-                    { label: 'Free events', filter: () => applyFilter('price', 'FREE') },
-                    { label: 'Online only', filter: () => applyFilter('mode', 'VIRTUAL') },
+                    { label: 'Free entry', filter: () => applyFilter('price', 'FREE') },
+                    { label: 'Online', filter: () => applyFilter('mode', 'VIRTUAL') },
                   ].map((quick) => (
-                    <button
-                      key={quick.label}
-                      type="button"
-                      onClick={quick.filter}
-                      className="rounded-full px-2.5 py-1 text-xs font-medium underline-offset-4 transition-colors hover:bg-white/10 hover:underline ievx-press"
-                      style={{ color: '#a7f3d0' }}
-                    >
-                      {quick.label}
-                    </button>
+                    <button key={quick.label} type="button" onClick={quick.filter}>{quick.label}</button>
                   ))}
+                  {home && (
+                    <span className="ml-auto hidden text-[11px] font-medium text-[#b9d6d1] sm:block">
+                      {statEvents} upcoming · {statOrgs} organizers · {statLive} live
+                    </span>
+                  )}
                 </div>
-                {home && (
-                  <div className="mt-5 flex flex-wrap items-center gap-1.5 text-[11px] sm:mt-6 sm:gap-2 sm:text-xs lg:mt-6 lg:text-sm">
-                    <span className="rounded-full bg-card/80 px-2.5 py-1 font-semibold backdrop-blur sm:px-3.5 sm:py-1.5 lg:px-4 lg:py-2">
-                      <TrendingUp className="mr-1 inline h-3 w-3 text-primary sm:mr-1.5 sm:h-3.5 sm:w-3.5 lg:h-4 lg:w-4" aria-hidden />
-                      <span className="sm:hidden">{statEvents} event{statEvents !== 1 ? 's' : ''}</span>
-                      <span className="hidden sm:inline">{statEvents} upcoming event{statEvents !== 1 ? 's' : ''}</span>
-                    </span>
-                    <span className="rounded-full bg-card/80 px-2.5 py-1 font-semibold backdrop-blur sm:px-3.5 sm:py-1.5 lg:px-4 lg:py-2">
-                      <MapPin className="mr-1 inline h-3 w-3 text-primary sm:mr-1.5 sm:h-3.5 sm:w-3.5 lg:h-4 lg:w-4" aria-hidden />
-                      <span className="sm:hidden">{statOrgs} organizer{statOrgs !== 1 ? 's' : ''}</span>
-                      <span className="hidden sm:inline">{statOrgs} verified organizer{statOrgs !== 1 ? 's' : ''}</span>
-                    </span>
-                    <span className="rounded-full bg-card/80 px-2.5 py-1 font-semibold backdrop-blur sm:px-3.5 sm:py-1.5 lg:px-4 lg:py-2">
-                      <Radio className="mr-1 inline h-3 w-3 text-destructive sm:mr-1.5 sm:h-3.5 sm:w-3.5 lg:h-4 lg:w-4" aria-hidden />
-                      <span className="sm:hidden">{statLive} live</span>
-                      <span className="hidden sm:inline">{statLive} live right now</span>
-                    </span>
-                  </div>
-                )}
               </div>
             </div>
           </div>
@@ -390,8 +345,8 @@ export default function Discover({ route }: { route: Route }) {
       )}
 
       {/* Search + filters */}
-      <section id="browse" className="sticky top-16 z-20 border-b border-border/50 bg-background/85 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-2 px-4 py-3">
+      <section id="browse" className="ievx-discovery-search sticky top-[52px] z-20">
+        <div className="mx-auto flex max-w-[1500px] flex-wrap items-center gap-2 px-3 py-2.5 sm:px-6 lg:px-8">
           <form
             className="flex min-w-0 flex-1 items-center"
             role="search"
@@ -402,17 +357,16 @@ export default function Discover({ route }: { route: Route }) {
               if (input.value) navigate(`/search?q=${encodeURIComponent(input.value)}`, { replace: true })
             }}
           >
-            <div className="efx-glow-focus-input w-full" style={{ margin: 0, maxWidth: '28rem', borderRadius: '999px' }}>
-              <Search className="efx-glow-focus-input__icon pointer-events-none" style={{ width: 18, height: 18 }} aria-hidden />
+            <div className="relative w-full max-w-[480px]">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-[18px] -translate-y-1/2 text-muted-foreground" aria-hidden />
               <input
                 name="q"
                 defaultValue={filters.q}
                 key={filters.q}
                 type="search"
-                placeholder="Search events, organizers, cities…"
+                placeholder="Search events, organizers or cities"
                 aria-label="Search events"
-                className="efx-glow-focus-input__field"
-                style={{ padding: '0.55rem 0' }}
+                className="h-10 w-full rounded-xl border border-border bg-card pl-10 pr-3 text-sm text-foreground outline-none transition-shadow focus:border-primary focus:ring-2 focus:ring-primary/15"
               />
             </div>
           </form>
