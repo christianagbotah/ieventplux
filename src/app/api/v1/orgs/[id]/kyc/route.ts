@@ -21,7 +21,8 @@ export async function GET(req: NextRequest, ctx: Context) {
     const verification = await db.organizerVerification.findUnique({ where: { orgId: id }, select: { evidence: true, status: true, notes: true } })
     if (!verification) throw errors.notFound('Verification case not found.')
     const documents = parseEvidence(verification.evidence).filter((r): r is KycDocument => r.type === 'kyc')
-    return jsonOk({ documents: documents.map(kycMetadata), status: verification.status, reviewNote: verification.notes }, { headers: { 'Cache-Control': 'no-store' } })
+    const org = await db.organization.findUnique({ where: { id }, select: { orgType: true } })
+    return jsonOk({ documents: documents.map(kycMetadata), orgType: org?.orgType ?? 'INDIVIDUAL', status: verification.status, reviewNote: verification.notes }, { headers: { 'Cache-Control': 'no-store' } })
   })
 }
 export async function POST(req: NextRequest, ctx: Context) {
