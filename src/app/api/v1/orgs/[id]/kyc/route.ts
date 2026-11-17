@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server'
 import { handle, jsonOk, requireUser, errors, rateLimit } from '@/server/api'
 import { membershipFor, orgCan, platformCan } from '@/server/permissions'
 import { db } from '@/lib/db'
-import { newDocumentId, parseEvidence, prepareKycFile, saveEncryptedKyc, deleteKycFile, kycMetadata, safeFileLabel, validKycKind, type KycDocument } from '@/server/kyc-storage'
+import { newDocumentId, parseEvidence, prepareKycFile, saveEncryptedKyc, deleteKycFile, kycMetadata, safeFileLabel, validKycKind, validKycSide, type KycDocument } from '@/server/kyc-storage'
 
 type Context = { params: Promise<{ id: string }> }
 async function allowed(user: { id: string; role: string }, orgId: string, upload: boolean) {
@@ -21,7 +21,8 @@ export async function GET(req: NextRequest, ctx: Context) {
     const verification = await db.organizerVerification.findUnique({ where: { orgId: id }, select: { evidence: true, status: true, notes: true } })
     if (!verification) throw errors.notFound('Verification case not found.')
     const documents = parseEvidence(verification.evidence).filter((r): r is KycDocument => r.type === 'kyc')
-    return jsonOk({ documents: documents.map(kycMetadata), status: verification.status, reviewNote: verification.notes }, { headers: { 'Cache-Control': 'no-store' } })
+    const org = await db.organization.findUnique({ where: { id }, select: { orgType: true } })
+    return jsonOk({ documents: documents.map(kycMetadata), orgType: org?.orgType ?? 'INDIVIDUAL', status: verification.status, reviewNote: verification.notes }, { headers: { 'Cache-Control': 'no-store' } })
   })
 }
 export async function POST(req: NextRequest, ctx: Context) {
@@ -34,12 +35,13 @@ export async function POST(req: NextRequest, ctx: Context) {
     if (!form) throw errors.badRequest('Multipart document upload required.')
     if (form.get('consent') !== 'yes') throw errors.badRequest('Confirm your consent to secure identity verification.')
     const kind = validKycKind(form.get('kind'))
+    const side = validKycSide(kind, form.get('side'))
     const file = form.get('file')
     if (!(file instanceof File)) throw errors.badRequest('Select a document or selfie image.')
     const safe = await prepareKycFile(file, kind)
     const docId = newDocumentId()
     const document: KycDocument = {
-      id: docId, type: 'kyc', kind,
+      id: docId, type: 'kyc', kind, ...(side ? { side } : {}),
       filename: safeFileLabel(file.name),
       mime: safe.mime, size: safe.buffer.length,
       uploadedAt: new Date().toISOString(), uploadedBy: user.id,
