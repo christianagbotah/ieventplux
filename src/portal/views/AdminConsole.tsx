@@ -411,6 +411,9 @@ function Orgs() {
                   </>
                 )}
               </div>
+              <Button type="button" size="sm" variant="outline" className="self-start" disabled={reviewBusy} onClick={() => { reviewRequestRef.current++; setReviewDecision(null) }}>
+                <ShieldCheck className="mr-1.5 size-4" /> Inspect documents before approving
+              </Button>
               <label className="flex items-start gap-2 rounded-lg border border-border p-3 text-xs leading-relaxed">
                 <input type="checkbox" className="mt-1 size-4 shrink-0 accent-primary" checked={reviewAttested} disabled={!reviewRequirements || reviewRequirements.some((item) => !item.complete)} onChange={(event) => setReviewAttested(event.target.checked)} />
                 <span>I personally viewed the front and back of the government ID, the selfie and any required registration documents and verified they reasonably match the organization's records. This is a manual review, not automated biometric verification.</span>
