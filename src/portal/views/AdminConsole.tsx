@@ -22,6 +22,7 @@ import { EmptyState } from '../components/EventCard'
 import { VerificationDocuments } from '../components/VerificationDocuments'
 import { WorkspaceNavigation } from '../components/WorkspaceNavigation'
 import { WorkspaceMetric } from '../components/WorkspaceMetric'
+import { kycRequirements, type KycRequirement, type IdentityEvidence } from '@/server/kyc-requirements'
 
 const SECTIONS = [
   { key: 'overview', group: 'Workspace', label: 'Overview', icon: ShieldCheck },
@@ -232,6 +233,7 @@ type AdminOrg = {
   name: string
   slug: string
   status: string
+  orgType: string
   city?: string | null
   address?: string | null
   contactEmail?: string | null
@@ -253,13 +255,28 @@ function Orgs() {
   const [reviewAttested, setReviewAttested] = useState(false)
   const [reviewNotes, setReviewNotes] = useState('')
   const [reviewBusy, setReviewBusy] = useState(false)
+  const [reviewRequirements, setReviewRequirements] = useState<KycRequirement[] | null>(null)
+  const [reviewEvidenceError, setReviewEvidenceError] = useState('')
+  const reviewRequestRef = useRef(0)
   const [data, reload, loading] = useAdmin<{ items: AdminOrg[] }>('/admin/orgs')
 
   const beginReview = (org: AdminOrg, decision: 'APPROVE' | 'REJECT') => {
-    setReviewOrgId(org.id) // Show the document list before review.
+    setReviewOrgId(org.id) // Keep the private list available for inspection.
     setReviewDecision({ id: org.id, name: org.name, decision })
     setReviewAttested(false)
     setReviewNotes('')
+    setReviewRequirements(null)
+    setReviewEvidenceError('')
+    const request = ++reviewRequestRef.current
+    if (decision === 'APPROVE') {
+      void api.get<{ documents: IdentityEvidence[]; orgType: string }>('/orgs/' + org.id + '/kyc')
+        .then(({ documents, orgType }) => {
+          if (request === reviewRequestRef.current) setReviewRequirements(kycRequirements(orgType, documents))
+        })
+        .catch((error) => {
+          if (request === reviewRequestRef.current) setReviewEvidenceError(error instanceof ApiClientError ? error.message : 'Could not verify the uploaded evidence.')
+        })
+    }
   }
 
   const submitDecision = async () => {
@@ -272,7 +289,9 @@ function Orgs() {
         notes: reviewNotes.trim(),
       })
       toast({ title: `Organization ${reviewDecision.decision === 'APPROVE' ? 'verified' : 'rejected'}` })
+      reviewRequestRef.current++
       setReviewDecision(null)
+      setReviewOrgId(null)
       reload()
     } catch (err) {
       toast({ description: err instanceof ApiClientError ? err.message : 'Verification decision failed.', variant: 'destructive' })
@@ -359,17 +378,44 @@ function Orgs() {
           </Card>
         )
       })}
-      <Dialog open={Boolean(reviewDecision)} onOpenChange={(open) => { if (!open && !reviewBusy) setReviewDecision(null) }}>
-        <DialogContent className="max-w-lg">
+      <Dialog open={Boolean(reviewDecision)} onOpenChange={(open) => { if (!open && !reviewBusy) { reviewRequestRef.current++; setReviewDecision(null) } }}>
+        <DialogContent className="max-h-[90dvh] max-w-xl overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{reviewDecision?.decision === 'APPROVE' ? 'Approve organization verification' : 'Reject organization verification'}</DialogTitle>
           </DialogHeader>
           <p className="text-sm font-semibold">{reviewDecision?.name}</p>
           {reviewDecision?.decision === 'APPROVE' ? (
-            <label className="flex items-start gap-2 rounded-lg border border-border p-3 text-sm">
-              <input type="checkbox" className="mt-1 h-4 w-4 accent-primary" checked={reviewAttested} onChange={(event) => setReviewAttested(event.target.checked)} />
-              <span>I personally inspected the submitted ID, selfie, and required registration documents and confirmed they reasonably match the organizer's records. I understand that this is a manual review, not automated biometric verification.</span>
-            </label>
+            <div className="space-y-3">
+              <div className="rounded-xl border border-border bg-secondary/30 p-3">
+                <p className="mb-2 text-xs font-bold uppercase tracking-wide">Required evidence</p>
+                {reviewEvidenceError ? (
+                  <p role="alert" className="text-xs text-destructive">{reviewEvidenceError}. Open Review KYC and retry.</p>
+                ) : !reviewRequirements ? (
+                  <p className="flex items-center gap-2 text-xs text-muted-foreground"><Loader2 className="size-4 animate-spin" /> Checking uploaded evidence…</p>
+                ) : (
+                  <>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {reviewRequirements.map((item) => (
+                        <p key={item.key} className="flex items-center gap-2 text-xs">
+                          {item.complete ? <Check className="size-4 shrink-0 text-emerald-600" aria-hidden /> : <X className="size-4 shrink-0 text-amber-600" aria-hidden />}
+                          <span className={item.complete ? '' : 'font-semibold text-amber-700 dark:text-amber-300'}>{item.label}</span>
+                          <span className="ml-auto text-[10px] text-muted-foreground">{item.complete ? 'Ready' : 'Missing'}</span>
+                        </p>
+                      ))}
+                    </div>
+                    {reviewRequirements.some((item) => !item.complete) && (
+                      <p role="status" className="mt-3 rounded-lg border border-amber-300/40 bg-amber-50 p-2 text-xs text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+                        Approval is blocked. Ask the organizer to upload the missing items under Organizer Settings → Private KYC Documents. Already uploaded files remain available for preview under Review KYC.
+                      </p>
+                    )}
+                  </>
+                )}
+              </div>
+              <label className="flex items-start gap-2 rounded-lg border border-border p-3 text-xs leading-relaxed">
+                <input type="checkbox" className="mt-1 size-4 shrink-0 accent-primary" checked={reviewAttested} disabled={!reviewRequirements || reviewRequirements.some((item) => !item.complete)} onChange={(event) => setReviewAttested(event.target.checked)} />
+                <span>I personally viewed the front and back of the government ID, the selfie and any required registration documents and verified they reasonably match the organization's records. This is a manual review, not automated biometric verification.</span>
+              </label>
+            </div>
           ) : (
             <p className="text-xs text-muted-foreground">Provide clear correction instructions. These notes are visible to authorized organization administrators.</p>
           )}
@@ -379,7 +425,7 @@ function Orgs() {
           </div>
           <div className="flex flex-wrap justify-end gap-2">
             <Button type="button" variant="outline" disabled={reviewBusy} onClick={() => setReviewDecision(null)}>Cancel</Button>
-            <Button type="button" disabled={reviewBusy || (reviewDecision?.decision === 'APPROVE' ? !reviewAttested : reviewNotes.trim().length < 10)} onClick={() => void submitDecision()}>
+            <Button type="button" disabled={reviewBusy || (reviewDecision?.decision === 'APPROVE' ? !reviewAttested || !reviewRequirements || reviewRequirements.some((item) => !item.complete) : reviewNotes.trim().length < 10)} onClick={() => void submitDecision()}>
               {reviewBusy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : null}
               {reviewDecision?.decision === 'APPROVE' ? 'Confirm manual approval' : 'Submit rejection'}
             </Button>
