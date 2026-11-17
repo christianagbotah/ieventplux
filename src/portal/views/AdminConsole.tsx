@@ -20,22 +20,24 @@ import { usePortal, isPlatformStaff } from '../store'
 import { money, relative, humanize, statusTone } from '../format'
 import { EmptyState } from '../components/EventCard'
 import { VerificationDocuments } from '../components/VerificationDocuments'
+import { WorkspaceNavigation } from '../components/WorkspaceNavigation'
+import { WorkspaceMetric } from '../components/WorkspaceMetric'
 
 const SECTIONS = [
-  { key: 'overview', label: 'Overview', icon: ShieldCheck },
-  { key: 'orgs', label: 'Organizations', icon: Building2 },
-  { key: 'events', label: 'Events', icon: CalendarDays },
-  { key: 'moderation', label: 'Moderation', icon: Flag },
-  { key: 'payments', label: 'Payments', icon: Wallet },
-  { key: 'refunds', label: 'Refunds', icon: RotateCw },
-  { key: 'payouts', label: 'Payouts', icon: Landmark },
-  { key: 'fees', label: 'Fees & Plans', icon: Percent },
-  { key: 'integrations', label: 'Integrations', icon: Plug },
-  { key: 'sms', label: 'SMS Log', icon: Bell },
-  { key: 'audit', label: 'Audit Log', icon: ScrollText },
-  { key: 'taxonomy', label: 'Taxonomy', icon: Tags },
-  { key: 'ops', label: 'Ops Health', icon: HeartPulse },
-  { key: 'sweeps', label: 'Operations', icon: Settings2 },
+  { key: 'overview', group: 'Workspace', label: 'Overview', icon: ShieldCheck },
+  { key: 'orgs', group: 'Management', label: 'Organizations', icon: Building2 },
+  { key: 'events', group: 'Management', label: 'Events', icon: CalendarDays },
+  { key: 'moderation', group: 'Management', label: 'Moderation', icon: Flag },
+  { key: 'payments', group: 'Finance', label: 'Payments', icon: Wallet },
+  { key: 'refunds', group: 'Finance', label: 'Refunds', icon: RotateCw },
+  { key: 'payouts', group: 'Finance', label: 'Payouts', icon: Landmark },
+  { key: 'fees', group: 'Finance', label: 'Fees & Plans', icon: Percent },
+  { key: 'integrations', group: 'System', label: 'Integrations', icon: Plug },
+  { key: 'sms', group: 'System', label: 'SMS Log', icon: Bell },
+  { key: 'audit', group: 'System', label: 'Audit Log', icon: ScrollText },
+  { key: 'taxonomy', group: 'System', label: 'Taxonomy', icon: Tags },
+  { key: 'ops', group: 'System', label: 'Ops Health', icon: HeartPulse },
+  { key: 'sweeps', group: 'System', label: 'Operations', icon: Settings2 },
 ]
 
 export default function AdminConsole({ route }: { route: Route }) {
@@ -53,6 +55,7 @@ export default function AdminConsole({ route }: { route: Route }) {
   // Desktop has an independent, viewport-height content scroller; the sidebar
   // never moves when a section is opened. Mobile still scrolls the document.
   const contentRef = useRef<HTMLDivElement>(null)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const rawTab = route.query.get('tab') ?? 'overview'
   const section = SECTIONS.some((s) => s.key === rawTab) ? rawTab : 'overview'
 
@@ -71,18 +74,11 @@ export default function AdminConsole({ route }: { route: Route }) {
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-4 sm:py-5 md:flex md:h-full md:min-h-0 md:flex-col md:overflow-hidden md:py-2">
-      <div className="mb-3 flex items-center gap-2.5 rounded-xl border border-border/70 bg-card px-3 py-2">
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"><ShieldCheck className="h-4 w-4" aria-hidden /></span>
-        <div className="min-w-0">
-          <h1 className="text-sm font-bold leading-tight sm:text-base">Platform Administration</h1>
-          <p className="text-[11px] text-muted-foreground">{humanize(user.role)} · Admin actions are audited</p>
-        </div>
-      </div>
+    <div className="ievx-workspace-shell mx-auto max-w-[1600px] px-3 py-3 sm:px-5 md:gap-4 md:overflow-hidden md:px-5 md:py-4">
 
       {/* Fourteen admin sections require a usable mobile chooser, not a
           horizontally-scrolling row whose most important actions are hidden. */}
-      <div className="sticky top-[52px] z-20 mb-3 rounded-2xl border border-border bg-card/95 p-3 shadow-sm backdrop-blur md:hidden">
+      <div className="sticky top-[52px] z-20 mb-3 rounded-xl border border-border bg-card p-2.5 shadow-sm md:hidden">
         <label htmlFor="admin-section" className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-muted-foreground">Admin section</label>
         <Select value={section} onValueChange={goSection}>
           <SelectTrigger id="admin-section" aria-label="Choose administration section" className="h-11 w-full rounded-xl">
@@ -96,32 +92,37 @@ export default function AdminConsole({ route }: { route: Route }) {
         </Select>
       </div>
 
-      <div className="flex items-start gap-6 md:min-h-0 md:flex-1 md:overflow-hidden">
-        {/* Desktop sidebar — R19b pattern: sticky under the header, independently
-            scrollable (overflow contained, no scroll chaining), viewport-bounded
-            so all 12 sections stay reachable on short screens. */}
-        <aside className="hidden md:relative md:top-auto md:block md:h-full md:max-h-none md:w-56 md:shrink-0 md:overflow-y-auto md:overscroll-contain ievx-scrollbar md:rounded-2xl md:border md:border-border/60 md:bg-card md:p-2">
-          <p className="mb-1 px-2.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Sections</p>
-          <nav aria-label="Admin sections" className="flex flex-col gap-0.5">
-            {SECTIONS.map((s) => (
-              <button
-                key={s.key}
-                onClick={() => goSection(s.key)}
-                className={`flex min-h-10 w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-sm font-medium transition-colors ${
-                  section === s.key ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
-                }`}
-                aria-current={section === s.key ? 'page' : undefined}
-              >
-                <s.icon className="h-4 w-4 shrink-0" aria-hidden />
-                {s.label}
-              </button>
-            ))}
-          </nav>
-        </aside>
-
-        {/* min-w-0 (R19b lesson): keeps grid children from blowing out the now
-            narrower content column. */}
-        <div ref={contentRef} className="min-w-0 flex-1 md:h-full md:overflow-y-auto md:overscroll-contain md:pb-8 md:pr-2 ievx-scrollbar">
+      {/* The navigation rail and content pane scroll independently on desktop. */}
+      <aside className={`ievx-workspace-sidebar ievx-scrollbar hidden shrink-0 p-2.5 md:block ${sidebarCollapsed ? 'md:w-[72px]' : 'md:w-[248px]'}`}>
+        <div className="ievx-workspace-sidebar-brand">
+          <span className="ievx-workspace-brand-icon"><ShieldCheck className="size-[18px]" aria-hidden /></span>
+          {!sidebarCollapsed && <span className="ievx-workspace-brand-copy">
+            <strong>Administration</strong><small>Platform control center</small>
+          </span>}
+        </div>
+        <WorkspaceNavigation
+          title="Platform navigation"
+          items={SECTIONS}
+          active={section}
+          onSelect={goSection}
+          collapsed={sidebarCollapsed}
+          onToggleCollapse={() => setSidebarCollapsed((value) => !value)}
+        />
+        {!sidebarCollapsed && <div className="ievx-workspace-sidebar-footer">
+          <p className="text-[11px] font-semibold">Lightworld Technologies</p>
+          <p className="mt-1 text-[10px]">Secure administrative actions are logged.</p>
+        </div>}
+      </aside>
+      <div ref={contentRef} className="ievx-workspace-content ievx-scrollbar min-w-0 flex-1 px-1 pb-8 md:px-1 md:pb-8">
+        <div className="ievx-workspace-toolbar">
+          <div className="min-w-0">
+            <p className="ievx-workspace-eyebrow">Platform administration / {humanize(user.role)}</p>
+            <h1 className="ievx-workspace-toolbar-title">{SECTIONS.find((entry) => entry.key === section)?.label ?? 'Overview'}</h1>
+          </div>
+          <span className="hidden items-center gap-2 rounded-lg border border-border px-3 py-1.5 text-[11px] font-semibold text-muted-foreground sm:inline-flex">
+            <ShieldCheck className="size-4 text-primary" aria-hidden /> Restricted workspace
+          </span>
+        </div>
           <div key={section} className="ievx-view-enter">
             {section === 'overview' && <Overview />}
             {section === 'orgs' && <Orgs />}
@@ -138,7 +139,6 @@ export default function AdminConsole({ route }: { route: Route }) {
             {section === 'ops' && <Ops />}
             {section === 'sweeps' && <Sweeps />}
           </div>
-        </div>
       </div>
     </div>
   )
