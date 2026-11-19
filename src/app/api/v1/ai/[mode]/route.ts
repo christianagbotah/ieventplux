@@ -475,7 +475,9 @@ async function runStudio(body: Record<string, unknown>) {
 export async function POST(req: NextRequest, ctx: RouteContext) {
   return handle(async () => {
     const { mode } = await ctx.params
-    if (!env.aiEnabled) throw errors.unavailable('AI_DISABLED', 'The AI concierge is disabled on this deployment.')
+    // Authentication must be enforced before exposing organizer AI feature state.
+    if (mode === 'studio') await requireUser()
+    if (!env.aiEnabled) throw errors.unavailable('AI_DISABLED', 'AI generation is disabled on this deployment. Contact the platform administrator for activation.')
 
     if (mode === 'search') {
       await rateLimit(req, 'ai-search', 12, 60_000)

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Check, ChevronDown, ChevronUp, Loader2, RotateCcw, Sparkles, WandSparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -29,8 +29,22 @@ export function EventCopyCopilot({ orgId, title, category, city, dateText, onApp
   const [draft, setDraft] = useState<Draft | null>(null)
   const [generatedFor, setGeneratedFor] = useState('')
   const [error, setError] = useState('')
+  const [aiReady, setAiReady] = useState<'checking' | 'ready' | 'disabled'>('checking')
+
+  useEffect(() => {
+    let active = true
+    void api.get<{ integrations?: { key: string; configured: boolean; mode: string }[] }>('/health')
+      .then(({ integrations }) => {
+        if (!active) return
+        const ai = integrations?.find((item) => item.key === 'ai-concierge')
+        setAiReady(ai?.configured && ai.mode === 'real' ? 'ready' : 'disabled')
+      })
+      .catch(() => { if (active) setAiReady('disabled') })
+    return () => { active = false }
+  }, [])
 
   const generate = async () => {
+    if (aiReady !== 'ready') return setError('The AI provider is not available on this deployment. Continue writing manually.')
     if (title.trim().length < 3) return setError('Enter an event title first.')
     setError('')
     setBusy(true)
@@ -60,12 +74,13 @@ export function EventCopyCopilot({ orgId, title, category, city, dateText, onApp
         </Button>
       </div>
       {open && <div className="mt-4 space-y-3 border-t border-primary/10 pt-4">
+        {aiReady !== 'ready' && <p role="status" className="rounded-lg border border-amber-300/40 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-200">{aiReady === 'checking' ? 'Checking AI provider availability…' : 'AI writing is not activated in this deployment. You can still enter or edit your event summary and description manually.'}</p>}
         <p className="text-xs leading-relaxed text-muted-foreground">The writer uses the event facts you provide. Generated statements must be checked before publishing. Nothing is saved without your approval.</p>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1.5"><Label htmlFor="copy-tone">Writing style</Label><Input id="copy-tone" value={tone} maxLength={40} onChange={(e) => setTone(e.target.value)} placeholder="Professional, welcoming…" /></div>
           <div className="space-y-1.5 sm:col-span-2"><Label htmlFor="copy-notes">Confirmed event highlights</Label><Textarea id="copy-notes" rows={3} value={notes} maxLength={1100} onChange={(e) => setNotes(e.target.value)} placeholder="Speakers, programme, audience, verified venue details — only facts you can confirm." /></div>
         </div>
-        <Button type="button" disabled={busy || title.trim().length < 3} onClick={() => void generate()}>
+        <Button type="button" disabled={busy || title.trim().length < 3 || aiReady !== 'ready'} onClick={() => void generate()}>
           {busy ? <Loader2 className="mr-2 size-4 animate-spin" /> : <WandSparkles className="mr-2 size-4" />}{busy ? 'Writing from your brief…' : draft ? 'Regenerate copy' : 'Generate AI description'}
         </Button>
         {error && <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-2.5 text-xs text-destructive">{error}</p>}

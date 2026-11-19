@@ -78,3 +78,7 @@ Track active/repeat organizers, published events per active organizer, 30/90-day
 - TypeScript, lint, unit tests, isolated production build, authenticated workflow tests where safe and public health smoke pass before release.
 
 **Not yet proven:** Real external AI output, provider live money flows, full mobile browser acceptance and valuation. These remain separate tests and commercial validation, not hidden product claims.
+
+## Production AI activation status (19 November 2026)
+
+The deployed environment explicitly sets `AI_CONCIERGE_ENABLED=false`. The embedded AI content writer checks provider-readiness and displays an unavailable/manual-edit state rather than claiming working AI generation. The Growth Center remains functional using real data and labelled rules. Before enabling model-backed output, confirm provider credentials, billing, response quality, AI safety tests and rate limits; do not silently remove the live feature gate.
