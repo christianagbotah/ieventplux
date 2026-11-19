@@ -1,3 +1,4 @@
+import { createHash, randomBytes } from 'node:crypto'
 import { db } from '../../lib/db'
 import { errors } from '../api'
 import { orderReference } from '../ids'
@@ -76,7 +77,8 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
   }
 
   const ticketSubtotal = subtotal
-  const merchLines: { productId: string; qty: number; unitPriceMinor: number; lineTotalMinor: number }[] = []
+  const merchLines: { productId: string; qty: number; unitPriceMinor: number; lineTotalMinor: number;
+    skuSnapshot: string; variantSnapshot: string | null; nameSnapshot: string }[] = []
   if (souvenirs.length && (event.org.status !== 'ACTIVE' || event.org.deletedAt)) {
     throw errors.forbidden('Online souvenir sales require an approved, active organizer.')
   }
@@ -86,7 +88,8 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
     if (product.priceMinor <= 0 || product.stockTotal < 1) throw errors.conflict(`${product.name} is not for sale.`)
     const lineTotalMinor = product.priceMinor * item.qty
     if (!Number.isSafeInteger(lineTotalMinor) || subtotal + lineTotalMinor > 2_000_000_000) throw errors.badRequest('Order total is too large.')
-    merchLines.push({ productId: product.id, qty: item.qty, unitPriceMinor: product.priceMinor, lineTotalMinor })
+    merchLines.push({ productId: product.id, qty: item.qty, unitPriceMinor: product.priceMinor,
+      lineTotalMinor, skuSnapshot: product.sku, variantSnapshot: product.variantLabel, nameSnapshot: product.name })
     subtotal += lineTotalMinor
   }
 
@@ -200,8 +203,16 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
       },
     })
     for (const merch of merchLines) {
-      await tx.souvenirOrderItem.create({ data: { orderId: created.id, productId: merch.productId,
-        qty: merch.qty, unitPriceMinor: merch.unitPriceMinor, lineTotalMinor: merch.lineTotalMinor, holdStatus: 'ACTIVE' } })
+      const line = await tx.merchandiseOrderLine.create({ data: {
+        orderId: created.id, eventId: event.id, productId: merch.productId,
+        skuSnapshot: merch.skuSnapshot, nameSnapshot: merch.nameSnapshot,
+        variantSnapshot: merch.variantSnapshot, qty: merch.qty, unitPriceMinor: merch.unitPriceMinor,
+        lineTotalMinor: merch.lineTotalMinor, currency: 'GHS', status: 'HELD', reservedUntil: expiresAt,
+      } })
+      await tx.merchandiseCollectionEntitlement.create({ data: {
+        orderLineId: line.id, codeHash: createHash('sha256').update(randomBytes(32)).digest('hex'),
+        qtyPurchased: merch.qty, status: 'UNPAID',
+      } })
     }
     for (const item of validated) {
       await tx.orderItem.create({

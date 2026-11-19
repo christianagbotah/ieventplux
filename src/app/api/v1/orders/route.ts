@@ -50,12 +50,22 @@ export async function GET(req: NextRequest) {
       include: {
         event: { select: { title: true, slug: true, startsAt: true, coverImageUrl: true, city: true } },
         items: { include: { ticketType: { select: { name: true } } } },
-        souvenirItems: { include: { product: { select: { name: true, variantLabel: true, sku: true } } } },
+        merchandiseLines: { select: { id: true, qty: true, unitPriceMinor: true, lineTotalMinor: true,
+          skuSnapshot: true, variantSnapshot: true, nameSnapshot: true, status: true,
+          entitlement: { select: { status: true, qtyCollected: true, qtyRefunded: true } },
+        } },
         payments: { select: { status: true, provider: true, attemptNo: true } },
       },
       orderBy: { createdAt: 'desc' },
       take: 50,
     })
-    return jsonOk({ items: orders })
+    return jsonOk({ items: orders.map(({ merchandiseLines, ...order }) => ({ ...order,
+      souvenirItems: merchandiseLines.map((line) => ({ id: line.id, qty: line.qty,
+        unitPriceMinor: line.unitPriceMinor, lineTotalMinor: line.lineTotalMinor,
+        holdStatus: line.status === 'PAID' ? 'CONSUMED' : line.status,
+        collectedQty: line.entitlement?.qtyCollected ?? 0,
+        product: { name: line.nameSnapshot, sku: line.skuSnapshot, variantLabel: line.variantSnapshot },
+      })),
+    })) })
   })
 }

@@ -12,8 +12,8 @@ export async function GET(req: NextRequest) {
     const user = await requireUser()
     const reference = new URL(req.url).searchParams.get('reference')?.trim().toUpperCase() ?? ''
     if (!/^ORD-[A-Z0-9-]{6,52}$/.test(reference)) throw errors.badRequest('Enter a valid receipt reference.')
-    const order = await db.order.findUnique({ where: { reference }, select: { eventId: true, souvenirItems: { select: { id: true }, take: 1 } } })
-    if (!order || !order.souvenirItems.length) throw errors.notFound('No souvenir receipt was found for that reference.')
+    const order = await db.order.findUnique({ where: { reference }, select: { eventId: true, merchandiseLines: { select: { id: true }, take: 1 } } })
+    if (!order || !order.merchandiseLines.length) throw errors.notFound('No souvenir receipt was found for that reference.')
     const access = await eventOrgAccess(user.id, order.eventId, 'checkin:scan')
     if (!access.allowed) throw errors.forbidden('Only assigned event staff may look up receipt numbers.')
     return jsonOk({ token: souvenirCollectionToken(reference) }, { headers: { 'Cache-Control': 'private, no-store' } })

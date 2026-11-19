@@ -79,6 +79,10 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
     // Explicit release gate; provider credentials alone never activate charging.
     const { merchandiseChargingEnabled } = await import('@/server/souvenir-policy')
     const merchCheckoutReady = merchandiseChargingEnabled()
+      && (process.env.NODE_ENV !== 'production' || !(await (async () => {
+        const { resolveHubtelCreds, paymentsSimulatorActive } = await import('@/server/hubtel/credentials')
+        return paymentsSimulatorActive(await resolveHubtelCreds())
+      })()))
 
     // A spread of included Prisma relations accidentally exposes private media
     // metadata. Explicitly replace the relations with public projections.

@@ -28,7 +28,7 @@ export default function SouvenirCollectionView({ token }: { token?: string }) {
   const [ref, setRef] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  const [pending, setPending] = useState<{ line: Line; qty: number } | null>(null)
+  const [pending, setPending] = useState<{ line: Line; qty: number; actionId: string } | null>(null)
   const [saving, setSaving] = useState(false)
   const [revision, setRevision] = useState(0)
   const load = useCallback(async () => {
@@ -59,7 +59,7 @@ export default function SouvenirCollectionView({ token }: { token?: string }) {
     setSaving(true)
     try {
       const result = await api.post<{ collected: number; duplicate: boolean; remaining: number }>(`/souvenir-collection/${encodeURIComponent(token)}`, {
-        orderItemId: pending.line.id, qty: pending.qty, clientActionId: crypto.randomUUID(),
+        orderItemId: pending.line.id, qty: pending.qty, clientActionId: pending.actionId,
       })
       setPending(null)
       toast({ title: result.duplicate ? 'Collection already recorded' : 'Collection confirmed',
@@ -94,7 +94,7 @@ export default function SouvenirCollectionView({ token }: { token?: string }) {
           <div className="flex flex-wrap items-start justify-between gap-2"><div className="min-w-0"><p className="font-bold">{line.product.name}{line.product.variantLabel ? ` · ${line.product.variantLabel}` : ''}</p><p className="text-xs text-muted-foreground">SKU {line.product.sku} · {money(line.unitPriceMinor)} each</p></div>
             <Badge variant={line.remaining === 0 ? 'default' : 'outline'}>{line.remaining === 0 ? 'Collected' : line.collectedQty > 0 ? 'Partially collected' : 'Awaiting collection'}</Badge></div>
           <div className="grid grid-cols-3 gap-2 rounded-lg bg-secondary/50 p-3 text-center text-sm"><div><p className="text-xs text-muted-foreground">Ordered</p><p className="font-bold">{line.qty}</p></div><div><p className="text-xs text-muted-foreground">Collected</p><p className="font-bold">{line.collectedQty}</p></div><div><p className="text-xs text-muted-foreground">Remaining</p><p className="font-bold">{line.remaining}</p></div></div>
-          {receipt.canCollect && line.remaining > 0 && <Button className="min-h-11 w-full" onClick={() => setPending({ line, qty: line.remaining })}><ClipboardCheck className="mr-1.5 size-4" /> Confirm collection</Button>}
+          {receipt.canCollect && line.remaining > 0 && <Button className="min-h-11 w-full" onClick={() => setPending({ line, qty: Math.min(line.remaining, 20), actionId: crypto.randomUUID() })}><ClipboardCheck className="mr-1.5 size-4" /> Confirm collection</Button>}
           {line.remaining === 0 && <p className="flex items-center gap-1.5 text-xs text-primary"><CheckCircle2 className="size-4" /> All items in this line have been collected</p>}
         </CardContent></Card>)}
         <p className="flex items-start gap-2 text-xs text-muted-foreground"><Ticket className="mt-0.5 size-4 shrink-0" /> Merchandise confirmation never changes ticket status. Admit attendees using the separate ticket check-in screen.</p>
