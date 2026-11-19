@@ -33,3 +33,14 @@ This release adds organizer-facing configuration for ticket-sale windows, per-bu
 - Ticket reservations use a single conditional PostgreSQL `UPDATE` which simultaneously checks the remaining quota, ticket activity, sales window and the quoted price/group policy. Concurrent requests cannot claim the same last ticket. Lines are processed in stable ticket-type order to reduce deadlocks.
 - Organizer ticket settings use a row lock during quota and price edits. Unlimited → finite inventory is **not** treated as a capacity increase; prices become immutable after the first reservation/order even if issued tickets remain at zero.
 - This change is backend-only and additive: no schema migration, pricing rewrite or live payment is required. A real authenticated staging transaction/reconciliation test is still necessary before claiming a fully verified ticket-selling release.
+
+## Discount-code capacity and concurrent checkout (2026-11-19)
+
+A checkout with an event promotion now locks the `DiscountCode` row inside the
+same transaction that reserves ticket inventory, rechecks validity and price,
+and counts pending unexpired orders plus confirmed redemptions against
+`maxUses`. Different buyers cannot reserve the final promotion slot at once.
+Expired or cancelled orders stop consuming a slot. The promotion lock is taken
+after inventory locks to match fulfilment lock ordering. This does not itself
+prove payment callback idempotency or a full end-to-end paid checkout; both
+remain explicit integration acceptance gates.

@@ -34,3 +34,12 @@ export function checkoutLinePrice(unitMinor: number, qty: number, groupMinQty: n
 export function ticketQuotaRaised(previous: number, next: number): boolean {
   return previous > 0 && next === 0 || previous > 0 && next > previous
 }
+
+/** Count confirmed uses plus currently held checkouts; stale holds do not
+ * permanently consume a promotion. Caller serializes this check via PG row lock.
+ */
+export function promotionHasCapacity(usedCount: number, pendingReservations: number, maxUses: number): boolean {
+  return Number.isSafeInteger(usedCount) && Number.isSafeInteger(pendingReservations) &&
+    Number.isSafeInteger(maxUses) && usedCount >= 0 && pendingReservations >= 0 &&
+    maxUses > 0 && usedCount + pendingReservations < maxUses
+}

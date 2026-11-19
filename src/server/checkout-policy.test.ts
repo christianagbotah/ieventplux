@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { checkoutLinePrice, normalizeCheckoutLines, ticketQuotaRaised } from './checkout-policy'
+import { checkoutLinePrice, normalizeCheckoutLines, promotionHasCapacity, ticketQuotaRaised } from './checkout-policy'
 
 describe('checkout input safety', () => {
   test('accepts distinct bounded integer quantities', () => {
@@ -18,6 +18,14 @@ describe('checkout input safety', () => {
   test('group discount is based on a single ticket-type line', () => {
     expect(checkoutLinePrice(2500, 4, 3, 20)).toEqual({ grossMinor: 10000, discountMinor: 2000, lineTotalMinor: 8000 })
     expect(checkoutLinePrice(2500, 2, 3, 20).discountMinor).toBe(0)
+  })
+  test('promotion capacity counts paid redemptions and active checkout holds', () => {
+    expect(promotionHasCapacity(0, 0, 1)).toBe(true)
+    expect(promotionHasCapacity(0, 1, 1)).toBe(false)
+    expect(promotionHasCapacity(1, 0, 1)).toBe(false)
+    expect(promotionHasCapacity(1, 1, 3)).toBe(true)
+    expect(promotionHasCapacity(2, 1, 3)).toBe(false)
+    expect(promotionHasCapacity(0, -1, 1)).toBe(false)
   })
   test('switching unlimited inventory to limited is not a capacity increase', () => {
     expect(ticketQuotaRaised(0, 100)).toBe(false)
