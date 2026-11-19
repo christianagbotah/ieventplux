@@ -20,6 +20,9 @@ import { formatMoney } from '../money'
  *  - Multiple successful attempts on one order are detected and routed for resolution.
  */
 
+/** Roll back *all* claims when one tier has exhausted its quota. */
+class LatePaymentCapacityUnavailable extends Error {}
+
 export interface FulfilOutcome {
   outcome: 'FULFILLED' | 'ALREADY_PAID' | 'EXCEPTION_CAPACITY' | 'REJECTED'
   detail: string
@@ -64,13 +67,20 @@ export async function fulfilPaidOrder(params: { orderId: string; paymentAttemptI
   if (usable.length === 0) {
     // Attempt capacity re-reservation (never oversell: quota re-checked transactionally).
     const canReserve = await db.$transaction(async (tx) => {
-      for (const item of order.items) {
-        const tt = await tx.ticketType.findUnique({ where: { id: item.ticketTypeId } })
-        if (!tt) return false
-        if (tt.quota > 0 && tt.soldCount + tt.reservedCount + item.qty > tt.quota) return false
+      // Stable row order prevents deadlocks when different orders include the
+      // same tiers in different sequences. Conditional SQL is required:
+      // read-then-update can oversell under concurrent late confirmations.
+      const sorted = [...order.items].sort((a, b) => a.ticketTypeId.localeCompare(b.ticketTypeId))
+      for (const item of sorted) {
+        const claimed = await tx.$executeRaw`
+          UPDATE "TicketType"
+          SET "reservedCount" = "reservedCount" + ${item.qty}
+          WHERE "id" = ${item.ticketTypeId}
+            AND ("quota" = 0 OR "soldCount" + "reservedCount" + ${item.qty} <= "quota")
+        `
+        if (claimed !== 1) throw new LatePaymentCapacityUnavailable()
       }
-      for (const item of order.items) {
-        await tx.ticketType.update({ where: { id: item.ticketTypeId }, data: { reservedCount: { increment: item.qty } } })
+      for (const item of sorted) {
         const res = order.reservations.find((r) => r.ticketTypeId === item.ticketTypeId && r.status !== 'CONSUMED')
         if (res) {
           await tx.inventoryReservation.update({ where: { id: res.id }, data: { status: 'ACTIVE', expiresAt: new Date(now.getTime() + 60_000) } })
@@ -81,6 +91,9 @@ export async function fulfilPaidOrder(params: { orderId: string; paymentAttemptI
         }
       }
       return true
+    }).catch((error: unknown) => {
+      if (error instanceof LatePaymentCapacityUnavailable) return false
+      throw error
     })
     if (!canReserve) {
       // Capacity gone: explicit exception + refund workflow. Money stays accounted.
