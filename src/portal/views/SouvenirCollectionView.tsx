@@ -52,6 +52,7 @@ export default function SouvenirCollectionView({ token }: { token: string }) {
     finally { setBusy(false) }
   }
   return <main className="mx-auto max-w-2xl space-y-4 px-4 py-6 pb-20">
+    <div className="flex items-center justify-between gap-2"><Button variant="outline" size="sm" className="min-h-10" onClick={() => navigate('/collect')}>Scan another receipt</Button></div>
     <div className="flex items-center gap-3"><span className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-primary/10"><PackageCheck className="size-6 text-primary" /></span><div className="min-w-0"><h1 className="text-xl font-extrabold">Souvenir collection desk</h1><p className="text-xs text-muted-foreground">Authorized staff only · QR scan opens receipt, not automatic collection</p></div></div>
     {!booted || loading ? <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" /> Verifying access and loading receipt…</p>
       : !user ? <Card className="rounded-xl"><CardContent className="space-y-3 p-5"><p className="text-sm">Sign in with your event staff account to inspect and confirm this receipt.</p><Button className="min-h-11 w-full" onClick={() => navigate(`/signin?next=${encodeURIComponent(`/collect/${token}`)}`)}>Staff sign in</Button></CardContent></Card>

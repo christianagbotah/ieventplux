@@ -1,11 +1,12 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Archive, CheckCheck, Clock3, Download, Package, RefreshCcw, ShoppingBag, Users } from 'lucide-react'
+import { Archive, CheckCheck, Clock3, Download, Package, RefreshCcw, QrCode, ShoppingBag, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { api, ApiClientError } from '../api'
 import { money } from '../format'
+import { navigate } from '../router'
 
 type EventOption = { id: string; title: string; startsAt: string; status: string }
 type Product = {
@@ -60,6 +61,7 @@ export function MerchandiseReconciliationView({ orgId }: { orgId: string }) {
           <p className="mt-1 max-w-2xl text-xs leading-relaxed text-muted-foreground">Track paid souvenir orders, outstanding venue pickups and staff handovers. Ticket admission is a separate process. No unverified checkout is counted as paid.</p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button size="sm" className="min-h-10 rounded-lg" onClick={() => navigate('/collect')}><QrCode className="size-4" /> Open pickup scanner</Button>
           <Button size="sm" className="min-h-10 rounded-lg" variant="outline" onClick={refresh} disabled={loading}><RefreshCcw className="size-4" /> Refresh</Button>
           {eventId && !loading && <Button size="sm" variant="outline" className="min-h-10 rounded-lg" asChild><a href={exportHref}><Download className="size-4" /> Export CSV</a></Button>}
         </div>

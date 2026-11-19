@@ -1738,6 +1738,9 @@ function AttendeesView({ orgId }: { orgId: string }) {
           <Button variant={scanMode ? 'default' : 'outline'} className="h-11 rounded-full" onClick={() => setScanMode((s) => !s)}>
             <ScanLine className="mr-1.5 h-4 w-4" /> {scanMode ? 'Close scanner' : 'Scan tickets'}
           </Button>
+          <Button variant="outline" className="h-11 rounded-full" onClick={() => navigate('/collect')}>
+            <ShoppingBag className="mr-1.5 h-4 w-4" /> Scan souvenirs
+          </Button>
           <Button variant="outline" size="icon" className="h-11 w-11 rounded-full" aria-label="Refresh attendee list" disabled={!eventId} onClick={() => void refresh()}>
             <RefreshCw className="h-4 w-4" aria-hidden />
           </Button>

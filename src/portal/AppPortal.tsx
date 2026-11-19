@@ -30,6 +30,7 @@ const AuthView = lazy(() => import('./views/AuthView'))
 const Me = lazy(() => import('./views/Me'))
 const OrderView = lazy(() => import('./views/OrderView'))
 const SouvenirCollectionView = lazy(() => import('./views/SouvenirCollectionView'))
+const SouvenirScannerView = lazy(() => import('./views/SouvenirScannerView'))
 const BroadcastView = lazy(() => import('./views/BroadcastView'))
 const OrganizerWorkspace = lazy(() => import('./views/OrganizerWorkspace'))
 const AdminConsole = lazy(() => import('./views/AdminConsole'))
@@ -177,7 +178,7 @@ export default function AppPortal() {
       case 'order':
         return param ? <OrderView key={param} reference={param} /> : <Discover route={route} />
       case 'collect':
-        return param ? <SouvenirCollectionView key={param} token={param} /> : <Discover route={route} />
+        return param ? <SouvenirCollectionView key={param} token={param} /> : <SouvenirScannerView />
       case 'broadcast':
         return param ? <BroadcastView key={param} id={param} /> : <LiveNow />
       case 'organizer':
