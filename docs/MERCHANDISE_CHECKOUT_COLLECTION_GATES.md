@@ -38,3 +38,19 @@ Implementation increment: 19 November 2026. This is a review branch and **must n
 - Real Hubtel test transaction, end-to-end settlement and refund/restock verification; no live purchase feature enabled yet.
 - Staff reconciliation/export report and reversal workflow for mistaken handovers, with independent approvals and audit history.
 - Organizer fulfillment dashboards, collection station roster, and automated pickup notifications once provider delivery is verified.
+
+## Isolated PostgreSQL integration QA — 19 November 2026
+
+- Created a **separate PostgreSQL schema** named `ieventplux_merch_qa_20261119` on the VPS, with no changes to production application tables and no real user/payment records. `prisma db push` on that empty QA schema succeeded **without** `--accept-data-loss`.
+- Generated a forward-only SQL diff `docs/migrations/20261119_add_souvenir_order_collections.sql` comparing the verified base schema at `4630105` against this branch. It contains only `CREATE TABLE`, `CREATE INDEX`, `ALTER TABLE ... ADD CONSTRAINT` operations, and no destructive DDL. Production schema state still requires an audited comparison before applying it.
+- Added repeatable `scripts/merchandise-isolated-qa.ts` which **refuses to execute without** a URL explicitly scoped to `?schema=ieventplux_merch_qa_20261119` and an enabled QA flag.
+- Executed that synthetic integration script successfully. Tested: merchandise-only stock hold; last-in-stock rejection; internal simulated verified payment and one receipt; payment replay idempotence; partial collection; same action ID replay; overcollection rejection; sold/collected stock counters; combined ticket plus souvenir payment; free RSVP parity; two simultaneous buyers competing for the final SKU; and expiry release for unpaid stock. All test customer emails use `.invalid`; no actual provider checkout, biometric check, SMS or email delivery occurred.
+- **Discovered and fixed a production-impacting Prisma/PostgreSQL issue:** selecting `pg_advisory_xact_lock` directly returned a `void` column Prisma could not deserialize. Both signed-in buyer checkout and souvenir collection now select a normal numeric column from the advisory-lock function. The isolated integration run exercises both paths.
+- Hardened the expiry sweep to avoid overwriting paid orders with EXPIRED and to retain holds when an authoritative payment attempt has already reported SUCCESS.
+- Extracted an auditable collection service with an Order row lock and atomic line update, preserving staff authorization and explicit physical handover confirmation in the API.
+
+**Still required before live activation:** provider sandbox test/settlement validation, money receipt/refund/restock and fee-policy signoff, actual Android camera scanning, production DB backup/restore evidence, staging web route auth QA, and careful production database rollout. Preserve the default-off launch flag until these are complete.
+
+### Financial exception audit validation
+
+A further isolated synthetic scenario tested a late **paid** mixed ticket/SKU order where its hold expired and another buyer bought the last SKU. The original late payment correctly entered `EXCEPTION_REVIEW`, recorded one `RefundCase` with `createdByKind='SYSTEM'` and nullable `requestedBy`, issued no ticket or invoice, and **released the ticket hold** obtained during the failed fulfilment. This also exposed a pre-existing FK mismatch in automatic refund creation (`requestedBy='system:...'` had referenced no User) and repaired it without impersonating a buyer or organizer. The organizer Finance view now names these records **Automatic finance review** rather than showing a fabricated requester. The additive schema delta is included in the reviewed migration SQL. No live money or production customer record was involved.

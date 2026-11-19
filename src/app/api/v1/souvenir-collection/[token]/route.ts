@@ -63,34 +63,15 @@ export async function POST(req: NextRequest, ctx: Context) {
     if (!/^[a-f0-9-]{36}$/i.test(actionId)) throw errors.badRequest('A unique collection action ID is required.')
     if (body.confirm !== true) throw errors.badRequest('Confirm the customer has physically received the selected items.')
 
-    const result = await db.$transaction(async (tx) => {
-      // A serializable idempotency lock per client action prevents duplicate
-      // submission and reduces accidental re-collection from mobile retries.
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${actionId}), hashtext('souvenir-collection'))`
-      const old = await tx.souvenirCollection.findUnique({ where: { clientActionId: actionId } })
-      if (old) {
-        if (old.orderItemId !== itemId || old.qty !== qty) throw errors.conflict('Collection request ID has already been used for a different action.')
-        return { id: old.id, status: 'ALREADY_RECORDED', qty: old.qty }
-      }
-      const fresh = await tx.order.findUnique({ where: { id: order.id }, select: { status: true } })
-      if (fresh?.status !== 'PAID') throw errors.conflict('Receipt is not fully paid or is under refund review.')
-      // Atomic row update enforces no overcollection even with two different
-      // staff devices submitting at the same time.
-      const updated = await tx.$executeRaw`
-        UPDATE "SouvenirOrderItem"
-        SET "collectedQty" = "collectedQty" + ${qty as number}, "updatedAt" = NOW()
-        WHERE "id" = ${itemId} AND "orderId" = ${order.id}
-          AND "holdStatus" = 'CONSUMED' AND "collectedQty" + ${qty as number} <= "qty"
-      `
-      if (updated !== 1) throw errors.conflict('These items have already been collected, or the selected quantity exceeds what remains.')
-      const item = await tx.souvenirOrderItem.findUniqueOrThrow({ where: { id: itemId }, select: { productId: true } })
-      await tx.eventSouvenirProduct.update({ where: { id: item.productId }, data: { stockFulfilled: { increment: qty as number } } })
-      const record = await tx.souvenirCollection.create({ data: {
-        orderItemId: itemId, eventId: order.eventId, collectorId: user.id,
-        qty: qty as number, clientActionId: actionId,
-        note: typeof body.note === 'string' ? body.note.slice(0, 200) : null,
-      } })
-      return { id: record.id, status: 'COLLECTED', qty: qty as number }
+    const { collectSouvenirItem } = await import('@/server/services/souvenir-collection')
+    const result = await collectSouvenirItem({
+      orderId: order.id,
+      eventId: order.eventId,
+      orderItemId: itemId,
+      collectorId: user.id,
+      qty: qty as number,
+      clientActionId: actionId,
+      note: typeof body.note === 'string' ? body.note : null,
     })
     return jsonOk({ ...result, note: 'Souvenir handover recorded separately from ticket admission.' })
   })

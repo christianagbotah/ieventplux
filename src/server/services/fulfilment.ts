@@ -1,4 +1,5 @@
 import { db } from '../../lib/db'
+import type { Prisma } from '@prisma/client'
 import { confirmedAmountMatches } from '../hubtel/security-policy'
 import { env } from '../env'
 import { errors } from '../api'
@@ -24,6 +25,37 @@ import { formatMoney } from '../money'
 class LatePaymentCapacityUnavailable extends Error {}
 class PaidSouvenirUnavailable extends Error {}
 
+/** A verified payment that cannot be fulfilled must not strand stock holds.
+ * Called only after the Order row is locked and changed to EXCEPTION_REVIEW,
+ * inside the SAME transaction as the refund-case creation. The customer keeps
+ * a financial claim, but never gains an admission/collection entitlement. */
+async function releaseExceptionInventory(tx: Prisma.TransactionClient, orderId: string) {
+  const holds = await tx.inventoryReservation.findMany({ where: { orderId, status: 'ACTIVE' }, orderBy: { ticketTypeId: 'asc' } })
+  for (const hold of holds) {
+    const updated = await tx.inventoryReservation.updateMany({
+      where: { id: hold.id, status: 'ACTIVE' }, data: { status: 'RELEASED', releasedAt: new Date() },
+    })
+    if (!updated.count) continue
+    const stock = await tx.ticketType.updateMany({
+      where: { id: hold.ticketTypeId, reservedCount: { gte: hold.qty } },
+      data: { reservedCount: { decrement: hold.qty } },
+    })
+    if (stock.count !== 1) throw errors.conflict('Ticket reserved stock needs reconciliation before refund review.')
+  }
+  const lines = await tx.souvenirOrderItem.findMany({ where: { orderId, holdStatus: 'ACTIVE' }, orderBy: { productId: 'asc' } })
+  for (const line of lines) {
+    const updated = await tx.souvenirOrderItem.updateMany({
+      where: { id: line.id, holdStatus: 'ACTIVE' }, data: { holdStatus: 'RELEASED' },
+    })
+    if (!updated.count) continue
+    const stock = await tx.eventSouvenirProduct.updateMany({
+      where: { id: line.productId, stockReserved: { gte: line.qty } },
+      data: { stockReserved: { decrement: line.qty } },
+    })
+    if (stock.count !== 1) throw errors.conflict('Souvenir reserved stock needs reconciliation before refund review.')
+  }
+}
+
 export interface FulfilOutcome {
   outcome: 'FULFILLED' | 'ALREADY_PAID' | 'EXCEPTION_CAPACITY' | 'REJECTED'
   detail: string
@@ -45,7 +77,7 @@ export async function fulfilPaidOrder(params: { orderId: string; paymentAttemptI
     await db.refundCase.create({
       data: {
         orderId: order.id,
-        requestedBy: 'system:duplicate-payment',
+        requestedBy: null, createdByKind: 'SYSTEM',
         type: 'FULL',
         amountMinor,
         status: 'REQUESTED',
@@ -105,20 +137,24 @@ export async function fulfilPaidOrder(params: { orderId: string; paymentAttemptI
     })
     if (!canReserve) {
       // Capacity gone: explicit exception + refund workflow. Money stays accounted.
-      await db.refundCase.create({
-        data: {
-          orderId: order.id,
-          requestedBy: 'system:late-payment',
-          type: 'FULL',
-          amountMinor,
-          status: 'REQUESTED',
+      const escalated = await db.$transaction(async (tx) => {
+        const rows = await tx.$queryRaw<Array<{ status: string }>>`
+          SELECT "status" FROM "Order" WHERE "id" = ${order.id} FOR UPDATE
+        `
+        if (!rows.length || rows[0].status === 'PAID') return false
+        if (rows[0].status === 'EXCEPTION_REVIEW') return true
+        await tx.refundCase.create({ data: {
+          orderId: order.id, requestedBy: null, createdByKind: 'SYSTEM', type: 'FULL',
+          amountMinor, status: 'REQUESTED',
           reason: `Late payment after reservation expiry for order ${order.reference}; capacity exhausted.`,
-        },
+        } })
+        await tx.order.update({ where: { id: order.id }, data: {
+          status: 'EXCEPTION_REVIEW', exceptionReason: 'Late payment with exhausted capacity; routed to refund.',
+        } })
+        await releaseExceptionInventory(tx, order.id)
+        return true
       })
-      await db.order.update({
-        where: { id: order.id },
-        data: { status: 'EXCEPTION_REVIEW', exceptionReason: 'Late payment with exhausted capacity; routed to refund.' },
-      })
+      if (!escalated) return { outcome: 'ALREADY_PAID', detail: 'Another callback already completed this order.' }
       await notifyUser({
         userId: order.userId ?? '',
         type: 'PAYMENT_REVIEW',
@@ -214,16 +250,22 @@ export async function fulfilPaidOrder(params: { orderId: string; paymentAttemptI
   })
   } catch (reason) {
     if (!(reason instanceof PaidSouvenirUnavailable)) throw reason
-    await db.$transaction(async (tx) => {
-      const fresh = await tx.order.findUnique({ where: { id: order.id }, select: { status: true } })
-      if (!fresh || fresh.status === 'EXCEPTION_REVIEW' || fresh.status === 'PAID') return
+    const escalated = await db.$transaction(async (tx) => {
+      const rows = await tx.$queryRaw<Array<{ status: string }>>`
+        SELECT "status" FROM "Order" WHERE "id" = ${order.id} FOR UPDATE
+      `
+      if (!rows.length || rows[0].status === 'PAID') return false
+      if (rows[0].status === 'EXCEPTION_REVIEW') return true
       await tx.refundCase.create({ data: {
-        orderId: order.id, requestedBy: 'system:souvenir-capacity', type: 'FULL',
+        orderId: order.id, requestedBy: null, createdByKind: 'SYSTEM', type: 'FULL',
         amountMinor, status: 'REQUESTED',
         reason: `Payment confirmed after souvenir stock was released or exhausted for ${order.reference}. Needs refund or inventory resolution.`,
       } })
       await tx.order.update({ where: { id: order.id }, data: { status: 'EXCEPTION_REVIEW', exceptionReason: 'Paid souvenir unavailable; refund review required.' } })
+      await releaseExceptionInventory(tx, order.id)
+      return true
     })
+    if (!escalated) return { outcome: 'ALREADY_PAID', detail: 'Another callback already completed this order.' }
     if (order.userId) await notifyUser({
       userId: order.userId, type: 'PAYMENT_REVIEW', title: 'Payment under review — souvenir inventory',
       body: `Your payment for ${order.event.title} was received, but a souvenir is no longer available. Our team will resolve the order or refund it.`,

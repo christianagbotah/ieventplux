@@ -875,7 +875,8 @@ model DeviceSession {
 model RefundCase {
   id               String    @id @default(cuid())
   orderId          String
-  requestedBy      String
+  requestedBy      String?  // nullable only for legitimate system-created financial exceptions
+  createdByKind    String   @default("USER") // USER | SYSTEM, never inferred from null alone
   type             String    @default("FULL") // FULL | PARTIAL | MANUAL_ONLY (unsupported by provider → tracked)
   amountMinor      Int
   status           String    @default("REQUESTED") // REQUESTED|APPROVED|PROCESSED|FAILED|MANUAL_TRACKED|REJECTED
@@ -888,7 +889,7 @@ model RefundCase {
   createdAt        DateTime  @default(now())
 
   order     Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  requester User  @relation("RefundRequester", fields: [requestedBy], references: [id])
+  requester User? @relation("RefundRequester", fields: [requestedBy], references: [id], onDelete: Restrict)
 
   @@index([status])
 }

@@ -2402,7 +2402,7 @@ function FinanceView({ orgId, role }: { orgId: string; role: string }) {
   const [data, setData] = useState<{
     summary: { grossSalesMinor: number; platformFeesMinor: number; netSalesMinor: number; pendingSettlementMinor: number; settlementHoldsMinor: number; availablePayoutMinor: number; payoutsInFlightMinor: number; payoutsCompletedMinor: number }
     journals: { id: string; memo: string; refType: string; createdAt: string; entries: { direction: string; amountMinor: number; account: { code: string; type: string; orgId?: string | null } }[] }[]
-    refundCases: { id: string; type: string; status: string; amountMinor: number; reason: string; resolutionNote?: string | null; createdAt: string; requesterIsStaff: boolean; order: { reference: string; status: string; event: { title: string } }; requester: { id: string; displayName: string; email: string } }[]
+    refundCases: { id: string; type: string; status: string; amountMinor: number; reason: string; resolutionNote?: string | null; createdAt: string; createdByKind: 'USER' | 'SYSTEM'; requesterIsStaff: boolean; order: { reference: string; status: string; event: { title: string } }; requester: { id: string; displayName: string; email: string } | null }[]
   } | null>(null)
   const [payouts, setPayouts] = useState<{ id: string; amountMinor: number; status: string; createdAt: string; failureReason?: string | null }[] | null>(null)
   const [payoutForm, setPayoutForm] = useState({ amount: '', momo: '', name: '' })
@@ -2569,7 +2569,7 @@ function FinanceView({ orgId, role }: { orgId: string; role: string }) {
                     <span className="font-mono">{rc.order.reference}</span> · {money(rc.amountMinor)} · {relative(rc.createdAt)}
                   </p>
                   <p className="mt-1">
-                    <span className="font-medium">{rc.requesterIsStaff ? 'Opened by staff' : 'Buyer request'}</span> · {rc.requester.displayName} — “{rc.reason}”
+                    <span className="font-medium">{rc.createdByKind === 'SYSTEM' ? 'Automatic finance review' : rc.requesterIsStaff ? 'Opened by staff' : 'Buyer request'}</span> · {rc.requester?.displayName ?? 'iEventPlux system'} — “{rc.reason}”
                   </p>
                   {rc.status === 'APPROVED' && <p className="mt-1 text-primary">Approved — the platform finance desk executes the money reversal.</p>}
                   {rc.status === 'REJECTED' && rc.resolutionNote && <p className="mt-1 text-amber-700 dark:text-amber-400">Declined: “{rc.resolutionNote}”</p>}

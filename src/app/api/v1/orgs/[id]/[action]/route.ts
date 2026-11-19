@@ -59,12 +59,12 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
       // Buyer-requested vs org-opened: a requester who holds a membership in THIS
       // org opened the case on the buyer's behalf (or as goodwill) — computed once,
       // in the same round trip, instead of guessing on the client.
-      const requesterIds = refundCases.map((rc) => rc.requester.id).filter((rid, i, arr) => arr.indexOf(rid) === i)
+      const requesterIds = refundCases.map((rc) => rc.requester?.id).filter((rid): rid is string => Boolean(rid))
       const staffRequesters = requesterIds.length
         ? await db.membership.findMany({ where: { orgId: id, userId: { in: requesterIds } }, select: { userId: true } })
         : []
       const staffIds = new Set(staffRequesters.map((m) => m.userId))
-      return jsonOk({ summary, journals, invoices, refundCases: refundCases.map((rc) => ({ ...rc, requesterIsStaff: staffIds.has(rc.requester.id) })) })
+      return jsonOk({ summary, journals, invoices, refundCases: refundCases.map((rc) => ({ ...rc, requesterIsStaff: rc.requester ? staffIds.has(rc.requester.id) : false })) })
     }
 
     if (action === 'payouts') {

@@ -113,6 +113,7 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
     // Lock identity to prevent two checkouts for the same buyer from both
     // reading the old per-buyer total and reserving past the configured cap.
     if (input.userId) {
+      // Both revisions return a numeric result, not PostgreSQL void.
       await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtext(${event.id}), hashtext(${input.userId}))`
     }
     const currentEvent = await tx.event.findUnique({ where: { id: event.id }, select: { status: true, deletedAt: true } })
@@ -223,9 +224,17 @@ export async function releaseExpiredReservations(): Promise<{ released: number; 
   const orderIds = new Set<string>()
   for (const res of expired) {
     await db.$transaction(async (tx) => {
-      const fresh = await tx.inventoryReservation.findUnique({ where: { id: res.id } })
+      const fresh = await tx.inventoryReservation.findUnique({ where: { id: res.id },
+        include: { order: { select: { status: true, payments: { select: { status: true } } } } },
+      })
       if (!fresh || fresh.status !== 'ACTIVE' || fresh.expiresAt > new Date()) return
-      await tx.inventoryReservation.update({ where: { id: res.id }, data: { status: 'EXPIRED', releasedAt: now } })
+      if (!['DRAFT', 'PENDING_PAYMENT', 'EXPIRED', 'CANCELLED'].includes(fresh.order.status) ||
+          fresh.order.payments.some((attempt) => attempt.status === 'SUCCESS')) return
+      const changed = await tx.inventoryReservation.updateMany({
+        where: { id: res.id, status: 'ACTIVE', expiresAt: { lt: new Date() } },
+        data: { status: 'EXPIRED', releasedAt: now },
+      })
+      if (!changed.count) return
       await tx.ticketType.update({ where: { id: res.ticketTypeId }, data: { reservedCount: { decrement: fresh.qty } } })
       orderIds.add(res.orderId)
       released += 1
@@ -257,8 +266,14 @@ export async function releaseExpiredReservations(): Promise<{ released: number; 
     if (['DRAFT', 'PENDING_PAYMENT'].includes(order.status) && order.expiresAt && order.expiresAt < now) {
       const hasSuccess = order.payments.some((p) => p.status === 'SUCCESS')
       if (!hasSuccess) {
-        await db.order.update({ where: { id: order.id }, data: { status: 'EXPIRED' } })
-        ordersExpired += 1
+        // Never overwrite a concurrent successful payment/fulfilment. The
+        // sweep's earlier read can be stale after a provider callback.
+        const transition = await db.order.updateMany({
+          where: { id: order.id, status: { in: ['DRAFT', 'PENDING_PAYMENT'] }, expiresAt: { lt: new Date() },
+            payments: { none: { status: 'SUCCESS' } } },
+          data: { status: 'EXPIRED' },
+        })
+        ordersExpired += transition.count
       }
     }
   }
