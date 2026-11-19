@@ -25,6 +25,8 @@ import { PlayerSim } from '../components/PlayerSim'
 import { EmptyState } from '../components/EventCard'
 import { scanMayQueueOffline } from '../lib/checkin-policy'
 import { OrganizationIdentityFields, emptyOrgFields } from '../components/OrganizationIdentityFields'
+import { OrganizerTypeDetails } from '../components/OrganizerTypeDetails'
+import { ORGANIZER_TYPE_CONFIG, organizerType, type OrganizerType, type ProfileDetails } from '@/lib/organization-types'
 import { VerificationDocuments } from '../components/VerificationDocuments'
 import { WorkspaceNavigation } from '../components/WorkspaceNavigation'
 import { WorkspaceMetric } from '../components/WorkspaceMetric'
@@ -2759,6 +2761,8 @@ function SettingsView({ orgId, role }: { orgId: string; role: string }) {
   const [verification, setVerification] = useState<{ status: string; notes?: string | null } | null>(null)
   const [evidence, setEvidence] = useState('')
   const [form, setForm] = useState({ ...emptyOrgFields, payoutMomo: '', payoutName: '' })
+  const [orgType, setOrgType] = useState<OrganizerType | null>(null)
+  const [profileDetails, setProfileDetails] = useState<ProfileDetails>({})
   const [logoFile, setLogoFile] = useState<File | null>(null)
   const [logoUrl, setLogoUrl] = useState<string | null>(null)
   const [loadingProfile, setLoadingProfile] = useState(true)
@@ -2774,9 +2778,11 @@ function SettingsView({ orgId, role }: { orgId: string; role: string }) {
       tagline?: string | null; description?: string | null; city?: string | null;
       address?: string | null; contactEmail?: string | null; contactPhone?: string | null;
       website?: string | null; mapsUrl?: string | null; latitude?: number | null; longitude?: number | null;
-      socialLinks?: Record<string, string>; logoUrl?: string | null;
+      socialLinks?: Record<string, string>; logoUrl?: string | null; orgType?: string; profileDetails?: ProfileDetails;
     } }>('/orgs/' + orgId + '/settings').then(({ org }) => {
       if (cancelled) return
+      setOrgType(organizerType(org.orgType))
+      setProfileDetails(org.profileDetails ?? {})
       setForm((previous) => ({
         ...previous,
         tagline: org.tagline ?? '', description: org.description ?? '', city: org.city ?? '',
@@ -2811,6 +2817,7 @@ function SettingsView({ orgId, role }: { orgId: string; role: string }) {
         address: form.address, contactEmail: form.contactEmail, contactPhone: form.contactPhone,
         website: form.website, mapsUrl: form.mapsUrl,
         latitude: form.latitude, longitude: form.longitude, socialLinks: form.socialLinks,
+        ...(orgType ? { profileDetails } : {}),
         payoutMomoNumber: form.payoutMomo || undefined,
         payoutRecipientName: form.payoutName || undefined,
       })
@@ -2821,7 +2828,7 @@ function SettingsView({ orgId, role }: { orgId: string; role: string }) {
         setLogoUrl(response.logoUrl + '?v=' + Date.now())
         setLogoFile(null)
       }
-      toast({ title: 'Organization profile saved', description: 'Saved values and public links are updated.' })
+      toast({ title: 'Organizer profile saved', description: 'Saved values and public links are updated.' })
     } catch (err) {
       toast({ description: err instanceof ApiClientError ? err.message : 'Could not save.', variant: 'destructive' })
     }
@@ -2860,11 +2867,20 @@ function SettingsView({ orgId, role }: { orgId: string; role: string }) {
       </Card>
 
       <Card className="rounded-2xl">
-        <CardHeader className="pb-2"><CardTitle className="text-base">Organization profile</CardTitle></CardHeader>
+        <CardHeader className="pb-2"><CardTitle className="text-base">Organizer profile</CardTitle></CardHeader>
         <CardContent className="space-y-4">
           {loadingProfile ? <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading saved organization details…</div> : (
             <>
-              <OrganizationIdentityFields value={form} onChange={(details) => setForm((previous) => ({ ...previous, ...details }))} logoUrl={logoUrl} logoFile={logoFile} onLogoFile={setLogoFile} />
+              {orgType && (
+                <>
+                  <div className="rounded-xl bg-secondary/50 p-3 text-sm">
+                    <span className="font-semibold">Profile type: {ORGANIZER_TYPE_CONFIG[orgType].label}</span>
+                    <p className="mt-1 text-xs text-muted-foreground">Type-specific information can be edited here. Changing the organizer category requires administrative review.</p>
+                  </div>
+                  <OrganizerTypeDetails type={orgType} value={profileDetails} onChange={setProfileDetails} />
+                </>
+              )}
+              <OrganizationIdentityFields value={form} orgType={orgType ?? undefined} onChange={(details) => setForm((previous) => ({ ...previous, ...details }))} logoUrl={logoUrl} logoFile={logoFile} onLogoFile={setLogoFile} />
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="space-y-1.5"><Label htmlFor="momo">Payout MoMo number</Label><Input id="momo" value={form.payoutMomo} onChange={(e) => setForm((previous) => ({ ...previous, payoutMomo: e.target.value }))} inputMode="tel" placeholder="+233..." /></div>
                 <div className="space-y-1.5"><Label htmlFor="pname">Payout recipient name</Label><Input id="pname" value={form.payoutName} onChange={(e) => setForm((previous) => ({ ...previous, payoutName: e.target.value }))} /></div>

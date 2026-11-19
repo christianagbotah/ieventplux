@@ -119,7 +119,8 @@ model Organization {
   description   String?
   logoUrl       String?
   coverUrl      String?
-  orgType       String    @default("ORGANIZATION") // CHURCH | MINISTRY | ASSOCIATION | COMPANY | INDIVIDUAL
+  orgType       String    @default("ORGANIZATION") // CHURCH | SCHOOL | MINISTRY | ASSOCIATION | COMPANY | INDIVIDUAL
+  profileDetails String   @default("{}") // Category-specific organizer profile metadata (validated JSON)
   country       String    @default("GH")
   city          String?
   address       String?

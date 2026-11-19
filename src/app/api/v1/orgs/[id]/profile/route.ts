@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { handle, jsonOk, errors } from '@/server/api'
 import { db } from '@/lib/db'
 import { getSession } from '@/server/auth'
+import { publicOrganizerDetails } from '@/server/org-profile-details'
 
 /** GET /api/v1/orgs/[slug]/profile — public organizer profile + public events only. */
 export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
@@ -24,7 +25,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
     return jsonOk({
       org: {
         id: org.id, name: org.name, slug: org.slug, tagline: org.tagline, description: org.description,
-        logoUrl: org.logoUrl, coverUrl: org.coverUrl, orgType: org.orgType, city: org.city, country: org.country,
+        logoUrl: org.logoUrl, coverUrl: org.coverUrl, orgType: org.orgType, profileDetails: publicOrganizerDetails(org.profileDetails, org.orgType), city: org.city, country: org.country,
         website: org.website, contactEmail: org.contactEmail, contactPhone: org.contactPhone,
         address: org.address, mapsUrl: org.mapsUrl, latitude: org.latitude, longitude: org.longitude,
         socialLinks: JSON.parse(org.socialLinks || '{}'),

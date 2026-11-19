@@ -25,10 +25,10 @@ export function kycRequirements(orgType: string, documents: readonly IdentityEvi
     { key: 'ID_BACK', label: 'Government ID – back', complete: id.some((doc) => doc.side === 'BACK') },
     { key: 'SELFIE', label: 'Identity selfie', complete: documents.some((doc) => doc.kind === 'SELFIE') },
   ]
-  if (orgType === 'COMPANY') {
+  if (orgType === 'COMPANY' || orgType === 'SCHOOL') {
     requirements.push({
       key: 'REGISTRATION',
-      label: 'Company registration document',
+      label: orgType === 'SCHOOL' ? 'School registration / authorization document' : 'Company registration document',
       complete: documents.some((doc) => doc.kind === 'BUSINESS_REGISTRATION'),
     })
   }

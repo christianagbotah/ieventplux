@@ -10,6 +10,7 @@ import { navigate } from '../router'
 import { EventCard, EventCardSkeleton, EmptyState, type EventCardData } from '../components/EventCard'
 import { usePortal } from '../store'
 import { relative } from '../format'
+import { ORGANIZER_TYPE_CONFIG, organizerType, type ProfileDetails } from '@/lib/organization-types'
 
 interface OrgProfilePayload {
   org: {
@@ -21,6 +22,7 @@ interface OrgProfilePayload {
     logoUrl?: string | null
     coverUrl?: string | null
     orgType: string
+    profileDetails?: ProfileDetails
     city?: string | null
     country: string
     website?: string | null
@@ -121,7 +123,7 @@ export default function OrgProfile({ slug }: { slug: string }) {
                 {data.org.verified && <Badge className="gap-1 bg-primary text-primary-foreground"><ShieldCheck className="h-3 w-3" /> Verified</Badge>}
               </div>
               <p className="mt-1 text-sm text-muted-foreground">
-                {data.org.tagline ?? data.org.orgType.toLowerCase()}
+                {data.org.tagline ?? ORGANIZER_TYPE_CONFIG[organizerType(data.org.orgType) ?? 'ASSOCIATION'].shortLabel}
                 {data.org.city && <> · <MapPin className="inline h-3.5 w-3.5" aria-hidden /> {data.org.city}</>}
                 {' '}· <Users className="inline h-3.5 w-3.5" aria-hidden /> {data.followers.toLocaleString()} followers
               </p>
@@ -171,6 +173,24 @@ export default function OrgProfile({ slug }: { slug: string }) {
         {data.org.description && (
           <Card className="mt-6 rounded-2xl">
             <CardContent className="p-5 text-sm leading-relaxed text-foreground/90">{data.org.description}</CardContent>
+          </Card>
+        )}
+
+        {organizerType(data.org.orgType) && data.org.profileDetails && Object.entries(data.org.profileDetails).some(([key, value]) => key !== 'registrationNumber' && Boolean(value)) && (
+          <Card className="mt-4 rounded-2xl">
+            <CardContent className="p-5">
+              <h2 className="mb-3 text-sm font-semibold">{ORGANIZER_TYPE_CONFIG[organizerType(data.org.orgType)!].detailsTitle}</h2>
+              <dl className="grid gap-3 text-sm sm:grid-cols-2">
+                {ORGANIZER_TYPE_CONFIG[organizerType(data.org.orgType)!].fields
+                  .filter((field) => field.key !== 'registrationNumber' && data.org.profileDetails?.[field.key])
+                  .map((field) => (
+                    <div key={field.key}>
+                      <dt className="text-xs text-muted-foreground">{field.label}</dt>
+                      <dd className="font-medium">{data.org.profileDetails?.[field.key]}</dd>
+                    </div>
+                  ))}
+              </dl>
+            </CardContent>
           </Card>
         )}
 

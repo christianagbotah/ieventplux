@@ -18,7 +18,9 @@ const LABELS: Record<KycKind, string> = {
   GOVERNMENT_ID: 'Government-issued ID',
   SELFIE: 'Selfie for manual identity review',
 }
-const labelFor = (doc: Document) => doc.kind === 'GOVERNMENT_ID'
+const labelFor = (doc: Document, orgType = '') => doc.kind === 'BUSINESS_REGISTRATION' && orgType === 'SCHOOL'
+  ? 'School registration / authorization'
+  : doc.kind === 'GOVERNMENT_ID'
   ? 'Government ID — ' + (doc.side === 'BACK' ? 'back' : 'front' + (doc.side ? '' : ' (earlier upload)'))
   : LABELS[doc.kind]
 
@@ -35,7 +37,7 @@ export function VerificationDocuments({ orgId, reviewerMode = false, onSubmitted
   const [nonce, setNonce] = useState(0)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
-  const [kind, setKind] = useState<KycKind>('BUSINESS_REGISTRATION')
+  const [kind, setKind] = useState<KycKind>('GOVERNMENT_ID')
   const [file, setFile] = useState<File | null>(null)
   const [frontFile, setFrontFile] = useState<File | null>(null)
   const [backFile, setBackFile] = useState<File | null>(null)
@@ -48,6 +50,7 @@ export function VerificationDocuments({ orgId, reviewerMode = false, onSubmitted
       const payload = await api.get<{ documents: Document[]; orgType: string; status: string; reviewNote?: string | null }>('/orgs/' + orgId + '/kyc')
       setDocuments(payload.documents)
       setOrgType(payload.orgType)
+      setKind((previous) => payload.orgType === 'INDIVIDUAL' && previous === 'BUSINESS_REGISTRATION' ? 'GOVERNMENT_ID' : previous)
       setStatus(payload.status)
       setReviewNote(payload.reviewNote ?? null)
       setLoadError('')
@@ -61,6 +64,7 @@ export function VerificationDocuments({ orgId, reviewerMode = false, onSubmitted
 
   const requirements = useMemo(() => kycRequirements(orgType, documents), [orgType, documents])
   const missing = requirements.filter((req) => !req.complete)
+  const isPersonal = orgType === 'INDIVIDUAL'
   const fileUrl = (doc: Document) => '/api/v1/orgs/' + encodeURIComponent(orgId) + '/kyc/' + encodeURIComponent(doc.id)
 
   const upload = async (selected: File | null, side?: IdentityDocumentSide) => {
@@ -129,15 +133,15 @@ export function VerificationDocuments({ orgId, reviewerMode = false, onSubmitted
                   <div key={doc.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card p-3">
                     {doc.kind === 'SELFIE' ? <Camera className="size-4 shrink-0 text-muted-foreground" aria-hidden /> : <FileText className="size-4 shrink-0 text-muted-foreground" aria-hidden />}
                     <div className="min-w-[110px] flex-1">
-                      <p className="truncate text-xs font-semibold">{labelFor(doc)}</p>
+                      <p className="truncate text-xs font-semibold">{labelFor(doc, orgType)}</p>
                       <p className="truncate text-[11px] text-muted-foreground">{doc.filename} · {Math.ceil(doc.size / 1024).toLocaleString()} KB · {doc.mime === 'application/pdf' ? 'PDF' : 'Image'}</p>
                     </div>
-                    <Button type="button" size="sm" variant="outline" className="h-8 gap-1.5" onClick={() => setPreview(doc)} aria-label={'View ' + labelFor(doc)}>
+                    <Button type="button" size="sm" variant="outline" className="h-8 gap-1.5" onClick={() => setPreview(doc)} aria-label={'View ' + labelFor(doc, orgType)}>
                       <Eye className="size-3.5" aria-hidden /> View
                     </Button>
-                    <a href={fileUrl(doc)} className="inline-flex h-8 items-center gap-1 rounded-md border border-border px-2.5 text-xs hover:bg-secondary" aria-label={'Download ' + labelFor(doc)}><Download className="size-3.5" aria-hidden /> <span className="hidden sm:inline">Download</span></a>
+                    <a href={fileUrl(doc)} className="inline-flex h-8 items-center gap-1 rounded-md border border-border px-2.5 text-xs hover:bg-secondary" aria-label={'Download ' + labelFor(doc, orgType)}><Download className="size-3.5" aria-hidden /> <span className="hidden sm:inline">Download</span></a>
                     {!reviewerMode && status !== 'APPROVED' && (
-                      <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => void remove(doc.id)} aria-label={'Remove ' + labelFor(doc)} className="h-8 px-2 text-destructive"><Trash2 className="size-3.5" aria-hidden /></Button>
+                      <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => void remove(doc.id)} aria-label={'Remove ' + labelFor(doc, orgType)} className="h-8 px-2 text-destructive"><Trash2 className="size-3.5" aria-hidden /></Button>
                     )}
                   </div>
                 ))}
@@ -149,9 +153,10 @@ export function VerificationDocuments({ orgId, reviewerMode = false, onSubmitted
       {!reviewerMode && !loading && !loadError && status !== 'APPROVED' && (
         <div className="space-y-3 rounded-xl border border-border p-4">
           <p className="text-sm font-semibold">Upload verification evidence</p>
+          {isPersonal && <p className="text-xs text-muted-foreground">Personal organizers only need a government ID (front and back) and a selfie; business registration is not required.</p>}
           <label htmlFor="kyc-kind" className="block text-xs font-semibold">Document category</label>
           <select id="kyc-kind" value={kind} onChange={(e) => { setKind(e.target.value as KycKind); setFile(null); setFrontFile(null); setBackFile(null) }} className="block h-10 w-full rounded-lg border border-border bg-background px-3 text-sm">
-            {(Object.keys(LABELS) as KycKind[]).map((value) => <option key={value} value={value}>{LABELS[value]}</option>)}
+            {(Object.keys(LABELS) as KycKind[]).filter((value) => !(isPersonal && value === 'BUSINESS_REGISTRATION')).map((value) => <option key={value} value={value}>{value === 'BUSINESS_REGISTRATION' && orgType === 'SCHOOL' ? 'School registration / authorization' : LABELS[value]}</option>)}
           </select>
           {kind === 'GOVERNMENT_ID' ? (
             <div className="grid gap-3 sm:grid-cols-2">

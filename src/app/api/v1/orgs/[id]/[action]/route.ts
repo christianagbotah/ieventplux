@@ -3,6 +3,8 @@ import { handle, jsonOk, requireUser, readJson, errors, jsonList, pagination, sa
 import { db } from '@/lib/db'
 import { membershipFor, orgCan, ORG_ROLES } from '@/server/permissions'
 import { organizationFields } from '@/server/org-metadata'
+import { organizerType } from '@/lib/organization-types'
+import { normalizeOrganizerDetails, readOrganizerDetails } from '@/server/org-profile-details'
 import { parseEvidence } from '@/server/kyc-storage'
 
 type RouteContext = { params: Promise<{ id: string; action: string }> }
@@ -24,13 +26,13 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
     if (action === 'settings') {
       const org = await db.organization.findUnique({
         where: { id }, select: {
-          id: true, name: true, slug: true, tagline: true, description: true,
+          id: true, name: true, slug: true, orgType: true, profileDetails: true, tagline: true, description: true,
           logoUrl: true, city: true, address: true, contactEmail: true, contactPhone: true,
           website: true, mapsUrl: true, latitude: true, longitude: true, socialLinks: true,
         },
       })
       if (!org) throw errors.notFound('Organization unavailable.')
-      return jsonOk({ org: { ...org, socialLinks: JSON.parse(org.socialLinks || '{}') } })
+      return jsonOk({ org: { ...org, profileDetails: readOrganizerDetails(org.profileDetails, org.orgType), socialLinks: JSON.parse(org.socialLinks || '{}') } })
     }
 
     if (action === 'team') {
@@ -260,6 +262,12 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
       if (body.contactEmail !== undefined) data.contactEmail = sanitizeText(body.contactEmail, 160) || null
       if (body.contactPhone !== undefined) data.contactPhone = sanitizeText(body.contactPhone, 24) || null
       Object.assign(data, organizationFields(body))
+      if (body.profileDetails !== undefined) {
+        const savedOrg = await db.organization.findUnique({ where: { id }, select: { orgType: true } })
+        const type = organizerType(savedOrg?.orgType)
+        if (!type) throw errors.badRequest('Organizer type is not supported. Contact support to update the organizer classification.')
+        data.profileDetails = normalizeOrganizerDetails(body.profileDetails, type)
+      }
       if (body.coverUrl !== undefined && String(body.coverUrl).startsWith('/')) data.coverUrl = String(body.coverUrl)
       // Payout destination changes are audited (restriction documented in PAYMENTS_AND_SETTLEMENTS.md).
       if (body.payoutMomoNumber !== undefined) {

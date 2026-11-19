@@ -59,6 +59,16 @@ removed from `/var/webuzo-data/nginx/custom/domains/ieventplux.lightworldtech.co
 structured validation errors. No demo-user seed was run. Registration remains separate
 from payment/financial launch certification.
 
+**Organizer-type-specific onboarding (2026-11-19):** Personal, Church, School, Business,
+Ministry and Association each have tailored profile forms. `Organization.profileDetails`
+is a separate validated JSON field with an additive schema change in
+`scripts/migrations/20261119_organizer_profile_details.sql`. This migration must be
+applied to production PostgreSQL before deploying code that queries the new column.
+Existing records default to `{}`; private business registration numbers are never
+returned by public profile endpoints. The editing screen uses the saved type and
+specific fields. Only institutional types requiring documents are checked for
+registration evidence, while personal users provide a government ID and selfie.
+
 **Email verification is not yet configured on the VPS:** SMTP is currently unavailable,
 so registration must accurately tell users that verification emails cannot be delivered.
 Do not imply a verification email was sent until a real SMTP delivery test has passed.
