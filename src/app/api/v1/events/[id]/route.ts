@@ -16,8 +16,10 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
         venue: true,
         series: true,
         agenda: { orderBy: [{ sortOrder: 'asc' }, { startsAt: 'asc' }] },
+        contributors: { where: { published: true }, orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }], take: 150 },
+        souvenirs: { where: { active: true }, orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }], take: 150 },
         ticketTypes: { where: { active: true }, orderBy: { sortOrder: 'asc' } },
-        media: { where: { kind: { in: ['GALLERY', 'CLIP'] } } },
+        media: { where: { kind: { in: ['GALLERY', 'CLIP', 'PROGRAMME'] }, status: 'READY' } },
         updates: { orderBy: { createdAt: 'desc' }, take: 10 },
         // Public event detail never needs ingest URLs, stream-key hashes,
         // recording origins, or other internal broadcaster credentials.
@@ -85,7 +87,13 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
         tags: parseTags(event.tags),
         venueId: redactVenue ? null : event.venueId,
         directionsUrl: redactVenue ? null : event.directionsUrl,
-        gallery: media.map((item) => ({ id: item.id, url: item.url, caption: item.caption })),
+        gallery: media.filter((item) => item.kind !== 'PROGRAMME').map((item) => ({ id: item.id, url: item.url, caption: item.caption })),
+        programmes: (event.visibility === 'INVITE_ONLY' && !isOrgMember && !inviteApproved ? [] : media.filter((item) => item.kind === 'PROGRAMME')).map((item) => ({
+          id: item.id, title: item.caption || 'Event programme', downloadUrl: `/api/v1/events/${event.id}/programmes/${item.id}`,
+        })),
+        souvenirs: event.souvenirs.map((p) => ({
+          ...p, available: Math.max(0, p.stockTotal - p.stockSold - p.stockReserved), onlineOrderingEnabled: false,
+        })),
         broadcasts,
         venue: venueSafe,
         feeNote: event.ticketTypes.some((t) => t.priceMinor > 0) ? 'Platform commission is borne by the organizer.' : null,

@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { CalendarDays, CalendarPlus, Clock, MapPin, Monitor, Share2, Heart, Bookmark, Flag, Users, ChevronLeft, Info, ExternalLink, Accessibility, Ticket, ShieldCheck, Church, Hourglass, Repeat, Star, Bell, BellRing, ScanSearch, TriangleAlert, Loader2 } from 'lucide-react'
+import { CalendarDays, CalendarPlus, Clock, MapPin, Mic2, ShoppingBag, FileText, Monitor, Share2, Heart, Bookmark, Flag, Users, ChevronLeft, Info, ExternalLink, Accessibility, Ticket, ShieldCheck, Church, Hourglass, Repeat, Star, Bell, BellRing, ScanSearch, TriangleAlert, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -15,6 +15,7 @@ import { navigate } from '../router'
 import { usePortal } from '../store'
 import { money, dateLong, timeRange, relative, initials, humanize } from '../format'
 import { EmptyState } from '../components/EventCard'
+import { OrganizerEventCover } from '../components/OrganizerEventCover'
 import LiveEngagement from '../components/LiveEngagement'
 import ReviewsPanel from '../components/ReviewsPanel'
 import UpdatesPanel from '../components/UpdatesPanel'
@@ -64,6 +65,9 @@ interface EventDetailPayload {
     refundPolicy?: string | null
     directionsUrl?: string | null
     agenda: { id: string; title: string; startsAt: string; endsAt?: string | null; speaker?: string | null; description?: string | null }[]
+    contributors?: { id: string; name: string; role: string; topic?: string | null; bio?: string | null; photoUrl?: string | null; startsAt?: string | null }[]
+    programmes?: { id: string; title: string; downloadUrl: string }[]
+    souvenirs?: { id: string; name: string; variantLabel?: string | null; sku: string; priceMinor: number; imageUrl?: string | null; description?: string | null; available: number; onlineOrderingEnabled: boolean }[]
     ticketTypes: TicketType[]
     updates: { id: string; title: string; body: string; important: boolean; createdAt: string }[]
     broadcasts: { id: string; title: string; status: string; accessPolicy: string; recordingStatus: string }[]
@@ -589,6 +593,58 @@ export default function EventDetail({ slug }: { slug: string }) {
                           <img src={g.url} alt={g.caption ?? 'Event photo'} className="aspect-square w-full object-cover transition-transform duration-300 hover:scale-105" loading="lazy" />
                           {g.caption && <figcaption className="truncate p-2 text-xs text-muted-foreground">{g.caption}</figcaption>}
                         </figure>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {!!event.contributors?.length && (
+                <Card className="rounded-2xl" id="lineup">
+                  <CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-base"><Mic2 className="size-4 text-primary" /> Artists, invited guests & speakers</CardTitle></CardHeader>
+                  <CardContent className="grid gap-3 sm:grid-cols-2">
+                    {event.contributors.map((person) => (
+                      <article key={person.id} className="grid min-w-0 grid-cols-[64px_minmax(0,1fr)] gap-x-3 gap-y-2 rounded-xl border border-border/70 bg-secondary/20 p-3">
+                        <OrganizerEventCover src={person.photoUrl} title={person.name} />
+                        <div className="min-w-0 self-center">
+                          <h3 className="text-sm font-bold leading-snug [overflow-wrap:break-word]">{person.name}</h3>
+                          <p className="mt-1 text-xs font-medium text-primary">{({ HEADLINER: 'Headline artist', ARTIST: 'Performer', MAIN_SPEAKER: 'Main speaker', ASSISTANT_SPEAKER: 'Assistant speaker', GUEST_SPEAKER: 'Invited speaker', SPECIAL_GUEST: 'Special guest', PANELIST: 'Panelist', MC: 'Master of ceremonies', DJ: 'DJ', HOST: 'Host' } as Record<string, string>)[person.role] ?? humanize(person.role)}</p>
+                        </div>
+                        {person.topic && <p className="col-span-2 text-sm font-semibold">Topic / appearance: {person.topic}</p>}
+                        {person.startsAt && <p className="col-span-2 text-xs text-muted-foreground">Scheduled: {new Date(person.startsAt).toLocaleString()}</p>}
+                        {person.bio && <p className="col-span-2 whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground">{person.bio}</p>}
+                      </article>
+                    ))}
+                  </CardContent>
+                </Card>
+              )}
+
+              {!!event.programmes?.length && (
+                <Card className="rounded-2xl" id="event-programmes">
+                  <CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-base"><FileText className="size-4 text-primary" /> Event programme & outlines</CardTitle></CardHeader>
+                  <CardContent className="space-y-2">
+                    {event.programmes.map((document) => (
+                      <a key={document.id} className="flex min-w-0 items-center gap-3 rounded-xl border border-border/70 p-3 text-sm font-semibold text-primary transition-colors hover:bg-secondary/50" href={document.downloadUrl} target="_blank" rel="noopener noreferrer">
+                        <FileText className="size-5 shrink-0" /><span className="min-w-0 flex-1 break-words">{document.title}</span><span className="shrink-0 text-xs">View PDF</span>
+                      </a>
+                    ))}
+                  </CardContent>
+                </Card>
+              )}
+
+              {!!event.souvenirs?.length && (
+                <Card className="rounded-2xl" id="event-souvenirs">
+                  <CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-base"><ShoppingBag className="size-4 text-primary" /> Event souvenirs & merchandise</CardTitle></CardHeader>
+                  <CardContent className="space-y-3">
+                    <p className="text-xs leading-relaxed text-muted-foreground">The organizer's current product catalogue is displayed below. Online merchandise ordering and collection QR codes are not yet active, so no payment is collected for these items through this page.</p>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {event.souvenirs.map((product) => (
+                        <article key={product.id} className="grid grid-cols-[64px_minmax(0,1fr)] items-center gap-x-3 gap-y-2 rounded-xl border border-border/70 p-3">
+                          <OrganizerEventCover src={product.imageUrl} title={product.name} />
+                          <div className="min-w-0"><h3 className="text-sm font-bold [overflow-wrap:break-word]">{product.name}</h3>{product.variantLabel && <p className="text-xs text-muted-foreground">{product.variantLabel}</p>}<p className="mt-1 text-sm font-bold text-primary">{money(product.priceMinor)}</p></div>
+                          {product.description && <p className="col-span-2 text-xs leading-relaxed text-muted-foreground">{product.description}</p>}
+                          <p className="col-span-2 text-[11px] font-medium text-muted-foreground">{product.available > 0 ? `${product.available} listed in stock` : 'Currently out of stock'} · Product code: {product.sku}</p>
+                        </article>
                       ))}
                     </div>
                   </CardContent>

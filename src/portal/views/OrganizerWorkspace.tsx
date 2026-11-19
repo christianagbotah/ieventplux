@@ -33,6 +33,7 @@ import { WorkspaceMetric } from '../components/WorkspaceMetric'
 import { GrowthCommandCenter } from '../components/GrowthCommandCenter'
 import { OrganizerEventCover } from '../components/OrganizerEventCover'
 import { EventCopyCopilot } from '../components/EventCopyCopilot'
+import { EventOperationsEditor } from '../components/EventOperationsEditor'
 import { TicketSalesEditor, TicketSalesFields, salesPayload, type TicketSalesRow, type TicketSalesForm } from '../components/TicketSalesControls'
 import { VenueLocationFields } from '../components/VenueLocationFields'
 import { COUNTRY_NAMES } from '../lib/venue-locations'
@@ -1272,6 +1273,7 @@ function EventEditor({ orgId, event, onClose }: { orgId: string; event: OrgEvent
               </label>
             </div>
           )}
+          {activeEvent && <EventOperationsEditor key={activeEvent.id} eventId={activeEvent.id} />}
           {event?.seriesId && (
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/30 bg-primary/5 p-4">
               <div className="min-w-0">

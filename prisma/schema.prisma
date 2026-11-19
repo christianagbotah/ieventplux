@@ -308,6 +308,8 @@ model Event {
   series       EventSeries?     @relation(fields: [seriesId], references: [id])
   venue        Venue?           @relation(fields: [venueId], references: [id])
   agenda       AgendaItem[]
+  contributors EventContributor[]
+  souvenirs    EventSouvenirProduct[]
   media        MediaAsset[] @relation("EventMedia")
   linkedClips  MediaAsset[] @relation("ClipLinksTo")
   interests    EventInterest[]
@@ -348,6 +350,57 @@ model AgendaItem {
   event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
   @@index([eventId])
+}
+
+// Named participants and talent lineup are structured separately from agenda
+// time slots, so a performer can be listed without a scheduled speaking time.
+model EventContributor {
+  id          String   @id @default(cuid())
+  eventId     String
+  name        String
+  role        String   @default("GUEST_SPEAKER") // ARTIST|HEADLINER|MAIN_SPEAKER|ASSISTANT_SPEAKER|GUEST_SPEAKER|PANELIST|MC|DJ|HOST|SPECIAL_GUEST
+  topic       String?
+  bio         String?
+  photoUrl    String?
+  startsAt    DateTime?
+  endsAt      DateTime?
+  sortOrder   Int      @default(0)
+  published   Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId, sortOrder])
+}
+
+// Souvenir catalogue: each item/variant gets its own SKU (e.g. SHIRT-M-BLACK).
+// Prices are in integer pesewas. Inventory held/sold/fulfilled counts are
+// reserved for the gated checkout and collection workflow; catalogue changes
+// may never falsify those counters.
+model EventSouvenirProduct {
+  id             String   @id @default(cuid())
+  eventId        String
+  name           String
+  variantLabel   String?
+  sku            String
+  description    String?
+  imageUrl       String?
+  priceMinor     Int
+  currency       String   @default("GHS")
+  stockTotal     Int
+  stockReserved  Int      @default(0)
+  stockSold      Int      @default(0)
+  stockFulfilled Int      @default(0)
+  active         Boolean  @default(true)
+  sortOrder      Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  event          Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, sku])
+  @@index([eventId, active])
 }
 
 model MediaAsset {

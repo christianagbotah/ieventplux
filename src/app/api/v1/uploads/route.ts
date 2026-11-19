@@ -3,6 +3,8 @@ import { handle, jsonOk, requireUser, errors, rateLimit } from '@/server/api'
 import { db } from '@/lib/db'
 import { eventOrgAccess } from '@/server/permissions'
 import { randomUUID } from 'crypto'
+import { join } from 'node:path'
+import { sanitizeText } from '@/server/api'
 import { isSupportedImage, mediaFilePath, mediaStorageDirectory, MAX_UPLOAD_BYTES } from '@/server/media-storage'
 
 /**
@@ -24,11 +26,14 @@ export async function POST(req: NextRequest) {
     if (!form) throw errors.badRequest('Multipart form required.')
     const file = form.get('file')
     const eventId = form.get('eventId') ? String(form.get('eventId')) : null
-    const kind = ['POSTER', 'GALLERY', 'CLIP'].includes(String(form.get('kind'))) ? String(form.get('kind')) : 'GALLERY'
+    const kind = ['POSTER', 'GALLERY', 'CLIP', 'PROGRAMME', 'SPEAKER_PHOTO', 'MERCH_PHOTO'].includes(String(form.get('kind'))) ? String(form.get('kind')) : 'GALLERY'
+    const programme = kind === 'PROGRAMME'
     if (!(file instanceof File)) throw errors.badRequest('A file is required.')
-    const ext = ALLOWED.get(file.type)
-    if (!ext) throw errors.badRequest('Only PNG, JPEG or WebP images are allowed.')
-    if (file.size > MAX_UPLOAD_BYTES) throw errors.badRequest('File exceeds the 5MB limit.')
+    const ext = programme && file.type === 'application/pdf' ? 'pdf' : ALLOWED.get(file.type)
+    if (!ext || (programme && ext !== 'pdf') || (!programme && ext === 'pdf')) throw errors.badRequest(programme ? 'Programme outlines must be PDF files.' : 'Only PNG, JPEG or WebP images are allowed.')
+    const max = programme ? 10 * 1024 * 1024 : MAX_UPLOAD_BYTES
+    if (file.size === 0 || file.size > max) throw errors.badRequest(`File must be between 1 byte and ${programme ? '10MB' : '5MB'}.`)
+    if (programme && !eventId) throw errors.badRequest('Choose the event for this programme PDF.')
 
     // Org scoping: upload to an event requires event media permission; otherwise org media library.
     let orgId: string | null = null
@@ -49,13 +54,14 @@ export async function POST(req: NextRequest) {
 
     const { writeFile, mkdir, unlink } = await import('fs/promises')
     const buffer = Buffer.from(await file.arrayBuffer())
-    if (!isSupportedImage(buffer, file.type)) {
-      throw errors.badRequest('The uploaded image is empty, corrupt, too large, or does not match its declared image type.')
+    const pdfHeader = buffer.length >= 9 && buffer.subarray(0, 5).toString('latin1') === '%PDF-' && buffer.subarray(-2048).toString('latin1').includes('%%EOF')
+    if (programme ? !pdfHeader : !isSupportedImage(buffer, file.type)) {
+      throw errors.badRequest(programme ? 'The PDF file is invalid or incomplete.' : 'The uploaded image is empty, corrupt, too large, or does not match its declared image type.')
     }
     const name = `${randomUUID()}.${ext}`
     let filePath: string
     try {
-      filePath = mediaFilePath(name)
+      filePath = programme ? join(mediaStorageDirectory(), name) : mediaFilePath(name)
       await mkdir(mediaStorageDirectory(), { recursive: true })
       await writeFile(filePath, buffer, { flag: 'wx', mode: 0o644 })
     } catch {
@@ -70,8 +76,8 @@ export async function POST(req: NextRequest) {
           eventId,
           uploaderId: user.id,
           kind,
-          url: `/uploads/${name}`,
-          caption: form.get('caption') ? String(form.get('caption')).slice(0, 200) : null,
+          url: programme ? `programme:${name}` : `/uploads/${name}`,
+          caption: sanitizeText(form.get('caption') ?? (programme ? file.name : ''), 200) || null,
           status: 'READY',
         },
       })
@@ -79,6 +85,6 @@ export async function POST(req: NextRequest) {
       await unlink(filePath).catch(() => {})
       throw error
     }
-    return jsonOk({ asset })
+    return jsonOk({ asset: { ...asset, url: programme ? `/api/v1/events/${eventId}/programmes/${asset.id}` : asset.url } })
   })
 }

@@ -1,0 +1,55 @@
+# iEventPlux Event Operations: Lineups, Programme, Souvenirs
+
+**Date:** 19 November 2026  
+**Product intent:** A complete organiser-operated event experience with artist lineups, guest speakers, speaker topics, programme files, merchandise, and trustworthy QR workflows. Build incrementally without making unsupported payment, stock or entry promises.
+
+## Release A — Current implementation
+
+### 1. Performer, guest and speaker lineup
+
+- Per-event profiles with confirmed full/stage name, role (`ARTIST`, `HEADLINER`, `MAIN_SPEAKER`, `ASSISTANT_SPEAKER`, `GUEST_SPEAKER`, `SPECIAL_GUEST`, `PANELIST`, `MC`, `DJ`, `HOST`), topic or performance description, biography, portrait, and optional start/end time and display order.
+- Org-scoped create/read/update/remove endpoints at `/api/v1/events/{id}/contributors`. Editing requires event-edit permission. Draft/private access follows existing event visibility. Public detail only shows published profiles.
+- The organizer editor lets organizers capture, review and revise person profiles. Public event detail shows each person's name, role, speaking topic or set, biography and time without guessing missing facts.
+- Existing timed agenda stays a separate representation, allowing multiple people to appear in one programme item.
+
+### 2. Programme outline PDF
+
+- Organizers with `media:manage` permission can upload bounded programme PDFs (up to 10MB) through `POST /api/v1/uploads` with `kind=PROGRAMME`, `eventId` and a filename/title. MIME, PDF magic header and end marker are validated before storage.
+- The PDF is stored in the **durable absolute** `IEVENTPLUX_UPLOADS_DIR`, not inside `.next` release files. A `MediaAsset` of kind `PROGRAMME` records the document. Programme PDFs are **not** served by the anonymous image route.
+- The event page and the editor provide links to `/api/v1/events/{id}/programmes/{assetId}`. The download checks published status, accepted organizer membership or approved invite-only RSVP/ticket access. Responses are sandboxed, `nosniff`, no-store PDFs. An organizer can archive a programme link; records remain for audit.
+
+### 3. Souvenir catalogue (read-only sales mode)
+
+- Organizers configure items and explicit variants (e.g. T-shirt, size M, black) with unique event SKU, optional image, description, integer price in pesewas, finite stock, active state and sorting.
+- Backend validates SKU uniqueness, integer price and inventory bounds. Stock cannot be lowered below sold/reserved quantity, and products are deactivated rather than being deleted.
+- The event page can **display** the catalogue and the organizer can manage it, but `onlineOrderingEnabled: false` remains explicit until verified payment/stock/collection workflows exist.
+- There is deliberately **no** merch checkout or receipt generation in this release. Presenting merchandise as purchasable while receipt fulfilment is unsupported would be misleading and financially risky.
+
+## Release B — Paid merchandise and collections (pending)
+
+Design and implement as a separate end-to-end financial release, with tests before live money:
+
+1. Add `MerchandiseOrderItem`/`MerchandiseReservation` linked to the **existing authenticated Order and PaymentAttempt** model. One checkout may include tickets + souvenirs, or merchandise alone; always snapshot unit price, SKU, size and quantity.
+2. Use a single, transactionally consistent reservation path to claim ticket seats and merchandise stock. A pending order holds inventory for a bounded window; expiry and verified payment apply exact idempotent effects. Do not sell the final available T-shirt twice across devices.
+3. Issue receipt/order reference only after the payment provider confirms money server-to-server. Reconcile callbacks, timeouts, refunds, partial fulfilment, cancellations and chargebacks against immutable financial ledger entries. Do not assume browser return equals payment.
+4. Assign a separate `CollectionEntitlement` to each paid souvenir line. Distinguish `UNPAID`, `READY`, `PARTIALLY_COLLECTED`, `COLLECTED`, `CANCELLED`, `REFUNDED` and `EXCEPTION_REVIEW`, supporting per-variant and partial-quantity delivery with an auditable issuer/scanner.
+5. Organizer fulfillment dashboard by event, product, size/colour and pickup booth, with reserved/sold/uncollected/collected counts, order lookup, printable receipt and exports.
+6. Issue cryptographically signed, short-lived or revocable **HTTPS** QR links designed for ordinary smartphone camera apps (not solely internal scanner payloads). The link opens the event's secure staff verification screen, not public order PII. Unauthenticated users must sign in; unapproved users see a denial, not the receipt or buyer details.
+7. Separate authorized **Review → Confirm admission** from **Review → Confirm souvenir collection**. Same transaction may have two entitlements; ticket check-in must never automatically release a souvenir. Staff actions are explicit, idempotent, transactional and auditable, with duplicate/used/cancelled/refunded states.
+8. Test camera-link opening on mainstream Android/iOS devices, offline check-in conflict resolution, payment refunds, one-use QR replay, webhooks and staff roles before enabling real-money merchandise sales.
+
+## Production and migration policy
+
+- Schema change is limited to creating `EventContributor` and `EventSouvenirProduct` tables with event foreign keys, indexes and one `(eventId, sku)` uniqueness constraint. File: `db/migrations/20261119_event_lineup_souvenir_catalogue.sql`.
+- The initial live-schema comparison also revealed a pre-existing drift on the KYC job timestamp default. This unrelated change was deliberately removed from the event-operations migration.
+- Rehearse migration on a clean schema-only clone of production; do not copy customer records into test.
+- Before applying to production, verify a fresh recoverable database backup. Apply the additive SQL within a transaction, check indexes/constraints and database health. Do not run `prisma db push --accept-data-loss` or automatically roll back a live database.
+- A code rollback is safe as the two unused tables do not change existing order or ticket columns; leave those tables intact during rollback.
+
+## Acceptance gates
+
+- Policy tests for malformed roles, photos, time windows, prices, duplicate SKUs and impossible stock reductions.
+- Prisma validation, TypeScript, lint, isolated optimized build and authenticated API authorization smoke tests, plus public event view/visibility.
+- Programme document permission tests, signed-out access checks, absent file handling and upload type/size tests.
+- Mobile review of the new organizer editor and public lineup/catalogue at narrow widths remains a manual sign-off gate.
+- Real payment, merchandise QR collection and final enterprise feature completeness **remain outstanding** until Release B and subsequent roadmap phases pass their gates.
