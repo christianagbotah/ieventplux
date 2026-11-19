@@ -52,6 +52,7 @@ model User {
   orders              Order[]
   tickets             Ticket[]
   scans               AdmissionScan[]        @relation("Scanner")
+  souvenirCollections SouvenirCollection[] @relation("SouvenirCollector")
   deviceSessions      DeviceSession[]
   comments            Comment[]
   reactions           Reaction[]
@@ -310,6 +311,7 @@ model Event {
   agenda       AgendaItem[]
   contributors EventContributor[]
   souvenirs    EventSouvenirProduct[]
+  souvenirCollections SouvenirCollection[]
   media        MediaAsset[] @relation("EventMedia")
   linkedClips  MediaAsset[] @relation("ClipLinksTo")
   interests    EventInterest[]
@@ -398,6 +400,7 @@ model EventSouvenirProduct {
   updatedAt      DateTime @updatedAt
 
   event          Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  orderItems     SouvenirOrderItem[]
 
   @@unique([eventId, sku])
   @@index([eventId, active])
@@ -681,6 +684,7 @@ model Order {
   event       Event                 @relation(fields: [eventId], references: [id])
   user        User?                 @relation(fields: [userId], references: [id])
   items       OrderItem[]
+  souvenirItems SouvenirOrderItem[]
   reservations InventoryReservation[]
   payments    PaymentAttempt[]
   tickets     Ticket[]
@@ -705,6 +709,42 @@ model OrderItem {
   ticketType  TicketType @relation(fields: [ticketTypeId], references: [id])
 
   @@index([orderId])
+}
+
+model SouvenirOrderItem {
+  id             String               @id @default(cuid())
+  orderId        String
+  productId      String
+  qty            Int
+  unitPriceMinor Int
+  lineTotalMinor Int
+  holdStatus     String               @default("ACTIVE")
+  collectedQty   Int                  @default(0)
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  order          Order                @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product        EventSouvenirProduct @relation(fields: [productId], references: [id])
+  collections    SouvenirCollection[]
+
+  @@unique([orderId, productId])
+  @@index([productId, holdStatus])
+}
+
+model SouvenirCollection {
+  id             String            @id @default(cuid())
+  orderItemId    String
+  eventId        String
+  collectorId    String
+  qty            Int
+  clientActionId String            @unique
+  note           String?
+  createdAt      DateTime          @default(now())
+  orderItem      SouvenirOrderItem @relation(fields: [orderItemId], references: [id])
+  event          Event             @relation(fields: [eventId], references: [id])
+  collector      User              @relation("SouvenirCollector", fields: [collectorId], references: [id])
+
+  @@index([eventId, createdAt])
+  @@index([orderItemId])
 }
 
 // ─────────────────────────────── Payments (Hubtel) ───────────────────────────────

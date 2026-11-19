@@ -14,6 +14,7 @@ export async function POST(req: NextRequest) {
     const body = await readJson<{
       eventId?: string
       items?: { ticketTypeId: string; qty: number }[]
+      souvenirs?: { productId: string; qty: number }[]
       buyerName?: string
       buyerEmail?: string
       buyerPhone?: string
@@ -34,6 +35,7 @@ export async function POST(req: NextRequest) {
       buyerPhone: body.buyerPhone ? String(body.buyerPhone).slice(0, 24) : user.phone,
       discountCode: body.discountCode ? String(body.discountCode).toUpperCase() : null,
       items: Array.isArray(body.items) ? body.items : [],
+      souvenirs: Array.isArray(body.souvenirs) ? body.souvenirs : [],
     })
     return jsonOk(result)
   })
@@ -48,6 +50,7 @@ export async function GET(req: NextRequest) {
       include: {
         event: { select: { title: true, slug: true, startsAt: true, coverImageUrl: true, city: true } },
         items: { include: { ticketType: { select: { name: true } } } },
+        souvenirItems: { include: { product: { select: { name: true, variantLabel: true, sku: true } } } },
         payments: { select: { status: true, provider: true, attemptNo: true } },
       },
       orderBy: { createdAt: 'desc' },

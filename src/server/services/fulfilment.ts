@@ -6,6 +6,7 @@ import { ticketCode } from '../ids'
 import { postJournal, ensureOrgAccounts, ensurePlatformAccounts } from '../ledger'
 import { notifyUser, queueMessage } from './notify'
 import { formatMoney } from '../money'
+import { ensureSouvenirHolds, consumeSouvenirHolds, releaseSouvenirHoldsForReview } from './souvenir-orders'
 
 /**
  * Idempotent payment fulfilment.
@@ -30,12 +31,19 @@ export interface FulfilOutcome {
 
 export async function fulfilPaidOrder(params: { orderId: string; paymentAttemptId: string; amountMinor: number }): Promise<FulfilOutcome> {
   const { orderId, paymentAttemptId, amountMinor } = params
-  const order = await db.order.findUnique({ where: { id: orderId }, include: { items: true, event: true, reservations: true, payments: true } })
+  const order = await db.order.findUnique({ where: { id: orderId }, include: { items: true, souvenirItems: true, event: true, reservations: true, payments: true } })
   if (!order) throw errors.notFound('Order not found.')
 
   // Idempotency: another attempt already paid this order → duplicate payment case.
   const successAttempts = order.payments.filter((p) => p.status === 'SUCCESS' && p.id !== paymentAttemptId)
-  if (order.status === 'PAID' || successAttempts.length > 0) {
+  // An at-least-once provider callback for the *same* successful attempt is
+  // a harmless replay, not a second payment. Never open a refund case for it.
+  if (order.status === 'PAID' && successAttempts.length === 0) {
+    return { outcome: 'ALREADY_PAID', detail: 'This payment attempt was already fulfilled; no duplicate inventory or receipt created.' }
+  }
+  if (successAttempts.length > 0) {
+    const existing = await db.refundCase.findFirst({ where: { orderId: order.id, requestedBy: 'system:duplicate-payment' } })
+    if (existing) return { outcome: 'ALREADY_PAID', detail: 'Duplicate payment already routed to refund review.' }
     await db.refundCase.create({
       data: {
         orderId: order.id,
@@ -57,8 +65,29 @@ export async function fulfilPaidOrder(params: { orderId: string; paymentAttemptI
     return { outcome: 'ALREADY_PAID', detail: 'Order already paid; excess payment routed to refund workflow.' }
   }
 
+  if (order.status === 'EXCEPTION_REVIEW') {
+    return { outcome: 'REJECTED', detail: 'Order requires manual exception and refund review before any further fulfilment.' }
+  }
+
   if (order.status === 'REFUNDED' || order.status === 'REFUND_PENDING') {
     return { outcome: 'REJECTED', detail: 'Order already refunded; payment routed for resolution.' }
+  }
+
+  // Physical stock is not interchangeable with admission inventory.
+  // Re-acquire an expired souvenir hold only while stock remains. A verified
+  // payment without goods goes to the existing manual refund/exception rail.
+  if (order.souvenirItems.length && !(await ensureSouvenirHolds(order.id))) {
+    const existing = await db.refundCase.findFirst({ where: { orderId: order.id, requestedBy: 'system:souvenir-capacity' } })
+    if (!existing) {
+      await db.refundCase.create({ data: { orderId: order.id, requestedBy: 'system:souvenir-capacity',
+        type: 'FULL', amountMinor, status: 'REQUESTED',
+        reason: `Verified payment for ${order.reference} arrived after the souvenir hold was released; stock is no longer available.` } })
+    }
+    await db.order.update({ where: { id: order.id }, data: { status: 'EXCEPTION_REVIEW', exceptionReason: 'Souvenir stock unavailable after a late payment; refund review required.' } })
+    if (order.userId) await notifyUser({ userId: order.userId, type: 'PAYMENT_REVIEW', title: 'Souvenir purchase under review',
+      body: `We received payment for ${order.reference}, but reserved merchandise is no longer available. A refund review has been opened.`,
+      link: `#/order/${order.reference}` }).catch(() => {})
+    return { outcome: 'EXCEPTION_CAPACITY', detail: 'Late souvenir payment requires refund review; no collection authorized.' }
   }
 
   // Late payment vs reservations: if reservations expired, try to re-reserve capacity.
@@ -96,6 +125,9 @@ export async function fulfilPaidOrder(params: { orderId: string; paymentAttemptI
       throw error
     })
     if (!canReserve) {
+      // When tickets cannot be issued after a late verified payment, release
+      // the merchandise hold before routing the full order to refund review.
+      if (order.souvenirItems.length) await releaseSouvenirHoldsForReview(order.id)
       // Capacity gone: explicit exception + refund workflow. Money stays accounted.
       await db.refundCase.create({
         data: {
@@ -131,6 +163,7 @@ export async function fulfilPaidOrder(params: { orderId: string; paymentAttemptI
       await tx.inventoryReservation.update({ where: { id: res.id }, data: { status: 'CONSUMED' } })
       await tx.ticketType.update({ where: { id: res.ticketTypeId }, data: { soldCount: { increment: res.qty }, reservedCount: { decrement: res.qty } } })
     }
+    await consumeSouvenirHolds(tx, order.id)
     const ttypes = await tx.ticketType.findMany({ where: { id: { in: order.items.map((i) => i.ticketTypeId) } } })
     const map = new Map(ttypes.map((t) => [t.id, t]))
     let seq = 0
@@ -164,7 +197,7 @@ export async function fulfilPaidOrder(params: { orderId: string; paymentAttemptI
         orgId: order.orgId,
         orderId: order.id,
         number: `RCPT-${order.reference}`,
-        description: `Tickets — ${order.event.title}`,
+        description: `${order.souvenirItems.length ? (order.items.length ? 'Tickets & souvenirs' : 'Souvenirs') : 'Tickets'} — ${order.event.title}`,
         amountMinor: order.totalMinor,
         currency: order.currency,
         status: 'PAID',
@@ -182,7 +215,7 @@ export async function fulfilPaidOrder(params: { orderId: string; paymentAttemptI
       orgId: order.orgId,
       refType: 'ORDER_PAYMENT',
       refId: order.id,
-      memo: `Ticket sale ${order.reference}`,
+      memo: `Event sale ${order.reference}`,
       createdBy: 'system:fulfilment',
       lines: [
         { accountCode: 'collections', orgScoped: false, direction: 'DEBIT', amountMinor: order.totalMinor },
@@ -197,9 +230,9 @@ export async function fulfilPaidOrder(params: { orderId: string; paymentAttemptI
   if (order.userId) {
     await notifyUser({
       userId: order.userId,
-      type: 'TICKET_ISSUED',
-      title: 'Your tickets are ready',
-      body: `Payment confirmed for ${eventTitle}. ${order.items.reduce((s, i) => s + i.qty, 0)} ticket(s) issued.`,
+      type: order.items.length ? 'TICKET_ISSUED' : 'ORDER_CONFIRMED',
+      title: order.items.length ? 'Your tickets are ready' : 'Your souvenir order is confirmed',
+      body: `Payment confirmed for ${eventTitle}. ${order.items.reduce((s, i) => s + i.qty, 0)} ticket(s) and ${order.souvenirItems.reduce((s, i) => s + i.qty, 0)} souvenir item(s). View your receipt and collection QR in My Orders.`,
       link: `#/order/${order.reference}`,
     }).catch(() => {})
   }
@@ -208,12 +241,12 @@ export async function fulfilPaidOrder(params: { orderId: string; paymentAttemptI
     target: order.buyerPhone ?? '',
     userId: order.userId,
     template: 'payment_receipt',
-    body: `iEventPlux: Payment received for ${eventTitle.slice(0, 40)}. Ref ${order.reference}. View tickets in My Tickets.`,
+    body: `iEventPlux: Payment received for ${eventTitle.slice(0, 40)}. Ref ${order.reference}. View your receipt and collection QR in My Orders.`,
     purpose: 'TRANSACTIONAL',
     dedupKey: `receipt:${order.id}:${paymentAttemptId}`,
   }).catch(() => {})
 
-  return { outcome: 'FULFILLED', detail: 'Order paid; tickets issued; ledger posted.' }
+  return { outcome: 'FULFILLED', detail: 'Order paid; tickets and merchandise accounted for; ledger posted.' }
 }
 
 /** Free RSVP order finalization (no payment, still inventory-controlled). */

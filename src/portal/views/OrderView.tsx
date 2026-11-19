@@ -37,6 +37,10 @@ interface RefundCaseRow {
 
 interface OrderPayload {
   order: {
+    collectionUrl?: string | null
+    collectionNote?: string | null
+    souvenirItems: { id: string; qty: number; collectedQty: number; holdStatus: string; unitPriceMinor: number; lineTotalMinor: number;
+      product: { name: string; sku: string; variantLabel?: string | null; imageUrl?: string | null } }[]
     reference: string
     status: string
     kind: string
@@ -83,6 +87,7 @@ export default function OrderView({ reference }: { reference: string }) {
   const [suggestions, setSuggestions] = useState<SuggestionItem[] | null>(null)
   // Mirrors the copy-success-checkmark animation; the real clipboard write happens in copyReference.
   const [refCopied, setRefCopied] = useState(false)
+  const [collectionQr, setCollectionQr] = useState<string | null>(null)
 
   // One-shot celebration when the order is confirmed (respects reduced motion).
   const celebratedRef = useRef(false)
@@ -113,6 +118,16 @@ export default function OrderView({ reference }: { reference: string }) {
       alive = false
     }
   }, [isPaid, reference])
+
+  const collectionUrl = data?.order.collectionUrl
+  useEffect(() => {
+    if (!collectionUrl) { setCollectionQr(null); return }
+    let active = true
+    void import('qrcode').then((qr) => qr.toDataURL(collectionUrl, { margin: 1, width: 248, errorCorrectionLevel: 'M' }))
+      .then((uri) => { if (active) setCollectionQr(uri) })
+      .catch(() => { if (active) setCollectionQr(null) })
+    return () => { active = false }
+  }, [collectionUrl])
 
   const load = useCallback(async () => {
     try {
@@ -287,6 +302,11 @@ export default function OrderView({ reference }: { reference: string }) {
                   <p className="font-semibold">{item.unitPriceMinor === 0 ? 'Free' : money(item.lineTotalMinor)}</p>
                 </div>
               ))}
+              {order.souvenirItems?.map((item) => <div key={item.id} className="flex min-w-0 flex-wrap items-center justify-between gap-2 rounded-xl bg-secondary/50 px-4 py-3 text-sm">
+                <div className="min-w-0"><p className="font-semibold">{item.product.name}{item.product.variantLabel ? ` · ${item.product.variantLabel}` : ''} × {item.qty}</p>
+                  <p className="text-xs text-muted-foreground">Souvenir · SKU {item.product.sku} · {item.collectedQty} of {item.qty} collected</p></div>
+                <span className="font-bold">{money(item.lineTotalMinor)}</span>
+              </div>)}
             </div>
             <div className="mt-3 space-y-1.5 border-t border-border pt-3 text-sm">
               {order.discountMinor > 0 && (
@@ -303,8 +323,8 @@ export default function OrderView({ reference }: { reference: string }) {
             <div className="flex flex-col items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
               <p className="text-sm text-amber-800">
                 {order.expiresAt && new Date(order.expiresAt) > new Date()
-                  ? `Tickets are held until ${new Date(order.expiresAt).toLocaleTimeString()} — complete the payment to confirm them.`
-                  : 'The ticket hold has expired. You can retry below if capacity remains.'}
+                  ? `Your tickets and/or souvenirs are reserved until ${new Date(order.expiresAt).toLocaleTimeString()}. Complete payment to confirm them.`
+                  : 'The order hold has expired. You may retry if inventory remains available.'}
               </p>
               <Button className="rounded-full ievx-press" onClick={() => void retryPayment()}>
                 <RefreshCw className="mr-1.5 h-4 w-4" /> Complete payment
@@ -326,6 +346,20 @@ export default function OrderView({ reference }: { reference: string }) {
               </div>
             </div>
           )}
+
+          {isPaid && order.souvenirItems?.length > 0 && <Card className="rounded-2xl border-primary/25" aria-label="Souvenir collection receipt">
+            <CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-base"><CheckCircle2 className="size-4 text-primary" /> Paid souvenir receipt & QR</CardTitle></CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm leading-relaxed text-muted-foreground">Show this QR to event staff when collecting your souvenirs. Your ordinary phone camera can open the same collection link. Staff confirm each item separately after checking your paid order.</p>
+              {collectionQr ? <div className="mx-auto w-fit rounded-xl border bg-white p-3"><img src={collectionQr} alt="QR link to paid souvenir receipt; opens staff-only verification" className="size-[210px]" /></div>
+                : <p role="status" className="rounded-lg bg-secondary p-3 text-center text-xs">Collection QR not available in this browser; show the reference number below.</p>}
+              <div className="rounded-lg border border-dashed p-3 text-center"><p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Receipt reference</p><p className="mt-1 font-mono text-lg font-extrabold [overflow-wrap:anywhere]">{order.reference}</p></div>
+              {order.collectionUrl && <Button type="button" variant="outline" className="min-h-11 w-full" onClick={() => {
+                void navigator.clipboard.writeText(order.collectionUrl ?? '').then(() => toast({ title: 'Collection link copied' })).catch(() => toast({ title: 'Copy unavailable', variant: 'destructive' }))
+              }}><Copy className="mr-1.5 size-4" /> Copy collection link</Button>}
+              <p className="text-xs font-semibold text-amber-700 dark:text-amber-300">Souvenir QR is not an admission ticket. Show individual ticket QR codes for entry. Collection status updates only when event staff explicitly approve handover.</p>
+            </CardContent>
+          </Card>}
 
           {/* Round 14: honest cross-sell — real upcoming events, same category or city first. */}
           {isPaid && suggestions && suggestions.length > 0 && (
