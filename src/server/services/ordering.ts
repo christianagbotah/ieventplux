@@ -3,14 +3,15 @@ import { errors } from '../api'
 import { orderReference } from '../ids'
 import { activeFeeVersion, computePlatformFee } from '../fees'
 import { getSetting } from '../settings'
+import { checkoutLinePrice, normalizeCheckoutLines } from '../checkout-policy'
 
 /**
  * Order creation with database-enforced inventory reservations.
  *
- * Concurrency: reservation claiming runs inside a transaction that re-reads
- * ticket types with fresh quota checks and bumps reservedCount atomically —
- * competing buyers cannot oversell the last ticket (SQLite serializes writers,
- * and the invariant sold + reserved <= quota is re-checked inside the txn).
+ * Concurrency: PostgreSQL conditional UPDATE atomically checks sellability,
+ * price snapshot, sale window and sold+reserved+requested <= quota. An advisory
+ * transaction lock serializes concurrent checkouts for the same user/event so
+ * per-buyer limits cannot be bypassed by overlapping requests.
  */
 
 export interface CreateOrderInput {
@@ -32,8 +33,7 @@ export interface CreateOrderResult {
 }
 
 export async function createOrder(input: CreateOrderInput): Promise<CreateOrderResult> {
-  if (!input.items?.length) throw errors.badRequest('Select at least one ticket type.')
-  if (input.items.length > 6) throw errors.badRequest('Too many line items.')
+  const lines = normalizeCheckoutLines(input.items)
 
   const event = await db.event.findUnique({ where: { id: input.eventId }, include: { ticketTypes: { where: { active: true } } } })
   if (!event) throw errors.notFound('Event not found.')
@@ -46,31 +46,21 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
 
   // Pre-validate items
   let subtotal = 0
-  const validated: { ticketTypeId: string; qty: number; unitPriceMinor: number; lineTotalMinor: number; discountMinor: number }[] = []
-  for (const item of input.items) {
-    const qty = Math.floor(Number(item.qty))
-    if (!Number.isInteger(qty) || qty < 1 || qty > 10) throw errors.badRequest('Quantity must be between 1 and 10 per ticket type.')
+  const validated: { ticketTypeId: string; qty: number; unitPriceMinor: number; lineTotalMinor: number; discountMinor: number; groupMinQty: number | null; groupPctOff: number | null }[] = []
+  for (const item of lines) {
+    const qty = item.qty
     const tt = event.ticketTypes.find((t) => t.id === item.ticketTypeId)
     if (!tt) throw errors.badRequest('Invalid ticket type.')
     if (tt.saleStartsAt && tt.saleStartsAt > now) throw errors.conflict(`Sales for ${tt.name} have not opened yet.`)
     if (tt.saleEndsAt && tt.saleEndsAt < now) throw errors.conflict(`Sales for ${tt.name} have closed.`)
-    if (input.userId && tt.perBuyerLimit > 0) {
-      const bought = await db.orderItem.aggregate({
-        where: { ticketTypeId: tt.id, order: { userId: input.userId, status: { in: ['PAID', 'PENDING_PAYMENT'] } } },
-        _sum: { qty: true },
-      })
-      const prior = bought._sum.qty ?? 0
-      if (prior + qty > tt.perBuyerLimit) throw errors.conflict(`Per-buyer limit reached for ${tt.name} (max ${tt.perBuyerLimit}).`)
-    }
+    // Re-check lifetime and reserved-order buyer caps inside the transaction,
+    // under a per-event/user database lock, rather than in this stale pre-read.
+    if (qty > tt.perBuyerLimit) throw errors.conflict(`Maximum ${tt.perBuyerLimit} tickets per buyer for ${tt.name}.`)
     const unit = tt.priceMinor
-    let lineTotal = unit * qty
-    let discount = 0
-    if (tt.groupMinQty && tt.groupPctOff && qty >= tt.groupMinQty) {
-      discount = Math.round((lineTotal * tt.groupPctOff) / 100)
-      lineTotal -= discount
-    }
-    subtotal += lineTotal
-    validated.push({ ticketTypeId: tt.id, qty, unitPriceMinor: unit, lineTotalMinor: lineTotal, discountMinor: discount })
+    const { lineTotalMinor, discountMinor } = checkoutLinePrice(unit, qty, tt.groupMinQty, tt.groupPctOff)
+    subtotal += lineTotalMinor
+    if (subtotal > 2_000_000_000) throw errors.badRequest('Order total is too large. Reduce ticket quantities.')
+    validated.push({ ticketTypeId: tt.id, qty, unitPriceMinor: unit, lineTotalMinor, discountMinor, groupMinQty: tt.groupMinQty, groupPctOff: tt.groupPctOff })
   }
 
   // Discount code (single code per order)
@@ -93,20 +83,59 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
   const reference = orderReference()
   const expiresAt = new Date(now.getTime() + reservationMinutes * 60 * 1000)
 
+  // Consistent ticket-type lock ordering avoids PostgreSQL deadlocks when
+  // multiple buyers select the same tiers in a different visual order.
+  validated.sort((a, b) => a.ticketTypeId.localeCompare(b.ticketTypeId))
+
   const order = await db.$transaction(async (tx) => {
-    // Re-check capacity and claim reservations atomically.
+    // Lock identity to prevent two checkouts for the same buyer from both
+    // reading the old per-buyer total and reserving past the configured cap.
+    if (input.userId) {
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${event.id}), hashtext(${input.userId}))`
+    }
+    const currentEvent = await tx.event.findUnique({ where: { id: event.id }, select: { status: true, deletedAt: true } })
+    if (!currentEvent || currentEvent.deletedAt || !['PUBLISHED', 'LIVE', 'POSTPONED'].includes(currentEvent.status)) {
+      throw errors.conflict('This event is no longer accepting bookings.')
+    }
+    const claimAt = new Date()
     for (const item of validated) {
-      const updated = await tx.ticketType.updateMany({
-        where: { id: item.ticketTypeId, OR: [{ quota: 0 }, { quota: { gte: 0 } }] },
-        data: {},
-      })
-      void updated
       const tt = await tx.ticketType.findUnique({ where: { id: item.ticketTypeId } })
-      if (!tt) throw errors.badRequest('Ticket type vanished during checkout.')
-      if (tt.quota > 0 && tt.soldCount + tt.reservedCount + item.qty > tt.quota) {
-        throw errors.conflict(`Not enough tickets left for ${tt.name}.`)
+      if (!tt || tt.eventId !== event.id || !tt.active) throw errors.conflict('A ticket type is no longer available. Refresh your selection.')
+      if (input.userId) {
+        const prior = await tx.orderItem.aggregate({
+          where: {
+            ticketTypeId: item.ticketTypeId,
+            order: { userId: input.userId, eventId: event.id, OR: [
+              { status: 'PAID' },
+              { status: 'PENDING_PAYMENT', expiresAt: { gt: claimAt } },
+              { status: 'DRAFT', expiresAt: { gt: claimAt } },
+              { status: 'EXCEPTION_REVIEW' },
+            ] },
+          },
+          _sum: { qty: true },
+        })
+        if ((prior._sum.qty ?? 0) + item.qty > tt.perBuyerLimit) {
+          throw errors.conflict(`Per-buyer limit reached for ${tt.name} (maximum ${tt.perBuyerLimit}, including active reservations).`)
+        }
       }
-      await tx.ticketType.update({ where: { id: tt.id }, data: { reservedCount: { increment: item.qty } } })
+      // One atomic SQL statement protects the final seat against competing
+      // checkouts AND organizer quota edits. Row locking is handled by PG.
+      // Price and group-policy comparisons ensure no stale quote is charged.
+      const claimed = await tx.$executeRaw`
+        UPDATE "TicketType"
+        SET "reservedCount" = "reservedCount" + ${item.qty}
+        WHERE "id" = ${item.ticketTypeId}
+          AND "eventId" = ${event.id}
+          AND "active" = TRUE
+          AND "priceMinor" = ${item.unitPriceMinor}
+          AND "groupMinQty" IS NOT DISTINCT FROM ${item.groupMinQty}::integer
+          AND "groupPctOff" IS NOT DISTINCT FROM ${item.groupPctOff}::integer
+          AND "perBuyerLimit" >= ${item.qty}
+          AND ("saleStartsAt" IS NULL OR "saleStartsAt" <= NOW())
+          AND ("saleEndsAt" IS NULL OR "saleEndsAt" > NOW())
+          AND ("quota" = 0 OR "soldCount" + "reservedCount" + ${item.qty} <= "quota")
+      `
+      if (claimed !== 1) throw errors.conflict(`Ticket availability or pricing changed for ${tt.name}. Refresh the page and try again.`)
     }
     const created = await tx.order.create({
       data: {
