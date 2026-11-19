@@ -31,6 +31,7 @@ import { VerificationDocuments } from '../components/VerificationDocuments'
 import { WorkspaceNavigation } from '../components/WorkspaceNavigation'
 import { WorkspaceMetric } from '../components/WorkspaceMetric'
 import { GrowthCommandCenter } from '../components/GrowthCommandCenter'
+import { OrganizerEventCover } from '../components/OrganizerEventCover'
 import { EventCopyCopilot } from '../components/EventCopyCopilot'
 import { TicketSalesEditor, TicketSalesFields, salesPayload, type TicketSalesRow, type TicketSalesForm } from '../components/TicketSalesControls'
 import { VenueLocationFields } from '../components/VenueLocationFields'
@@ -307,7 +308,7 @@ function Dashboard({ orgId, role }: { orgId: string; role: string }) {
         <div><h3 className="ievx-workspace-heading">Performance at a glance</h3><p className="mt-0.5 text-xs text-muted-foreground">Figures reflect actual organizer activity, not predictions</p></div>
         <Button size="sm" variant="outline" className="h-8" onClick={() => setRevision((r) => r + 1)}><RefreshCw className="mr-1.5 size-3.5" /> Refresh</Button>
       </div>
-      <div className={`grid gap-3 sm:grid-cols-2 ${cards.length === 4 ? 'xl:grid-cols-4' : 'xl:grid-cols-3'}`}>
+      <div className={`grid grid-cols-2 gap-2.5 sm:gap-3 ${cards.length === 4 ? 'xl:grid-cols-4' : 'xl:grid-cols-3'}`}>
         {cards.map((metric) => <WorkspaceMetric key={metric.label} label={metric.label} value={metric.value} icon={metric.icon} description={metric.description} />)}
       </div>
       {canReview && data.onboarding && data.onboarding.orgStatus !== 'ACTIVE' && (
@@ -366,15 +367,13 @@ function VerificationBanner({ onboarding, onOpenSettings }: { onboarding: Onboar
           : { title: 'Verification required', body: 'Submit your registration documents to unlock paid ticket sales. Free RSVP events work immediately.' }
   const done = onboarding.orgStatus === 'ACTIVE'
   return (
-    <div className={`flex flex-wrap items-center gap-3 rounded-2xl border p-4 ${done ? 'border-primary/30 bg-primary/5' : 'border-amber-500/40 bg-amber-500/10'}`} role="status">
-      <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${done ? 'bg-primary/10' : 'bg-amber-500/15'}`}>
-        <ShieldAlert className={`h-4.5 w-4.5 ${done ? 'text-primary' : 'text-amber-600 dark:text-amber-400'}`} aria-hidden />
+    <div className={`grid min-w-0 grid-cols-[40px_minmax(0,1fr)] items-center gap-x-3 gap-y-2.5 rounded-2xl border p-4 sm:grid-cols-[40px_minmax(0,1fr)_auto] sm:gap-x-4 ${done ? 'border-primary/30 bg-primary/5' : 'border-amber-500/40 bg-amber-500/10'}`} role="status">
+      <span className={`col-start-1 row-start-1 flex size-10 shrink-0 items-center justify-center rounded-xl ${done ? 'bg-primary/10' : 'bg-amber-500/15'}`}>
+        <ShieldAlert className={`size-5 ${done ? 'text-primary' : 'text-amber-600 dark:text-amber-400'}`} aria-hidden="true" />
       </span>
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-bold">{copy.title}</p>
-        <p className="text-xs text-muted-foreground">{copy.body}</p>
-      </div>
-      <Button size="sm" variant={done ? 'outline' : 'default'} className="rounded-full" onClick={onOpenSettings}>
+      <p className="col-start-2 row-start-1 min-w-0 text-base font-bold leading-snug">{copy.title}</p>
+      <p className="col-span-2 text-sm leading-relaxed text-muted-foreground sm:col-span-1 sm:col-start-2 sm:row-start-2">{copy.body}</p>
+      <Button size="sm" variant={done ? 'outline' : 'default'} className="col-span-2 min-h-10 w-full rounded-xl sm:col-span-1 sm:col-start-3 sm:row-span-2 sm:row-start-1 sm:w-auto sm:rounded-full" onClick={onOpenSettings}>
         {done ? 'View settings' : onboarding.evidenceCount > 0 ? 'Review submission' : 'Submit documents'}
       </Button>
     </div>
@@ -538,7 +537,7 @@ function EventsManager({ orgId, role, autoNew }: { orgId: string; role: string; 
           <h1 className="efx-animated-gradient-text iefx-page-title font-extrabold">Events</h1>
           <p className="text-sm text-muted-foreground">{events?.length ?? '…'} events · series occurrences tracked separately</p>
         </div>
-        {canPublish && <Button className="rounded-full ievx-press" onClick={() => void openEditor(null)}><Plus className="mr-1 h-4 w-4" /> New event</Button>}
+
       </div>
 
       {events === null ? (
@@ -548,37 +547,37 @@ function EventsManager({ orgId, role, autoNew }: { orgId: string; role: string; 
       ) : (
         <div className="space-y-3">
           {events.map((e) => (
-            <Card key={e.id} className="ievx-card-hover rounded-2xl">
-              <CardContent className="flex flex-wrap items-center gap-3 p-4">
-                <div className="h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-muted">
-                  {e.coverImageUrl && (
-                    <img src={e.coverImageUrl} alt="" className="h-full w-full object-cover" />
-                  )}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <p className="truncate font-semibold">{e.title}</p>
-                    <Badge variant={statusTone(e.status) === 'success' ? 'default' : 'secondary'} className="capitalize text-[10px]">{humanize(e.status)}</Badge>
-                    {e.visibility !== 'PUBLIC' && <Badge variant="outline" className="text-[10px]">{humanize(e.visibility)}</Badge>}
-                    {e.seriesId && <Badge variant="outline" className="gap-1 text-[10px]"><Repeat className="h-3 w-3" aria-hidden /> Series</Badge>}
+            <Card key={e.id} className="min-w-0 rounded-2xl ievx-card-hover">
+              <CardContent className="p-4 sm:p-5">
+                <div className="grid min-w-0 grid-cols-[64px_minmax(0,1fr)] items-start gap-x-3 gap-y-3 sm:grid-cols-[80px_minmax(0,1fr)] sm:gap-x-4">
+                  <OrganizerEventCover key={e.coverImageUrl ?? 'no-cover'} src={e.coverImageUrl} title={e.title} />
+                  <div className="min-w-0 self-center space-y-2">
+                    <h2 className="min-w-0 text-base font-bold leading-snug [overflow-wrap:break-word]">{e.title}</h2>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <Badge variant={statusTone(e.status) === 'success' ? 'default' : 'secondary'} className="capitalize text-[11px]">{humanize(e.status)}</Badge>
+                      {e.visibility !== 'PUBLIC' && <Badge variant="outline" className="text-[11px]">{humanize(e.visibility)}</Badge>}
+                      {e.seriesId && <Badge variant="outline" className="gap-1 text-[11px]"><Repeat className="size-3" aria-hidden /> Series</Badge>}
+                    </div>
                   </div>
-                  <p className="text-xs text-muted-foreground">{dateLong(e.startsAt)} · {humanize(e.categorySlug)} · {e.mode === 'VIRTUAL' ? 'Online' : e.city ?? '—'}</p>
-                  {stats[e.id] && <p className="text-xs text-muted-foreground">{stats[e.id].ticketsSold} tickets · gross {money(stats[e.id].grossMinor)} · {stats[e.id].checkedIn} checked in</p>}
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {canPublish && ['DRAFT', 'SCHEDULED'].includes(e.status) && (
-                    <Button size="sm" className="rounded-full" onClick={() => void transition(e, 'PUBLISHED')}>Publish</Button>
-                  )}
-                  {canPublish && e.status === 'PUBLISHED' && (
-                    <Button size="sm" variant="outline" className="rounded-full" onClick={() => void transition(e, 'POSTPONED')}>Postpone</Button>
-                  )}
-                  {['OWNER', 'ADMIN'].includes(role) && ['PUBLISHED', 'POSTPONED', 'SCHEDULED'].includes(e.status) && (
-                    <Button size="sm" variant="destructive" className="rounded-full" onClick={() => void transition(e, 'CANCELLED')}>Cancel</Button>
-                  )}
-                  <Button size="sm" variant="outline" className="rounded-full" onClick={() => void openEditor(e)}>Edit</Button>
-                  {canPublish && e.visibility === 'INVITE_ONLY' && (
-                    <Button size="sm" variant="outline" className="rounded-full" onClick={() => setGuestsEvent(e)}><Users className="mr-1 h-3.5 w-3.5" aria-hidden /> Guests</Button>
-                  )}
+                  <div className="col-span-2 min-w-0 space-y-1.5 text-sm leading-relaxed text-muted-foreground">
+                    <p>{dateLong(e.startsAt)} · {humanize(e.categorySlug)} · {e.mode === 'VIRTUAL' ? 'Online' : e.city ?? 'Location to be confirmed'}</p>
+                    {stats[e.id] && <p>{stats[e.id].ticketsSold.toLocaleString()} tickets · gross {money(stats[e.id].grossMinor)} · {stats[e.id].checkedIn.toLocaleString()} checked in</p>}
+                  </div>
+                  <div className="col-span-2 grid grid-cols-2 gap-2 border-t border-border/60 pt-3 sm:flex sm:flex-wrap sm:justify-end">
+                    {canPublish && ['DRAFT', 'SCHEDULED'].includes(e.status) && (
+                      <Button size="sm" className="min-h-10 w-full rounded-lg sm:w-auto" onClick={() => void transition(e, 'PUBLISHED')}>Publish</Button>
+                    )}
+                    {canPublish && e.status === 'PUBLISHED' && (
+                      <Button size="sm" variant="outline" className="min-h-10 w-full rounded-lg sm:w-auto" onClick={() => void transition(e, 'POSTPONED')}>Postpone</Button>
+                    )}
+                    {['OWNER', 'ADMIN'].includes(role) && ['PUBLISHED', 'POSTPONED', 'SCHEDULED'].includes(e.status) && (
+                      <Button size="sm" variant="destructive" className="min-h-10 w-full rounded-lg sm:w-auto" onClick={() => void transition(e, 'CANCELLED')}>Cancel</Button>
+                    )}
+                    <Button size="sm" variant="outline" className="min-h-10 w-full rounded-lg sm:w-auto" onClick={() => void openEditor(e)}>Edit</Button>
+                    {canPublish && e.visibility === 'INVITE_ONLY' && (
+                      <Button size="sm" variant="outline" className="min-h-10 w-full rounded-lg sm:w-auto" onClick={() => setGuestsEvent(e)}><Users className="mr-1 size-4" aria-hidden /> Guests</Button>
+                    )}
+                  </div>
                 </div>
               </CardContent>
             </Card>

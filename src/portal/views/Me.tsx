@@ -253,25 +253,23 @@ export default function Me({ route }: { route: Route }) {
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8">
-      {/* Header */}
-      <div className="mb-6 flex flex-wrap items-center gap-4">
-        <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-xl font-extrabold text-primary">{initials(user.displayName)}</span>
-        <div className="min-w-0 flex-1">
-          <h1 className="text-2xl font-extrabold">{user.displayName}</h1>
-          <p className="text-sm text-muted-foreground">{user.email}{user.city ? ` · ${user.city}` : ''}{memberships.length > 0 ? ` · Organizer (${memberships.length})` : ''}</p>
+      {/* Two-column mobile identity header. Keep email and actions on their own
+          full-width rows instead of squeezing the name into a sliver. */}
+      <header className="mb-5 grid grid-cols-[56px_minmax(0,1fr)] items-center gap-x-3 gap-y-3 sm:mb-6 sm:grid-cols-[64px_minmax(0,1fr)_auto] sm:gap-x-4">
+        <span className="flex size-14 items-center justify-center rounded-2xl bg-primary/10 text-lg font-extrabold text-primary sm:size-16" aria-hidden="true">{initials(user.displayName)}</span>
+        <h1 className="min-w-0 text-xl font-extrabold leading-tight tracking-tight [overflow-wrap:break-word] sm:text-2xl">{user.displayName}</h1>
+        <div className="col-span-2 min-w-0 space-y-0.5 sm:col-span-1 sm:col-start-2 sm:row-start-2">
+          <p className="text-sm leading-relaxed text-muted-foreground [overflow-wrap:anywhere]">{user.email}</p>
+          {(user.city || memberships.length > 0) && <p className="text-xs leading-relaxed text-muted-foreground">{[user.city, memberships.length > 0 ? `Organizer (${memberships.length})` : null].filter(Boolean).join(' · ')}</p>}
         </div>
-        {memberships.length > 0 && (
-          <Button variant="outline" className="rounded-full" onClick={() => navigate('/organizer')}>Organizer workspace</Button>
-        )}
-        {/* R23: every signed-in account can organize — the header previously only
-            surfaced the workspace to existing organizers, leaving attendees with
-            the single Discover promo band as their only entry point. */}
-        {memberships.length === 0 && (
-          <Button className="rounded-full ievx-press" onClick={() => navigate('/create-org')}>
-            <Sparkles className="mr-1.5 h-4 w-4" aria-hidden /> Start organizing
+        {memberships.length > 0 ? (
+          <Button variant="outline" className="col-span-2 min-h-11 w-full justify-center rounded-xl sm:col-span-1 sm:col-start-3 sm:row-span-2 sm:row-start-1 sm:w-auto sm:rounded-full" onClick={() => navigate('/organizer')}>Organizer workspace</Button>
+        ) : (
+          <Button className="col-span-2 min-h-11 w-full justify-center rounded-xl sm:col-span-1 sm:col-start-3 sm:row-span-2 sm:row-start-1 sm:w-auto sm:rounded-full" onClick={() => navigate('/create-org')}>
+            <Sparkles className="mr-1.5 size-4" aria-hidden /> Start organizing
           </Button>
         )}
-      </div>
+      </header>
 
       <Tabs value={tab} onValueChange={(next) => {
         setTab(next)

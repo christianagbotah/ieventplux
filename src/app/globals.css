@@ -948,3 +948,35 @@ body {
 .ievx-growth-stat { transition: border-color .2s ease, box-shadow .2s ease; }
 .ievx-growth-stat:hover { border-color: color-mix(in srgb, var(--primary) 28%, var(--border)); box-shadow: 0 8px 20px rgb(6 38 32 / 6%); }
 @media (prefers-reduced-motion: reduce) { .ievx-growth-stat { transition: none; } }
+
+/* Compact mobile metrics: two readable columns instead of one oversized tile.
+ * Labels stay beside their small icon; amounts and supporting copy use full width. */
+@media (max-width: 639px) {
+  .ievx-workspace-metric {
+    min-height: 0;
+    gap: 9px;
+    padding: 12px;
+  }
+  .ievx-workspace-metric-top {
+    display: grid;
+    grid-template-columns: 27px minmax(0, 1fr);
+    gap: 7px;
+    align-items: center;
+  }
+  .ievx-workspace-metric-icon {
+    grid-column: 1;
+    grid-row: 1;
+    width: 27px;
+    height: 27px;
+    border-radius: 8px;
+  }
+  .ievx-workspace-metric-label {
+    grid-column: 2;
+    grid-row: 1;
+    min-width: 0;
+    font-size: 11px;
+    line-height: 1.35;
+  }
+  .ievx-workspace-metric-value { font-size: clamp(19px, 5.5vw, 23px); }
+  .ievx-workspace-metric-foot { font-size: 10.5px; }
+}
