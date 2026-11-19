@@ -310,6 +310,7 @@ model Event {
   agenda       AgendaItem[]
   contributors EventContributor[]
   souvenirs    EventSouvenirProduct[]
+  merchandiseLines MerchandiseOrderLine[]
   media        MediaAsset[] @relation("EventMedia")
   linkedClips  MediaAsset[] @relation("ClipLinksTo")
   interests    EventInterest[]
@@ -398,9 +399,80 @@ model EventSouvenirProduct {
   updatedAt      DateTime @updatedAt
 
   event          Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  orderLines     MerchandiseOrderLine[]
 
   @@unique([eventId, sku])
   @@index([eventId, active])
+}
+
+// Release B schema-only foundation. Paid merchandise checkout and collection
+// remain disabled until provider verification, reconciliation and refund QA.
+// A line snapshots the SKU/variant and unit price at checkout. Inventory
+// reservation and fulfillment are separate from the ticket's admission state.
+model MerchandiseOrderLine {
+  id               String   @id @default(cuid())
+  orderId          String
+  eventId          String
+  productId        String
+  skuSnapshot      String
+  variantSnapshot  String?
+  nameSnapshot     String
+  qty              Int
+  unitPriceMinor   Int
+  lineTotalMinor   Int
+  currency         String   @default("GHS")
+  status           String   @default("HELD") // HELD|PAID|EXPIRED|CANCELLED|REFUNDED|EXCEPTION_REVIEW
+  reservedUntil    DateTime
+  paidAt           DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  order            Order    @relation(fields: [orderId], references: [id])
+  event            Event    @relation(fields: [eventId], references: [id])
+  product          EventSouvenirProduct @relation(fields: [productId], references: [id])
+  entitlement      MerchandiseCollectionEntitlement?
+
+  @@index([orderId])
+  @@index([productId, status, reservedUntil])
+  @@index([eventId, status])
+}
+
+model MerchandiseCollectionEntitlement {
+  id              String   @id @default(cuid())
+  orderLineId     String   @unique
+  codeHash        String   @unique // never store a plaintext redeemable token
+  status          String   @default("UNPAID") // UNPAID|READY|PARTIALLY_COLLECTED|COLLECTED|CANCELLED|REFUNDED|EXCEPTION_REVIEW
+  qtyPurchased    Int
+  qtyCollected    Int      @default(0)
+  qtyRefunded     Int      @default(0)
+  qrVersion       Int      @default(1) // increment to revoke previously issued links
+  readyAt         DateTime?
+  collectedAt     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  orderLine       MerchandiseOrderLine @relation(fields: [orderLineId], references: [id])
+  actions         MerchandiseCollectionAction[]
+
+  @@index([status, updatedAt])
+}
+
+// Append-only idempotency and audit journal for explicit staff decisions.
+model MerchandiseCollectionAction {
+  id              String   @id @default(cuid())
+  entitlementId   String
+  actorUserId     String
+  idempotencyKey  String
+  action          String // REVIEW|COLLECT|CANCEL|REFUND|EXCEPTION
+  qty             Int      @default(0)
+  beforeStatus    String
+  afterStatus     String
+  createdAt       DateTime @default(now())
+  entitlement     MerchandiseCollectionEntitlement @relation(fields: [entitlementId], references: [id])
+
+  @@unique([entitlementId, idempotencyKey])
+  @@index([entitlementId, createdAt])
+  @@index([actorUserId, createdAt])
 }
 
 model MediaAsset {
@@ -686,6 +758,7 @@ model Order {
   tickets     Ticket[]
   invoices    Invoice[]
   refundCases RefundCase[]
+  merchandiseLines MerchandiseOrderLine[]
 
   @@index([eventId, status])
   @@index([orgId, createdAt])
