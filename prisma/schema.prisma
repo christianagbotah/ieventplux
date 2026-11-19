@@ -180,7 +180,7 @@ model KycProviderJob {
   lastCheckedAt  DateTime?
   decisionNote   String?
   createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  updatedAt      DateTime  @default(now()) @updatedAt
   org            Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
   user           User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
