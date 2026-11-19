@@ -8,7 +8,8 @@ export function parseSouvenirScan(value: string, allowedOrigin: string): Souveni
   const text = value.trim()
   if (!text || text.length > 900) return null
   if (TOKEN.test(text)) return { type: 'token', token: text }
-  if (REFERENCE.test(text)) return { type: 'reference', reference: text.toUpperCase() }
+  const printedReference = text.replace(/^RCPT-/i, '')
+  if (REFERENCE.test(printedReference)) return { type: 'reference', reference: printedReference.toUpperCase() }
   try {
     const url = new URL(text, allowedOrigin)
     const origin = new URL(allowedOrigin).origin

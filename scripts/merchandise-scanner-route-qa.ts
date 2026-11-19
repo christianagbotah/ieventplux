@@ -37,7 +37,7 @@ async function main() {
   await test('analyst without checkin:scan permission denied', order.reference, cookies[2], 403)
   await test('printed receipt malformed', '../../other', cookies[0], 400)
   await test('nonexistent receipt rejected', 'ORD-FAKERECEIPT', cookies[0], 404)
-  const response = await test('accepted event staff resolves printed receipt', order.reference.toLowerCase(), cookies[0], 200)
+  const response = await test('accepted event staff resolves exact printed RCPT- receipt', `RCPT-${order.reference}`.toLowerCase(), cookies[0], 200)
   assert.equal(response.headers.get('cache-control'), 'private, no-store')
   const body = await response.json() as { token: string }
   assert.equal(verifySouvenirCollectionToken(body.token), order.reference)

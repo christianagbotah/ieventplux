@@ -123,7 +123,7 @@ export default function SouvenirScannerView() {
           </CardContent></Card>
         <Card className="rounded-xl"><CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-base"><Search className="size-4 text-primary" /> Enter receipt number or paste QR link</CardTitle></CardHeader><CardContent>
           <form className="space-y-3" onSubmit={submit}><label htmlFor="souvenir-receipt-lookup" className="block text-xs font-semibold">Receipt number / collection QR</label>
-            <input id="souvenir-receipt-lookup" name="receipt" className="h-12 w-full rounded-xl border border-border bg-background px-3 font-mono text-sm" placeholder="ORD-XXXXXXXX or paste collection QR link" value={value} onChange={(event) => { setValue(event.target.value); setError('') }} maxLength={900} autoComplete="off" required />
+            <input id="souvenir-receipt-lookup" name="receipt" className="h-12 w-full rounded-xl border border-border bg-background px-3 font-mono text-sm" placeholder="RCPT-ORD-XXXXXXXX or paste collection QR link" value={value} onChange={(event) => { setValue(event.target.value); setError('') }} maxLength={900} autoComplete="off" required />
             <Button type="submit" className="min-h-11 w-full" disabled={busy || !value.trim()}>{busy ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Search className="mr-2 size-4" />} Find paid receipt</Button>
           </form>
         </CardContent></Card>

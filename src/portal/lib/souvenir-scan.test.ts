@@ -12,6 +12,7 @@ describe('souvenir scanner accepts only internal collection credentials', () => 
   })
   test('recognizes printed receipt references for staff-authorized lookup', () => {
     expect(parseSouvenirScan('  ord-abcdefgh  ', origin)).toEqual({ type: 'reference', reference: 'ORD-ABCDEFGH' })
+    expect(parseSouvenirScan('RCPT-ORD-ABCDEFGH', origin)).toEqual({ type: 'reference', reference: 'ORD-ABCDEFGH' })
   })
   test('rejects ticket QRs, arbitrary links, dangerous URLs and invalid credentials', () => {
     for (const bad of [

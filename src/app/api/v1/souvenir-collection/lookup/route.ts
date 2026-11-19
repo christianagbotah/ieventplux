@@ -14,7 +14,8 @@ export async function POST(req: NextRequest) {
     if (!souvenirCheckoutEnabled()) throw errors.unavailable('SOUVENIR_COLLECTION_DISABLED', 'Souvenir collection is not yet available.')
     await rateLimit(req, 'souvenir-reference-lookup', 30, 60_000)
     const input = await readJson<{ reference?: unknown }>(req)
-    const reference = typeof input.reference === 'string' ? input.reference.trim().toUpperCase() : ''
+    const entered = typeof input.reference === 'string' ? input.reference.trim().toUpperCase() : ''
+    const reference = entered.startsWith('RCPT-') ? entered.slice(5) : entered
     if (!/^ORD-[A-Z0-9-]{6,52}$/.test(reference)) throw errors.badRequest('Enter a valid receipt reference.')
     const order = await db.order.findUnique({
       where: { reference }, select: { eventId: true, souvenirItems: { select: { id: true }, take: 1 } },
