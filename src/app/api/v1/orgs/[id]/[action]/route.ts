@@ -209,8 +209,13 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
 
     if (action === 'refund-request') {
       if (!orgCan(membership.role, 'refund:request')) throw errors.forbidden('Refund requests require a finance role.')
+      await rateLimit(req, 'org-refund-request', 12, 60_000)
+      const reason = sanitizeText(body.reason, 500)
+      if (reason.length < 10) throw errors.badRequest('A refund request requires a reason of at least 10 characters.')
       const { requestRefund } = await import('@/server/services/refunds')
-      const rc = await requestRefund({ orderId: String(body.orderId ?? ''), requestedBy: user.id, reason: String(body.reason ?? '') })
+      const rc = await requestRefund({ scope: { kind: 'organization', orgId: id }, orderId: String(body.orderId ?? ''), requestedBy: user.id, reason })
+      const { audit } = await import('@/server/audit')
+      await audit({ actorUserId: user.id, actorLabel: user.email, action: 'refund.request', entityType: 'RefundCase', entityId: rc.id, after: { orderId: rc.orderId, amountMinor: rc.amountMinor, status: rc.status } })
       return jsonOk({ refundCase: rc })
     }
 
