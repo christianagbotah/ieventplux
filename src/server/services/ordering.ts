@@ -123,7 +123,7 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
     // Lock identity to prevent two checkouts for the same buyer from both
     // reading the old per-buyer total and reserving past the configured cap.
     if (input.userId) {
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${event.id}), hashtext(${input.userId}))`
+      await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtext(${event.id}), hashtext(${input.userId}))`
     }
     const currentEvent = await tx.event.findUnique({ where: { id: event.id }, select: { status: true, deletedAt: true } })
     if (!currentEvent || currentEvent.deletedAt || !['PUBLISHED', 'LIVE', 'POSTPONED'].includes(currentEvent.status)) {
