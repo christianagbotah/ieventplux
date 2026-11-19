@@ -60,6 +60,9 @@ jobs:
       - name: Security policy unit tests (payments, realtime, check-in and private KYC)
         run: bun test src/server/hubtel/security-policy.test.ts mini-services/realtime/room-authorization.test.ts src/portal/lib/checkin-policy.test.ts src/server/kyc-storage.test.ts src/server/kyc-requirements.test.ts
 
+      - name: Ticket inventory, promotion hold, and sales-window regression
+        run: bun test src/server/checkout-policy.test.ts src/server/ticket-sales-policy.test.ts src/server/media-storage.test.ts
+
       - name: Push schema + seed
         run: |
           bunx prisma db push --accept-data-loss

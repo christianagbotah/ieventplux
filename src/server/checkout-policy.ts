@@ -26,6 +26,15 @@ export function normalizeCheckoutLines(items: unknown): CheckoutLine[] {
  * snapshotted to the order, not recomputed after organizer policy changes.
  */
 export function checkoutLinePrice(unitMinor: number, qty: number, groupMinQty: number | null, groupPctOff: number | null) {
+  // Never persist an imprecise financial snapshot if a corrupted catalog row
+  // or untrusted caller supplies values outside the minor-unit contract.
+  if (!Number.isSafeInteger(unitMinor) || unitMinor < 0 || !Number.isSafeInteger(qty) || qty < 1 || qty > 10 ||
+      !Number.isSafeInteger(unitMinor * qty) ||
+      (groupMinQty !== null && (!Number.isSafeInteger(groupMinQty) || groupMinQty < 2 || groupMinQty > 10)) ||
+      (groupPctOff !== null && (!Number.isSafeInteger(groupPctOff) || groupPctOff < 1 || groupPctOff > 90)) ||
+      (groupMinQty === null) !== (groupPctOff === null)) {
+    throw errors.badRequest('Ticket pricing or group discount configuration is invalid. Refresh checkout.')
+  }
   const grossMinor = unitMinor * qty
   const discountMinor = groupMinQty && groupPctOff && qty >= groupMinQty ? Math.round((grossMinor * groupPctOff) / 100) : 0
   return { grossMinor, discountMinor, lineTotalMinor: grossMinor - discountMinor }
@@ -41,5 +50,6 @@ export function ticketQuotaRaised(previous: number, next: number): boolean {
 export function promotionHasCapacity(usedCount: number, pendingReservations: number, maxUses: number): boolean {
   return Number.isSafeInteger(usedCount) && Number.isSafeInteger(pendingReservations) &&
     Number.isSafeInteger(maxUses) && usedCount >= 0 && pendingReservations >= 0 &&
-    maxUses > 0 && usedCount + pendingReservations < maxUses
+    maxUses > 0 && Number.isSafeInteger(usedCount + pendingReservations) &&
+    usedCount + pendingReservations < maxUses
 }

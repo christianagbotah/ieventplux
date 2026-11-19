@@ -19,6 +19,19 @@ describe('checkout input safety', () => {
     expect(checkoutLinePrice(2500, 4, 3, 20)).toEqual({ grossMinor: 10000, discountMinor: 2000, lineTotalMinor: 8000 })
     expect(checkoutLinePrice(2500, 2, 3, 20).discountMinor).toBe(0)
   })
+  test('rejects invalid financial minor units and malformed group discounts', () => {
+    for (const [unit, qty, min, pct] of [
+      [NaN, 1, null, null], [Infinity, 1, null, null], [-1, 1, null, null],
+      [1.2, 1, null, null], [Number.MAX_SAFE_INTEGER, 2, null, null],
+      [100, 0, null, null], [100, 11, null, null],
+      [100, 2, 2, null], [100, 2, null, 10],
+      [100, 2, 1, 20], [100, 2, 2, 91], [100, 2, 2.5, 20],
+    ] as Array<[number, number, number | null, number | null]>) {
+      expect(() => checkoutLinePrice(unit, qty, min, pct)).toThrow()
+    }
+    expect(checkoutLinePrice(0, 1, null, null)).toEqual({ grossMinor: 0, discountMinor: 0, lineTotalMinor: 0 })
+    expect(checkoutLinePrice(99999999, 10, 10, 90)).toEqual({ grossMinor: 999999990, discountMinor: 899999991, lineTotalMinor: 99999999 })
+  })
   test('promotion capacity counts paid redemptions and active checkout holds', () => {
     expect(promotionHasCapacity(0, 0, 1)).toBe(true)
     expect(promotionHasCapacity(0, 1, 1)).toBe(false)
@@ -26,6 +39,8 @@ describe('checkout input safety', () => {
     expect(promotionHasCapacity(1, 1, 3)).toBe(true)
     expect(promotionHasCapacity(2, 1, 3)).toBe(false)
     expect(promotionHasCapacity(0, -1, 1)).toBe(false)
+    expect(promotionHasCapacity(Number.MAX_SAFE_INTEGER, 1, Number.MAX_SAFE_INTEGER)).toBe(false)
+    expect(promotionHasCapacity(0, 0, 0)).toBe(false)
   })
   test('switching unlimited inventory to limited is not a capacity increase', () => {
     expect(ticketQuotaRaised(0, 100)).toBe(false)

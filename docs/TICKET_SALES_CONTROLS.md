@@ -44,3 +44,11 @@ Expired or cancelled orders stop consuming a slot. The promotion lock is taken
 after inventory locks to match fulfilment lock ordering. This does not itself
 prove payment callback idempotency or a full end-to-end paid checkout; both
 remain explicit integration acceptance gates.
+
+## Minor-unit financial safety and CI regression (2026-11-19)
+
+The checkout price calculator now rejects malformed, fractional, negative, overflowing or inconsistent ticket/group-pricing inputs before a financial snapshot can be saved. Free tickets with valid zero pricing remain supported. Finite promotion usage arithmetic rejects integer overflow. The GitHub web CI job now explicitly runs checkout, sales-window, and public-image-storage regression tests before the database smoke suite. These are additional fail-closed invariants; they do not activate payment providers or prove real checkout delivery.
+
+## PostgreSQL advisory-lock Prisma compatibility (2026-11-19)
+
+The per-buyer advisory transaction lock is now selected through a supported integer projection (`SELECT 1 ... FROM pg_advisory_xact_lock(...)`), rather than returning PostgreSQL `void` to Prisma's `$queryRaw` deserializer. GitHub Actions previously failed at the development seed checkout on `P2010` because Prisma cannot deserialize `void`. The lock still executes within the same checkout transaction. CI's seeded checkout and end-to-end smoke tests must pass before this compatibility fix is promoted to production.
