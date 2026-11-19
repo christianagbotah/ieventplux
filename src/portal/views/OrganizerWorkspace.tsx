@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { connectRealtime } from '../realtime'
 import {
-  LayoutDashboard, CalendarPlus, CalendarClock, Users, Ticket, Radio, Megaphone, MessageSquare, Wallet, UserCog, CreditCard, Settings,
+  LayoutDashboard, CalendarPlus, CalendarClock, Users, Ticket, ShoppingBag, Radio, Megaphone, MessageSquare, Wallet, UserCog, CreditCard, Settings,
   ChevronLeft, ChevronRight, ChevronDown, Plus, Loader2, Camera, ScanLine, Search, Play, Square, RefreshCw, KeyRound, Pause, PlayCircle, Trash2, FileText, ShieldAlert, TrendingUp, Repeat, Activity, Vote, HandCoins, Sparkles, Download, Upload, CheckCircle2, Eye, EyeOff, Flag, History, Clock, MapPin, Pencil,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -31,6 +31,7 @@ import { VerificationDocuments } from '../components/VerificationDocuments'
 import { WorkspaceNavigation } from '../components/WorkspaceNavigation'
 import { WorkspaceMetric } from '../components/WorkspaceMetric'
 import { GrowthCommandCenter } from '../components/GrowthCommandCenter'
+import { MerchandiseReconciliationView } from '../components/MerchandiseReconciliationView'
 import { OrganizerEventCover } from '../components/OrganizerEventCover'
 import { EventCopyCopilot } from '../components/EventCopyCopilot'
 import { EventOperationsEditor } from '../components/EventOperationsEditor'
@@ -61,6 +62,7 @@ const NAV = [
   { key: 'growth', group: 'Overview', label: 'Growth & AI', icon: Sparkles },
   { key: 'events', group: 'Events & tickets', label: 'Events', icon: CalendarPlus },
   { key: 'orders', group: 'Events & tickets', label: 'Orders', icon: Ticket },
+  { key: 'merchandise', group: 'Events & tickets', label: 'Merchandise & Pickups', icon: ShoppingBag },
   { key: 'attendees', group: 'Events & tickets', label: 'Attendees & Check-in', icon: Users },
   { key: 'studio', group: 'Production', label: 'Streaming Studio', icon: Radio },
   { key: 'live', group: 'Production', label: 'Live Room', icon: Activity },
@@ -113,10 +115,12 @@ export default function OrganizerWorkspace({ route }: { route: Route }) {
   const activeOrg = memberships.find((m) => m.orgId === activeOrgId) ?? memberships[0]
   const canManageEvents = ['OWNER', 'ADMIN', 'EVENT_MANAGER'].includes(activeOrg.role)
   const canViewReports = ['OWNER', 'ADMIN', 'FINANCE', 'ANALYST'].includes(activeOrg.role)
+  const canViewMerchandise = ['OWNER', 'ADMIN', 'EVENT_MANAGER', 'FINANCE', 'ANALYST'].includes(activeOrg.role)
   const canViewGrowth = [...['OWNER', 'ADMIN', 'FINANCE', 'ANALYST'], 'EVENT_MANAGER'].includes(activeOrg.role)
   const visibleNav = NAV.filter((item) => {
     if (['insights', 'finance'].includes(item.key) && !canViewReports) return false
     if (item.key === 'growth' && !canViewGrowth) return false
+    if (item.key === 'merchandise' && !canViewMerchandise) return false
     return true
   })
 
@@ -218,6 +222,7 @@ export default function OrganizerWorkspace({ route }: { route: Route }) {
           {section === 'growth' && (canViewGrowth ? <div className="space-y-5"><GrowthCommandCenter orgId={activeOrg.orgId} canCreate={canManageEvents} />{canViewReports && <AiAdvisorCard orgId={activeOrg.orgId} />}</div> : <RoleRestricted />)}
           {section === 'events' && <EventsManager orgId={activeOrg.orgId} role={activeOrg.role} autoNew={route.query.get('new') === '1'} />}
           {section === 'orders' && <OrdersView orgId={activeOrg.orgId} />}
+          {section === 'merchandise' && (canViewMerchandise ? <MerchandiseReconciliationView key={activeOrg.orgId} orgId={activeOrg.orgId} /> : <RoleRestricted />)}
           {section === 'attendees' && <AttendeesView orgId={activeOrg.orgId} />}
           {section === 'studio' && <StudioView orgId={activeOrg.orgId} />}
           {section === 'live' && <LiveRoomView orgId={activeOrg.orgId} />}

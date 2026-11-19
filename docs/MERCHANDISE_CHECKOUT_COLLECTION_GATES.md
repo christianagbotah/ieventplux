@@ -67,3 +67,12 @@ The actual Next.js staging API (127.0.0.1:3179), explicitly connected to isolate
 - GET now explicitly reports `collectionEnabled` and sets `collectionAllowed=false` when rollout gates are off; the staff interface shows the disabled/awaiting-activation state rather than an actionable confirmation button.
 
 This verifies HTTP authorization and business logic on localhost. It **does not** substitute for actual Android/iPhone camera QR testing, real gateway settlement, a production migration review or physical-venue UAT. The production buyer/collection switches remain off.
+
+
+### Organizer merchandise reconciliation and CSV — 19 November 2026
+
+- Added **Organizer Studio → Merchandise & Pickups**. A mobile-friendly operational dashboard displays confirmed paid receipts, souvenir units ordered/collected/outstanding, bounded stock reservations, per-SKU status and the latest 35 staff handover audit records. It never counts unpaid or exception orders as collectible. Ticket admission remains separate.
+- `GET /api/v1/orgs/{orgId}/merchandise?eventId=...` requires authenticated, **accepted** organizational membership with `orders:view`, validates event ownership server-side, and returns `Cache-Control: private, no-store`. `CHECKIN_STAFF` and outsiders do not get access. Only roles with `org:view_finance` receive monetary totals; event managers see operations with financial values `null`.
+- `&format=csv` is the same role-restricted endpoint; requires explicit `eventId` and omits revenue columns for nonfinance roles. CSV escapes quotes, delimiters, line breaks and spreadsheet formula prefixes, including whitespace bypasses. The UI discloses the product display cap and labels exports accordingly.
+- **Real HTTP acceptance** against the isolated QA schema: ten role, scope, CSV and redaction checks passed (anonymous 401; outsider and check-in role 403; cross-org event 404; missing CSV event 400; event manager and finance requests 200 with appropriately redacted/included values). Direct isolated database tests independently matched paid-order counts and outstanding stock against synthetic orders, verified financial redaction and cross-org isolation. CSV safety has its own unit tests.
+- Reporting is **read-only**. No payment activation, real refund action, barcode scanning or stock write is performed by this screen. The launch gate for checkout and physical handover remains separate and OFF in production.
