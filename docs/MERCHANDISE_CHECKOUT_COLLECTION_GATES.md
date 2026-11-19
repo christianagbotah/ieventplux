@@ -54,3 +54,16 @@ Implementation increment: 19 November 2026. This is a review branch and **must n
 ### Financial exception audit validation
 
 A further isolated synthetic scenario tested a late **paid** mixed ticket/SKU order where its hold expired and another buyer bought the last SKU. The original late payment correctly entered `EXCEPTION_REVIEW`, recorded one `RefundCase` with `createdByKind='SYSTEM'` and nullable `requestedBy`, issued no ticket or invoice, and **released the ticket hold** obtained during the failed fulfilment. This also exposed a pre-existing FK mismatch in automatic refund creation (`requestedBy='system:...'` had referenced no User) and repaired it without impersonating a buyer or organizer. The organizer Finance view now names these records **Automatic finance review** rather than showing a fabricated requester. The additive schema delta is included in the reviewed migration SQL. No live money or production customer record was involved.
+
+### Authenticated staff QR HTTP acceptance — 19 November 2026
+
+The actual Next.js staging API (127.0.0.1:3179), explicitly connected to isolated `ieventplux_merch_qa_20261119`, completed the **12 HTTP and database checks** in `scripts/merchandise-route-qa.ts`. Its strict test guard rejects any other database schema. Tests create synthetic user accounts with `.invalid` email domains and temporary sessions, never real customers. Both checkout and collection switches were enabled **only in staging**.
+
+- Anonymous GET rejected (401); signed-in nonstaff, unaccepted invitations and analyst-only roles rejected (403).
+- Tampered QR reference rejected (404); accepted CHECKIN_STAFF successfully opened a verified paid collection receipt (200) with `Cache-Control: private, no-store`.
+- Unauthorized POST rejected (403) and missing handover confirmation rejected (400).
+- Authorized POST recorded exactly one unit; replay with the **same** client action ID returned `ALREADY_RECORDED` without a second handover; a separate attempted overcollection returned conflict (409).
+- Verified `collectedQty`, `stockFulfilled` and single `SouvenirCollection` ledger row; confirmed **admission Ticket rows were unchanged**.
+- GET now explicitly reports `collectionEnabled` and sets `collectionAllowed=false` when rollout gates are off; the staff interface shows the disabled/awaiting-activation state rather than an actionable confirmation button.
+
+This verifies HTTP authorization and business logic on localhost. It **does not** substitute for actual Android/iPhone camera QR testing, real gateway settlement, a production migration review or physical-venue UAT. The production buyer/collection switches remain off.

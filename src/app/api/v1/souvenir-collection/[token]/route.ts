@@ -37,7 +37,8 @@ export async function GET(_req: NextRequest, ctx: Context) {
     return jsonOk({
       receipt: {
         ...order,
-        collectionAllowed: order.status === 'PAID' && order.souvenirItems.every((item) => item.holdStatus === 'CONSUMED'),
+        collectionEnabled: souvenirCollectionEnabled(),
+        collectionAllowed: souvenirCollectionEnabled() && order.status === 'PAID' && order.souvenirItems.every((item) => item.holdStatus === 'CONSUMED'),
         items: order.souvenirItems.map(({ product, ...item }) => ({ ...item, product,
           remaining: Math.max(0, item.qty - item.collectedQty) })),
         souvenirItems: undefined,
