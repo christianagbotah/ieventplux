@@ -18,6 +18,7 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
         event: { select: { id: true, title: true, slug: true, startsAt: true, endsAt: true, timezone: true, coverImageUrl: true, venue: { select: { name: true, city: true } }, org: { select: { name: true, slug: true } } } },
         items: { include: { ticketType: { select: { name: true, kind: true } } } },
         tickets: { select: { id: true, code: true, status: true, ticketTypeId: true } },
+        souvenirItems: { include: { product: { select: { name: true, variantLabel: true, sku: true } } }, orderBy: { createdAt: 'asc' } },
         payments: true,
         // Refund lifecycle visible to the buyer/org staff (both already gated above).
         refundCases: { orderBy: { createdAt: 'asc' }, select: { id: true, status: true, type: true, amountMinor: true, reason: true, resolutionNote: true, createdAt: true, processedAt: true } },
@@ -37,7 +38,17 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
     }
     if (!allowed) throw errors.forbidden('You do not have access to this order.')
 
+    const hasMerch = order.souvenirItems.length > 0
+    let collectionQr: { url: string; dataUrl: string } | null = null
+    if (hasMerch && order.status === 'PAID') {
+      const { env } = await import('@/server/env')
+      const { souvenirCollectionToken } = await import('@/server/souvenir-policy')
+      const { qrDataUrl } = await import('@/server/qr')
+      const url = `${env.appUrl}/#/collect/${souvenirCollectionToken(order.reference)}`
+      collectionQr = { url, dataUrl: await qrDataUrl(url, 260) }
+    }
     return jsonOk({
+      collectionQr,
       order: {
         ...order,
         totalLabel: formatMoney(order.totalMinor, order.currency),

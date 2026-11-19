@@ -17,7 +17,7 @@ export async function GET(_req: NextRequest, ctx: Context) {
     })
     return jsonOk({ items: items.map((product) => ({
       ...product, available: Math.max(0, product.stockTotal - product.stockReserved - product.stockSold),
-      onlineOrderingEnabled: false, // Payment reservation and fulfilment are NOT active yet.
+      onlineOrderingEnabled: process.env.IEVENTPLUX_SOUVENIR_CHECKOUT_ENABLED === '1' && product.active && product.priceMinor > 0 && product.stockTotal > product.stockSold + product.stockReserved,
     })) }, { headers: { 'Cache-Control': 'private, no-store' } })
   })
 }

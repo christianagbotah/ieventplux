@@ -65,6 +65,14 @@ export default function AuthView({ mode }: { mode: 'signin' | 'register' }) {
     if (!me.user) throw new Error('Your credentials were accepted, but the sign-in session could not be verified. Please try signing in again.')
     setUser(me.user)
     setMemberships(me.memberships ?? [])
+    // An event staff member opening a collection QR can sign in without losing
+    // that specific route. Only a tightly scoped internal route is honored.
+    const next = new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('next')
+    if (next && /^\/collect\/ORD-[A-Z0-9-]{6,52}\.[a-f0-9]{32}$/i.test(next)) {
+      toast({ title: 'Signed in', description: 'Opening the event receipt for authorized staff.' })
+      navigate(next)
+      return
+    }
     // R20: platform staff (SUPPORT / MODERATOR / FINANCE_ADMIN / SUPER_ADMIN) sign in through
     // this same form — the session backend hands back their staff role, so we route them
     // straight into the admin console instead of the consumer landing page.
