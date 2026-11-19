@@ -19,7 +19,22 @@ export async function PATCH(req: NextRequest, ctx: Context) {
       const taken = await db.eventSouvenirProduct.findUnique({ where: { eventId_sku: { eventId: id, sku: data.sku } }, select: { id: true } })
       if (taken && taken.id !== product.id) throw errors.conflict('The SKU is already in use by another product.')
     }
-    return jsonOk({ item: await db.eventSouvenirProduct.update({ where: { id: product.id }, data }) })
+    // Check stock under the same row lock used by concurrent checkout holds.
+    // The organizer may not reduce inventory below already sold+reserved stock,
+    // nor silently reprice units held by customers or already sold.
+    const updated = await db.$executeRaw`
+      UPDATE "EventSouvenirProduct"
+      SET "name" = ${data.name}, "sku" = ${data.sku},
+        "variantLabel" = ${data.variantLabel}, "description" = ${data.description},
+        "imageUrl" = ${data.imageUrl}, "priceMinor" = ${data.priceMinor},
+        "stockTotal" = ${data.stockTotal}, "active" = ${data.active},
+        "sortOrder" = ${data.sortOrder}, "updatedAt" = NOW()
+      WHERE "id" = ${product.id} AND "eventId" = ${id}
+        AND "stockSold" + "stockReserved" <= ${data.stockTotal}
+        AND ("stockSold" + "stockReserved" = 0 OR "priceMinor" = ${data.priceMinor})
+    `
+    if (updated !== 1) throw errors.conflict('Inventory changed during editing. Refresh the product; stock cannot fall below paid or reserved items.')
+    return jsonOk({ item: await db.eventSouvenirProduct.findUnique({ where: { id: product.id } }) })
   })
 }
 export async function DELETE(_req: NextRequest, ctx: Context) {

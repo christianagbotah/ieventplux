@@ -12,7 +12,7 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
     const event = await db.event.findFirst({
       where: { OR: [{ slug: id }, { id }] },
       include: {
-        org: { select: { id: true, name: true, slug: true, tagline: true, logoUrl: true, verifiedAt: true, orgType: true } },
+        org: { select: { id: true, name: true, slug: true, tagline: true, logoUrl: true, verifiedAt: true, orgType: true, status: true } },
         venue: true,
         series: true,
         agenda: { orderBy: [{ sortOrder: 'asc' }, { startsAt: 'asc' }] },
@@ -76,6 +76,14 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
         ? { id: null, name: 'Location shared with approved guests', address: null, city: null, mapsUrl: null, lat: null, lng: null, accessibilityInfo: null }
         : event.venue
       : null
+    // Explicit release gate; provider credentials alone never activate charging.
+    const { merchandiseChargingEnabled } = await import('@/server/souvenir-policy')
+    const merchCheckoutReady = merchandiseChargingEnabled()
+      && (process.env.NODE_ENV !== 'production' || !(await (async () => {
+        const { resolveHubtelCreds, paymentsSimulatorActive } = await import('@/server/hubtel/credentials')
+        return paymentsSimulatorActive(await resolveHubtelCreds())
+      })()))
+
     // A spread of included Prisma relations accidentally exposes private media
     // metadata. Explicitly replace the relations with public projections.
     const { media, venue: _venue, broadcasts, ...safeEvent } = event
@@ -84,6 +92,8 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
     return jsonOk({
       event: {
         ...safeEvent,
+        org: { id: event.org.id, name: event.org.name, slug: event.org.slug, tagline: event.org.tagline,
+          verifiedAt: event.org.verifiedAt, orgType: event.org.orgType },
         tags: parseTags(event.tags),
         venueId: redactVenue ? null : event.venueId,
         directionsUrl: redactVenue ? null : event.directionsUrl,
@@ -92,7 +102,9 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
           id: item.id, title: item.caption || 'Event programme', downloadUrl: `/api/v1/events/${event.id}/programmes/${item.id}`,
         })),
         souvenirs: event.souvenirs.map((p) => ({
-          ...p, available: Math.max(0, p.stockTotal - p.stockSold - p.stockReserved), onlineOrderingEnabled: false,
+          ...p, available: Math.max(0, p.stockTotal - p.stockSold - p.stockReserved),
+          onlineOrderingEnabled: merchCheckoutReady && event.org.status === 'ACTIVE' && ['PUBLISHED', 'LIVE', 'POSTPONED'].includes(event.status)
+            && p.priceMinor > 0 && p.stockSold + p.stockReserved < p.stockTotal,
         })),
         broadcasts,
         venue: venueSafe,

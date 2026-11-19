@@ -4,6 +4,9 @@ import { db } from '@/lib/db'
 import { getSession } from '@/server/auth'
 import { fulfilFreeOrder } from '@/server/services/fulfilment'
 import { formatMoney } from '@/server/money'
+import { souvenirCollectionToken } from '@/server/souvenir-policy'
+import { env } from '@/server/env'
+import { orgCan } from '@/server/permissions'
 
 type RouteContext = { params: Promise<{ ref: string }> }
 
@@ -17,8 +20,13 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
       include: {
         event: { select: { id: true, title: true, slug: true, startsAt: true, endsAt: true, timezone: true, coverImageUrl: true, venue: { select: { name: true, city: true } }, org: { select: { name: true, slug: true } } } },
         items: { include: { ticketType: { select: { name: true, kind: true } } } },
+        merchandiseLines: { select: { id: true, qty: true, unitPriceMinor: true, lineTotalMinor: true,
+          status: true, skuSnapshot: true, nameSnapshot: true, variantSnapshot: true,
+          product: { select: { imageUrl: true } },
+          entitlement: { select: { qtyCollected: true, qtyRefunded: true, status: true } },
+        } },
         tickets: { select: { id: true, code: true, status: true, ticketTypeId: true } },
-        payments: true,
+        payments: { select: { id: true, status: true, provider: true, attemptNo: true, reference: true } },
         // Refund lifecycle visible to the buyer/org staff (both already gated above).
         refundCases: { orderBy: { createdAt: 'asc' }, select: { id: true, status: true, type: true, amountMinor: true, reason: true, resolutionNote: true, createdAt: true, processedAt: true } },
       },
@@ -31,18 +39,30 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
     if (session) {
       if (order.userId === session.user.id) allowed = true
       else {
-        const membership = await db.membership.findFirst({ where: { userId: session.user.id, orgId: order.orgId } })
-        if (membership) allowed = true
+        const membership = await db.membership.findFirst({ where: { userId: session.user.id, orgId: order.orgId, acceptedAt: { not: null } }, select: { role: true } })
+        if (membership && orgCan(membership.role, 'orders:view')) allowed = true
       }
     }
     if (!allowed) throw errors.forbidden('You do not have access to this order.')
 
+    const { merchandiseLines, ...safeOrder } = order
+    const souvenirItems = merchandiseLines.map((line) => ({
+      id: line.id, qty: line.qty, unitPriceMinor: line.unitPriceMinor,
+      lineTotalMinor: line.lineTotalMinor, collectedQty: line.entitlement?.qtyCollected ?? 0,
+      refundedQty: line.entitlement?.qtyRefunded ?? 0,
+      holdStatus: line.status === 'PAID' ? 'CONSUMED' : line.status,
+      product: { name: line.nameSnapshot, sku: line.skuSnapshot,
+        variantLabel: line.variantSnapshot, imageUrl: line.product.imageUrl },
+    }))
     return jsonOk({
       order: {
-        ...order,
+        ...safeOrder, souvenirItems,
         totalLabel: formatMoney(order.totalMinor, order.currency),
         subtotalLabel: formatMoney(order.subtotalMinor, order.currency),
         feeLabel: formatMoney(order.platformFeeMinor, order.currency),
+        collectionUrl: order.status === 'PAID' && merchandiseLines.length
+          ? `${env.appUrl}/#/collection/${souvenirCollectionToken(order.reference)}` : null,
+        collectionNote: merchandiseLines.length ? 'The collection QR opens a staff-only verification page; it never grants venue admission. Show ticket QR codes separately.' : null,
       },
     })
   })

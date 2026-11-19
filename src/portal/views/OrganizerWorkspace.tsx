@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { connectRealtime } from '../realtime'
 import {
   LayoutDashboard, CalendarPlus, CalendarClock, Users, Ticket, Radio, Megaphone, MessageSquare, Wallet, UserCog, CreditCard, Settings,
-  ChevronLeft, ChevronRight, ChevronDown, Plus, Loader2, Camera, ScanLine, Search, Play, Square, RefreshCw, KeyRound, Pause, PlayCircle, Trash2, FileText, ShieldAlert, TrendingUp, Repeat, Activity, Vote, HandCoins, Sparkles, Download, Upload, CheckCircle2, Eye, EyeOff, Flag, History, Clock, MapPin, Pencil,
+  ChevronLeft, ChevronRight, ChevronDown, Plus, Loader2, Camera, PackageCheck, ScanLine, Search, Play, Square, RefreshCw, KeyRound, Pause, PlayCircle, Trash2, FileText, ShieldAlert, TrendingUp, Repeat, Activity, Vote, HandCoins, Sparkles, Download, Upload, CheckCircle2, Eye, EyeOff, Flag, History, Clock, MapPin, Pencil,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -62,6 +62,7 @@ const NAV = [
   { key: 'events', group: 'Events & tickets', label: 'Events', icon: CalendarPlus },
   { key: 'orders', group: 'Events & tickets', label: 'Orders', icon: Ticket },
   { key: 'attendees', group: 'Events & tickets', label: 'Attendees & Check-in', icon: Users },
+  { key: 'collection', group: 'Events & tickets', label: 'Souvenir collection', icon: PackageCheck },
   { key: 'studio', group: 'Production', label: 'Streaming Studio', icon: Radio },
   { key: 'live', group: 'Production', label: 'Live Room', icon: Activity },
   { key: 'promotions', group: 'Engagement', label: 'Promotions', icon: Megaphone },
@@ -112,11 +113,14 @@ export default function OrganizerWorkspace({ route }: { route: Route }) {
   if (!user || memberships.length === 0) return null
   const activeOrg = memberships.find((m) => m.orgId === activeOrgId) ?? memberships[0]
   const canManageEvents = ['OWNER', 'ADMIN', 'EVENT_MANAGER'].includes(activeOrg.role)
+  const canCollect = ['OWNER', 'ADMIN', 'EVENT_MANAGER', 'CHECKIN_STAFF'].includes(activeOrg.role)
   const canViewReports = ['OWNER', 'ADMIN', 'FINANCE', 'ANALYST'].includes(activeOrg.role)
   const canViewGrowth = [...['OWNER', 'ADMIN', 'FINANCE', 'ANALYST'], 'EVENT_MANAGER'].includes(activeOrg.role)
   const visibleNav = NAV.filter((item) => {
     if (['insights', 'finance'].includes(item.key) && !canViewReports) return false
     if (item.key === 'growth' && !canViewGrowth) return false
+    if (item.key === 'collection' && !canCollect) return false
+    if (item.key === 'orders' && !['OWNER', 'ADMIN', 'EVENT_MANAGER', 'FINANCE', 'ANALYST'].includes(activeOrg.role)) return false
     return true
   })
 
@@ -218,6 +222,7 @@ export default function OrganizerWorkspace({ route }: { route: Route }) {
           {section === 'growth' && (canViewGrowth ? <div className="space-y-5"><GrowthCommandCenter orgId={activeOrg.orgId} canCreate={canManageEvents} />{canViewReports && <AiAdvisorCard orgId={activeOrg.orgId} />}</div> : <RoleRestricted />)}
           {section === 'events' && <EventsManager orgId={activeOrg.orgId} role={activeOrg.role} autoNew={route.query.get('new') === '1'} />}
           {section === 'orders' && <OrdersView orgId={activeOrg.orgId} />}
+          {section === 'collection' && (canCollect ? <Card className="rounded-2xl"><CardHeader><CardTitle className="flex items-center gap-2 text-base"><PackageCheck className="size-5 text-primary" /> Souvenir collection desk</CardTitle></CardHeader><CardContent className="space-y-3"><p className="text-sm leading-relaxed text-muted-foreground">Scan a customer's paid receipt QR using the normal Camera app on your phone, or type the receipt reference. Staff must review the order and explicitly confirm each item handed over. Ticket admission remains a separate QR workflow.</p><Button className="min-h-11 w-full sm:w-auto" onClick={() => navigate('/collection')}><ScanLine className="mr-2 size-4" /> Open collection desk</Button></CardContent></Card> : <RoleRestricted />)}
           {section === 'attendees' && <AttendeesView orgId={activeOrg.orgId} />}
           {section === 'studio' && <StudioView orgId={activeOrg.orgId} />}
           {section === 'live' && <LiveRoomView orgId={activeOrg.orgId} />}
