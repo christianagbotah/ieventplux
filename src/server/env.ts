@@ -128,6 +128,16 @@ export async function integrationStatuses(): Promise<IntegrationStatus[]> {
   const view = hubtelCredentialsView(creds)
   const checkoutSim = paymentsSimulatorActive(creds)
   const smsSim = smsSimulatorActive(creds)
+  // A feature toggle is not evidence that the external LLM SDK can initialize.
+  // This probes local SDK configuration only, not billable AI generation.
+  let aiConfigured = false
+  if (env.aiEnabled) {
+    try {
+      const { llmClient } = await import('./ai/llm')
+      await llmClient()
+      aiConfigured = true
+    } catch { /* Missing/unreadable provider credentials: unavailable, never simulated. */ }
+  }
   const { smileProviderStatus } = await import('./identity-provider/smile')
   const biometric = smileProviderStatus()
   return [
@@ -197,12 +207,12 @@ export async function integrationStatuses(): Promise<IntegrationStatus[]> {
     {
       key: 'ai-concierge',
       name: 'AI concierge (LLM + voice)',
-      stage: 'implemented',
-      configured: env.aiEnabled,
-      mode: env.aiEnabled ? 'real' : 'unavailable',
-      detail: env.aiEnabled
-        ? 'Z.ai SDK chat/ASR/TTS active for the attendee concierge (text + real-time voice conversation).'
-        : 'Disabled via AI_CONCIERGE_ENABLED=false.',
+      stage: aiConfigured ? 'implemented' : 'externally-blocked',
+      configured: aiConfigured,
+      mode: aiConfigured ? 'real' : 'unavailable',
+      detail: aiConfigured
+        ? 'Z.ai SDK credentials are locally readable. A successful external response and production provider entitlement have not been verified by this status check.'
+        : env.aiEnabled ? 'AI is enabled in settings but provider SDK configuration is absent or invalid. AI generation remains unavailable.' : 'Disabled via AI_CONCIERGE_ENABLED=false.',
     },
     {
       key: 'realtime',

@@ -105,14 +105,23 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
       return jsonOk(await orgSubscription(id))
     }
 
+    if (action === 'growth') {
+      if (!orgCan(membership.role, 'orders:view')) throw errors.forbidden('Growth intelligence requires organizer reporting access.')
+      const { orgGrowthIntelligence } = await import('@/server/services/growth')
+      const result = await orgGrowthIntelligence(id)
+      return jsonOk(result, { headers: { 'Cache-Control': 'private, no-store' } })
+    }
+
     if (action === 'overview') {
+      const financeAllowed = orgCan(membership.role, 'org:view_finance')
+      const ordersAllowed = orgCan(membership.role, 'orders:view')
       const now = new Date()
       const [published, draft, live, ticketsSold, revenue, followers, upcoming, ticketTypeCount, orgRow, verificationRow] = await Promise.all([
         db.event.count({ where: { orgId: id, status: { in: ['PUBLISHED', 'SCHEDULED'] }, deletedAt: null } }),
         db.event.count({ where: { orgId: id, status: 'DRAFT', deletedAt: null } }),
         db.event.count({ where: { orgId: id, status: 'LIVE', deletedAt: null } }),
-        db.ticket.count({ where: { event: { orgId: id } } }),
-        db.order.aggregate({ where: { orgId: id, status: 'PAID' }, _sum: { totalMinor: true } }),
+        ordersAllowed ? db.ticket.count({ where: { event: { orgId: id } } }) : Promise.resolve(null),
+        financeAllowed ? db.order.aggregate({ where: { orgId: id, status: 'PAID' }, _sum: { totalMinor: true } }) : Promise.resolve(null),
         db.follow.count({ where: { orgId: id } }),
         db.event.findMany({ where: { orgId: id, startsAt: { gte: now }, deletedAt: null, status: { in: ['PUBLISHED', 'SCHEDULED'] } }, orderBy: { startsAt: 'asc' }, take: 5 }),
         db.ticketType.count({ where: { event: { orgId: id }, active: true } }),
@@ -128,11 +137,11 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
         const arr = JSON.parse(verificationRow?.evidence ?? '[]')
         if (Array.isArray(arr)) evidenceCount = arr.length
       } catch { evidenceCount = 0 }
-      const { orgFinanceSummary } = await import('@/server/ledger')
+      const { orgFinanceSummary } = financeAllowed ? await import('@/server/ledger') : { orgFinanceSummary: null }
       return jsonOk({
         counts: { published, draft, live, ticketsSold, followers },
-        grossMinor: revenue._sum.totalMinor ?? 0,
-        finance: await orgFinanceSummary(id),
+        grossMinor: financeAllowed ? (revenue?._sum.totalMinor ?? 0) : null,
+        finance: financeAllowed && orgFinanceSummary ? await orgFinanceSummary(id) : null,
         upcoming,
         onboarding: {
           orgStatus: orgRow?.status ?? 'PENDING_VERIFICATION',
@@ -144,6 +153,7 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
     }
 
     if (action === 'insights') {
+      if (!orgCan(membership.role, 'org:view_finance')) throw errors.forbidden('Financial analytics require an authorized finance or analyst role.')
       // Analytics derived only from real transactional rows — see the service
       // header for the honesty contract (no invented page-view metrics).
       const { orgInsights } = await import('@/server/services/insights')

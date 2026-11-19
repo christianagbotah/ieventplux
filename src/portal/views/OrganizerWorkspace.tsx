@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { connectRealtime } from '../realtime'
 import {
-  LayoutDashboard, CalendarPlus, Users, Ticket, Radio, Megaphone, MessageSquare, Wallet, UserCog, CreditCard, Settings,
+  LayoutDashboard, CalendarPlus, CalendarClock, Users, Ticket, Radio, Megaphone, MessageSquare, Wallet, UserCog, CreditCard, Settings,
   ChevronLeft, ChevronRight, ChevronDown, Plus, Loader2, Camera, ScanLine, Search, Play, Square, RefreshCw, KeyRound, Pause, PlayCircle, Trash2, FileText, ShieldAlert, TrendingUp, Repeat, Activity, Vote, HandCoins, Sparkles, Download, Upload, CheckCircle2, Eye, EyeOff, Flag, History, Clock, MapPin, Pencil,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -30,6 +30,8 @@ import { ORGANIZER_TYPE_CONFIG, organizerType, type OrganizerType, type ProfileD
 import { VerificationDocuments } from '../components/VerificationDocuments'
 import { WorkspaceNavigation } from '../components/WorkspaceNavigation'
 import { WorkspaceMetric } from '../components/WorkspaceMetric'
+import { GrowthCommandCenter } from '../components/GrowthCommandCenter'
+import { EventCopyCopilot } from '../components/EventCopyCopilot'
 import { VenueLocationFields } from '../components/VenueLocationFields'
 import { COUNTRY_NAMES } from '../lib/venue-locations'
 
@@ -53,6 +55,7 @@ interface OrgEvent {
 const NAV = [
   { key: 'dashboard', group: 'Overview', label: 'Dashboard', icon: LayoutDashboard },
   { key: 'insights', group: 'Overview', label: 'Insights', icon: TrendingUp },
+  { key: 'growth', group: 'Overview', label: 'Growth & AI', icon: Sparkles },
   { key: 'events', group: 'Events & tickets', label: 'Events', icon: CalendarPlus },
   { key: 'orders', group: 'Events & tickets', label: 'Orders', icon: Ticket },
   { key: 'attendees', group: 'Events & tickets', label: 'Attendees & Check-in', icon: Users },
@@ -105,6 +108,14 @@ export default function OrganizerWorkspace({ route }: { route: Route }) {
 
   if (!user || memberships.length === 0) return null
   const activeOrg = memberships.find((m) => m.orgId === activeOrgId) ?? memberships[0]
+  const canManageEvents = ['OWNER', 'ADMIN', 'EVENT_MANAGER'].includes(activeOrg.role)
+  const canViewReports = ['OWNER', 'ADMIN', 'FINANCE', 'ANALYST'].includes(activeOrg.role)
+  const canViewGrowth = [...['OWNER', 'ADMIN', 'FINANCE', 'ANALYST'], 'EVENT_MANAGER'].includes(activeOrg.role)
+  const visibleNav = NAV.filter((item) => {
+    if (['insights', 'finance'].includes(item.key) && !canViewReports) return false
+    if (item.key === 'growth' && !canViewGrowth) return false
+    return true
+  })
 
   return (
     <div className="ievx-workspace-shell mx-auto max-w-[1600px] px-0 py-0 md:gap-4 md:overflow-hidden md:px-5 md:py-4">
@@ -149,7 +160,7 @@ export default function OrganizerWorkspace({ route }: { route: Route }) {
         )}
         <WorkspaceNavigation
           title="Workspace sections"
-          items={NAV}
+          items={visibleNav}
           active={section}
           collapsed={sidebarCollapsed && !sidebarOpen}
           onToggleCollapse={() => setSidebarCollapsed((value) => !value)}
@@ -189,18 +200,19 @@ export default function OrganizerWorkspace({ route }: { route: Route }) {
               <h1 className="ievx-workspace-toolbar-title">{NAV.find((item) => item.key === section)?.label ?? 'Dashboard'}</h1>
             </div>
           </div>
-          <Button
+          {canManageEvents && <Button
             size="sm"
             className="shrink-0 rounded-lg"
             onClick={() => navigate('/organizer?tab=events&new=1', { replace: true })}
           >
             <Plus className="size-4" aria-hidden />
             <span className="hidden min-[380px]:inline">New event</span>
-          </Button>
+          </Button>}
         </div>
         <div key={section} className="ievx-view-enter">
-          {section === 'dashboard' && <Dashboard orgId={activeOrg.orgId} route={route} />}
-          {section === 'insights' && <InsightsView orgId={activeOrg.orgId} />}
+          {section === 'dashboard' && <Dashboard orgId={activeOrg.orgId} role={activeOrg.role} />}
+          {section === 'insights' && (canViewReports ? <InsightsView orgId={activeOrg.orgId} /> : <RoleRestricted />)}
+          {section === 'growth' && (canViewGrowth ? <div className="space-y-5"><GrowthCommandCenter orgId={activeOrg.orgId} canCreate={canManageEvents} />{canViewReports && <AiAdvisorCard orgId={activeOrg.orgId} />}</div> : <RoleRestricted />)}
           {section === 'events' && <EventsManager orgId={activeOrg.orgId} role={activeOrg.role} autoNew={route.query.get('new') === '1'} />}
           {section === 'orders' && <OrdersView orgId={activeOrg.orgId} />}
           {section === 'attendees' && <AttendeesView orgId={activeOrg.orgId} />}
@@ -208,7 +220,7 @@ export default function OrganizerWorkspace({ route }: { route: Route }) {
           {section === 'live' && <LiveRoomView orgId={activeOrg.orgId} />}
           {section === 'promotions' && <PromotionsView orgId={activeOrg.orgId} />}
           {section === 'messages' && <MessagesView orgId={activeOrg.orgId} />}
-          {section === 'finance' && <FinanceView orgId={activeOrg.orgId} role={activeOrg.role} />}
+          {section === 'finance' && (canViewReports ? <FinanceView orgId={activeOrg.orgId} role={activeOrg.role} /> : <RoleRestricted />)}
           {section === 'team' && <TeamView orgId={activeOrg.orgId} role={activeOrg.role} />}
           {section === 'billing' && <BillingView orgId={activeOrg.orgId} />}
           {section === 'settings' && <SettingsView orgId={activeOrg.orgId} role={activeOrg.role} />}
@@ -216,6 +228,10 @@ export default function OrganizerWorkspace({ route }: { route: Route }) {
       </div>
     </div>
   )
+}
+
+function RoleRestricted() {
+  return <div role="status" className="rounded-2xl border border-border bg-card p-6"><ShieldAlert className="mb-3 size-6 text-amber-600" /><p className="text-base font-bold">Restricted workspace section</p><p className="mt-2 text-sm text-muted-foreground">Ask your organization owner or administrator for the relevant reporting permissions. Your other sections remain available.</p></div>
 }
 
 // ── Dashboard ────────────────────────────────────────────────────────────────
@@ -227,93 +243,110 @@ interface OnboardingData {
   ticketTypeCount: number
 }
 
-function Dashboard({ orgId, route }: { orgId: string; route: Route }) {
+function Dashboard({ orgId, role }: { orgId: string; role: string }) {
   const [data, setData] = useState<{
-    counts: { published: number; draft: number; live: number; ticketsSold: number; followers: number }
-    grossMinor: number
-    finance: { availablePayoutMinor: number; pendingSettlementMinor: number; grossSalesMinor: number; platformFeesMinor: number; payoutsCompletedMinor: number }
+    counts: { published: number; draft: number; live: number; ticketsSold: number | null; followers: number }
+    grossMinor: number | null
+    finance: { availablePayoutMinor: number; pendingSettlementMinor: number; grossSalesMinor: number; platformFeesMinor: number; payoutsCompletedMinor: number } | null
     upcoming: OrgEvent[]
     onboarding?: OnboardingData
   } | null>(null)
+  const [error, setError] = useState('')
+  const [revision, setRevision] = useState(0)
+  const canCreate = ['OWNER', 'ADMIN', 'EVENT_MANAGER'].includes(role)
+  const canReview = ['OWNER', 'ADMIN'].includes(role)
+  const canReport = ['OWNER', 'ADMIN', 'FINANCE', 'ANALYST'].includes(role)
+  const canGrowth = canReport || canCreate
 
   useEffect(() => {
-    void api.get<typeof data>(`/orgs/${orgId}/overview`).then(setData).catch(() => setData(null))
-  }, [orgId])
+    const controller = new AbortController()
+    setData(null)
+    setError('')
+    void api.get<NonNullable<typeof data>>(`/orgs/${orgId}/overview`, { signal: controller.signal })
+      .then((result) => { if (!controller.signal.aborted) setData(result) })
+      .catch((reason) => {
+        if (!controller.signal.aborted) setError(reason instanceof ApiClientError ? reason.message : 'Dashboard data is unavailable. Try refreshing.')
+      })
+    return () => controller.abort()
+  }, [orgId, revision])
 
+  if (!data && error) return <div role="alert" className="rounded-2xl border border-destructive/30 bg-destructive/5 p-5"><p className="text-sm font-bold">Unable to load your workspace</p><p className="mt-1 text-xs text-muted-foreground">{error}</p><Button className="mt-4" size="sm" variant="outline" onClick={() => setRevision((r) => r + 1)}><RefreshCw className="mr-2 size-4" /> Retry</Button></div>
   if (!data) return <LoadingBlock />
+  const finance = canReport ? data.finance : null
   const cards = [
-    { label: 'Tickets sold', value: data.counts.ticketsSold.toLocaleString(), icon: Ticket },
-    { label: 'Gross sales', value: money(data.finance.grossSalesMinor), icon: TrendingUp },
-    { label: 'Available payout', value: money(data.finance.availablePayoutMinor), icon: Wallet },
-    { label: 'Followers', value: data.counts.followers.toLocaleString(), icon: Users },
+    { label: 'Active events', value: (data.counts.published + data.counts.live).toLocaleString(), icon: CalendarClock, description: 'Published, scheduled and live' },
+    ...(data.counts.ticketsSold !== null ? [{ label: 'Tickets issued', value: data.counts.ticketsSold.toLocaleString(), icon: Ticket, description: 'Across your events' }] : []),
+    ...(finance ? [
+      { label: 'Gross ticket sales', value: money(finance.grossSalesMinor), icon: TrendingUp, description: 'Confirmed payments · not platform profit' },
+      { label: 'Available payout', value: money(finance.availablePayoutMinor), icon: Wallet, description: 'Subject to verified settlement' },
+    ] : [{ label: 'Followers', value: data.counts.followers.toLocaleString(), icon: Users, description: 'Organizer community' }]),
   ]
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="ievx-workspace-heading">Event performance</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{data.counts.published} published · {data.counts.draft} drafts · {data.counts.live} live now</p>
+    <div className="space-y-5">
+      <section className="ievx-growth-hero relative overflow-hidden rounded-[22px] p-5 sm:p-6" aria-label="Organizer dashboard overview">
+        <div className="relative z-10 flex flex-wrap items-start justify-between gap-5">
+          <div className="max-w-2xl">
+            <p className="text-[11px] font-extrabold uppercase tracking-[.16em] text-emerald-200">Organizer command desk</p>
+            <h2 className="mt-2 text-2xl font-extrabold tracking-tight text-white sm:text-[30px]">Make every event count.</h2>
+            <p className="mt-2 max-w-xl text-sm leading-relaxed text-white/80">Manage your events, stay ahead of the next launch and bring your audience together. Your workspace is updated from real organizer records.</p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {canCreate && <Button size="sm" className="border-none bg-white text-emerald-950 hover:bg-emerald-50" onClick={() => navigate('/organizer?tab=events&new=1')}><Plus className="mr-1.5 size-4" /> Create event</Button>}
+              {canGrowth && <Button size="sm" variant="outline" className="border-white/40 bg-white/5 text-white hover:bg-white/15 hover:text-white" onClick={() => navigate('/organizer?tab=growth')}><Sparkles className="mr-1.5 size-4" /> Growth & AI</Button>}
+            </div>
+          </div>
+          <div className="flex shrink-0 gap-2">
+            <div className="rounded-xl border border-white/20 bg-white/10 px-3.5 py-3 text-center"><p className="text-xl font-extrabold tabular-nums text-white">{data.counts.published}</p><p className="text-[11px] text-white/75">Published</p></div>
+            <div className="rounded-xl border border-white/20 bg-white/10 px-3.5 py-3 text-center"><p className="text-xl font-extrabold tabular-nums text-white">{data.counts.draft}</p><p className="text-[11px] text-white/75">Drafts</p></div>
+            <div className="rounded-xl border border-white/20 bg-white/10 px-3.5 py-3 text-center"><p className="text-xl font-extrabold tabular-nums text-white">{data.counts.live}</p><p className="text-[11px] text-white/75">Live</p></div>
+          </div>
         </div>
+      </section>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div><h3 className="ievx-workspace-heading">Performance at a glance</h3><p className="mt-0.5 text-xs text-muted-foreground">Figures reflect actual organizer activity, not predictions</p></div>
+        <Button size="sm" variant="outline" className="h-8" onClick={() => setRevision((r) => r + 1)}><RefreshCw className="mr-1.5 size-3.5" /> Refresh</Button>
       </div>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {cards.map((metric) => (
-          <WorkspaceMetric
-            key={metric.label}
-            label={metric.label}
-            value={metric.value}
-            icon={metric.icon}
-            description={metric.label === 'Gross sales' ? 'Confirmed ticket revenue' : metric.label === 'Available payout' ? 'Subject to verified settlement' : undefined}
-          />
-        ))}
+      <div className={`grid gap-3 sm:grid-cols-2 ${cards.length === 4 ? 'xl:grid-cols-4' : 'xl:grid-cols-3'}`}>
+        {cards.map((metric) => <WorkspaceMetric key={metric.label} label={metric.label} value={metric.value} icon={metric.icon} description={metric.description} />)}
       </div>
-      {/* R23: verification state surfaced on the dashboard — previously invisible
-          unless the user opened Settings (org sits at PENDING_VERIFICATION by
-          default, so new organizers never saw why paid sales were blocked). */}
-      {data.onboarding && data.onboarding.orgStatus !== 'ACTIVE' && (
+      {canReview && data.onboarding && data.onboarding.orgStatus !== 'ACTIVE' && (
         <VerificationBanner onboarding={data.onboarding} onOpenSettings={() => navigate('/organizer?tab=settings')} />
       )}
-      {/* R23: getting-started checklist from REAL overview data; hidden once all
-          four steps are complete so established organizers keep a clean dashboard. */}
-      {data.onboarding && <OnboardingChecklist counts={data.counts} onboarding={data.onboarding} />}
-      <div className="grid gap-4 lg:grid-cols-2">
-        {/* R19b: min-w-0 lets the grid track shrink below max-content — long event
-            titles otherwise forced the card past the phone viewport (104px horizontal
-            scroll at 390px; truncation only works when the item can actually shrink). */}
+      {canCreate && data.onboarding && <OnboardingChecklist counts={data.counts} onboarding={data.onboarding} />}
+      {canGrowth && <GrowthCommandCenter orgId={orgId} compact canCreate={canCreate} />}
+      <div className={`grid gap-4 ${finance ? 'lg:grid-cols-2' : ''}`}>
         <Card className="min-w-0 rounded-2xl">
-          <CardHeader className="pb-2"><CardTitle className="text-base">Next events</CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-base"><CalendarClock className="size-4 text-primary" /> Next events</CardTitle></CardHeader>
           <CardContent className="space-y-2">
             {data.upcoming.length === 0 && (
               <EmptyState
-                title="No events yet"
-                description="Create your first event — free RSVP works immediately; paid sales unlock after verification."
-                action={<Button size="sm" className="rounded-full" onClick={() => navigate('/organizer?tab=events&new=1')}><Plus className="mr-1 h-4 w-4" /> Create your first event</Button>}
+                title="No upcoming events"
+                description={canCreate ? 'Create your next event. Free RSVP can work while verification is in progress.' : 'Your organizer has no upcoming published events right now.'}
+                action={canCreate ? <Button size="sm" className="rounded-lg" onClick={() => navigate('/organizer?tab=events&new=1')}><Plus className="mr-1 size-4" /> Create event</Button> : undefined}
               />
             )}
             {data.upcoming.map((e) => (
-              <button key={e.id} className="flex w-full items-center justify-between gap-2 rounded-xl bg-secondary/50 p-3 text-left text-sm hover:bg-secondary" onClick={() => navigate(`/event/${e.slug}`)}>
-                <div className="min-w-0">
-                  <p className="truncate font-semibold">{e.title}</p>
-                  <p className="text-xs text-muted-foreground">{dateLong(e.startsAt)}</p>
-                </div>
-                <Badge variant={statusTone(e.status) === 'success' ? 'default' : 'secondary'} className="capitalize shrink-0 text-[10px]">{humanize(e.status)}</Badge>
+              <button key={e.id} className="flex w-full items-center justify-between gap-3 rounded-xl bg-secondary/50 p-3 text-left text-sm transition-colors hover:bg-secondary focus-visible:outline-2 focus-visible:outline-primary" onClick={() => navigate(`/event/${e.slug}`)}>
+                <div className="min-w-0"><p className="truncate font-semibold">{e.title}</p><p className="mt-0.5 text-xs text-muted-foreground">{dateLong(e.startsAt)} · {e.mode === 'VIRTUAL' ? 'Online' : e.city ?? 'Venue pending'}</p></div>
+                <Badge variant={statusTone(e.status) === 'success' ? 'default' : 'secondary'} className="shrink-0 text-[10px]">{humanize(e.status)}</Badge>
               </button>
             ))}
           </CardContent>
         </Card>
-        <Card className="min-w-0 rounded-2xl">
-          <CardHeader className="pb-2"><CardTitle className="text-base">Finance snapshot</CardTitle></CardHeader>
-          <CardContent className="space-y-2.5 text-sm">
-            <Row label="Gross sales" value={money(data.finance.grossSalesMinor)} />
-            <Row label="Platform commission" value={`−${money(data.finance.platformFeesMinor)}`} />
-            <Row label="Pending settlement" value={money(data.finance.pendingSettlementMinor)} />
-            <Row label="Payouts completed" value={money(data.finance.payoutsCompletedMinor)} />
-            <div className="border-t border-border pt-2.5">
-              <Row label="Available payout" value={money(data.finance.availablePayoutMinor)} strong />
-            </div>
-            <p className="pt-1 text-[11px] text-muted-foreground">Ticket sales volume is separate from platform revenue and from profit.</p>
-          </CardContent>
-        </Card>
+        {finance && (
+          <Card className="min-w-0 rounded-2xl">
+            <CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-base"><Wallet className="size-4 text-primary" /> Financial position</CardTitle></CardHeader>
+            <CardContent className="space-y-2.5 text-sm">
+              <Row label="Confirmed gross ticket sales" value={money(finance.grossSalesMinor)} />
+              <Row label="Platform commission" value={`−${money(finance.platformFeesMinor)}`} />
+              <Row label="Pending settlement" value={money(finance.pendingSettlementMinor)} />
+              <Row label="Payouts completed" value={money(finance.payoutsCompletedMinor)} />
+              <div className="border-t border-border pt-3"><Row label="Available payout" value={money(finance.availablePayoutMinor)} strong /></div>
+              <p className="text-[11px] leading-relaxed text-muted-foreground">The displayed gross is not the organizer's net income. Payout availability depends on settlements and verification.</p>
+              <Button size="sm" variant="outline" className="w-full" onClick={() => navigate('/organizer?tab=finance')}>Open finance <ChevronRight className="ml-1.5 size-4" /></Button>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   )
@@ -859,6 +892,7 @@ function EventEditor({ orgId, event, onClose }: { orgId: string; event: OrgEvent
   const [cats, setCats] = useState<{ slug: string; name: string }[] | null>(null)
   const [moreOpen, setMoreOpen] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [copyBeforeAi, setCopyBeforeAi] = useState<{ summary: string; description: string } | null>(null)
   const posterFileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -1030,6 +1064,23 @@ function EventEditor({ orgId, event, onClose }: { orgId: string; event: OrgEvent
               <Label htmlFor="description">Description</Label>
               <Textarea id="description" className="min-h-28" value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} />
             </div>
+            {!createdEvent && <div className="min-w-0 sm:col-span-2">
+              <EventCopyCopilot
+                orgId={orgId} title={form.title} category={form.categorySlug} city={form.city}
+                dateText={form.startsAt ? new Date(form.startsAt).toLocaleString('en-GH') : ''}
+                canUndo={Boolean(copyBeforeAi)}
+                onApply={(draft) => {
+                  setCopyBeforeAi({ summary: form.summary, description: form.description })
+                  setForm((current) => ({ ...current, summary: draft.summary, description: draft.description }))
+                }}
+                onUndo={() => {
+                  if (!copyBeforeAi) return
+                  setForm((current) => ({ ...current, ...copyBeforeAi }))
+                  setCopyBeforeAi(null)
+                }}
+              />
+            </div>}
+
             <div className="space-y-1.5">
               <Label htmlFor="category">Category</Label>
               {catOptions ? (

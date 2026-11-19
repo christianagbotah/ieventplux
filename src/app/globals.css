@@ -931,3 +931,20 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .ievx-workspace-nav-item, .ievx-workspace-collapse, .ievx-public .ievx-hero-action { transition: none; }
 }
+
+/* Enterprise growth cockpit: purposeful hierarchy, responsive surfaces and
+   reduced motion. Inherit light/dark theme through ordinary cards below. */
+.ievx-growth-hero {
+  background: radial-gradient(circle at 84% 4%, rgb(140 238 194 / 22%), transparent 31%),
+              radial-gradient(circle at 8% 100%, rgb(31 141 124 / 44%), transparent 38%),
+              linear-gradient(122deg, #072f2a 0%, #105b47 58%, #073b35 100%);
+  box-shadow: 0 14px 34px rgb(7 66 49 / 12%);
+}
+.ievx-growth-hero::after {
+  content: ''; position: absolute; right: -65px; bottom: -180px; width: 350px; height: 350px;
+  border: 1px solid rgb(255 255 255 / 15%); border-radius: 100%; pointer-events: none;
+  box-shadow: 0 0 0 42px rgb(255 255 255 / 3%), 0 0 0 86px rgb(255 255 255 / 2%);
+}
+.ievx-growth-stat { transition: border-color .2s ease, box-shadow .2s ease; }
+.ievx-growth-stat:hover { border-color: color-mix(in srgb, var(--primary) 28%, var(--border)); box-shadow: 0 8px 20px rgb(6 38 32 / 6%); }
+@media (prefers-reduced-motion: reduce) { .ievx-growth-stat { transition: none; } }

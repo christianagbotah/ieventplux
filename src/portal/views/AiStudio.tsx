@@ -140,6 +140,19 @@ export default function AiStudio() {
     )
   }
 
+  if (!['OWNER', 'ADMIN', 'EVENT_MANAGER'].includes(org.role)) {
+    return (
+      <div className="mx-auto max-w-xl px-4 py-16">
+        <div className="rounded-3xl border bg-card p-7 text-center">
+          <Sparkles className="mx-auto mb-3 size-9 text-primary" />
+          <h1 className="text-xl font-bold">AI Content Studio</h1>
+          <p className="mt-2 text-sm text-muted-foreground">AI event creation is available to organization owners, admins and event managers. Ask the organization owner for an eligible role to generate content.</p>
+          <Button className="mt-4" variant="outline" onClick={() => navigate('/organizer')}>Return to organizer workspace</Button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="mx-auto max-w-5xl px-4 py-8">
       <header className="mb-6">
@@ -177,12 +190,12 @@ export default function AiStudio() {
 
         {/* ── Description writer ── */}
         <TabsContent value="description">
-          <DescriptionTab categories={categories} />
+          <DescriptionTab orgId={org.orgId} categories={categories} />
         </TabsContent>
 
         {/* ── Social captions ── */}
         <TabsContent value="captions">
-          <CaptionsTab />
+          <CaptionsTab orgId={org.orgId} />
         </TabsContent>
 
         {/* ── Poster designer ── */}
@@ -196,7 +209,7 @@ export default function AiStudio() {
 
 // ── Description writer ────────────────────────────────────────────────────────
 
-function DescriptionTab({ categories }: { categories: { slug: string; name: string }[] }) {
+function DescriptionTab({ orgId, categories }: { orgId: string; categories: { slug: string; name: string }[] }) {
   const { toast } = useToast()
   const [form, setForm] = useState({ title: '', category: '', city: '', dateText: '', audience: '', tone: 'Professional', notes: '' })
   const [loading, setLoading] = useState(false)
@@ -211,7 +224,7 @@ function DescriptionTab({ categories }: { categories: { slug: string; name: stri
     }
     setLoading(true)
     try {
-      const data = await api.post<DescResult>('/ai/studio', { kind: 'description', ...form })
+      const data = await api.post<DescResult>('/ai/studio', { kind: 'description', orgId, ...form })
       setResult(data)
     } catch (err) {
       toast({ title: 'Generation failed', description: err instanceof Error ? err.message : 'Please try again.', variant: 'destructive' })
@@ -346,7 +359,7 @@ function DescriptionTab({ categories }: { categories: { slug: string; name: stri
 
 // ── Social captions ───────────────────────────────────────────────────────────
 
-function CaptionsTab() {
+function CaptionsTab({ orgId }: { orgId: string }) {
   const { toast } = useToast()
   const [form, setForm] = useState({ title: '', dateText: '', city: '', highlights: '', link: '' })
   const [loading, setLoading] = useState(false)
@@ -361,7 +374,7 @@ function CaptionsTab() {
     }
     setLoading(true)
     try {
-      const data = await api.post<CaptionResult>('/ai/studio', { kind: 'captions', ...form })
+      const data = await api.post<CaptionResult>('/ai/studio', { kind: 'captions', orgId, ...form })
       setResult(data)
     } catch (err) {
       toast({ title: 'Generation failed', description: err instanceof Error ? err.message : 'Please try again.', variant: 'destructive' })
@@ -475,7 +488,7 @@ function PosterTab({ orgId }: { orgId: string }) {
     setLoading(true)
     setSavedUrl(null)
     try {
-      const data = await api.post<{ imageBase64: string; mimeType: string }>('/ai/studio', { kind: 'poster', ...form })
+      const data = await api.post<{ imageBase64: string; mimeType: string }>('/ai/studio', { kind: 'poster', orgId, ...form })
       setImage(`data:${data.mimeType};base64,${data.imageBase64}`)
     } catch (err) {
       toast({ title: 'Poster generation failed', description: err instanceof Error ? err.message : 'Please try again.', variant: 'destructive' })

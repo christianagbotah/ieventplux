@@ -5,6 +5,7 @@ import { env } from '@/server/env'
 import { formatMoney } from '@/server/money'
 import { PUBLIC_EVENT_WHERE, buildDiscoveryWhere } from '@/server/services/events'
 import { llmClient, llmReply, llmJson } from '@/server/ai/llm'
+import { membershipFor, orgCan } from '@/server/permissions'
 
 /**
  * AI surface (brief §7 — AI assistance is additive, never core-path):
@@ -395,7 +396,7 @@ async function runPlanner(body: Record<string, unknown>) {
 
 // ── AI studio: organizer copywriting + poster generation ─────────────────────
 
-async function runStudio(userId: string, body: Record<string, unknown>) {
+async function runStudio(body: Record<string, unknown>) {
   const kind = String(body.kind ?? '')
   const str = (key: string, max = 300) => sanitizeText(body[key], max)
   const title = str('title', 140)
@@ -500,11 +501,16 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     }
 
     if (mode === 'studio') {
-      await rateLimit(req, 'ai-studio', 15, 60_000)
       const user = await requireUser()
       const body = await readJson<Record<string, unknown>>(req)
-      const result = await runStudio(user.id, body)
-      return jsonOk(result)
+      const orgId = String(body.orgId ?? '').trim()
+      if (!orgId || orgId.length > 100) throw errors.badRequest('Choose the organization for your AI content.')
+      const membership = await membershipFor(user.id, orgId)
+      if (!membership || !orgCan(membership.role, 'event:create')) throw errors.forbidden('AI content creation requires an accepted organizer event-manager role.')
+      const kind = String(body.kind ?? '')
+      if (kind === 'poster') await rateLimit(req, `ai-studio-poster-${user.id}`, 3, 60 * 60_000)
+      else await rateLimit(req, `ai-studio-text-${user.id}`, 15, 60_000)
+      return jsonOk(await runStudio(body), { headers: { 'Cache-Control': 'private, no-store' } })
     }
 
     const user = await requireUser()
