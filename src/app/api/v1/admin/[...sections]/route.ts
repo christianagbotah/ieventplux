@@ -467,6 +467,64 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
       throw errors.badRequest('Invalid refund operation.')
     }
 
+    if (root === 'smtp' && id === 'verify') {
+      if (!platformCan(user.role, 'admin:settings')) throw errors.forbidden('Super administrator role required.')
+      await rateLimit(req, `smtp-verify-${user.id}`, 3, 60 * 60_000)
+      const { resolveSmtpConfig } = await import('@/server/communications-config')
+      const config = await resolveSmtpConfig()
+      if (!config.configured) throw errors.badRequest('Save complete SMTP settings before attempting a connection test.')
+      const nodemailer = await import('nodemailer')
+      const transport = nodemailer.createTransport({
+        host: config.host, port: config.port, secure: config.port === 465,
+        requireTLS: config.port !== 465,
+        auth: { user: config.user, pass: config.pass },
+        connectionTimeout: 9000, greetingTimeout: 9000, socketTimeout: 12000,
+      })
+      let ok = false
+      try { await transport.verify(); ok = true } catch { /* Never return raw SMTP errors: providers may echo tokens or usernames. */ }
+      finally { transport.close() }
+      const { audit } = await import('@/server/audit')
+      await audit({ actorUserId: user.id, actorLabel: user.email, action: 'smtp.connection.test', entityType: 'PlatformSetting', entityId: 'smtp.provider.*', after: { ok } })
+      return jsonOk({ ok, stage: ok ? 'authenticated' : 'failed', detail: ok
+        ? 'Connected and authenticated to the SMTP server. No email was sent, and inbox delivery remains unverified.'
+        : 'SMTP authentication or connection failed. Check the hostname, port, password, outbound access and provider restrictions.' }, { headers: { 'Cache-Control': 'private, no-store' } })
+    }
+
+    if (root === 'smtp' && id === 'test-message') {
+      if (!platformCan(user.role, 'admin:settings')) throw errors.forbidden('Super administrator role required.')
+      await rateLimit(req, `smtp-test-message-${user.id}`, 2, 60 * 60_000)
+      const { resolveSmtpConfig, validSmtpFrom } = await import('@/server/communications-config')
+      if (!(await resolveSmtpConfig()).configured) throw errors.badRequest('Save complete SMTP settings before testing email delivery.')
+      const recipient = typeof body.recipient === 'string' ? body.recipient.trim().toLowerCase() : ''
+      if (!validSmtpFrom(recipient)) throw errors.badRequest('Enter a valid mailbox email address for this test.')
+      if (body.confirmRecipient !== true) throw errors.badRequest('Confirm you control this mailbox and consent to this test email.')
+      const { queueMessage } = await import('@/server/services/notify')
+      const messageId = await queueMessage({ channel: 'EMAIL', target: recipient, template: 'ADMIN_PROVIDER_TEST',
+        subject: 'iEventPlux SMTP connection test', body: 'This is a one-time iEventPlux email delivery test requested by a platform administrator. No action is required.',
+        purpose: 'TRANSACTIONAL' })
+      const { audit } = await import('@/server/audit')
+      await audit({ actorUserId: user.id, actorLabel: user.email, action: 'smtp.test_message.queue', entityType: 'MessageDelivery', entityId: messageId ?? 'not-queued', after: { channel: 'EMAIL' } })
+      return jsonOk({ queued: Boolean(messageId), id: messageId, stage: 'queued', detail: 'Test email queued. Check the Message Log for SMTP server acceptance; recipient inbox delivery is not guaranteed.' })
+    }
+
+    if (root === 'sms-configuration' && id === 'test-message') {
+      if (!platformCan(user.role, 'admin:settings')) throw errors.forbidden('Super administrator role required.')
+      await rateLimit(req, `sms-provider-test-${user.id}`, 2, 60 * 60_000)
+      const { resolveHubtelCreds } = await import('@/server/hubtel/credentials')
+      const creds = await resolveHubtelCreds()
+      if (!creds.sms.clientId || !creds.sms.clientSecret || !creds.sms.senderId) throw errors.badRequest('Configure all Hubtel SMS credentials and an approved sender ID before testing.')
+      const { normalizeAdminSmsTestPhone, providerTestAcknowledgment } = await import('@/server/communications-test-policy')
+      const phone = normalizeAdminSmsTestPhone(body.phone)
+      if (!phone) throw errors.badRequest('Enter the receiving phone in international format, such as +233XXXXXXXXX.')
+      if (body.confirmCharge !== true || body.confirmRecipient !== true) throw errors.badRequest('Confirm that you control the phone and approve one potentially chargeable test SMS.')
+      const { queueMessage } = await import('@/server/services/notify')
+      const messageId = await queueMessage({ channel: 'SMS', target: phone, template: 'ADMIN_PROVIDER_TEST',
+        body: 'iEventPlux SMS connection test, requested by your platform administrator. No action required.', purpose: 'TRANSACTIONAL' })
+      const { audit } = await import('@/server/audit')
+      await audit({ actorUserId: user.id, actorLabel: user.email, action: 'sms.test_message.queue', entityType: 'MessageDelivery', entityId: messageId ?? 'not-queued', after: { channel: 'SMS' } })
+      return jsonOk({ queued: Boolean(messageId), id: messageId, stage: 'queued', detail: providerTestAcknowledgment({ queued: Boolean(messageId), channel: 'SMS' }) })
+    }
+
     if (root === 'smtp' && !id) {
       if (!platformCan(user.role, 'admin:settings')) throw errors.forbidden('Super administrator role required.')
       await rateLimit(req, 'smtp-config', 6, 60_000)

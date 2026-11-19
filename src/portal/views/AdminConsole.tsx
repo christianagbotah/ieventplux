@@ -35,7 +35,7 @@ const SECTIONS = [
   { key: 'payouts', group: 'Finance', label: 'Payouts', icon: Landmark },
   { key: 'fees', group: 'Finance', label: 'Fees & Plans', icon: Percent },
   { key: 'integrations', group: 'System', label: 'Integrations', icon: Plug },
-  { key: 'sms', group: 'System', label: 'SMS Log', icon: Bell },
+  { key: 'sms', group: 'System', label: 'Message Log', icon: Bell },
   { key: 'audit', group: 'System', label: 'Audit Log', icon: ScrollText },
   { key: 'taxonomy', group: 'System', label: 'Taxonomy', icon: Tags },
   { key: 'ops', group: 'System', label: 'Ops Health', icon: HeartPulse },
@@ -1083,11 +1083,12 @@ function SmsLog() {
       <div className="overflow-x-auto rounded-2xl border border-border/70">
         <table className="w-full min-w-[560px] text-sm">
           <thead className="bg-secondary/60 text-left text-xs uppercase tracking-wide text-muted-foreground">
-            <tr><th className="p-3">Target</th><th className="p-3">Purpose</th><th className="p-3">Status</th><th className="p-3">Provider</th><th className="p-3">Segments</th><th className="p-3">When</th></tr>
+            <tr><th className="p-3">Channel</th><th className="p-3">Target</th><th className="p-3">Purpose</th><th className="p-3">Status</th><th className="p-3">Provider</th><th className="p-3">Segments</th><th className="p-3">When</th></tr>
           </thead>
           <tbody>
             {data.items.map((m) => (
               <tr key={m.id} className="border-t border-border/50 hover:bg-secondary/30">
+                <td className="p-3 text-xs"><Badge variant="outline" className="text-[10px]">{m.channel}</Badge></td>
                 <td className="p-3 font-mono text-xs">{m.target}</td>
                 <td className="p-3 text-xs capitalize">{humanize(m.purpose)}</td>
                 <td className="p-3"><Badge variant={statusTone(m.status) === 'success' ? 'default' : 'secondary'} className="capitalize text-[10px]">{humanize(m.status)}</Badge>{m.failureReason && <p className="text-[10px] text-destructive">{m.failureReason}</p>}</td>
@@ -1099,7 +1100,7 @@ function SmsLog() {
           </tbody>
         </table>
       </div>
-      <p className="text-[11px] text-muted-foreground">API acceptance ≠ handset delivery — provider delivery states drive DELIVERED/FAILED only.</p>
+      <p className="text-[11px] text-muted-foreground">SMS provider acceptance is not handset delivery. SMTP server acceptance marks an email Sent; inbox delivery cannot be inferred. This log includes both channels and authorized provider tests.</p>
     </div>
   )
 }

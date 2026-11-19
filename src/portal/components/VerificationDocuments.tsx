@@ -10,6 +10,7 @@ import { useToast } from '@/hooks/use-toast'
 import { FileText, Camera, ShieldCheck, Loader2, Download, RefreshCw, Trash2, Eye, CheckCircle2, AlertCircle, CreditCard } from 'lucide-react'
 import { api, ApiClientError } from '../api'
 import { IdentityLiveCapture } from './IdentityLiveCapture'
+import { ManualSelfieCamera } from './ManualSelfieCamera'
 import { kycRequirements, type IdentityDocumentSide, type IdentityDocumentKind } from '@/server/kyc-requirements'
 
 type AutomatedIdentityState = {
@@ -48,6 +49,7 @@ export function VerificationDocuments({ orgId, reviewerMode = false, onSubmitted
   const [kind, setKind] = useState<KycKind>('GOVERNMENT_ID')
   const [file, setFile] = useState<File | null>(null)
   const selfieCameraInputRef = useRef<HTMLInputElement>(null)
+  const [manualCameraOpen, setManualCameraOpen] = useState(false)
   const [selfiePreviewUrl, setSelfiePreviewUrl] = useState<string | null>(null)
   useEffect(() => {
     if (!file || kind !== 'SELFIE') { setSelfiePreviewUrl(null); return }
@@ -255,7 +257,8 @@ export function VerificationDocuments({ orgId, reviewerMode = false, onSubmitted
             <div className="space-y-3 rounded-xl border border-primary/25 bg-primary/[.035] p-3">
               <div className="space-y-1"><p className="text-sm font-bold">Take a clear identity selfie</p><p className="text-xs leading-relaxed text-muted-foreground">Face the camera, remove hats or sunglasses, and use good lighting. This is for private manual review; it does not perform Smile ID biometric matching. Nothing is uploaded until you consent and press Secure upload.</p></div>
               <input key={'selfie-camera-' + nonce} ref={selfieCameraInputRef} className="sr-only" tabIndex={-1} type="file" accept="image/jpeg,image/png,image/webp" capture="user" onChange={(event) => setFile(event.target.files?.[0] ?? null)} aria-label="Capture selfie with front camera" />
-              <Button type="button" variant="outline" className="min-h-11 w-full gap-2 rounded-xl" onClick={() => selfieCameraInputRef.current?.click()}><Camera className="size-4" /> Open front camera / Take selfie</Button>
+              <Button type="button" className="min-h-11 w-full gap-2 rounded-xl" onClick={() => setManualCameraOpen(true)}><Camera className="size-4" /> Open camera with live preview</Button>
+              <Button type="button" variant="outline" className="min-h-10 w-full gap-2 rounded-xl" onClick={() => selfieCameraInputRef.current?.click()}><Camera className="size-4" /> Or use device camera app</Button>
               <div className="space-y-1.5"><label htmlFor="kyc-selfie-file" className="text-xs font-semibold">Or choose a selfie photo already on your phone</label><Input key={'selfie-photo-' + nonce} id="kyc-selfie-file" type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => setFile(event.target.files?.[0] ?? null)} /></div>
               {selfiePreviewUrl && <div className="flex min-w-0 items-start gap-3 rounded-lg border bg-card p-3"><img src={selfiePreviewUrl} alt="Selfie selected for private review, not yet uploaded" className="size-24 shrink-0 rounded-xl object-cover" /><div className="min-w-0 text-xs"><p className="font-semibold">Ready to submit</p><p className="mt-1 break-all text-muted-foreground">{file?.name}</p><p className="mt-1 text-muted-foreground">Check your photo before continuing. The preview is only on this device.</p></div></div>}
               <Button type="button" className="min-h-11 w-full rounded-xl" disabled={!file || !consent || busy || documents.length >= 10} onClick={() => void upload(file)}>{busy ? <Loader2 className="mr-2 size-4 animate-spin" /> : <ShieldCheck className="mr-2 size-4" />} Securely upload selfie</Button>
@@ -273,6 +276,7 @@ export function VerificationDocuments({ orgId, reviewerMode = false, onSubmitted
         </div>
       )}
 
+      <ManualSelfieCamera open={manualCameraOpen && !reviewerMode} onClose={() => setManualCameraOpen(false)} onCaptured={(captured) => { setFile(captured); setKind('SELFIE') }} />
       {liveCaptureOpen && automated?.provider.ready && automated.provider.noticeUrl && (
         <IdentityLiveCapture orgId={orgId} noticeUrl={automated.provider.noticeUrl} onClose={() => setLiveCaptureOpen(false)} onSubmitted={() => { void loadAutomated(); void load(); onSubmitted?.() }} />
       )}
