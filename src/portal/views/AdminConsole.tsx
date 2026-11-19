@@ -18,6 +18,7 @@ import { api, ApiClientError } from '../api'
 import { navigate, type Route } from '../router'
 import { usePortal, isPlatformStaff } from '../store'
 import { money, relative, humanize, statusTone } from '../format'
+import { refundActionFeedback } from '../lib/refund-feedback'
 import { EmptyState } from '../components/EventCard'
 import { VerificationDocuments } from '../components/VerificationDocuments'
 import { AdminCommunicationsConfig } from '../components/AdminCommunicationsConfig'
@@ -729,7 +730,7 @@ function Refunds() {
   const act = async (id: string, op: 'approve' | 'process' | 'reject') => {
     try {
       const result = await api.post<{ status: string }>(`/admin/refunds/${id}/${op}`, op === 'process' ? {} : { note: 'Platform finance decision.' })
-      toast({ title: `Refund ${op === 'process' ? 'processed' : op}`, description: `Outcome: ${humanize(result.status ?? 'OK')} · ledger reversed, unused tickets revoked.` })
+      toast(refundActionFeedback(op, result.status))
       reload()
     } catch (err) {
       if (err instanceof ApiClientError && err.extra && (err.extra as { elevated?: boolean }).elevated) {

@@ -13,8 +13,20 @@ import { physicalRefundReview } from '../souvenir-refund-policy'
  * evidence, never fake money movement. See docs/PAYMENTS_AND_SETTLEMENTS.md.
  */
 
-export async function requestRefund(params: { orderId: string; requestedBy: string; reason: string; ticketIds?: string[] }) {
-  const order = await db.order.findUnique({ where: { id: params.orderId }, include: { tickets: true } })
+export async function requestRefund(params: {
+  orderId: string; requestedBy: string; reason: string; ticketIds?: string[]
+  scope: { kind: 'organization'; orgId: string } | { kind: 'buyer'; userId: string }
+}) {
+  // No unscoped call can compile. Organization finance staff can only request
+  // refunds for their own org; buyers are independently verified to own the
+  // order, both here and in the customer API.
+  const scopeWhere = params.scope.kind === 'organization'
+    ? { orgId: params.scope.orgId }
+    : { userId: params.scope.userId }
+  const order = await db.order.findFirst({
+    where: { id: params.orderId, ...scopeWhere },
+    include: { tickets: true },
+  })
   if (!order) throw errors.notFound('Order not found.')
   if (!['PAID', 'EXCEPTION_REVIEW', 'PARTIALLY_REFUNDED'].includes(order.status)) throw errors.conflict('Only paid orders can be refunded.')
   const existing = await db.refundCase.findFirst({ where: { orderId: order.id, status: { in: ['REQUESTED', 'APPROVED', 'PROCESSED'] } } })
@@ -188,7 +200,9 @@ export async function rejectRefund(refundCaseId: string, actorId: string, note: 
     where: { orderId: rc.orderId, status: 'PROCESSED' },
     _sum: { amountMinor: true },
   })
-  const restoreStatus = (refundedSoFar._sum.amountMinor ?? 0) > 0 ? 'PARTIALLY_REFUNDED' : 'PAID'
+  // Preserve payment-capacity exception holds: declining an exception-order
+  // refund cannot magically turn an unfulfilled order into a paid entitlement.
+  const restoreStatus = rc.order.exceptionReason ? 'EXCEPTION_REVIEW' : (refundedSoFar._sum.amountMinor ?? 0) > 0 ? 'PARTIALLY_REFUNDED' : 'PAID'
   await db.order.update({ where: { id: rc.orderId }, data: { status: restoreStatus } })
 
   if (rc.order.userId) {
