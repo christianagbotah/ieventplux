@@ -106,16 +106,22 @@ async function handleSendMessage(payload: JobPayload): Promise<string> {
   }
 
   if (message.channel === 'EMAIL') {
-    if (!env.smtp.host) {
+    const { resolveSmtpConfig } = await import('../communications-config')
+    const smtp = await resolveSmtpConfig()
+    if (!smtp.configured) {
       await db.messageDelivery.update({ where: { id: message.id }, data: { status: 'SUPPRESSED', failureReason: 'SMTP not configured' } })
       return 'suppressed_no_smtp'
     }
     try {
       const nodemailer = await import('nodemailer')
-      const transport = nodemailer.createTransport({ host: env.smtp.host, port: env.smtp.port, auth: { user: env.smtp.user, pass: env.smtp.pass } })
-      await transport.sendMail({ from: env.smtp.from, to: message.target, subject: message.subject ?? 'iEventPlux', text: message.body })
-      await db.messageDelivery.update({ where: { id: message.id }, data: { status: 'DELIVERED', provider: 'SMTP', sentAt: new Date(), deliveredAt: new Date(), attempts: { increment: 1 } } })
-      return 'sent'
+      const transport = nodemailer.createTransport({
+        host: smtp.host, port: smtp.port, secure: smtp.port === 465,
+        requireTLS: smtp.port !== 465, auth: { user: smtp.user, pass: smtp.pass },
+        connectionTimeout: 10_000, greetingTimeout: 10_000, socketTimeout: 15_000,
+      })
+      await transport.sendMail({ from: smtp.from, to: message.target, subject: message.subject ?? 'iEventPlux', text: message.body })
+      await db.messageDelivery.update({ where: { id: message.id }, data: { status: 'SENT', provider: 'SMTP', sentAt: new Date(), attempts: { increment: 1 } } })
+      return 'smtp_accepted'
     } catch (err) {
       await db.messageDelivery.update({
         where: { id: message.id },

@@ -128,6 +128,8 @@ export async function integrationStatuses(): Promise<IntegrationStatus[]> {
   const view = hubtelCredentialsView(creds)
   const checkoutSim = paymentsSimulatorActive(creds)
   const smsSim = smsSimulatorActive(creds)
+  const { resolveSmtpConfig } = await import('./communications-config')
+  const smtpLive = await resolveSmtpConfig()
   // A feature toggle is not evidence that the external LLM SDK can initialize.
   // This probes local SDK configuration only, not billable AI generation.
   let aiConfigured = false
@@ -200,9 +202,9 @@ export async function integrationStatuses(): Promise<IntegrationStatus[]> {
       key: 'smtp-email',
       name: 'SMTP email',
       stage: 'implemented',
-      configured: smtpConfigured,
-      mode: smtpConfigured ? 'real' : 'unavailable',
-      detail: smtpConfigured ? 'SMTP configured.' : 'SMTP_HOST not set — email messages are queued with SUPPRESSED status (truthful, not fake success).',
+      configured: smtpLive.configured,
+      mode: smtpLive.configured ? 'real' : 'unavailable',
+      detail: smtpLive.configured ? `SMTP settings available via ${smtpLive.source}. SMTP acceptance and recipient delivery have not yet been verified.` : 'SMTP credentials incomplete — email messages are suppressed until the provider is configured.',
     },
     {
       key: 'ai-concierge',

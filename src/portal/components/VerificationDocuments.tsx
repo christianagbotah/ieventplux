@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -47,6 +47,14 @@ export function VerificationDocuments({ orgId, reviewerMode = false, onSubmitted
   const [loadError, setLoadError] = useState('')
   const [kind, setKind] = useState<KycKind>('GOVERNMENT_ID')
   const [file, setFile] = useState<File | null>(null)
+  const selfieCameraInputRef = useRef<HTMLInputElement>(null)
+  const [selfiePreviewUrl, setSelfiePreviewUrl] = useState<string | null>(null)
+  useEffect(() => {
+    if (!file || kind !== 'SELFIE') { setSelfiePreviewUrl(null); return }
+    const url = URL.createObjectURL(file)
+    setSelfiePreviewUrl(url)
+    return () => URL.revokeObjectURL(url)
+  }, [file, kind])
   const [frontFile, setFrontFile] = useState<File | null>(null)
   const [backFile, setBackFile] = useState<File | null>(null)
   const [preview, setPreview] = useState<Document | null>(null)
@@ -136,7 +144,7 @@ export function VerificationDocuments({ orgId, reviewerMode = false, onSubmitted
         <Badge variant="secondary">{status || (loading ? 'Checking…' : 'PENDING')}</Badge>
       </div>
       <p className="text-xs leading-relaxed text-muted-foreground">
-        Documents remain encrypted outside the public website. Only organization administrators and authorized finance reviewers can view them. Review is manual; no biometric face matching is performed.
+        Documents remain encrypted outside the public website. Only authorized reviewers can access them. Manual photo review is not biometric face matching. Use the clearly labelled Take selfie step below to capture or select a photo.
       </p>
       <div className="space-y-2 rounded-lg border border-border/70 bg-secondary/30 p-3 text-xs leading-relaxed text-muted-foreground">
         <p className="font-semibold text-foreground">Smile ID biometric verification: {automated?.provider.ready ? `${automated.provider.mode === 'sandbox' ? 'Sandbox' : 'Production'} connected` : 'Not activated'}</p>
@@ -222,10 +230,12 @@ export function VerificationDocuments({ orgId, reviewerMode = false, onSubmitted
         <div className="space-y-3 rounded-xl border border-border p-4">
           <p className="text-sm font-semibold">Upload verification evidence</p>
           {isPersonal && <p className="text-xs text-muted-foreground">Personal organizers only need a government ID (front and back) and a selfie; business registration is not required.</p>}
-          <label htmlFor="kyc-kind" className="block text-xs font-semibold">Document category</label>
-          <select id="kyc-kind" value={kind} onChange={(e) => { setKind(e.target.value as KycKind); setFile(null); setFrontFile(null); setBackFile(null) }} className="block h-10 w-full rounded-lg border border-border bg-background px-3 text-sm">
-            {(Object.keys(LABELS) as KycKind[]).filter((value) => !(isPersonal && value === 'BUSINESS_REGISTRATION')).map((value) => <option key={value} value={value}>{value === 'BUSINESS_REGISTRATION' && orgType === 'SCHOOL' ? 'School registration / authorization' : LABELS[value]}</option>)}
-          </select>
+          <p className="text-xs font-semibold">Choose the verification evidence to provide</p>
+          <div role="group" aria-label="Verification document steps" className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            <Button type="button" variant={kind === 'GOVERNMENT_ID' ? 'default' : 'outline'} className="h-auto min-h-12 whitespace-normal rounded-xl px-2 py-2 text-xs" aria-pressed={kind === 'GOVERNMENT_ID'} onClick={() => { setKind('GOVERNMENT_ID'); setFile(null) }}><CreditCard className="mr-1.5 size-4 shrink-0" /> ID front & back</Button>
+            <Button type="button" variant={kind === 'SELFIE' ? 'default' : 'outline'} className="h-auto min-h-12 whitespace-normal rounded-xl px-2 py-2 text-xs" aria-pressed={kind === 'SELFIE'} onClick={() => { setKind('SELFIE'); setFile(null) }}><Camera className="mr-1.5 size-4 shrink-0" /> Take selfie</Button>
+            {!isPersonal && <Button type="button" variant={kind === 'BUSINESS_REGISTRATION' ? 'default' : 'outline'} className="col-span-2 h-auto min-h-12 whitespace-normal rounded-xl px-2 py-2 text-xs sm:col-span-1" aria-pressed={kind === 'BUSINESS_REGISTRATION'} onClick={() => { setKind('BUSINESS_REGISTRATION'); setFile(null) }}><FileText className="mr-1.5 size-4 shrink-0" /> {orgType === 'SCHOOL' ? 'School documents' : 'Registration documents'}</Button>}
+          </div>
           {kind === 'GOVERNMENT_ID' ? (
             <div className="grid gap-3 sm:grid-cols-2">
               {(['FRONT', 'BACK'] as const).map((side) => {
@@ -241,14 +251,20 @@ export function VerificationDocuments({ orgId, reviewerMode = false, onSubmitted
                 </div>
               })}
             </div>
-          ) : (
-            <div className="space-y-2">
-              <label htmlFor="kyc-file" className="block text-xs font-semibold">{kind === 'SELFIE' ? 'Take or select a selfie' : 'Select registration document'}</label>
-              <Input key={kind + '-' + nonce} id="kyc-file" type="file" accept={kind === 'SELFIE' ? 'image/jpeg,image/png,image/webp' : 'application/pdf,image/jpeg,image/png,image/webp'} capture={kind === 'SELFIE' ? 'user' : undefined} onChange={(event) => setFile(event.target.files?.[0] ?? null)} />
-              <Button type="button" size="sm" disabled={!file || !consent || busy || documents.length >= 10} onClick={() => void upload(file)}>{busy ? <Loader2 className="size-4 animate-spin" /> : <ShieldCheck className="size-4" />} Secure upload</Button>
+          ) : kind === 'SELFIE' ? (
+            <div className="space-y-3 rounded-xl border border-primary/25 bg-primary/[.035] p-3">
+              <div className="space-y-1"><p className="text-sm font-bold">Take a clear identity selfie</p><p className="text-xs leading-relaxed text-muted-foreground">Face the camera, remove hats or sunglasses, and use good lighting. This is for private manual review; it does not perform Smile ID biometric matching. Nothing is uploaded until you consent and press Secure upload.</p></div>
+              <input key={'selfie-camera-' + nonce} ref={selfieCameraInputRef} className="sr-only" tabIndex={-1} type="file" accept="image/jpeg,image/png,image/webp" capture="user" onChange={(event) => setFile(event.target.files?.[0] ?? null)} aria-label="Capture selfie with front camera" />
+              <Button type="button" variant="outline" className="min-h-11 w-full gap-2 rounded-xl" onClick={() => selfieCameraInputRef.current?.click()}><Camera className="size-4" /> Open front camera / Take selfie</Button>
+              <div className="space-y-1.5"><label htmlFor="kyc-selfie-file" className="text-xs font-semibold">Or choose a selfie photo already on your phone</label><Input key={'selfie-photo-' + nonce} id="kyc-selfie-file" type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => setFile(event.target.files?.[0] ?? null)} /></div>
+              {selfiePreviewUrl && <div className="flex min-w-0 items-start gap-3 rounded-lg border bg-card p-3"><img src={selfiePreviewUrl} alt="Selfie selected for private review, not yet uploaded" className="size-24 shrink-0 rounded-xl object-cover" /><div className="min-w-0 text-xs"><p className="font-semibold">Ready to submit</p><p className="mt-1 break-all text-muted-foreground">{file?.name}</p><p className="mt-1 text-muted-foreground">Check your photo before continuing. The preview is only on this device.</p></div></div>}
+              <Button type="button" className="min-h-11 w-full rounded-xl" disabled={!file || !consent || busy || documents.length >= 10} onClick={() => void upload(file)}>{busy ? <Loader2 className="mr-2 size-4 animate-spin" /> : <ShieldCheck className="mr-2 size-4" />} Securely upload selfie</Button>
+              {!consent && <p className="text-xs text-amber-700 dark:text-amber-300">Tick the verification consent checkbox below before uploading.</p>}
             </div>
+          ) : (
+            <div className="space-y-2"><label htmlFor="kyc-file" className="block text-xs font-semibold">Select registration document</label><Input key={kind + '-' + nonce} id="kyc-file" type="file" accept="application/pdf,image/jpeg,image/png,image/webp" onChange={(event) => setFile(event.target.files?.[0] ?? null)} /><Button type="button" size="sm" disabled={!file || !consent || busy || documents.length >= 10} onClick={() => void upload(file)}>{busy ? <Loader2 className="size-4 animate-spin" /> : <ShieldCheck className="size-4" />} Secure upload</Button></div>
           )}
-          <p className="text-[11px] leading-relaxed text-muted-foreground">Accepted: PDF, PNG, JPG, WebP; up to 8 MB per document and 10 documents per organization. On a phone, the selfie field can open the front camera.</p>
+          <p className="text-[11px] leading-relaxed text-muted-foreground">Accepted: PDF, PNG, JPG, WebP; up to 8 MB per document and 10 documents per organization. The dedicated Take selfie control requests the front camera on supported mobile browsers; you can also select a photo from your gallery.</p>
           <label className="flex items-start gap-2 text-xs leading-relaxed">
             <Checkbox checked={consent} onCheckedChange={(value) => setConsent(value === true)} />
             <span>I am authorized to submit these documents and consent to encrypted storage for manual identity verification. Removed documents may remain in encrypted backups until backup retention expires.</span>

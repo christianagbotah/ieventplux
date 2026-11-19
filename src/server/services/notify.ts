@@ -45,7 +45,7 @@ export async function queueMessage(input: QueueMessageInput): Promise<string | n
     smsSimulator = smsSimulatorActive(await resolveHubtelCreds())
   }
   const provider =
-    input.channel === 'INAPP' ? 'INAPP' : input.channel === 'SMS' ? (smsSimulator ? 'SIMULATOR' : 'HUBTEL') : env.smtp.host ? 'SMTP' : 'SMTP'
+    input.channel === 'INAPP' ? 'INAPP' : input.channel === 'SMS' ? (smsSimulator ? 'SIMULATOR' : 'HUBTEL') : 'SMTP'
   const row = await db.messageDelivery.create({
     data: {
       channel: input.channel,

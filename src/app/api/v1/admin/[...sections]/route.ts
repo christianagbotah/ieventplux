@@ -139,8 +139,10 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
 
     if (root === 'sms') {
       const { smsSimulatorActive, resolveHubtelCreds } = await import('@/server/hubtel/credentials')
+      const creds = await resolveHubtelCreds()
+      const configured = Boolean(creds.sms.clientId && creds.sms.clientSecret && creds.sms.senderId)
       const items = await db.messageDelivery.findMany({ orderBy: { createdAt: 'desc' }, take: 100 })
-      return jsonOk({ items, mode: smsSimulatorActive(await resolveHubtelCreds()) ? 'simulated' : 'real' })
+      return jsonOk({ items, mode: smsSimulatorActive(creds) ? 'simulated' : configured ? 'real' : 'unavailable' })
     }
 
     if (root === 'audit') {
@@ -149,7 +151,35 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
     }
 
     if (root === 'integrations') {
-      return jsonOk({ integrations: await integrationStatuses(), validation: envValidation() })
+      const { resolveSmtpConfig } = await import('@/server/communications-config')
+      const smtp = await resolveSmtpConfig()
+      const integrations = await integrationStatuses()
+      const mail = integrations.find((item) => item.key === 'smtp-email')
+      if (mail) {
+        mail.configured = smtp.configured
+        mail.mode = smtp.configured ? 'real' : 'unavailable'
+        mail.detail = smtp.configured ? `SMTP settings saved (${smtp.source}); provider authentication and real delivery remain unverified.` : 'SMTP credentials incomplete — messages will be suppressed until an administrator configures a mail provider.'
+      }
+      const validation = envValidation()
+      if (smtp.configured) validation.warnings = validation.warnings.filter((warning) => !warning.startsWith('SMTP_*'))
+      return jsonOk({ integrations, validation })
+    }
+
+    if (root === 'smtp') {
+      if (!platformCan(user.role, 'admin:settings')) throw errors.forbidden('Super administrator role required to view mail settings.')
+      const { resolveSmtpConfig, smtpAdminView } = await import('@/server/communications-config')
+      return jsonOk({ smtp: smtpAdminView(await resolveSmtpConfig()) }, { headers: { 'Cache-Control': 'private, no-store' } })
+    }
+
+    if (root === 'sms-configuration') {
+      if (!platformCan(user.role, 'admin:settings')) throw errors.forbidden('Super administrator role required to view SMS credentials.')
+      const { resolveHubtelCreds, maskSecret } = await import('@/server/hubtel/credentials')
+      const creds = await resolveHubtelCreds()
+      return jsonOk({ sms: {
+        provider: 'HUBTEL', configured: Boolean(creds.sms.clientId && creds.sms.clientSecret && creds.sms.senderId),
+        senderIdMasked: maskSecret(creds.sms.senderId), clientIdMasked: maskSecret(creds.sms.clientId),
+        secretSaved: Boolean(creds.sms.clientSecret), source: creds.sources.sms,
+      } }, { headers: { 'Cache-Control': 'private, no-store' } })
     }
 
     if (root === 'hubtel') {
@@ -166,8 +196,13 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
     }
 
     if (root === 'settings') {
-      const items = await db.platformSetting.findMany()
-      return jsonOk({ items })
+      if (!platformCan(user.role, 'admin:settings')) throw errors.forbidden('Super administrator role required to view settings.')
+      // NEVER expose Hubtel secrets, SMTP passwords or provider tokens via
+      // the generic platform-settings API, even to super administrators.
+      const { DEFAULT_SETTINGS } = await import('@/server/settings')
+      const keys = Object.keys(DEFAULT_SETTINGS)
+      const items = await db.platformSetting.findMany({ where: { key: { in: keys } } })
+      return jsonOk({ items }, { headers: { 'Cache-Control': 'private, no-store' } })
     }
 
     if (root === 'categories') {
@@ -432,6 +467,59 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
       throw errors.badRequest('Invalid refund operation.')
     }
 
+    if (root === 'smtp' && !id) {
+      if (!platformCan(user.role, 'admin:settings')) throw errors.forbidden('Super administrator role required.')
+      await rateLimit(req, 'smtp-config', 6, 60_000)
+      const { SMTP_SETTING_KEYS, encryptSmtpPassword, validSmtpHost, validSmtpFrom, validSmtpPort } = await import('@/server/communications-config')
+      const { setSetting } = await import('@/server/settings')
+      const fields = {
+        host: typeof body.host === 'string' ? body.host.trim().toLowerCase() : '',
+        port: body.port === undefined || body.port === '' ? '' : String(body.port).trim(),
+        username: typeof body.username === 'string' ? body.username.trim() : '',
+        password: typeof body.password === 'string' ? body.password : '',
+        from: typeof body.from === 'string' ? body.from.trim() : '',
+      }
+      if (Object.values(fields).every((value) => value.length === 0)) throw errors.badRequest('Enter at least one SMTP setting.')
+      if (fields.host && !validSmtpHost(fields.host)) throw errors.badRequest('Use a public SMTP hostname such as smtp.example.com; local hosts and IP addresses are not accepted.')
+      if (fields.port && !validSmtpPort(Number(fields.port))) throw errors.badRequest('Supported SMTP ports are 465 (TLS), 587 (STARTTLS) or 2525 (STARTTLS).')
+      if (fields.username && (fields.username.length > 200 || /[\r\n]/.test(fields.username))) throw errors.badRequest('SMTP username is invalid.')
+      if (fields.password && (fields.password.length > 500 || fields.password.trim().length === 0)) throw errors.badRequest('SMTP password must be a non-empty app password (maximum 500 characters).')
+      if (fields.from && !validSmtpFrom(fields.from)) throw errors.badRequest('Enter a valid sender email address, such as noreply@example.com.')
+      const updates: { key: string; value: string }[] = []
+      if (fields.host) updates.push({ key: SMTP_SETTING_KEYS.host, value: fields.host })
+      if (fields.port) updates.push({ key: SMTP_SETTING_KEYS.port, value: fields.port })
+      if (fields.username) updates.push({ key: SMTP_SETTING_KEYS.username, value: fields.username })
+      if (fields.password) updates.push({ key: SMTP_SETTING_KEYS.password, value: encryptSmtpPassword(fields.password) })
+      if (fields.from) updates.push({ key: SMTP_SETTING_KEYS.from, value: fields.from })
+      for (const update of updates) await setSetting(update.key, update.value, user.id)
+      const { audit } = await import('@/server/audit')
+      await audit({ actorUserId: user.id, actorLabel: user.email, action: 'smtp.config.update', entityType: 'PlatformSetting', entityId: 'smtp.provider.*', after: { keys: updates.map((item) => item.key) } })
+      const { resolveSmtpConfig, smtpAdminView } = await import('@/server/communications-config')
+      return jsonOk({ smtp: smtpAdminView(await resolveSmtpConfig()), note: 'Credentials saved securely. Mail delivery remains unverified until a provider-accepted message is tested.' })
+    }
+
+    if (root === 'sms-configuration' && !id) {
+      if (!platformCan(user.role, 'admin:settings')) throw errors.forbidden('Super administrator role required.')
+      await rateLimit(req, 'sms-config', 6, 60_000)
+      const { HUBTEL_SETTING_KEYS } = await import('@/server/hubtel/credentials')
+      const { setSetting } = await import('@/server/settings')
+      const clientId = typeof body.clientId === 'string' ? body.clientId.trim() : ''
+      const clientSecret = typeof body.clientSecret === 'string' ? body.clientSecret.trim() : ''
+      const senderId = typeof body.senderId === 'string' ? body.senderId.trim() : ''
+      if (!clientId && !clientSecret && !senderId) throw errors.badRequest('Enter an SMS client ID, secret or approved sender ID.')
+      if ((clientId && clientId.length > 200) || (clientSecret && clientSecret.length > 300)) throw errors.badRequest('SMS credentials exceed allowed length.')
+      if (senderId && !/^[A-Za-z0-9 -]{3,20}$/.test(senderId)) throw errors.badRequest('Sender ID must be 3–20 letters, numbers, spaces or hyphens, and approved by Hubtel.')
+      const updates = [
+        ...(clientId ? [{ key: HUBTEL_SETTING_KEYS.smsClientId, value: clientId }] : []),
+        ...(clientSecret ? [{ key: HUBTEL_SETTING_KEYS.smsClientSecret, value: clientSecret }] : []),
+        ...(senderId ? [{ key: HUBTEL_SETTING_KEYS.smsSenderId, value: senderId }] : []),
+      ]
+      for (const item of updates) await setSetting(item.key, item.value, user.id)
+      const { audit } = await import('@/server/audit')
+      await audit({ actorUserId: user.id, actorLabel: user.email, action: 'sms.config.update', entityType: 'PlatformSetting', entityId: 'hubtel.sms.*', after: { keys: updates.map((item) => item.key) } })
+      return jsonOk({ saved: updates.length, note: 'Hubtel SMS credentials saved independently of checkout; delivery is not yet verified.' })
+    }
+
     if (root === 'hubtel' && id === 'credentials') {
       // Round 14: platform admins can connect Hubtel without a redeploy.
       // Hubtel issues ONE API client per business account — the saved pair
@@ -494,7 +582,8 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
       if (!platformCan(user.role, 'admin:settings')) throw errors.forbidden('Super administrator role required.')
       const key = sanitizeText(body.key, 60)
       const value = sanitizeText(body.value, 200)
-      if (!key) throw errors.badRequest('key is required.')
+      const { DEFAULT_SETTINGS } = await import('@/server/settings')
+      if (!Object.prototype.hasOwnProperty.call(DEFAULT_SETTINGS, key)) throw errors.forbidden('This setting is managed by its dedicated, credential-safe administration form.')
       const { setSetting } = await import('@/server/settings')
       await setSetting(key, value, user.id)
       const { audit } = await import('@/server/audit')

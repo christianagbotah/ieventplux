@@ -20,6 +20,7 @@ import { usePortal, isPlatformStaff } from '../store'
 import { money, relative, humanize, statusTone } from '../format'
 import { EmptyState } from '../components/EventCard'
 import { VerificationDocuments } from '../components/VerificationDocuments'
+import { AdminCommunicationsConfig } from '../components/AdminCommunicationsConfig'
 import { WorkspaceNavigation } from '../components/WorkspaceNavigation'
 import { WorkspaceMetric } from '../components/WorkspaceMetric'
 import { kycRequirements, type KycRequirement, type IdentityEvidence } from '@/server/kyc-requirements'
@@ -954,7 +955,7 @@ function HubtelConnection() {
     <Card className="rounded-2xl">
       <CardHeader className="pb-2">
         <CardTitle className="flex flex-wrap items-center justify-between gap-2 text-base">
-          <span className="flex items-center gap-2"><CreditCard className="h-4 w-4 text-primary" /> Hubtel connection</span>
+          <span className="flex items-center gap-2"><CreditCard className="h-4 w-4 text-primary" /> Hubtel checkout & payouts</span>
           <Badge variant={c.paymentsMode === 'UNAVAILABLE' ? 'destructive' : 'secondary'}>
             {c.paymentsMode === 'REAL' ? 'Credentials configured · verification pending' : c.paymentsMode === 'SIMULATOR' ? 'Development simulator' : 'Checkout unavailable'}
           </Badge>
@@ -962,7 +963,7 @@ function HubtelConnection() {
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-xs text-muted-foreground">
-          Hubtel issues one API client per business account — the saved pair feeds Checkout, Send Money and SMS. Keys are stored server-side and shown masked only. Configured credentials do not prove real charges or payouts work: complete the provider tests in GO_LIVE.md before accepting customer money.
+          Legacy shared Hubtel credentials populate Checkout, Send Money and SMS. To configure **only SMS** without changing checkout, use the dedicated SMS card above. Keys are stored server-side and shown masked only. Configured credentials do not prove real charges or payouts work: complete the provider tests in GO_LIVE.md before accepting customer money.
           Saved keys take effect immediately (no redeploy). Checkout base: <code className="rounded bg-secondary/60 px-1">{c.checkout.base}</code> (source: {c.checkout.source}).
         </p>
         <div className="grid gap-3 sm:grid-cols-2">
@@ -1016,13 +1017,15 @@ function HubtelConnection() {
 }
 
 function Integrations() {
-  const [data, , loading] = useAdmin<{ integrations: { key: string; name: string; stage: string; configured: boolean; mode: string; detail: string }[]; validation: { errors: string[]; warnings: string[] } }>('/admin/integrations')
+  const { user } = usePortal()
+  const [data, reload, loading] = useAdmin<{ integrations: { key: string; name: string; stage: string; configured: boolean; mode: string; detail: string }[]; validation: { errors: string[]; warnings: string[] } }>('/admin/integrations')
 
   if (loading) return <AdminLoader label="Loading integration health…" />
   if (!data) return <EmptyState title="Integration health unavailable" />
   return (
     <div className="space-y-4">
-      <HubtelConnection />
+      {user?.role === 'SUPER_ADMIN' && <AdminCommunicationsConfig onSaved={reload} />}
+      {user?.role === 'SUPER_ADMIN' && <HubtelConnection />}
       {data.validation.warnings.length > 0 && (
         <Card className="rounded-2xl border-amber-500/30 bg-amber-500/5">
           <CardContent className="p-4 text-xs text-amber-800">
@@ -1075,7 +1078,7 @@ function SmsLog() {
             style={{ position: 'static', width: 7, height: 7, background: 'rgba(16, 185, 129, 0.55)', flex: 'none' }}
           />
         )}
-        {data.mode === 'real' ? 'Hubtel SMS active' : 'Dev simulator — no live messages'}
+        {data.mode === 'real' ? 'Hubtel SMS credentials present · delivery unverified' : data.mode === 'unavailable' ? 'SMS not configured — no live delivery' : 'Dev simulator — no live messages'}
       </Badge>
       <div className="overflow-x-auto rounded-2xl border border-border/70">
         <table className="w-full min-w-[560px] text-sm">
