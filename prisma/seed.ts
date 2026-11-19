@@ -416,7 +416,7 @@ async function main() {
   // case carries the decision trail for the org Finance inbox + buyer page.
   const akuaVipOrder = akuaOrderRef ? await db.order.findUnique({ where: { reference: akuaOrderRef } }) : null
   if (akuaVipOrder) {
-    const rcAkua = await requestRefund({ orderId: akuaVipOrder.id, requestedBy: users.akua.id, reason: 'I have a work rotation that weekend and cannot attend after all.' })
+    const rcAkua = await requestRefund({ scope: { kind: 'buyer', userId: users.akua.id }, orderId: akuaVipOrder.id, requestedBy: users.akua.id, reason: 'I have a work rotation that weekend and cannot attend after all.' })
     await rejectRefund(rcAkua.id, users.mediaLead.id, 'Refund window closed 48 hours before doors — we can transfer your ticket to another service instead.')
   }
 
