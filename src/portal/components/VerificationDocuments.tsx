@@ -109,6 +109,10 @@ export function VerificationDocuments({ orgId, reviewerMode = false, onSubmitted
       <p className="text-xs leading-relaxed text-muted-foreground">
         Documents remain encrypted outside the public website. Only organization administrators and authorized finance reviewers can view them. Review is manual; no biometric face matching is performed.
       </p>
+      <div className="rounded-lg border border-border/70 bg-secondary/30 p-3 text-xs leading-relaxed text-muted-foreground">
+        <p className="font-semibold text-foreground">Automated ID and selfie verification: not connected</p>
+        <p className="mt-1">Live identity matching and selfie liveness checks require an activated verification provider (such as Smile ID), a camera capture step and separate consent before documents are shared. An uploaded selfie is not automatically identity-verified. Manual document review remains available.</p>
+      </div>
       {reviewNote && status === 'REJECTED' && <p className="rounded-lg border border-amber-400/30 bg-amber-50/70 p-3 text-xs text-amber-950 dark:bg-amber-950/20 dark:text-amber-200"><strong>Reviewer instructions:</strong> {reviewNote}</p>}
       {loading ? <p className="flex items-center gap-2 text-xs text-muted-foreground"><Loader2 className="size-4 animate-spin" /> Loading secure evidence…</p>
         : loadError ? <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{loadError}<Button type="button" variant="outline" size="sm" className="ml-3" onClick={() => void load()}>Retry</Button></div>

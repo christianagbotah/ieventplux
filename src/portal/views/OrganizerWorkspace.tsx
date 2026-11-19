@@ -30,6 +30,8 @@ import { ORGANIZER_TYPE_CONFIG, organizerType, type OrganizerType, type ProfileD
 import { VerificationDocuments } from '../components/VerificationDocuments'
 import { WorkspaceNavigation } from '../components/WorkspaceNavigation'
 import { WorkspaceMetric } from '../components/WorkspaceMetric'
+import { VenueLocationFields } from '../components/VenueLocationFields'
+import { COUNTRY_NAMES } from '../lib/venue-locations'
 
 interface OrgEvent {
   id: string
@@ -2903,6 +2905,8 @@ type VenueRow = {
   city?: string | null
   region?: string | null
   country: string
+  lat?: number | null
+  lng?: number | null
   capacity?: number | null
   mapsUrl?: string | null
   accessibilityInfo?: string | null
@@ -2952,7 +2956,7 @@ function VenuesCard({ orgId, canManage }: { orgId: string; canManage: boolean })
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
-        <p className="text-sm text-muted-foreground">Reusable places for your events — name, address, map link and accessibility notes render on every event hosted here.</p>
+        <p className="text-sm text-muted-foreground">Add a venue once, choose its country, region, city and map pin, then reuse it for your events. Directions are available to attendees.</p>
         {venues === null ? (
           <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" aria-hidden /> Loading venues…</div>
         ) : venues.length === 0 ? (
@@ -2962,7 +2966,7 @@ function VenuesCard({ orgId, canManage }: { orgId: string; canManage: boolean })
             {venues.map((v) => (
               <div key={v.id} className="flex flex-wrap items-center gap-2 rounded-lg bg-secondary/40 px-3 py-2 text-sm">
                 <div className="min-w-0 flex-1">
-                  <p className="font-medium">{v.name} <span className="text-xs font-normal text-muted-foreground">· {v.city ?? '—'}{v.capacity ? ` · cap ${v.capacity.toLocaleString()}` : ''} · {v.eventCount} event{v.eventCount === 1 ? '' : 's'}</span></p>
+                  <p className="font-medium">{v.name} <span className="text-xs font-normal text-muted-foreground">· {v.city ?? '—'}{v.region ? `, ${v.region}` : ''}, ${COUNTRY_NAMES.get(v.country) ?? v.country}{v.capacity ? ` · cap ${v.capacity.toLocaleString()}` : ''} · {v.eventCount} event{v.eventCount === 1 ? '' : 's'}</span></p>
                   {(v.address ?? v.mapsUrl) && (
                     <p className="truncate text-xs text-muted-foreground">
                       {v.address ?? ''}
@@ -3012,11 +3016,15 @@ function VenueDialog({ orgId, venue, onClose, onSaved }: {
 }) {
   const { toast } = useToast()
   const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
   const [form, setForm] = useState({
     name: venue?.name ?? '',
     address: venue?.address ?? '',
     city: venue?.city ?? '',
     region: venue?.region ?? '',
+    country: venue?.country ?? 'GH',
+    lat: venue?.lat == null ? '' : String(venue.lat),
+    lng: venue?.lng == null ? '' : String(venue.lng),
     capacity: venue?.capacity != null ? String(venue.capacity) : '',
     mapsUrl: venue?.mapsUrl ?? '',
     accessibilityInfo: venue?.accessibilityInfo ?? '',
@@ -3024,13 +3032,22 @@ function VenueDialog({ orgId, venue, onClose, onSaved }: {
   })
 
   const save = async () => {
+    if (busy) return
+    if (!form.country || !form.city.trim() || (form.country === 'GH' && !form.region)) {
+      setError('Choose a country and city/town. For Ghana, also select one of the 16 regions.')
+      return
+    }
     setBusy(true)
+    setError('')
     try {
       const payload = {
         name: form.name.trim(),
-        address: form.address.trim() || null,
-        city: form.city.trim() || null,
+        country: form.country,
         region: form.region.trim() || null,
+        city: form.city.trim(),
+        address: form.address.trim() || null,
+        lat: form.lat === '' ? null : Number(form.lat),
+        lng: form.lng === '' ? null : Number(form.lng),
         capacity: form.capacity.trim() ? Number(form.capacity) : null,
         mapsUrl: form.mapsUrl.trim() || null,
         accessibilityInfo: form.accessibilityInfo.trim() || null,
@@ -3038,10 +3055,12 @@ function VenueDialog({ orgId, venue, onClose, onSaved }: {
       }
       if (venue) await api.patch(`/orgs/${orgId}/venues/${venue.id}`, payload)
       else await api.post(`/orgs/${orgId}/venues`, payload)
-      toast({ title: venue ? 'Venue saved' : 'Venue added', description: 'Pick it from the event editor anytime.' })
+      toast({ title: venue ? 'Venue saved' : 'Venue added', description: 'The venue location and map pin are saved for reuse in events.' })
       onSaved()
     } catch (err) {
-      toast({ description: err instanceof ApiClientError ? err.message : 'Could not save the venue.', variant: 'destructive' })
+      const message = err instanceof ApiClientError ? err.message : 'Could not save the venue. Check your connection and try again.'
+      setError(message)
+      toast({ title: 'Could not save venue', description: message, variant: 'destructive' })
     } finally {
       setBusy(false)
     }
@@ -3049,43 +3068,27 @@ function VenueDialog({ orgId, venue, onClose, onSaved }: {
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto ievx-scrollbar">
+      <DialogContent className="max-h-[94dvh] w-[calc(100vw-1rem)] max-w-3xl sm:max-w-3xl overflow-y-auto p-4 sm:p-6 ievx-scrollbar">
         <DialogHeader>
-          <DialogTitle>{venue ? `Edit: ${venue.name}` : 'Add venue'}</DialogTitle>
+          <DialogTitle>{venue ? `Edit venue: ${venue.name}` : 'Add venue'}</DialogTitle>
+          <p className="text-sm text-muted-foreground">Give your venue a name and pin its exact location for event attendees.</p>
         </DialogHeader>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-1.5 sm:col-span-2">
-            <Label htmlFor="v-name">Name</Label>
-            <Input id="v-name" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="Lightworld Cathedral — Main Auditorium" />
-          </div>
-          <div className="space-y-1.5 sm:col-span-2">
-            <Label htmlFor="v-address">Address</Label>
-            <Input id="v-address" value={form.address} onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))} placeholder="12 Liberation Road, North Kaneshie" />
-          </div>
-          <div className="space-y-1.5"><Label htmlFor="v-city">City</Label><Input id="v-city" value={form.city} onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))} placeholder="Accra" /></div>
-          <div className="space-y-1.5"><Label htmlFor="v-region">Region</Label><Input id="v-region" value={form.region} onChange={(e) => setForm((f) => ({ ...f, region: e.target.value }))} placeholder="Greater Accra" /></div>
+        <div className="space-y-4">
           <div className="space-y-1.5">
-            <Label htmlFor="v-capacity">Capacity</Label>
-            <Input id="v-capacity" inputMode="numeric" value={form.capacity} onChange={(e) => setForm((f) => ({ ...f, capacity: e.target.value.replace(/\D/g, '') }))} placeholder="e.g. 3000" />
+            <Label htmlFor="v-name">Venue name *</Label>
+            <Input id="v-name" required maxLength={140} value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="Main auditorium, conference centre, event grounds…" />
           </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="v-maps">Map link (https)</Label>
-            <Input id="v-maps" value={form.mapsUrl} onChange={(e) => setForm((f) => ({ ...f, mapsUrl: e.target.value }))} placeholder="https://maps.google.com/…" />
-          </div>
-          <div className="space-y-1.5 sm:col-span-2">
-            <Label htmlFor="v-access">Accessibility notes</Label>
-            <Input id="v-access" value={form.accessibilityInfo} onChange={(e) => setForm((f) => ({ ...f, accessibilityInfo: e.target.value }))} placeholder="Ramp at the east gate, reserved seating…" />
-          </div>
-          <div className="space-y-1.5 sm:col-span-2">
-            <Label htmlFor="v-directions">Directions note</Label>
-            <Input id="v-directions" value={form.directionsNote} onChange={(e) => setForm((f) => ({ ...f, directionsNote: e.target.value }))} placeholder="Landmarks, parking, trotro routes…" />
-          </div>
+          <VenueLocationFields value={form} onChange={(next) => setForm((current) => ({ ...current, ...next }))} />
+          <div className="space-y-1.5"><Label htmlFor="v-capacity">Capacity (optional)</Label><Input id="v-capacity" inputMode="numeric" value={form.capacity} onChange={(e) => setForm((f) => ({ ...f, capacity: e.target.value.replace(/\D/g, '') }))} placeholder="e.g. 3000" /></div>
+          <div className="space-y-1.5"><Label htmlFor="v-access">Accessibility notes</Label><Input id="v-access" maxLength={500} value={form.accessibilityInfo} onChange={(e) => setForm((f) => ({ ...f, accessibilityInfo: e.target.value }))} placeholder="Wheelchair ramp, reserved seating…" /></div>
+          <div className="space-y-1.5"><Label htmlFor="v-directions">Additional directions</Label><Input id="v-directions" maxLength={500} value={form.directionsNote} onChange={(e) => setForm((f) => ({ ...f, directionsNote: e.target.value }))} placeholder="Landmarks, parking entrance, transport routes…" /></div>
         </div>
-        <DialogFooter>
-          <Button variant="outline" className="rounded-full" onClick={onClose}>Cancel</Button>
-          <Button className="rounded-full" disabled={busy || form.name.trim().length < 3} onClick={() => void save()}>
+        {error && <p role="alert" className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
+        <DialogFooter className="gap-2">
+          <Button type="button" variant="outline" onClick={onClose} disabled={busy}>Cancel</Button>
+          <Button type="button" disabled={busy || form.name.trim().length < 3 || !form.city.trim() || (form.country === 'GH' && !form.region)} onClick={() => void save()}>
             {busy && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" aria-hidden />}
-            {venue ? 'Save changes' : 'Add venue'}
+            {venue ? 'Save venue' : 'Add venue'}
           </Button>
         </DialogFooter>
       </DialogContent>

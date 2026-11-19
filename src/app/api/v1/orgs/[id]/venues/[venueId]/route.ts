@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { handle, jsonOk, requireUser, readJson, errors, sanitizeText, rateLimit } from '@/server/api'
 import { db } from '@/lib/db'
 import { membershipFor, orgCan } from '@/server/permissions'
+import { venueCountry, venueRegion, venueCity, venueCoordinatePair, venueMapsUrl } from '@/server/venue-location'
 
 type RouteContext = { params: Promise<{ id: string; venueId: string }> }
 
@@ -31,7 +32,7 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
     if (!membership) throw errors.forbidden('You are not a member of this organization.')
     if (!orgCan(membership.role, 'event:create')) throw errors.forbidden('Venue management requires an organizer role.')
     await rateLimit(req, 'venue-edit', 60, 60_000)
-    await loadScopedVenue(id, venueId)
+    const current = await loadScopedVenue(id, venueId)
 
     const body = await readJson<Record<string, unknown>>(req)
     const data: Record<string, unknown> = {}
@@ -41,10 +42,14 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
       if (name.length < 3) throw errors.badRequest('Venue name is required (at least 3 characters).')
       data.name = name
     }
-    for (const [field, max] of [['address', 200], ['city', 60], ['region', 60], ['accessibilityInfo', 500], ['directionsNote', 500]] as const) {
+    for (const [field, max] of [['address', 200], ['accessibilityInfo', 500], ['directionsNote', 500]] as const) {
       if (body[field] !== undefined) data[field] = sanitizeText(body[field], max) || null
     }
-    if (body.country !== undefined) data.country = (sanitizeText(body.country, 2).toUpperCase() || 'GH').slice(0, 2)
+    const country = venueCountry(body.country === undefined ? current.country : body.country)
+    if (body.country !== undefined) data.country = country
+    if (body.region !== undefined || body.country !== undefined) data.region = venueRegion(country, body.region === undefined ? current.region : body.region)
+    if (body.city !== undefined) data.city = venueCity(body.city)
+
 
     if (body.capacity !== undefined) {
       const capacity = body.capacity === null || String(body.capacity) === '' ? null : Math.round(Number(body.capacity))
@@ -53,19 +58,13 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
       }
       data.capacity = capacity
     }
-    for (const field of ['lat', 'lng'] as const) {
-      if (body[field] !== undefined) {
-        const value = body[field] === null || String(body[field]) === '' ? null : Number(body[field])
-        if (value !== null && !Number.isFinite(value)) throw errors.badRequest(`${field} must be a number.`)
-        if (value !== null && field === 'lat' && (value < -90 || value > 90)) throw errors.badRequest('Latitude must be between -90 and 90.')
-        if (value !== null && field === 'lng' && (value < -180 || value > 180)) throw errors.badRequest('Longitude must be between -180 and 180.')
-        data[field] = value
-      }
+    if (body.lat !== undefined || body.lng !== undefined) {
+      const pair = venueCoordinatePair(body.lat === undefined ? current.lat : body.lat, body.lng === undefined ? current.lng : body.lng)
+      data.lat = pair.lat
+      data.lng = pair.lng
     }
     if (body.mapsUrl !== undefined) {
-      const mapsUrl = sanitizeText(body.mapsUrl, 300)
-      if (mapsUrl && !/^https:\/\//.test(mapsUrl)) throw errors.badRequest('The map link must be an https:// URL.')
-      data.mapsUrl = mapsUrl || null
+      data.mapsUrl = venueMapsUrl(body.mapsUrl)
     }
     if (Object.keys(data).length === 0) throw errors.badRequest('Nothing to update.')
 

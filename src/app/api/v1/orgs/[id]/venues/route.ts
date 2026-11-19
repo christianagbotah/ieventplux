@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { handle, jsonOk, requireUser, readJson, errors, sanitizeText, rateLimit } from '@/server/api'
 import { db } from '@/lib/db'
 import { membershipFor, orgCan } from '@/server/permissions'
+import { venueCountry, venueRegion, venueCity, venueCoordinatePair, venueMapsUrl } from '@/server/venue-location'
 
 type RouteContext = { params: Promise<{ id: string }> }
 
@@ -58,26 +59,25 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
       throw errors.badRequest('Capacity must be a number between 1 and 2,000,000.')
     }
 
-    const lat = body.lat === undefined || body.lat === null || String(body.lat) === '' ? null : Number(body.lat)
-    const lng = body.lng === undefined || body.lng === null || String(body.lng) === '' ? null : Number(body.lng)
-    if (lat !== null && (!Number.isFinite(lat) || lat < -90 || lat > 90)) throw errors.badRequest('Latitude must be between -90 and 90.')
-    if (lng !== null && (!Number.isFinite(lng) || lng < -180 || lng > 180)) throw errors.badRequest('Longitude must be between -180 and 180.')
+    const country = venueCountry(body.country)
+    const region = venueRegion(country, body.region)
+    const city = venueCity(body.city)
+    const { lat, lng } = venueCoordinatePair(body.lat, body.lng)
 
-    const mapsUrl = sanitizeText(body.mapsUrl, 300)
-    if (mapsUrl && !/^https:\/\//.test(mapsUrl)) throw errors.badRequest('The map link must be an https:// URL.')
+    const mapsUrl = venueMapsUrl(body.mapsUrl)
 
     const venue = await db.venue.create({
       data: {
         orgId: id,
         name,
         address: sanitizeText(body.address, 200) || null,
-        city: sanitizeText(body.city, 60) || null,
-        region: sanitizeText(body.region, 60) || null,
-        country: (sanitizeText(body.country, 2).toUpperCase() || 'GH').slice(0, 2),
+        city,
+        region,
+        country,
         capacity,
         lat,
         lng,
-        mapsUrl: mapsUrl || null,
+        mapsUrl,
         accessibilityInfo: sanitizeText(body.accessibilityInfo, 500) || null,
         directionsNote: sanitizeText(body.directionsNote, 500) || null,
       },
