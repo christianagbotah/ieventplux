@@ -165,24 +165,33 @@ export default function EventDetail({ slug }: { slug: string }) {
   }, [load, user?.id])
 
   const event = data?.event
+  const [salesClock, setSalesClock] = useState(() => Date.now())
+  // A sale that opens while the visitor has this page open should become buyable
+  // without a hard refresh; the server still validates every reservation.
+  useEffect(() => {
+    const handle = window.setInterval(() => setSalesClock(Date.now()), 30_000)
+    return () => window.clearInterval(handle)
+  }, [])
   const saleable = useMemo(() => {
     if (!event) return []
-    const now = Date.now()
+    const now = salesClock
     return event.ticketTypes.filter((tt) => {
       if (tt.saleStartsAt && new Date(tt.saleStartsAt).getTime() > now) return false
       if (tt.saleEndsAt && new Date(tt.saleEndsAt).getTime() < now) return false
       return tt.quota === 0 || tt.soldCount + tt.reservedCount < tt.quota
     })
-  }, [event])
+  }, [event, salesClock])
+
+  const upcomingTicketTypes = useMemo(() => event?.ticketTypes.filter((tt) => tt.saleStartsAt && new Date(tt.saleStartsAt).getTime() > salesClock && (tt.quota === 0 || tt.soldCount + tt.reservedCount < tt.quota)) ?? [], [event, salesClock])
 
   const soldOutTypes = useMemo(() => {
     if (!event) return []
-    const now = Date.now()
+    const now = salesClock
     return event.ticketTypes.filter((tt) =>
       (!tt.saleStartsAt || new Date(tt.saleStartsAt).getTime() <= now) &&
       (!tt.saleEndsAt || new Date(tt.saleEndsAt).getTime() >= now) &&
       tt.quota > 0 && tt.soldCount + tt.reservedCount >= tt.quota)
-  }, [event])
+  }, [event, salesClock])
 
   const nextOccurrence = useMemo(() => {
     if (!seriesInfo || !event) return null
@@ -740,9 +749,10 @@ export default function EventDetail({ slug }: { slug: string }) {
                   ) : saleable.length === 0 ? (
                     <div className="space-y-3">
                       <p className="rounded-xl bg-white/10 p-3 text-sm text-white/80">
-                        {event.ticketTypes.length === 0 ? 'Tickets have not been published yet.' : 'All tickets are sold out.'}
+                        {event.ticketTypes.length === 0 ? 'Tickets have not been published yet.' : upcomingTicketTypes.length > 0 ? 'Ticket sales are scheduled to open soon.' : soldOutTypes.length > 0 ? 'All currently available tickets are sold out.' : 'Ticket sales are currently closed.'}
                       </p>
-                      {event.ticketTypes.length > 0 && !['CANCELLED', 'ENDED', 'POSTPONED'].includes(event.status) && new Date(event.startsAt).getTime() > Date.now() && (
+                      {upcomingTicketTypes.length > 0 && <div className="space-y-1 rounded-xl border border-emerald-300/30 bg-emerald-400/5 p-3 text-sm text-white"><p className="font-semibold">Upcoming ticket releases</p>{upcomingTicketTypes.map((type) => <p key={type.id} className="text-xs text-white/80">{type.name} · opens {new Date(type.saleStartsAt!).toLocaleString()}</p>)}</div>}
+                      {soldOutTypes.length > 0 && !['CANCELLED', 'ENDED', 'POSTPONED'].includes(event.status) && new Date(event.startsAt).getTime() > salesClock && (
                         <div className="efx-glassmorphism-card__panel rounded-xl border border-white/25 p-4">
                           <p className="flex items-center gap-2 text-sm font-semibold text-white">
                             <Hourglass className="h-4 w-4 text-amber-300" aria-hidden /> Waitlist
@@ -780,6 +790,7 @@ export default function EventDetail({ slug }: { slug: string }) {
                     </div>
                   ) : (
                     <>
+                      {upcomingTicketTypes.length > 0 && <div className="rounded-xl border border-emerald-300/30 bg-emerald-400/5 p-3 text-xs text-white/85"><p className="mb-1 font-semibold text-white">More tickets opening soon</p>{upcomingTicketTypes.map((type) => <p key={type.id}>{type.name} · {new Date(type.saleStartsAt!).toLocaleString()}</p>)}</div>}
                       {saleable.map((tt) => {
                         const remaining = tt.quota > 0 ? tt.quota - tt.soldCount - tt.reservedCount : null
                         return (

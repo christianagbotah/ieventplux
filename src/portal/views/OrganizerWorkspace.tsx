@@ -32,6 +32,7 @@ import { WorkspaceNavigation } from '../components/WorkspaceNavigation'
 import { WorkspaceMetric } from '../components/WorkspaceMetric'
 import { GrowthCommandCenter } from '../components/GrowthCommandCenter'
 import { EventCopyCopilot } from '../components/EventCopyCopilot'
+import { TicketSalesEditor, TicketSalesFields, salesPayload, type TicketSalesRow, type TicketSalesForm } from '../components/TicketSalesControls'
 import { VenueLocationFields } from '../components/VenueLocationFields'
 import { COUNTRY_NAMES } from '../lib/venue-locations'
 
@@ -472,7 +473,7 @@ function LoadingBlock() {
 
 // ── Events manager ──────────────────────────────────────────────────────────
 
-interface TicketTypeRow {
+interface TicketTypeRow extends TicketSalesRow {
   id: string
   name: string
   kind: string
@@ -872,7 +873,9 @@ function EventEditor({ orgId, event, onClose }: { orgId: string; event: OrgEvent
     ageGuidance: '',
     refundPolicy: '',
   })
-  const [tt, setTt] = useState({ name: '', price: '0.00', quota: '100', perBuyerLimit: '4', kind: 'PHYSICAL', includesVirtualAccess: false })
+  const [tt, setTt] = useState<TicketSalesForm & { kind: string; includesVirtualAccess: boolean }>({ name: '', price: '0.00', quota: '100', perBuyerLimit: '4', saleStartsAt: '', saleEndsAt: '', groupMinQty: '', groupPctOff: '', kind: 'PHYSICAL', includesVirtualAccess: false })
+  const [ticketOptionsOpen, setTicketOptionsOpen] = useState(false)
+  const [ticketEditing, setTicketEditing] = useState<TicketTypeRow | null>(null)
   const [busy, setBusy] = useState(false)
   const [savingTt, setSavingTt] = useState(false)
   const [repeat, setRepeat] = useState(false)
@@ -897,7 +900,8 @@ function EventEditor({ orgId, event, onClose }: { orgId: string; event: OrgEvent
 
   useEffect(() => {
     if (event) {
-      void api.get<{ event: { description: string; visibility: string; venueId?: string | null; accessibilityInfo?: string | null; attendanceRules?: string | null; ageGuidance?: string | null; refundPolicy?: string | null } }>(`/events/${event.id}`).then((d) => {
+      void api.get<{ event: { description: string; visibility: string; venueId?: string | null; accessibilityInfo?: string | null; attendanceRules?: string | null; ageGuidance?: string | null; refundPolicy?: string | null; ticketTypes: TicketTypeRow[] } }>(`/events/${event.id}`).then((d) => {
+        setTicketTypes(d.event.ticketTypes ?? [])
         setForm((f) => ({
           ...f,
           description: d.event.description,
@@ -961,16 +965,14 @@ function EventEditor({ orgId, event, onClose }: { orgId: string; event: OrgEvent
     setSavingTt(true)
     try {
       await api.post(`/events/${activeEvent.id}/ticket-types`, {
-        name: tt.name,
-        priceMinor: moneyFromCedis(Number(tt.price)),
-        quota: Number(tt.quota),
-        perBuyerLimit: Number(tt.perBuyerLimit),
+        ...salesPayload(tt),
         kind: tt.kind,
         includesVirtualAccess: tt.includesVirtualAccess,
       })
       const detail = await api.get<{ event: { ticketTypes: TicketTypeRow[] } }>(`/events/${activeEvent.id}`)
       setTicketTypes(detail.event.ticketTypes)
-      setTt({ ...tt, name: '', price: '0.00' })
+      setTt({ ...tt, name: '', price: '0.00', saleStartsAt: '', saleEndsAt: '', groupMinQty: '', groupPctOff: '' })
+      setTicketOptionsOpen(false)
       toast({ title: 'Ticket type added' })
     } catch (err) {
       toast({ title: 'Could not add ticket type', description: err instanceof ApiClientError ? err.message : undefined, variant: 'destructive' })
@@ -1233,15 +1235,18 @@ function EventEditor({ orgId, event, onClose }: { orgId: string; event: OrgEvent
                     <div>
                       <p className="font-medium">{t.name} {!t.active && <Badge variant="secondary" className="ml-1 text-[9px]">inactive</Badge>}</p>
                       <p className="text-xs text-muted-foreground">{t.priceMinor === 0 ? 'Free' : money(t.priceMinor)} · {t.soldCount}/{t.quota || '∞'} sold · max {t.perBuyerLimit}/buyer{t.includesVirtualAccess ? ' · +online' : ''}</p>
+                      {(t.saleStartsAt || t.saleEndsAt) && <p className="text-[11px] text-muted-foreground">Sales: {t.saleStartsAt ? dateLong(t.saleStartsAt) : 'Immediately'} – {t.saleEndsAt ? dateLong(t.saleEndsAt) : 'Until closed manually'}</p>}
+                      {t.groupMinQty && t.groupPctOff && <p className="text-[11px] font-medium text-primary">{t.groupPctOff}% group discount for {t.groupMinQty}+ tickets</p>}
                     </div>
-                    {t.active && t.soldCount === 0 && (
-                      <Button size="sm" variant="ghost" className="h-7 rounded-full text-destructive" onClick={() => void deactivateTt(t.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
-                    )}
+                    <div className="flex shrink-0 items-center gap-1">
+                      {t.active && <Button size="sm" variant="outline" className="h-8 rounded-lg" onClick={() => setTicketEditing(t)}><Pencil className="mr-1 size-3.5" /> Manage</Button>}
+                      {t.active && t.soldCount === 0 && <Button size="icon" variant="ghost" aria-label={`Deactivate ${t.name}`} className="size-8 text-destructive" onClick={() => void deactivateTt(t.id)}><Trash2 className="size-3.5" /></Button>}
+                    </div>
                   </div>
                 ))}
                 {(ticketTypes ?? []).length === 0 && <p className="text-xs text-muted-foreground">No ticket types yet — add free RSVP or paid admission.</p>}
               </div>
-              <div className="grid gap-2 sm:grid-cols-[1fr_90px_80px_80px_1fr_auto]">
+              <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_110px_100px] lg:grid-cols-[minmax(0,1fr)_120px_100px_100px_120px_auto]">
                 <Input value={tt.name} onChange={(e) => setTt((s) => ({ ...s, name: e.target.value }))} placeholder="Ticket name" aria-label="Ticket name" />
                 <Input value={tt.price} onChange={(e) => setTt((s) => ({ ...s, price: e.target.value }))} placeholder="₵ price" inputMode="decimal" aria-label="Price in cedis" />
                 <Input value={tt.quota} onChange={(e) => setTt((s) => ({ ...s, quota: e.target.value }))} placeholder="Quota" inputMode="numeric" aria-label="Quota" />
@@ -1255,6 +1260,12 @@ function EventEditor({ orgId, event, onClose }: { orgId: string; event: OrgEvent
                   </SelectContent>
                 </Select>
                 <Button size="sm" className="rounded-full" disabled={!tt.name.trim() || savingTt} onClick={() => void addTicketType()}>Add</Button>
+              </div>
+              <div className="mt-3">
+                <button type="button" aria-expanded={ticketOptionsOpen} className="flex items-center gap-2 rounded-lg px-2 py-2 text-xs font-semibold text-primary hover:bg-primary/5" onClick={() => setTicketOptionsOpen((open) => !open)}>
+                  <CalendarClock className="size-4" /> {ticketOptionsOpen ? 'Hide advanced ticket settings' : 'Schedule ticket sales or add a group discount'} <ChevronDown className={'size-4 transition-transform ' + (ticketOptionsOpen ? 'rotate-180' : '')} />
+                </button>
+                {ticketOptionsOpen && <div className="mt-2"><TicketSalesFields value={tt} onChange={(next) => setTt((current) => ({ ...current, ...next }))} /></div>}
               </div>
               <label className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
                 <Switch checked={tt.includesVirtualAccess} onCheckedChange={(v) => setTt((s) => ({ ...s, includesVirtualAccess: v }))} aria-label="Includes virtual access" />
@@ -1274,6 +1285,7 @@ function EventEditor({ orgId, event, onClose }: { orgId: string; event: OrgEvent
             </div>
           )}
         </div>
+        {ticketEditing && activeEvent && <TicketSalesEditor eventId={activeEvent.id} ticket={ticketEditing} onClose={() => setTicketEditing(null)} onSaved={() => void api.get<{ event: { ticketTypes: TicketTypeRow[] } }>(`/events/${activeEvent.id}`).then((d) => setTicketTypes(d.event.ticketTypes ?? []))} />}
         {/* Apply-to-series dialog */}
         <Dialog open={seriesOpen} onOpenChange={setSeriesOpen}>
           <DialogContent className="max-w-md">

@@ -82,3 +82,7 @@ Track active/repeat organizers, published events per active organizer, 30/90-day
 ## Production AI activation status (19 November 2026)
 
 The deployed environment explicitly sets `AI_CONCIERGE_ENABLED=false`. The embedded AI content writer checks provider-readiness and displays an unavailable/manual-edit state rather than claiming working AI generation. The Growth Center remains functional using real data and labelled rules. Before enabling model-backed output, confirm provider credentials, billing, response quality, AI safety tests and rate limits; do not silently remove the live feature gate.
+
+### Release B incremental progress — Ticket sales controls (19 November 2026)
+
+New/edit organizer ticket controls now expose sale opening/closing windows, paid group discounts and per-buyer limits; server validates dates, caps, and pricing; public event pages distinguish scheduled releases from sold-out inventory. See [TICKET_SALES_CONTROLS.md](TICKET_SALES_CONTROLS.md). Seat mapping and corporate package subscriptions are not part of this increment.

@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { handle, jsonOk, requireUser, readJson, errors, sanitizeText } from '@/server/api'
 import { db } from '@/lib/db'
 import { eventOrgAccess } from '@/server/permissions'
+import { boundedInt, ticketSalesSettings } from '@/server/ticket-sales-policy'
 
 type RouteContext = { params: Promise<{ id: string; ttId: string }> }
 
@@ -16,26 +17,38 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
     if (!tt || tt.eventId !== id) throw errors.notFound('Ticket type not found.')
     const body = await readJson<Record<string, unknown>>(req)
     const data: Record<string, unknown> = {}
-    if (body.name !== undefined) data.name = sanitizeText(body.name, 80)
+    if (body.name !== undefined) {
+      const name = sanitizeText(body.name, 80)
+      if (!name) throw errors.badRequest('Ticket type name cannot be empty.')
+      data.name = name
+    }
     if (body.description !== undefined) data.description = sanitizeText(body.description, 300) || null
     if (body.priceMinor !== undefined) {
-      const price = Math.max(0, Math.round(Number(body.priceMinor)))
-      if (price > 0 && tt.soldCount > 0) throw errors.conflict('Price cannot change after sales started (immutable price snapshots protect buyers).')
+      const price = boundedInt(body.priceMinor, 'Ticket price', 0, 100_000_000)
+      if (price > 0 && tt.soldCount > 0 && price !== tt.priceMinor) throw errors.conflict('Price cannot change after sales started (immutable price snapshots protect buyers).')
+      if (price > 0 && tt.priceMinor === 0) {
+        const organizer = await db.organization.findUnique({ where: { id: tt.orgId }, select: { status: true } })
+        if (organizer?.status !== 'ACTIVE') throw errors.forbidden('Paid tickets require approved organizer verification.')
+      }
       data.priceMinor = price
     }
     if (body.quota !== undefined) {
-      const quota = Math.max(0, Math.round(Number(body.quota)))
+      const quota = boundedInt(body.quota, 'Ticket quota', 0, 1_000_000)
       if (quota > 0 && quota < tt.soldCount + tt.reservedCount) {
         throw errors.conflict(`Quota cannot go below already sold/reserved (${tt.soldCount + tt.reservedCount}).`)
       }
       data.quota = quota
     }
-    const quotaRaised = typeof data.quota === 'number' && data.quota > tt.quota
-    if (body.perBuyerLimit !== undefined) data.perBuyerLimit = Math.max(1, Math.min(20, Number(body.perBuyerLimit)))
+    const quotaRaised = typeof data.quota === 'number' && (data.quota > tt.quota || (data.quota === 0 && tt.quota > 0))
+    if (body.perBuyerLimit !== undefined) data.perBuyerLimit = boundedInt(body.perBuyerLimit, 'Maximum tickets per buyer', 1, 10)
     if (body.active !== undefined) data.active = Boolean(body.active)
     if (body.includesVirtualAccess !== undefined) data.includesVirtualAccess = Boolean(body.includesVirtualAccess)
-    if (body.saleEndsAt !== undefined) data.saleEndsAt = body.saleEndsAt ? new Date(String(body.saleEndsAt)) : null
-    if (body.saleStartsAt !== undefined) data.saleStartsAt = body.saleStartsAt ? new Date(String(body.saleStartsAt)) : null
+    if (['perBuyerLimit', 'saleEndsAt', 'saleStartsAt', 'groupMinQty', 'groupPctOff', 'priceMinor'].some((key) => body[key] !== undefined)) {
+      Object.assign(data, ticketSalesSettings(body, {
+        perBuyerLimit: tt.perBuyerLimit, saleStartsAt: tt.saleStartsAt, saleEndsAt: tt.saleEndsAt,
+        groupMinQty: tt.groupMinQty, groupPctOff: tt.groupPctOff,
+      }, typeof data.priceMinor === 'number' ? data.priceMinor : tt.priceMinor))
+    }
     const updated = await db.ticketType.update({ where: { id: ttId }, data })
 
     // A quota raise frees inventory — wake the waitlist so waiting fans get a fair shot.

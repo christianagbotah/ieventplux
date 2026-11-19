@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { handle, jsonOk, requireUser, readJson, errors, sanitizeText, jsonList, pagination, rateLimit } from '@/server/api'
 import { db } from '@/lib/db'
 import { eventOrgAccess } from '@/server/permissions'
+import { boundedInt, ticketSalesSettings } from '@/server/ticket-sales-policy'
 
 type RouteContext = { params: Promise<{ id: string; action: string }> }
 
@@ -701,8 +702,9 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
       if (!access.allowed) throw errors.forbidden('You do not have permission to manage tickets.')
       const name = sanitizeText(body.name, 80)
       if (!name) throw errors.badRequest('Ticket type name is required.')
-      const priceMinor = Math.max(0, Math.round(Number(body.priceMinor ?? 0)))
-      const quota = Math.max(0, Math.round(Number(body.quota ?? 0)))
+      const priceMinor = boundedInt(body.priceMinor ?? 0, 'Ticket price', 0, 100_000_000)
+      const quota = boundedInt(body.quota ?? 0, 'Ticket quota', 0, 1_000_000)
+      const policy = ticketSalesSettings(body, undefined, priceMinor)
       const event = await db.event.findUnique({ where: { id } })
       if (priceMinor > 0 && event) {
         const org = await db.organization.findUnique({ where: { id: event.orgId } })
@@ -718,13 +720,9 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
           priceMinor,
           currency: 'GHS',
           quota,
-          perBuyerLimit: Math.max(1, Math.min(20, Number(body.perBuyerLimit ?? 4))),
-          saleStartsAt: body.saleStartsAt ? new Date(String(body.saleStartsAt)) : null,
-          saleEndsAt: body.saleEndsAt ? new Date(String(body.saleEndsAt)) : null,
+          ...policy,
           includesVirtualAccess: Boolean(body.includesVirtualAccess),
-          groupMinQty: body.groupMinQty ? Number(body.groupMinQty) : null,
-          groupPctOff: body.groupPctOff ? Number(body.groupPctOff) : null,
-          sortOrder: Number(body.sortOrder ?? 0),
+          sortOrder: boundedInt(body.sortOrder ?? 0, 'Sort order', 0, 10_000),
         },
       })
       return jsonOk({ ticketType: tt })
