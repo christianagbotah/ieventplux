@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
-import { handle, jsonOk, errors } from '@/server/api'
+import { handle, jsonOk, errors, requireUser } from '@/server/api'
 import { db } from '@/lib/db'
-import { getSession } from '@/server/auth'
+import { canReadFullOrder } from '@/server/order-access'
 import { PUBLIC_EVENT_WHERE } from '@/server/services/events'
 import { formatMoney } from '@/server/money'
 
@@ -19,22 +19,14 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
   return handle(async () => {
     void req
     const { ref } = await ctx.params
+    const user = await requireUser()
     const order = await db.order.findUnique({
       where: { reference: ref },
       select: { id: true, userId: true, orgId: true, eventId: true, event: { select: { categorySlug: true, city: true } } },
     })
     if (!order) throw errors.notFound('Order not found.')
 
-    const session = await getSession()
-    let allowed = false
-    if (session) {
-      if (order.userId === session.user.id) allowed = true
-      else {
-        const membership = await db.membership.findFirst({ where: { userId: session.user.id, orgId: order.orgId } })
-        if (membership) allowed = true
-      }
-    }
-    if (!allowed) throw errors.forbidden('You do not have access to this order.')
+    if (!(await canReadFullOrder(user.id, order))) throw errors.forbidden('You do not have access to this order.')
 
     const now = new Date()
     const attending = await db.ticket.findMany({
@@ -93,6 +85,6 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
                 : 'Coming up on iEventPlux',
         }
       }),
-    })
+    }, { headers: { 'Cache-Control': 'private, no-store' } })
   })
 }
