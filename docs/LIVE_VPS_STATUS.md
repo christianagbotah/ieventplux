@@ -51,13 +51,20 @@ Do not run the mutating, demo-user seed smoke suite against this database. Avoid
 
 ## First administrator and remaining launch gates
 
-The production database was created **without demo accounts** and had **zero users** at the HTTPS verification check. To prevent public registration from creating an account before the one-time SUPER_ADMIN bootstrap, the Webuzo domain include temporarily returns **503** for POST `/api/v1/auth/register`. The homepage, read-only APIs and real-time connection remain available. Remove this exact temporary Nginx location only after the initial administrator is created and SMTP/account-verification delivery is tested. The operator should create their initial super-admin in a root SSH/Webuzo interactive terminal:
+The production database was created without demo accounts. On **2026-11-19**, the initial
+`SUPER_ADMIN` was confirmed to exist and the obsolete Nginx 503 registration block was
+removed from `/var/webuzo-data/nginx/custom/domains/ieventplux.lightworldtech.com.conf`
+(after taking a configuration backup, validating Nginx, and reloading). The live public
+`POST /api/v1/auth/register` route now reaches the application and returns normal
+structured validation errors. No demo-user seed was run. Registration remains separate
+from payment/financial launch certification.
 
-```bash
-bash /root/ieventplux-create-admin.sh
-```
+**Email verification is not yet configured on the VPS:** SMTP is currently unavailable,
+so registration must accurately tell users that verification emails cannot be delivered.
+Do not imply a verification email was sent until a real SMTP delivery test has passed.
 
-This script uses the reviewed one-time, hidden-password bootstrap and targets the owner's email; it does not insert a default password. Verify the first login before handing out organizer permissions.
+The original one-time admin bootstrap instructions are kept in `DEPLOYMENT.md`, but
+must **not** be rerun against this populated database.
 
 **Still not certified:** Hubtel collections/payouts/SMS, SMTP transaction delivery, Cloudflare Stream ingestion/playback, durable offline check-in across browser reloads, full real-device/browser accessibility QA, offsite backup/recovery rehearsal, and financial go/no-go. These must remain disabled or unavailable until verified. Monitor shared disk utilization (about 91% at deploy) and swap pressure before onboarding customers.
 

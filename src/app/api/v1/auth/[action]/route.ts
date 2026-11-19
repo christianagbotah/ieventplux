@@ -61,33 +61,56 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
       if (displayName.length < 2) throw errors.badRequest('Enter your full name.')
       const existing = await db.user.findFirst({ where: { OR: [{ email }, ...(body.phone ? [{ phone: String(body.phone).trim() }] : [])], deletedAt: null } })
       if (existing) throw errors.conflict('An account with this email or phone already exists. Try signing in.')
-      const user = await db.user.create({
-        data: {
-          email,
-          passwordHash: await hashPassword(password),
-          displayName,
-          phone: body.phone ? String(body.phone).trim() : null,
-          notifPrefs: JSON.stringify({ email: true, sms: Boolean(body.phone), push: true, marketing: Boolean(body.marketingSms) }),
-        },
-      })
-      if (body.phone && body.marketingSms) {
-        await db.consent.upsert({
-          where: { target_channel_scope: { target: String(body.phone).trim(), channel: 'SMS', scope: 'MARKETING' } },
-          create: { userId: user.id, channel: 'SMS', target: String(body.phone).trim(), scope: 'MARKETING', source: 'signup' },
-          update: { grantedAt: new Date(), revokedAt: null },
-        })
-      }
-      // Contact verification codes (email; SMS if phone provided). Dev mode surfaces them via the API
-      // with an explicit DEV label because no live transport is configured.
+      // Do not leave a half-created account if verification or consent storage fails:
+      // the account, code and marketing preference are committed atomically.
       const code = otpCode()
-      await db.contactVerification.create({ data: { userId: user.id, channel: 'EMAIL', target: email, codeHash: sha256(code), purpose: 'VERIFY', expiresAt: new Date(Date.now() + 30 * 60_000) } })
-      await queueMessage({ channel: 'EMAIL', target: email, userId: user.id, template: 'verify_email', subject: 'Verify your iEventPlux account', body: `Your verification code is ${code}. It expires in 30 minutes.`, purpose: 'TRANSACTIONAL' })
+      const passwordHash = await hashPassword(password)
+      const phone = body.phone ? String(body.phone).trim() : null
+      let user: Awaited<ReturnType<typeof db.user.create>>
+      try {
+        user = await db.$transaction(async (tx) => {
+          const created = await tx.user.create({
+            data: {
+              email,
+              passwordHash,
+              displayName,
+              phone,
+              notifPrefs: JSON.stringify({ email: true, sms: Boolean(phone), push: true, marketing: Boolean(body.marketingSms) }),
+            },
+          })
+          await tx.contactVerification.create({
+            data: { userId: created.id, channel: 'EMAIL', target: email, codeHash: sha256(code), purpose: 'VERIFY', expiresAt: new Date(Date.now() + 30 * 60_000) },
+          })
+          if (phone && body.marketingSms) {
+            await tx.consent.upsert({
+              where: { target_channel_scope: { target: phone, channel: 'SMS', scope: 'MARKETING' } },
+              create: { userId: created.id, channel: 'SMS', target: phone, scope: 'MARKETING', source: 'signup' },
+              update: { grantedAt: new Date(), revokedAt: null },
+            })
+          }
+          return created
+        })
+      } catch (error) {
+        if (error && typeof error === 'object' && 'code' in error && error.code === 'P2002') {
+          throw errors.conflict('An account with this email or phone already exists. Try signing in or resetting your password.')
+        }
+        throw error
+      }
+      // Verification delivery is not essential for creating an account. Keep the
+      // real status honest when SMTP is disabled or the outbox cannot be queued.
+      let verificationQueued = false
+      try {
+        await queueMessage({ channel: 'EMAIL', target: email, userId: user.id, template: 'verify_email', subject: 'Verify your iEventPlux account', body: `Your verification code is ${code}. It expires in 30 minutes.`, purpose: 'TRANSACTIONAL' })
+        verificationQueued = true
+      } catch (error) {
+        console.error('[auth.register] could not queue verification email', error instanceof Error ? error.name : 'unknown error')
+      }
       let devCode: string | null = null
       if (!env.isProd) devCode = code
       const { token, expiresAt } = await createSession(user.id, req.headers.get('x-forwarded-for') ?? undefined, req.headers.get('user-agent') ?? undefined)
       await setSessionCookie(token, expiresAt)
       await audit({ actorUserId: user.id, actorLabel: email, action: 'auth.register', entityType: 'User', entityId: user.id })
-      return jsonOk({ user: { id: user.id, email: user.email, displayName: user.displayName, role: user.role }, devVerificationCode: devCode, devNote: devCode ? 'DEV ONLY: verification code exposed because SMTP is not configured.' : null })
+      return jsonOk({ user: { id: user.id, email: user.email, displayName: user.displayName, role: user.role }, devVerificationCode: devCode, verificationEmailAvailable: verificationQueued && Boolean(env.smtp.host && env.smtp.user), devNote: devCode ? 'DEV ONLY: verification code exposed because SMTP is not configured.' : null })
     }
 
     if (action === 'login') {

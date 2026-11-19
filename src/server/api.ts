@@ -58,16 +58,26 @@ export async function handle(fn: () => Promise<NextResponse>): Promise<NextRespo
   try {
     return await fn()
   } catch (err) {
+    // Share a safe reference with the user and correlate it with server-side logs;
+    // never disclose database URLs, traces, or exception internals in responses.
+    const requestId = correlationId()
     if (err instanceof ApiError) {
       const res = NextResponse.json({ error: { code: err.code, message: err.message, ...err.extra } }, { status: err.status })
+      res.headers.set('X-Correlation-Id', requestId)
       // 429s carry the bucket's real window expiry so well-behaved clients back off.
       const retryAfter = (err.extra as { retryAfterSec?: number } | undefined)?.retryAfterSec
       if (err.status === 429 && typeof retryAfter === 'number') res.headers.set('Retry-After', String(Math.max(1, Math.ceil(retryAfter))))
       return res
     }
-    const message = err instanceof Error ? err.message : 'Unexpected error'
-    console.error('[api]', message, err)
-    return NextResponse.json({ error: { code: 'INTERNAL', message: 'Unexpected server error.' } }, { status: 500 })
+    const databaseCode = err && typeof err === 'object' && 'code' in err ? String(err.code) : ''
+    const databaseOffline = ['P1001', 'P1002', 'P1017', 'P2024'].includes(databaseCode)
+    console.error('[api]', requestId, err instanceof Error ? err.message : 'Unexpected error', err)
+    const res = NextResponse.json({ error: databaseOffline
+      ? { code: 'DATABASE_UNAVAILABLE', message: 'The database is temporarily unavailable. Please try again in a few minutes.' }
+      : { code: 'INTERNAL', message: 'The server could not complete your request. Please try again shortly.' },
+    }, { status: databaseOffline ? 503 : 500 })
+    res.headers.set('X-Correlation-Id', requestId)
+    return res
   }
 }
 

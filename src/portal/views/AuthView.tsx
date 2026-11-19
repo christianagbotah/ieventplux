@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Church, Ticket, ShieldCheck, Loader2, Eye, EyeOff } from 'lucide-react'
+import { Church, Ticket, ShieldCheck, Loader2, Eye, EyeOff, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -16,6 +16,8 @@ export default function AuthView({ mode }: { mode: 'signin' | 'register' }) {
   const { toast } = useToast()
   const { setUser, setMemberships } = usePortal()
   const [busy, setBusy] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
+  const [resetError, setResetError] = useState<string | null>(null)
   const [resetOpen, setResetOpen] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [showResetPassword, setShowResetPassword] = useState(false)
@@ -60,7 +62,7 @@ export default function AuthView({ mode }: { mode: 'signin' | 'register' }) {
 
   const finishAuth = async () => {
     const me = await api.get<{ user: Parameters<typeof setUser>[0]; memberships: Parameters<typeof setMemberships>[0] }>('/auth/me')
-    if (!me.user) return
+    if (!me.user) throw new Error('Your credentials were accepted, but the sign-in session could not be verified. Please try signing in again.')
     setUser(me.user)
     setMemberships(me.memberships ?? [])
     // R20: platform staff (SUPPORT / MODERATOR / FINANCE_ADMIN / SUPER_ADMIN) sign in through
@@ -80,28 +82,44 @@ export default function AuthView({ mode }: { mode: 'signin' | 'register' }) {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (busy) return
     setBusy(true)
+    setFormError(null)
     try {
       if (mode === 'signin') {
         await doSignIn(form.email, form.password)
       } else {
-        const result = await api.post<{ devVerificationCode: string | null }>('/auth/register', {
+        const result = await api.post<{ devVerificationCode: string | null; verificationEmailAvailable?: boolean }>('/auth/register', {
           email: form.email,
           password: form.password,
           displayName: form.displayName,
           phone: form.phone || undefined,
           marketingSms: form.marketingSms,
         })
+        // Account creation succeeded. A failed follow-up session check must not be
+        // reported as a failed registration (otherwise people create duplicates).
+        try {
+          await finishAuth()
+        } catch {
+          const message = 'Your account was created, but automatic sign-in did not finish. Please use Sign in with the email and password you just registered.'
+          setFormError(message)
+          toast({ title: 'Account created — sign in to continue', description: message, variant: 'destructive' })
+          return
+        }
         if (result.devVerificationCode) {
+          toast({ title: 'Account created', description: `DEV verification code: ${result.devVerificationCode}` })
+        } else if (result.verificationEmailAvailable === false) {
           toast({
-            title: 'Account created',
-            description: `DEV: your email verification code is ${result.devVerificationCode} (SMTP is not configured — see Profile to verify).`,
+            title: 'Account created — email verification is pending',
+            description: 'Email verification is not yet configured on this platform. You can sign in, but verification emails cannot be delivered until an administrator enables email sending.',
           })
         }
-        await finishAuth()
       }
     } catch (err) {
-      toast({ title: 'Authentication failed', description: err instanceof ApiClientError ? err.message : 'Please try again.', variant: 'destructive' })
+      const message = err instanceof ApiClientError ? err.message
+        : err instanceof Error ? err.message : 'We could not complete your request. Please try again.'
+      setFormError(message)
+      toast({ title: mode === 'signin' ? 'Could not sign in' : 'Could not create account', description: message, variant: 'destructive' })
     } finally {
       setBusy(false)
     }
@@ -110,12 +128,15 @@ export default function AuthView({ mode }: { mode: 'signin' | 'register' }) {
   const requestReset = async () => {
     if (resetBusy) return
     setResetBusy(true)
+    setResetError(null)
     try {
       const res = await api.post<{ devResetCode: string | null }>('/auth/password-reset', { email: resetEmail })
       setResetCodeSent(res.devResetCode ?? 'sent')
       toast({ description: res.devResetCode ? `DEV: reset code is ${res.devResetCode}` : 'If that account exists, a reset code has been sent.' })
     } catch (err) {
-      toast({ description: err instanceof ApiClientError ? err.message : 'Could not start reset.', variant: 'destructive' })
+      const message = err instanceof ApiClientError ? err.message : 'Could not request a password reset. Check your connection and try again.'
+      setResetError(message)
+      toast({ title: 'Password reset unavailable', description: message, variant: 'destructive' })
     } finally {
       setResetBusy(false)
     }
@@ -124,13 +145,16 @@ export default function AuthView({ mode }: { mode: 'signin' | 'register' }) {
   const confirmReset = async () => {
     if (resetBusy) return
     setResetBusy(true)
+    setResetError(null)
     try {
       await api.post('/auth/password-reset-confirm', { email: resetEmail, code: resetCode, password: newPassword })
       toast({ title: 'Password updated', description: 'Sign in with your new password.' })
       setResetOpen(false)
       navigate('/signin')
     } catch (err) {
-      toast({ description: err instanceof ApiClientError ? err.message : 'Could not reset password.', variant: 'destructive' })
+      const message = err instanceof ApiClientError ? err.message : 'Could not update your password. Check your connection and try again.'
+      setResetError(message)
+      toast({ title: 'Password could not be updated', description: message, variant: 'destructive' })
     } finally {
       setResetBusy(false)
     }
@@ -177,7 +201,13 @@ export default function AuthView({ mode }: { mode: 'signin' | 'register' }) {
         <p className="mt-1 text-sm text-muted-foreground">
           {mode === 'signin' ? 'Use your email and password.' : 'It takes less than a minute.'}
         </p>
-        <form onSubmit={submit} className="mt-6">
+        <form onSubmit={submit} className="mt-6" aria-describedby={formError ? 'auth-form-error' : undefined}>
+          {formError && (
+            <div id="auth-form-error" role="alert" className="mb-4 flex items-start gap-2.5 rounded-xl border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+              <p>{formError}</p>
+            </div>
+          )}
           {mode === 'register' && (
             <div className="efx-floating-label-input" style={{ maxWidth: '100%', margin: '0 0 0.9rem' }}>
               <input
@@ -314,6 +344,12 @@ export default function AuthView({ mode }: { mode: 'signin' | 'register' }) {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
+            {resetError && (
+              <div role="alert" className="flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+                <span>{resetError}</span>
+              </div>
+            )}
             <Input type="email" autoComplete="email" placeholder="you@example.com" value={resetEmail} onChange={(e) => setResetEmail(e.target.value)} aria-label="Password reset email" />
             <Button className="w-full rounded-xl" disabled={resetBusy || !resetEmail.trim()} onClick={() => void requestReset()}>
               {resetBusy ? 'Sending…' : 'Send reset code'}
