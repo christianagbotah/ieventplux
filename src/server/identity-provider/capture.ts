@@ -28,7 +28,7 @@ export function validateIdentityNames(form: FormData): { givenNames: string; las
 }
 
 export function validateLivenessFiles(values: FormDataEntryValue[]): void {
-  if (values.length !== 6) throw errors.badRequest('Six guided liveness captures from the provider camera are required before starting verification.')
+  if (values.length < 2 || values.length > 12) throw errors.badRequest('The guided camera must provide between 2 and 12 liveness frames. Please retake the camera challenge.')
   if (values.some((v) => !(v instanceof File) || v.size > 3 * 1024 * 1024)) {
     throw errors.badRequest('A liveness capture is missing or too large. Please retry the camera challenge.')
   }

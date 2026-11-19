@@ -9,6 +9,8 @@ describe('biometric upload contract', () => {
     form.set('lastName', 'Boateng')
     expect(validateIdentityNames(form)).toEqual({ givenNames: 'Ama', lastName: 'Boateng' })
     expect(() => validateLivenessFiles([])).toThrow()
+    expect(() => validateLivenessFiles(Array(13).fill(new File([new Uint8Array(1024)], 'frame.jpg', { type: 'image/jpeg' })))).toThrow()
+    expect(() => validateLivenessFiles(Array(3).fill(new File([new Uint8Array(1024)], 'frame.jpg', { type: 'image/jpeg' })))).not.toThrow()
     form.set('lastName', '')
     expect(() => validateIdentityNames(form)).toThrow()
   })

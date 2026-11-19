@@ -2,8 +2,7 @@
 
 **2026-11-19 implementation update:** The server-side Smile ID V3 adapter, database jobs,
 authenticated check-status polling, explicit-consent gate and provider-review trail
-are implemented (not activated). The guided browser camera flow and provider credentials
-remain outstanding. See [SMILE_ID_INTEGRATION_STATUS.md](SMILE_ID_INTEGRATION_STATUS.md)
+are implemented (not activated). The guided browser camera flow is integrated but needs a real browser sandbox acceptance test; provider credentials and privacy notice are outstanding. See [SMILE_ID_INTEGRATION_STATUS.md](SMILE_ID_INTEGRATION_STATUS.md)
 for the current engineering status and activation checklist.
 
 **Current state: no live provider connection configured.**

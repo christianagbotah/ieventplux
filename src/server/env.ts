@@ -138,7 +138,7 @@ export async function integrationStatuses(): Promise<IntegrationStatus[]> {
       configured: biometric.configured,
       mode: biometric.ready ? 'real' : 'unavailable',
       detail: biometric.ready
-        ? `Server SDK configured for ${biometric.mode} (manual approval still required; camera capture UI pending).`
+        ? `Server SDK configured for ${biometric.mode} (guided Smile ID camera enabled; human approval still required).`
         : `Not activated: ${biometric.requirements.join(', ')}. Identity documents remain under encrypted manual review.`,
     },
     {

@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { useToast } from '@/hooks/use-toast'
 import { FileText, Camera, ShieldCheck, Loader2, Download, RefreshCw, Trash2, Eye, CheckCircle2, AlertCircle, CreditCard } from 'lucide-react'
 import { api, ApiClientError } from '../api'
+import { IdentityLiveCapture } from './IdentityLiveCapture'
 import { kycRequirements, type IdentityDocumentSide, type IdentityDocumentKind } from '@/server/kyc-requirements'
 
 type AutomatedIdentityState = {
@@ -53,6 +54,7 @@ export function VerificationDocuments({ orgId, reviewerMode = false, onSubmitted
   const [busy, setBusy] = useState(false)
   const [automated, setAutomated] = useState<AutomatedIdentityState | null>(null)
   const [checkingJob, setCheckingJob] = useState('')
+  const [liveCaptureOpen, setLiveCaptureOpen] = useState(false)
   const [reviewerProviderJobs, setReviewerProviderJobs] = useState<{ id: string; state: string; createdAt: string }[]>([])
 
   const load = useCallback(async () => {
@@ -137,10 +139,25 @@ export function VerificationDocuments({ orgId, reviewerMode = false, onSubmitted
         Documents remain encrypted outside the public website. Only organization administrators and authorized finance reviewers can view them. Review is manual; no biometric face matching is performed.
       </p>
       <div className="space-y-2 rounded-lg border border-border/70 bg-secondary/30 p-3 text-xs leading-relaxed text-muted-foreground">
-        <p className="font-semibold text-foreground">Smile ID biometric verification: {automated?.provider.ready ? 'Server connected' : 'Not activated'}</p>
+        <p className="font-semibold text-foreground">Smile ID biometric verification: {automated?.provider.ready ? `${automated.provider.mode === 'sandbox' ? 'Sandbox' : 'Production'} connected` : 'Not activated'}</p>
         <p>{automated?.provider.ready
-          ? 'The server can submit real document and liveness checks. Guided live-camera capture is not yet available in this screen; manual identity review remains in place.'
+          ? automated.provider.mode === 'sandbox' ? 'Test environment connected. The guided camera is available, but sandbox checks do not establish real identity. Use manual KYC for actual approvals.' : 'Live camera verification is available. A separate biometric consent is required before capture, and you decide when to submit images. Manual review remains available.'
           : 'Automated identity matching and liveness verification require an active Smile ID account, a published biometric privacy notice and a separately consented live-camera capture. A normal selfie upload is not an automated identity check.'}</p>
+        {!reviewerMode && automated && !automated.provider.ready && status !== 'APPROVED' && (
+          <div className="pt-1">
+            <Button type="button" size="sm" variant="outline" className="gap-2" disabled title="Requires an activated Smile ID account and biometric privacy notice">
+              <Camera className="size-4" /> Guided selfie and ID verification · Activation required
+            </Button>
+          </div>
+        )}
+        {!reviewerMode && automated?.provider.ready && automated.provider.noticeUrl && status !== 'APPROVED' && (
+          <div className="pt-1">
+            <Button type="button" size="sm" className="gap-2" disabled={automated.jobs.some((job) => ['SUBMITTING','PROCESSING'].includes(job.state))} onClick={() => setLiveCaptureOpen(true)}>
+              <Camera className="size-4" /> Start guided selfie and ID verification
+            </Button>
+            {automated.jobs.some((job) => ['SUBMITTING','PROCESSING'].includes(job.state)) && <p className="mt-1 text-xs">An existing identity check is in progress. Review its status before starting another.</p>}
+          </div>
+        )}
         {!reviewerMode && automated && automated.provider.requirements.length > 0 && (
           <p>Setup outstanding: {automated.provider.requirements.join(' · ')}. No biometric images have been sent to Smile ID by this screen.</p>
         )}
@@ -240,6 +257,9 @@ export function VerificationDocuments({ orgId, reviewerMode = false, onSubmitted
         </div>
       )}
 
+      {liveCaptureOpen && automated?.provider.ready && automated.provider.noticeUrl && (
+        <IdentityLiveCapture orgId={orgId} noticeUrl={automated.provider.noticeUrl} onClose={() => setLiveCaptureOpen(false)} onSubmitted={() => { void loadAutomated(); void load(); onSubmitted?.() }} />
+      )}
       <Dialog open={Boolean(preview)} onOpenChange={(open) => { if (!open) setPreview(null) }}>
         <DialogContent className="flex max-h-[92dvh] max-w-4xl flex-col gap-3 overflow-hidden p-4 sm:p-5">
           <DialogHeader>

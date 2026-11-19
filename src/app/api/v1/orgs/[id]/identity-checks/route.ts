@@ -30,7 +30,7 @@ export async function GET(req: NextRequest, ctx: Context) {
 }
 
 /** Optional Smile ID V3 document/liveness job; no provider credentials -> no submission.
- * The client must supply fresh guided captures (one selfie, six liveness frames,
+ * The client must supply fresh guided captures (one selfie, SDK-generated liveness frames,
  * front and optional back) and explicitly consent to third-party processing.
  * This route does not upload previously stored manual-review evidence to Smile ID.
  */
