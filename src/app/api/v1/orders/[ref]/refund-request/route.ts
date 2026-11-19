@@ -36,7 +36,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     }
 
     const { requestRefund } = await import('@/server/services/refunds')
-    const rc = await requestRefund({ orderId: order.id, requestedBy: user.id, reason })
+    const rc = await requestRefund({ scope: { kind: 'buyer', userId: user.id }, orderId: order.id, requestedBy: user.id, reason })
 
     // Ring the org's finance bell: buyer-requested cases need a human decision.
     const financeMembers = await db.membership.findMany({
