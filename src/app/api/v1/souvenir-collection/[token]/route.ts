@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server'
 import { db } from '@/lib/db'
 import { handle, jsonOk, requireUser, readJson, errors, rateLimit } from '@/server/api'
 import { eventOrgAccess } from '@/server/permissions'
-import { verifySouvenirCollectionToken } from '@/server/souvenir-policy'
+import { verifySouvenirCollectionToken, souvenirCollectionEnabled } from '@/server/souvenir-policy'
 
 type Context = { params: Promise<{ token: string }> }
 
@@ -49,6 +49,7 @@ export async function GET(_req: NextRequest, ctx: Context) {
 
 export async function POST(req: NextRequest, ctx: Context) {
   return handle(async () => {
+    if (!souvenirCollectionEnabled()) throw errors.unavailable('SOUVENIR_COLLECTION_DISABLED', 'Souvenir handover is not yet enabled.')
     await rateLimit(req, 'souvenir-collection', 80, 60_000)
     const user = await requireUser()
     const { token } = await ctx.params

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { availableSouvenirStock, normalizeSouvenirLines, souvenirCollectionToken, verifySouvenirCollectionToken } from './souvenir-policy'
+import { availableSouvenirStock, normalizeSouvenirLines, souvenirCollectionToken, verifySouvenirCollectionToken, souvenirCollectionEnabled } from './souvenir-policy'
 
 describe('souvenir inventory and collection policy', () => {
   const a = 'cm2nm3op4qr5st6uv7wx8yz9'
@@ -17,6 +17,22 @@ describe('souvenir inventory and collection policy', () => {
     expect(verifySouvenirCollectionToken(token)).toBe(ref)
     expect(verifySouvenirCollectionToken(token.slice(0,-1)+'0')).toBeNull()
     expect(verifySouvenirCollectionToken('ORD-ZZZZZZZZ.'+'0'.repeat(32))).toBeNull()
+  })
+  test('collection stays disabled unless checkout and collection are both explicitly approved', () => {
+    const checkout = process.env.IEVENTPLUX_SOUVENIR_CHECKOUT_ENABLED
+    const collection = process.env.IEVENTPLUX_SOUVENIR_COLLECTION_ENABLED
+    try {
+      for (const [a,b,allowed] of [['0','0',false],['1','0',false],['0','1',false],['1','1',true]] as const) {
+        process.env.IEVENTPLUX_SOUVENIR_CHECKOUT_ENABLED = a
+        process.env.IEVENTPLUX_SOUVENIR_COLLECTION_ENABLED = b
+        expect(souvenirCollectionEnabled()).toBe(allowed)
+      }
+    } finally {
+      if (checkout === undefined) delete process.env.IEVENTPLUX_SOUVENIR_CHECKOUT_ENABLED
+      else process.env.IEVENTPLUX_SOUVENIR_CHECKOUT_ENABLED = checkout
+      if (collection === undefined) delete process.env.IEVENTPLUX_SOUVENIR_COLLECTION_ENABLED
+      else process.env.IEVENTPLUX_SOUVENIR_COLLECTION_ENABLED = collection
+    }
   })
   test('sold and reserved units are unavailable to new buyers', () => {
     expect(availableSouvenirStock(30,8,7)).toBe(15)

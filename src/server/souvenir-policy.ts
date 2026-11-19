@@ -41,3 +41,8 @@ export function availableSouvenirStock(total: number, sold: number, reserved: nu
 export function souvenirCheckoutEnabled(): boolean {
   return process.env.IEVENTPLUX_SOUVENIR_CHECKOUT_ENABLED === '1'
 }
+
+/** Physical handover requires its own post-QA activation, independent of checkout. */
+export function souvenirCollectionEnabled(): boolean {
+  return process.env.IEVENTPLUX_SOUVENIR_COLLECTION_ENABLED === '1' && souvenirCheckoutEnabled()
+}

@@ -14,7 +14,7 @@ Implementation increment: 19 November 2026. This is a review branch and **must n
 
 ## Launch gate — disabled by default
 
-`IEVENTPLUX_SOUVENIR_CHECKOUT_ENABLED` defaults to **disabled**. The public catalogue explicitly says ordering is unavailable and the POST `/api/v1/orders` server refuses any souvenir lines unless the value is `1`. Do not enable it merely because an admin saves Hubtel credentials.
+`IEVENTPLUX_SOUVENIR_CHECKOUT_ENABLED` defaults to **disabled**. Physical handover additionally requires `IEVENTPLUX_SOUVENIR_COLLECTION_ENABLED=1` on the server; neither switch alone permits collection. The public catalogue explicitly says ordering is unavailable and the POST `/api/v1/orders` server refuses any souvenir lines unless the value is `1`. Do not enable it merely because an admin saves Hubtel credentials.
 
 **Before enabling:**
 
