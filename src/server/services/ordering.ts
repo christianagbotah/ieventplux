@@ -3,7 +3,7 @@ import { errors } from '../api'
 import { orderReference } from '../ids'
 import { activeFeeVersion, computePlatformFee } from '../fees'
 import { getSetting } from '../settings'
-import { checkoutLinePrice, normalizeCheckoutLines } from '../checkout-policy'
+import { checkoutLinePrice, normalizeCheckoutLines, promotionHasCapacity } from '../checkout-policy'
 
 /**
  * Order creation with database-enforced inventory reservations.
@@ -91,7 +91,7 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
     // Lock identity to prevent two checkouts for the same buyer from both
     // reading the old per-buyer total and reserving past the configured cap.
     if (input.userId) {
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${event.id}), hashtext(${input.userId}))`
+      await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtext(${event.id}), hashtext(${input.userId}))`
     }
     const currentEvent = await tx.event.findUnique({ where: { id: event.id }, select: { status: true, deletedAt: true } })
     if (!currentEvent || currentEvent.deletedAt || !['PUBLISHED', 'LIVE', 'POSTPONED'].includes(currentEvent.status)) {
@@ -136,6 +136,42 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
           AND ("quota" = 0 OR "soldCount" + "reservedCount" + ${item.qty} <= "quota")
       `
       if (claimed !== 1) throw errors.conflict(`Ticket availability or pricing changed for ${tt.name}. Refresh the page and try again.`)
+    }
+    // Acquire promotion lock AFTER ticket rows, matching fulfilment lock order.
+    if (appliedCode) {
+      // Lock the promotion row before counting pending redemptions. This makes
+      // simultaneous checkouts for different buyers compete for one finite
+      // promotion slot, not merely the eventual successful-payment counter.
+      // The paid order itself counts as a reservation until fulfilment updates
+      // usedCount; expired and cancelled orders no longer hold slots.
+      const lockedCodes = await tx.$queryRaw<Array<{ id: string; active: boolean; maxUses: number; usedCount: number; expiresAt: Date | null; pctOff: number | null; amountOffMinor: number | null }>>`
+        SELECT "id", "active", "maxUses", "usedCount", "expiresAt", "pctOff", "amountOffMinor"
+        FROM "DiscountCode"
+        WHERE "eventId" = ${event.id} AND "code" = ${appliedCode}
+        FOR UPDATE
+      `
+      const currentCode = lockedCodes[0]
+      if (!currentCode || !currentCode.active || (currentCode.expiresAt && currentCode.expiresAt <= claimAt)) {
+        throw errors.conflict('This discount code is no longer available. Refresh checkout.')
+      }
+      const currentDiscount = currentCode.pctOff
+        ? Math.round(subtotal * currentCode.pctOff / 100)
+        : Math.min(currentCode.amountOffMinor ?? 0, subtotal)
+      if (currentDiscount !== orderDiscount) throw errors.conflict('The discount amount changed. Refresh checkout to see the new total.')
+      const pending = await tx.order.count({
+        where: {
+          eventId: event.id,
+          discountCode: appliedCode,
+          OR: [
+            { status: 'PENDING_PAYMENT', expiresAt: { gt: claimAt } },
+            { status: 'DRAFT', expiresAt: { gt: claimAt } },
+            { status: 'EXCEPTION_REVIEW' },
+          ],
+        },
+      })
+      if (!promotionHasCapacity(currentCode.usedCount, pending, currentCode.maxUses)) {
+        throw errors.conflict('This discount code has reached its redemption limit.')
+      }
     }
     const created = await tx.order.create({
       data: {

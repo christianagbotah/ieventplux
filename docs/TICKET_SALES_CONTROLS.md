@@ -33,3 +33,22 @@ This release adds organizer-facing configuration for ticket-sale windows, per-bu
 - Ticket reservations use a single conditional PostgreSQL `UPDATE` which simultaneously checks the remaining quota, ticket activity, sales window and the quoted price/group policy. Concurrent requests cannot claim the same last ticket. Lines are processed in stable ticket-type order to reduce deadlocks.
 - Organizer ticket settings use a row lock during quota and price edits. Unlimited → finite inventory is **not** treated as a capacity increase; prices become immutable after the first reservation/order even if issued tickets remain at zero.
 - This change is backend-only and additive: no schema migration, pricing rewrite or live payment is required. A real authenticated staging transaction/reconciliation test is still necessary before claiming a fully verified ticket-selling release.
+
+## Discount-code capacity and concurrent checkout (2026-11-19)
+
+A checkout with an event promotion now locks the `DiscountCode` row inside the
+same transaction that reserves ticket inventory, rechecks validity and price,
+and counts pending unexpired orders plus confirmed redemptions against
+`maxUses`. Different buyers cannot reserve the final promotion slot at once.
+Expired or cancelled orders stop consuming a slot. The promotion lock is taken
+after inventory locks to match fulfilment lock ordering. This does not itself
+prove payment callback idempotency or a full end-to-end paid checkout; both
+remain explicit integration acceptance gates.
+
+## Minor-unit financial safety and CI regression (2026-11-19)
+
+The checkout price calculator now rejects malformed, fractional, negative, overflowing or inconsistent ticket/group-pricing inputs before a financial snapshot can be saved. Free tickets with valid zero pricing remain supported. Finite promotion usage arithmetic rejects integer overflow. The GitHub web CI job now explicitly runs checkout, sales-window, and public-image-storage regression tests before the database smoke suite. These are additional fail-closed invariants; they do not activate payment providers or prove real checkout delivery.
+
+## PostgreSQL advisory-lock Prisma compatibility (2026-11-19)
+
+The per-buyer advisory transaction lock is now selected through a supported integer projection (`SELECT 1 ... FROM pg_advisory_xact_lock(...)`), rather than returning PostgreSQL `void` to Prisma's `$queryRaw` deserializer. GitHub Actions previously failed at the development seed checkout on `P2010` because Prisma cannot deserialize `void`. The lock still executes within the same checkout transaction. CI's seeded checkout and end-to-end smoke tests must pass before this compatibility fix is promoted to production.
