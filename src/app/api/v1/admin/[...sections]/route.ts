@@ -267,6 +267,12 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
           if (missing.length > 0) {
             throw errors.badRequest('Missing required verification documents: ' + missing.map((item) => item.label).join(', ') + '. Upload and inspect all items before approval.')
           }
+          // A provider failure is not an automatic permanent ban, but a reviewer
+          // must explicitly document why the manual evidence overcomes it.
+          const lastProvider = await tx.kycProviderJob.findFirst({ where: { orgId: id }, orderBy: { createdAt: 'desc' }, select: { state: true } })
+          if (lastProvider && lastProvider.state !== 'CLEAR' && notes.trim().length < 20) {
+            throw errors.badRequest('Latest automated identity check is ' + lastProvider.state + '. Provide at least 20 characters explaining your manual verification override.')
+          }
         }
         const changed = await tx.organizerVerification.updateMany({
           where: { id: v.id, status: v.status, evidence: v.evidence },

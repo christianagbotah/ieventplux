@@ -118,6 +118,7 @@ export function envValidation() {
   if (!smsConfigured) warnings.push(isProd ? 'HUBTEL_SMS_* / HUBTEL_SMS_SENDER_ID not set — production SMS delivery unavailable; no simulated delivery.' : 'HUBTEL_SMS_* / HUBTEL_SMS_SENDER_ID not set — development-only SMS simulator active.')
   if (!videoConfigured) warnings.push('CF_STREAM_* not set — live delivery uses the clearly-labelled synthetic stream renderer.')
   if (!smtpConfigured) warnings.push('SMTP_* not set — email delivery is queued with truthful "SUPPRESSED" status.')
+  if (process.env.SMILE_ID_BIOMETRIC_ENABLED !== '1') warnings.push('Smile ID biometric verification is disabled — encrypted document upload and manual review remain available.')
   return { errors, warnings }
 }
 
@@ -127,7 +128,19 @@ export async function integrationStatuses(): Promise<IntegrationStatus[]> {
   const view = hubtelCredentialsView(creds)
   const checkoutSim = paymentsSimulatorActive(creds)
   const smsSim = smsSimulatorActive(creds)
+  const { smileProviderStatus } = await import('./identity-provider/smile')
+  const biometric = smileProviderStatus()
   return [
+    {
+      key: 'identity-verification',
+      name: 'Smile ID document + liveness verification',
+      stage: biometric.ready ? 'implemented' : 'externally-blocked',
+      configured: biometric.configured,
+      mode: biometric.ready ? 'real' : 'unavailable',
+      detail: biometric.ready
+        ? `Server SDK configured for ${biometric.mode} (manual approval still required; camera capture UI pending).`
+        : `Not activated: ${biometric.requirements.join(', ')}. Identity documents remain under encrypted manual review.`,
+    },
     {
       key: 'hubtel-checkout',
       name: 'Hubtel Online Checkout (collections)',

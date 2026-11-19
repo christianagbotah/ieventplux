@@ -72,6 +72,7 @@ model User {
   refundRequests      RefundCase[]           @relation("RefundRequester")
   verifications       ContactVerification[]
   chatMessages        ChatMessage[]
+  identityProviderJobs KycProviderJob[]
   livePollVotes       LivePollVote[]
   questionsAsked      AudienceQuestion[]      @relation("QuestionAuthor")
   answersGiven        AudienceQuestion[]      @relation("QuestionAnswerer")
@@ -143,6 +144,7 @@ model Organization {
 
   owner          User                  @relation("OrgOwner", fields: [ownerId], references: [id])
   memberships    Membership[]
+  identityProviderJobs KycProviderJob[]
   followers      Follow[]
   verification   OrganizerVerification?
   venues         Venue[]
@@ -161,6 +163,27 @@ model Organization {
   invoices       Invoice[]
   messageSends   MessageDelivery[]     @relation("OrgMessageSends")
   journals       LedgerJournal[]       @relation("OrgJournals")
+}
+
+/** Separate provider job audit trail. No face images or ID numbers are persisted here. */
+model KycProviderJob {
+  id             String    @id @default(cuid())
+  orgId          String
+  userId         String
+  provider       String    @default("SMILE_ID")
+  externalJobId  String?   @unique
+  state          String    @default("SUBMITTING") // SUBMITTING | PROCESSING | CLEAR | BLOCK | REVIEW_REQUIRED | ERROR
+  consentAt      DateTime
+  noticeUrl      String
+  country        String
+  lastCheckedAt  DateTime?
+  decisionNote   String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  org            Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user           User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, createdAt])
 }
 
 model Membership {

@@ -257,6 +257,7 @@ function Orgs() {
   const [reviewBusy, setReviewBusy] = useState(false)
   const [reviewRequirements, setReviewRequirements] = useState<KycRequirement[] | null>(null)
   const [reviewEvidenceError, setReviewEvidenceError] = useState('')
+  const [reviewProviderJobs, setReviewProviderJobs] = useState<{ id: string; state: string; createdAt: string }[]>([])
   const reviewRequestRef = useRef(0)
   const [data, reload, loading] = useAdmin<{ items: AdminOrg[] }>('/admin/orgs')
 
@@ -267,11 +268,15 @@ function Orgs() {
     setReviewNotes('')
     setReviewRequirements(null)
     setReviewEvidenceError('')
+    setReviewProviderJobs([])
     const request = ++reviewRequestRef.current
     if (decision === 'APPROVE') {
-      void api.get<{ documents: IdentityEvidence[]; orgType: string }>('/orgs/' + org.id + '/kyc')
-        .then(({ documents, orgType }) => {
-          if (request === reviewRequestRef.current) setReviewRequirements(kycRequirements(orgType, documents))
+      void api.get<{ documents: IdentityEvidence[]; orgType: string; providerJobs?: { id: string; state: string; createdAt: string }[] }>('/orgs/' + org.id + '/kyc')
+        .then(({ documents, orgType, providerJobs }) => {
+          if (request === reviewRequestRef.current) {
+            setReviewRequirements(kycRequirements(orgType, documents))
+            setReviewProviderJobs(providerJobs ?? [])
+          }
         })
         .catch((error) => {
           if (request === reviewRequestRef.current) setReviewEvidenceError(error instanceof ApiClientError ? error.message : 'Could not verify the uploaded evidence.')
@@ -411,6 +416,13 @@ function Orgs() {
                   </>
                 )}
               </div>
+              {reviewProviderJobs.length > 0 && (
+                <div className="rounded-xl border border-amber-400/40 p-3 text-xs">
+                  <p className="font-semibold">External identity-check history</p>
+                  {reviewProviderJobs.map((job) => <p className="mt-1" key={job.id}>{job.state.replaceAll('_', ' ')} · {new Date(job.createdAt).toLocaleDateString()}</p>)}
+                  {reviewProviderJobs[0]?.state !== 'CLEAR' && <p className="mt-2 text-amber-700 dark:text-amber-300">The latest provider result is not clear. A detailed manual-review reason is required before overriding it.</p>}
+                </div>
+              )}
               <Button type="button" size="sm" variant="outline" className="self-start" disabled={reviewBusy} onClick={() => { reviewRequestRef.current++; setReviewDecision(null) }}>
                 <ShieldCheck className="mr-1.5 size-4" /> Inspect documents before approving
               </Button>
@@ -423,12 +435,12 @@ function Orgs() {
             <p className="text-xs text-muted-foreground">Provide clear correction instructions. These notes are visible to authorized organization administrators.</p>
           )}
           <div className="space-y-1.5">
-            <label htmlFor="kyc-review-notes" className="text-sm font-semibold">{reviewDecision?.decision === 'APPROVE' ? 'Review notes (optional)' : 'Rejection reason (required)'}</label>
-            <Textarea id="kyc-review-notes" value={reviewNotes} maxLength={500} rows={3} onChange={(event) => setReviewNotes(event.target.value)} placeholder={reviewDecision?.decision === 'APPROVE' ? 'What did you inspect?' : 'Explain which document needs correcting or replacing…'} />
+            <label htmlFor="kyc-review-notes" className="text-sm font-semibold">{reviewDecision?.decision === 'APPROVE' ? (reviewProviderJobs[0] && reviewProviderJobs[0].state !== 'CLEAR' ? 'Manual override justification (required)' : 'Review notes (optional)') : 'Rejection reason (required)'}</label>
+            <Textarea id="kyc-review-notes" value={reviewNotes} maxLength={500} rows={3} onChange={(event) => setReviewNotes(event.target.value)} placeholder={reviewDecision?.decision === 'APPROVE' ? 'Explain how documents and identity were verified, especially if the provider was inconclusive or unsuccessful…' : 'Explain which document needs correcting or replacing…'} />
           </div>
           <div className="flex flex-wrap justify-end gap-2">
             <Button type="button" variant="outline" disabled={reviewBusy} onClick={() => setReviewDecision(null)}>Cancel</Button>
-            <Button type="button" disabled={reviewBusy || (reviewDecision?.decision === 'APPROVE' ? !reviewAttested || !reviewRequirements || reviewRequirements.some((item) => !item.complete) : reviewNotes.trim().length < 10)} onClick={() => void submitDecision()}>
+            <Button type="button" disabled={reviewBusy || (reviewDecision?.decision === 'APPROVE' ? !reviewAttested || !reviewRequirements || reviewRequirements.some((item) => !item.complete) || Boolean(reviewProviderJobs[0] && reviewProviderJobs[0].state !== 'CLEAR' && reviewNotes.trim().length < 20) : reviewNotes.trim().length < 10)} onClick={() => void submitDecision()}>
               {reviewBusy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : null}
               {reviewDecision?.decision === 'APPROVE' ? 'Confirm manual approval' : 'Submit rejection'}
             </Button>

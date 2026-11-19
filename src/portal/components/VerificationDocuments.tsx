@@ -11,6 +11,13 @@ import { FileText, Camera, ShieldCheck, Loader2, Download, RefreshCw, Trash2, Ey
 import { api, ApiClientError } from '../api'
 import { kycRequirements, type IdentityDocumentSide, type IdentityDocumentKind } from '@/server/kyc-requirements'
 
+type AutomatedIdentityState = {
+  provider: { configured: boolean; enabled: boolean; ready: boolean; mode: string; requirements: string[]; noticeUrl: string | null }
+  jobs: { id: string; state: string; createdAt: string; lastCheckedAt?: string | null }[]
+  autoApproval: false
+  manualReviewAvailable: true
+}
+
 type KycKind = IdentityDocumentKind
 type Document = { id: string; kind: KycKind; side?: IdentityDocumentSide | null; filename: string; mime: string; size: number; uploadedAt: string }
 const LABELS: Record<KycKind, string> = {
@@ -44,11 +51,15 @@ export function VerificationDocuments({ orgId, reviewerMode = false, onSubmitted
   const [preview, setPreview] = useState<Document | null>(null)
   const [consent, setConsent] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [automated, setAutomated] = useState<AutomatedIdentityState | null>(null)
+  const [checkingJob, setCheckingJob] = useState('')
+  const [reviewerProviderJobs, setReviewerProviderJobs] = useState<{ id: string; state: string; createdAt: string }[]>([])
 
   const load = useCallback(async () => {
     try {
-      const payload = await api.get<{ documents: Document[]; orgType: string; status: string; reviewNote?: string | null }>('/orgs/' + orgId + '/kyc')
+      const payload = await api.get<{ documents: Document[]; orgType: string; status: string; reviewNote?: string | null; providerJobs?: { id: string; state: string; createdAt: string }[] }>('/orgs/' + orgId + '/kyc')
       setDocuments(payload.documents)
+      setReviewerProviderJobs(payload.providerJobs ?? [])
       setOrgType(payload.orgType)
       setKind((previous) => payload.orgType === 'INDIVIDUAL' && previous === 'BUSINESS_REGISTRATION' ? 'GOVERNMENT_ID' : previous)
       setStatus(payload.status)
@@ -61,6 +72,22 @@ export function VerificationDocuments({ orgId, reviewerMode = false, onSubmitted
     } finally { setLoading(false) }
   }, [orgId, toast])
   useEffect(() => { void load() }, [load])
+  const loadAutomated = useCallback(async () => {
+    try {
+      const status = await api.get<AutomatedIdentityState>('/orgs/' + orgId + '/identity-checks')
+      setAutomated(status)
+    } catch { setAutomated(null) }
+  }, [orgId])
+  useEffect(() => { if (!reviewerMode) void loadAutomated() }, [reviewerMode, loadAutomated])
+  const refreshJob = async (jobId: string) => {
+    setCheckingJob(jobId)
+    try {
+      await api.post('/orgs/' + orgId + '/identity-checks/' + jobId, {})
+      await loadAutomated()
+    } catch (error) {
+      toast({ title: 'Could not refresh provider check', description: error instanceof ApiClientError ? error.message : 'Please try again later.', variant: 'destructive' })
+    } finally { setCheckingJob('') }
+  }
 
   const requirements = useMemo(() => kycRequirements(orgType, documents), [orgType, documents])
   const missing = requirements.filter((req) => !req.complete)
@@ -109,10 +136,30 @@ export function VerificationDocuments({ orgId, reviewerMode = false, onSubmitted
       <p className="text-xs leading-relaxed text-muted-foreground">
         Documents remain encrypted outside the public website. Only organization administrators and authorized finance reviewers can view them. Review is manual; no biometric face matching is performed.
       </p>
-      <div className="rounded-lg border border-border/70 bg-secondary/30 p-3 text-xs leading-relaxed text-muted-foreground">
-        <p className="font-semibold text-foreground">Automated ID and selfie verification: not connected</p>
-        <p className="mt-1">Live identity matching and selfie liveness checks require an activated verification provider (such as Smile ID), a camera capture step and separate consent before documents are shared. An uploaded selfie is not automatically identity-verified. Manual document review remains available.</p>
+      <div className="space-y-2 rounded-lg border border-border/70 bg-secondary/30 p-3 text-xs leading-relaxed text-muted-foreground">
+        <p className="font-semibold text-foreground">Smile ID biometric verification: {automated?.provider.ready ? 'Server connected' : 'Not activated'}</p>
+        <p>{automated?.provider.ready
+          ? 'The server can submit real document and liveness checks. Guided live-camera capture is not yet available in this screen; manual identity review remains in place.'
+          : 'Automated identity matching and liveness verification require an active Smile ID account, a published biometric privacy notice and a separately consented live-camera capture. A normal selfie upload is not an automated identity check.'}</p>
+        {!reviewerMode && automated && automated.provider.requirements.length > 0 && (
+          <p>Setup outstanding: {automated.provider.requirements.join(' · ')}. No biometric images have been sent to Smile ID by this screen.</p>
+        )}
+        {!reviewerMode && automated && automated.jobs.length > 0 && <div className="space-y-2 border-t pt-2">
+          <p className="font-semibold text-foreground">Provider check history</p>
+          {automated.jobs.map((job) => <div key={job.id} className="flex flex-wrap items-center justify-between gap-2">
+            <span>{job.state.replaceAll('_', ' ').toLowerCase()} · {new Date(job.createdAt).toLocaleDateString()}</span>
+            {job.state === 'PROCESSING' && <Button type="button" size="sm" variant="outline" disabled={checkingJob !== ''} onClick={() => void refreshJob(job.id)}>
+              {checkingJob === job.id && <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />} Check status
+            </Button>}
+          </div>)}
+          <p>Even a clear provider result requires human review before the organizer is approved.</p>
+        </div>}
       </div>
+      {reviewerMode && reviewerProviderJobs.length > 0 && <div className="rounded-lg border border-amber-400/40 p-3 text-xs">
+        <p className="font-semibold">Automated provider checks — reviewer information</p>
+        {reviewerProviderJobs.map((job) => <p key={job.id} className="mt-1">{new Date(job.createdAt).toLocaleString()}: {job.state.replaceAll('_', ' ')}</p>)}
+        <p className="mt-1 text-muted-foreground">Provider decisions require manual assessment; an unsuccessful or inconclusive check must be documented if approval is granted.</p>
+      </div>}
       {reviewNote && status === 'REJECTED' && <p className="rounded-lg border border-amber-400/30 bg-amber-50/70 p-3 text-xs text-amber-950 dark:bg-amber-950/20 dark:text-amber-200"><strong>Reviewer instructions:</strong> {reviewNote}</p>}
       {loading ? <p className="flex items-center gap-2 text-xs text-muted-foreground"><Loader2 className="size-4 animate-spin" /> Loading secure evidence…</p>
         : loadError ? <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{loadError}<Button type="button" variant="outline" size="sm" className="ml-3" onClick={() => void load()}>Retry</Button></div>

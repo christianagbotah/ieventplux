@@ -1,6 +1,12 @@
 # iEventPlux — live selfie, identity and liveness verification
 
-**Current state (2026-11-19): not connected to an identity-verification provider.**
+**2026-11-19 implementation update:** The server-side Smile ID V3 adapter, database jobs,
+authenticated check-status polling, explicit-consent gate and provider-review trail
+are implemented (not activated). The guided browser camera flow and provider credentials
+remain outstanding. See [SMILE_ID_INTEGRATION_STATUS.md](SMILE_ID_INTEGRATION_STATUS.md)
+for the current engineering status and activation checklist.
+
+**Current state: no live provider connection configured.**
 Existing ID (front/back), selfie and organization-registration evidence are privately stored encrypted and manually reviewed. Uploading a selfie does **not** identify a person or establish liveness. Do not label the user "biometrically verified" until a real, authenticated provider result is received and reviewed.
 
 ## Recommended provider for Ghana: Smile ID
