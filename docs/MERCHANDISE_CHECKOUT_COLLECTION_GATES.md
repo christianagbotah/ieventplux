@@ -80,3 +80,13 @@ This verifies HTTP authorization and business logic on localhost. It **does not*
 ### Physical merchandise refund safeguard
 
 The existing ticket-refund provider workflow is **not** suitable for stock already paid for or handed over as physical souvenirs. A separate pre-provider policy now detects any souvenir order lines during `processRefund` and records a truthful `MANUAL_TRACKED` finance case instead. Its resolution note includes ordered/handed-over counts and states explicitly that provider refund, restocking and ledger reversal were **not** performed. Ticket-only orders retain their existing processing path. Unit tests cover ticket-only, uncollected, partial and fully collected variants and invalid counters. This is **not** a completed refund engine: finance still needs an evidence-backed return/reversal workflow and payment-provider reconciliation before production checkout can be enabled.
+
+### Read-only comparison against current live PostgreSQL schema — release blocker
+
+A **read-only** Prisma migration-diff check was performed against the live production database schema on 19 November 2026. In addition to the intended additions (new `SouvenirOrderItem`/`SouvenirCollection` tables, their indexes and foreign keys, and the additive `RefundCase.createdByKind` and nullable requester change), the generic live-to-branch diff also proposed:
+
+```sql
+ALTER TABLE "KycProviderJob" ALTER COLUMN "updatedAt" DROP DEFAULT;
+```
+
+That **KYC-provider schema drift is unrelated to souvenir ordering**. Do **not** apply the generic production diff wholesale; it could change an identity-provider job default without a specific migration review. The **reviewed** script at `docs/migrations/20261119_add_souvenir_order_collections.sql` deliberately excludes `KycProviderJob` and contains only the merchandise/refund-intent changes. Investigate the KYC schema difference separately before full deployment. The read-only comparison did not write to production. A verified DB backup, restore exercise, authenticated staging and payment-provider certification are still mandatory before any production migration or activation.
