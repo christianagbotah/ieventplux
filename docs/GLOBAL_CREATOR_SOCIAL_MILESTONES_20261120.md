@@ -29,6 +29,32 @@ security review, regional compliance and operational readiness.
   financial entitlements.
 - No schema change and no payment/provider changes are required for this PR.
 
+## Creator video upload pilot — implemented behind a disabled flag
+
+- Organizer Studio now exposes a **Creator Clips** queue for accepted members
+  with media-management permission. It is scoped to the active organization.
+- `POST /api/v1/uploads` can accept actual MP4/WebM up to **25MB** only when
+  `IEVENTPLUX_CREATOR_VIDEO_UPLOAD_ENABLED=true`, a valid event is selected,
+  and the creator explicitly confirms rights and participant consent.
+  Container signatures are checked in addition to MIME; uploads are capped at
+  twelve outstanding pending files per organizer.
+- A video upload always creates a `PROCESSING` media record. The public file
+  route denies that file until its media status becomes `READY` **and** the
+  event and organization remain active and publicly visible. No admin or user
+  can claim a video has passed scanning/transcoding yet; the publication
+  pipeline is **not implemented in this pilot**.
+- Approved/public videos have HTTP byte-range support (`206`) with full and
+  suffix request validation and no caching so removal becomes effective.
+- Public organizer profiles only expose READY clips tied to public events;
+  inactive organizations and unfinished/draft media are filtered.
+- An organizer-private queue lists submitted and pending media without issuing
+  direct public-access URLs for still-processing video.
+- Launch dependencies: malware and content scanning, FFprobe/video encoding,
+  transcode/thumbnail handling, copyright and consent review, moderation action
+  to authorize READY, provider storage/CDN plan, quotas and deletion lifecycle,
+  authenticated device testing, and abuse/cost controls. Keep upload flag OFF
+  in production until every dependency is signed off.
+
 ## Release gates
 1. Bun policy tests, web and mobile typechecking, standalone build and smoke.
 2. Real device UAT on Android and iPhone: scroll, Play/Pause, report dialog,
