@@ -69,7 +69,38 @@ async function main() {
   const targeted = await list(pastor, 'mine=1&orgId=' + chapel.id + '&eventId=' + firstOwnId)
   assert(targeted.status === 200 && targeted.data.total === 1 && targeted.data.items[0]?.id === firstOwnId,
     'organizer may select a specific event through a tenant-scoped deep link')
+  // Event admission monitoring must remain inside the same accepted
+  // membership boundary and must never leak ticket credentials or holders.
+  const anonymousMonitor = await fetch(base + '/checkin/monitor?eventId=' + firstOwnId)
+  assert(anonymousMonitor.status === 401, 'anonymous user cannot view admission operations')
+  const unauthorizedMonitor = await fetch(base + '/checkin/monitor?eventId=' + firstOwnId, {
+    headers: { Cookie: attendee },
+  })
+  assert(unauthorizedMonitor.status === 403, 'ordinary attendee cannot monitor check-in operations')
+  const organizerMonitor = await fetch(base + '/checkin/monitor?eventId=' + firstOwnId, {
+    headers: { Cookie: pastor },
+  })
+  const organizerMonitorData = await organizerMonitor.json()
+  assert(organizerMonitor.status === 200 &&
+    organizerMonitorData.eventId === firstOwnId &&
+    Number.isInteger(organizerMonitorData.totals.admitted) &&
+    Number.isInteger(organizerMonitorData.totals.validToAdmit) &&
+    Array.isArray(organizerMonitorData.scanners) &&
+    Array.isArray(organizerMonitorData.alerts) &&
+    Array.isArray(organizerMonitorData.devices),
+    'accepted organizer can load read-only, event-scoped admission operations')
+  const disallowedFields = ['ticketId', 'holderName', 'holderEmail', 'code', 'qrSecret', 'tokenHash', 'deviceToken', 'payload']
+  const secretLeak = JSON.stringify(organizerMonitorData)
+  assert(!disallowedFields.some((field) => secretLeak.includes('"' + field + '"')),
+    'monitoring payload omits ticket credentials, attendee PII and device secrets')
+  assert(organizerMonitor.headers.get('cache-control')?.includes('no-store'),
+    'private monitoring response is never cached')
   const otherOrgEvent = await db.event.findFirstOrThrow({ where: { orgId: ministries.id }, select: { id: true } })
+  const forbiddenMonitor = await fetch(base + '/checkin/monitor?eventId=' + otherOrgEvent.id, {
+    headers: { Cookie: pastor },
+  })
+  assert(forbiddenMonitor.status === 403, 'organizer cannot monitor a different organization event')
+
   const crossOrgEvent = await list(pastor, 'mine=1&orgId=' + chapel.id + '&eventId=' + otherOrgEvent.id)
   assert(crossOrgEvent.status === 200 && crossOrgEvent.data.total === 0 && crossOrgEvent.data.items.length === 0,
     'organizer cannot retrieve another organization event by guessed id')

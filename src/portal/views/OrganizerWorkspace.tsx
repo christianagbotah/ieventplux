@@ -31,6 +31,7 @@ import { ORGANIZER_TYPE_CONFIG, organizerType, type OrganizerType, type ProfileD
 import { VerificationDocuments } from '../components/VerificationDocuments'
 import { WorkspaceNavigation } from '../components/WorkspaceNavigation'
 import { WorkspaceMetric } from '../components/WorkspaceMetric'
+import { AdmissionOperationsPanel } from '../components/AdmissionOperationsPanel'
 import { GrowthCommandCenter } from '../components/GrowthCommandCenter'
 import { OrganizerEventCover } from '../components/OrganizerEventCover'
 import { EventCopyCopilot } from '../components/EventCopyCopilot'
@@ -1732,7 +1733,6 @@ function AttendeesView({ orgId, initialEventId }: { orgId: string; initialEventI
   const [eventsError, setEventsError] = useState('')
   const [attendees, setAttendees] = useState<unknown[] | null>(null)
   const [attendeesError, setAttendeesError] = useState('')
-  const [stats, setStats] = useState<{ ticketsIssued: number; admitted: number; remaining: number; anomalies: number } | null>(null)
   const [scanMode, setScanMode] = useState(false)
   const [scanValue, setScanValue] = useState('')
   const [lookupQuery, setLookupQuery] = useState('')
@@ -1744,6 +1744,7 @@ function AttendeesView({ orgId, initialEventId }: { orgId: string; initialEventI
   const [syncBusy, setSyncBusy] = useState(false)
   const [online, setOnline] = useState(true)
   const [scanBusy, setScanBusy] = useState(false)
+  const [monitorRevision, setMonitorRevision] = useState(0)
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const scanBusyRef = useRef(false)
   const pendingRef = useRef<PendingScan[]>([])
@@ -1838,20 +1839,16 @@ function AttendeesView({ orgId, initialEventId }: { orgId: string; initialEventI
     const targetEventId = eventId
     setAttendeesError('')
     try {
-      const [att, st] = await Promise.all([
-        api.get<{ items: unknown[] }>('/events/' + encodeURIComponent(targetEventId) + '/attendees?pageSize=100', { signal }),
-        api.get<{ ticketsIssued: number; admitted: number; remaining: number; anomalies: number }>(
-          '/checkin/stats?eventId=' + encodeURIComponent(targetEventId), { signal },
-        ),
-      ])
+      const att = await api.get<{ items: unknown[] }>(
+        '/events/' + encodeURIComponent(targetEventId) + '/attendees?pageSize=100',
+        { signal },
+      )
       if (signal?.aborted || selectedEventRef.current !== targetEventId) return
       setAttendees(att.items)
-      setStats(st)
     } catch (err) {
       if (signal?.aborted || selectedEventRef.current !== targetEventId) return
-      setAttendeesError(err instanceof ApiClientError ? err.message : 'Could not load attendees or admission statistics.')
+      setAttendeesError(err instanceof ApiClientError ? err.message : 'Could not load the attendee list.')
       setAttendees([])
-      setStats(null)
     }
   }, [eventId])
 
@@ -1859,7 +1856,6 @@ function AttendeesView({ orgId, initialEventId }: { orgId: string; initialEventI
     selectedEventRef.current = eventId
     setAttendees(eventId ? null : [])
     setAttendeesError('')
-    setStats(null)
     if (!eventId) return
     const controller = new AbortController()
     void refresh(controller.signal)
@@ -1905,6 +1901,7 @@ function AttendeesView({ orgId, initialEventId }: { orgId: string; initialEventI
         setLastResult(result)
         setScanValue('')
         await refresh()
+        setMonitorRevision((current) => current + 1)
       }
     } catch (err) {
       // HTTP 400/401/403/409/429 errors are authoritative server decisions,
@@ -2021,7 +2018,10 @@ function AttendeesView({ orgId, initialEventId }: { orgId: string; initialEventI
         description: admitted + ' admitted, ' + conflicts + ' conflict/duplicate/invalid. ' +
           (remaining.some((scan) => scan.eventId === targetEventId) ? 'More scans remain pending.' : 'No pending scans for this event.'),
       })
-      if (targetEventId === selectedEventRef.current) await refresh()
+      if (targetEventId === selectedEventRef.current) {
+        await refresh()
+        setMonitorRevision((current) => current + 1)
+      }
     } catch (err) {
       toast({
         description: (err instanceof ApiClientError ? err.message : err instanceof Error ? err.message : 'Sync failed.') +
@@ -2062,7 +2062,7 @@ function AttendeesView({ orgId, initialEventId }: { orgId: string; initialEventI
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="efx-animated-gradient-text iefx-page-title font-extrabold">Attendees & Check-in</h1>
-          {stats && <p className="text-sm text-muted-foreground">{stats.admitted}/{stats.ticketsIssued} admitted · {stats.anomalies} anomalies</p>}
+          <p className="text-sm text-muted-foreground">Admission monitoring and event check-in operations</p>
         </div>
         <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
           <Select value={eventId} onValueChange={changeEvent} disabled={eventsLoading || scanBusy || events.length === 0}>
@@ -2081,7 +2081,7 @@ function AttendeesView({ orgId, initialEventId }: { orgId: string; initialEventI
           <Button variant={scanMode ? 'default' : 'outline'} disabled={!eventId || eventsLoading || !queueReady} className="h-11 rounded-full" onClick={() => setScanMode((s) => !s)}>
             <ScanLine className="mr-1.5 h-4 w-4" /> {scanMode ? 'Close scanner' : 'Scan tickets'}
           </Button>
-          <Button variant="outline" size="icon" className="h-11 w-11 rounded-full" aria-label="Refresh attendee list" disabled={!eventId} onClick={() => void refresh()}>
+          <Button variant="outline" size="icon" className="h-11 w-11 rounded-full" aria-label="Refresh attendee list and admission monitor" disabled={!eventId} onClick={() => { void refresh(); setMonitorRevision((current) => current + 1) }}>
             <RefreshCw className="h-4 w-4" aria-hidden />
           </Button>
         </div>
@@ -2102,6 +2102,8 @@ function AttendeesView({ orgId, initialEventId }: { orgId: string; initialEventI
           {offlineQueue.length > 0 && <span className="ml-auto font-semibold text-amber-700 dark:text-amber-400">{offlineQueue.length} pending offline scan{offlineQueue.length === 1 ? '' : 's'} across events</span>}
         </div>
       )}
+
+      {eventId && <AdmissionOperationsPanel key={eventId} eventId={eventId} refreshKey={monitorRevision} />}
 
       <section aria-label="Offline scan recovery" className="rounded-2xl border border-border bg-card p-3.5 sm:p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
