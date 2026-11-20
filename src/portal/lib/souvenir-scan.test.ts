@@ -10,6 +10,11 @@ describe('souvenir scanner accepts only internal collection credentials', () => 
     expect(parseSouvenirScan(`${origin}/#/collect/${token}`, origin)).toEqual({ type: 'token', token })
     expect(parseSouvenirScan(`/#/collect/${token}`, origin)).toEqual({ type: 'token', token })
   })
+  test('never accepts insecure HTTP collection links, even from a configured HTTP origin', () => {
+    expect(parseSouvenirScan(`http://ieventplux.lightworldtech.com/#/collect/${token}`, origin)).toBeNull()
+    expect(parseSouvenirScan(`http://ieventplux.lightworldtech.com/#/collect/${token}`, 'http://ieventplux.lightworldtech.com')).toBeNull()
+    expect(parseSouvenirScan(`/#/collect/${token}`, 'http://ieventplux.lightworldtech.com')).toBeNull()
+  })
   test('recognizes printed receipt references for staff-authorized lookup', () => {
     expect(parseSouvenirScan('  ord-abcdefgh  ', origin)).toEqual({ type: 'reference', reference: 'ORD-ABCDEFGH' })
     expect(parseSouvenirScan('RCPT-ORD-ABCDEFGH', origin)).toEqual({ type: 'reference', reference: 'ORD-ABCDEFGH' })
