@@ -57,6 +57,9 @@ jobs:
       - name: Typecheck
         run: bun run typecheck
 
+      - name: Check-in scan identity and replay authorization
+        run: bun test src/server/services/checkin-idempotency.test.ts
+
       - name: Durable offline check-in queue and transport safety
         run: bun test src/portal/lib/checkin-offline-storage.test.ts src/portal/lib/checkin-policy.test.ts
 
@@ -107,6 +110,9 @@ jobs:
 
       - name: Realtime access smoke (public event, private notification and broadcast)
         run: bun run scripts/realtime-smoke.ts
+
+      - name: Check-in replay isolation with synthetic admission record
+        run: bun run scripts/checkin-replay-scope-smoke.ts
 
       - name: Organizer event tenant privacy regression (seeded users)
         run: bun run scripts/org-event-access-smoke.ts

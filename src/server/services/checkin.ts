@@ -1,6 +1,7 @@
 import { db } from '../../lib/db'
 import { errors } from '../api'
 import { verifyTicketSignature } from '../qr'
+import { isSameScanContext, isSameScanCredential, validClientScanId, validCaptureTime } from './checkin-idempotency'
 
 /**
  * Venue check-in: online scanning, manual lookup, offline sync with preserved
@@ -24,13 +25,23 @@ export interface ScanResult {
 }
 
 export async function processScan(req: ScanRequest): Promise<ScanResult> {
+  if (!validClientScanId(req.clientScanId)) throw errors.badRequest('Invalid client scan identifier.')
+  if (!req.payload.trim() || req.payload.length > 2048) throw errors.badRequest('Invalid ticket scan payload.')
+  if (!validCaptureTime(req.capturedOfflineAt ?? undefined)) throw errors.badRequest('Invalid offline scan timestamp.')
+
   const existing = await db.admissionScan.findUnique({ where: { clientScanId: req.clientScanId } })
   if (existing) {
+    // An ID alone is NOT an authorization credential. A different staff
+    // member/event (or a changed ticket payload) must not receive holder PII.
+    if (!isSameScanContext(existing, req)) throw errors.conflict('Scan identifier is already in use. Start a fresh scan.')
     const ticket = await db.ticket.findUnique({ where: { id: existing.ticketId }, include: { ticketType: true } })
+    if (!ticket || !isSameScanCredential(req.payload, ticket, verifyTicketSignature)) {
+      throw errors.conflict('Scan identifier is already in use. Start a fresh scan.')
+    }
     return {
       result: existing.result as ScanResult['result'],
-      ticket: ticket ? { code: ticket.code, holderName: ticket.holderName, ticketType: ticket.ticketType.name, checkedInAt: ticket.checkedInAt?.toISOString() ?? null } : undefined,
-      detail: 'Duplicate scan submission (same client scan id) — original result returned.',
+      ticket: { code: ticket.code, holderName: ticket.holderName, ticketType: ticket.ticketType.name, checkedInAt: ticket.checkedInAt?.toISOString() ?? null },
+      detail: 'Previously processed scan — original result returned without a new admission.',
     }
   }
 
