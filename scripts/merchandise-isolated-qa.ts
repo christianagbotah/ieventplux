@@ -79,6 +79,17 @@ async function main() {
   assert.equal(await db.invoice.count({ where: { orderId: order.id, status: 'PAID' } }), 1)
   console.log('PASS: simulated verified payment consumes stock, creates one paid receipt and no admission ticket')
 
+  // Concurrent provider replay must not create duplicate paid entitlements.
+  const parallelReplays = await Promise.all([
+    fulfilPaidOrder({ orderId: order.id, paymentAttemptId: attempt.id, amountMinor: pending.totalMinor }),
+    fulfilPaidOrder({ orderId: order.id, paymentAttemptId: attempt.id, amountMinor: pending.totalMinor }),
+  ])
+  assert.deepEqual(parallelReplays.map((result) => result.outcome), ['ALREADY_PAID', 'ALREADY_PAID'])
+  assert.equal(await db.invoice.count({ where: { orderId: order.id } }), 1)
+  assert.equal(await db.souvenirOrderItem.count({ where: { orderId: order.id, holdStatus: 'CONSUMED' } }), 1)
+  assert.equal(await db.ticket.count({ where: { orderId: order.id } }), 0)
+  console.log('PASS: simultaneous provider callback replays cannot duplicate merchandise entitlements or receipts')
+
   const replay = await fulfilPaidOrder({ orderId: order.id, paymentAttemptId: attempt.id, amountMinor: pending.totalMinor })
   assert.equal(replay.outcome, 'ALREADY_PAID')
   assert.equal(await db.invoice.count({ where: { orderId: order.id } }), 1)
