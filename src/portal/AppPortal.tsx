@@ -1,7 +1,7 @@
 'use client'
 
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react'
-import { Compass, Radio, Film, Search, Ticket, LayoutDashboard, ShieldCheck, LogOut, Bell, Sparkles, UserRound, Command as CommandIcon } from 'lucide-react'
+import { Compass, Radio, Film, UsersRound, Search, Ticket, LayoutDashboard, ShieldCheck, LogOut, Bell, Sparkles, UserRound, Command as CommandIcon } from 'lucide-react'
 import { connectRealtime } from './realtime'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -24,6 +24,7 @@ const Discover = lazy(() => import('./views/Discover'))
 const EventDetail = lazy(() => import('./views/EventDetail'))
 const LiveNow = lazy(() => import('./views/LiveNow'))
 const Reels = lazy(() => import('./views/Reels'))
+const FollowingFeed = lazy(() => import('./views/FollowingFeed'))
 const EffectsStudio = lazy(() => import('./views/EffectsStudio'))
 const OrgProfile = lazy(() => import('./views/OrgProfile'))
 const AuthView = lazy(() => import('./views/AuthView'))
@@ -49,12 +50,14 @@ function ViewFallback() {
 
 const NAV = [
   { path: '/', label: 'Discover', icon: Compass },
+  { path: '/following', label: 'Following', icon: UsersRound },
   { path: '/live', label: 'Live Now', icon: Radio },
   { path: '/reels', label: 'Reels', icon: Film },
 ]
 
 const MOBILE_NAV = [
   { path: '/', label: 'Discover', icon: Compass, tab: '' },
+  { path: '/following', label: 'Feed', icon: UsersRound, tab: '' },
   { path: '/live', label: 'Live', icon: Radio, tab: '' },
   { path: '/reels', label: 'Reels', icon: Film, tab: '' },
   { path: '/me?tab=tickets', label: 'Tickets', icon: Ticket, tab: 'tickets' },
@@ -162,6 +165,8 @@ export default function AppPortal() {
         return <LiveNow />
       case 'reels':
         return <Reels />
+      case 'following':
+        return <FollowingFeed />
       case 'effects':
         return <EffectsStudio />
       case 'event':
@@ -321,6 +326,9 @@ export default function AppPortal() {
                     <DropdownMenuItem onClick={() => navigate('/me?tab=tickets')}>
                       <Ticket className="h-4 w-4" /> My Tickets
                     </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => navigate('/following')}>
+                      <UsersRound className="h-4 w-4" /> My Following feed
+                    </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => navigate('/me?tab=orders')}>
                       <UserRound className="h-4 w-4" /> Orders & Profile
                     </DropdownMenuItem>
@@ -379,7 +387,7 @@ export default function AppPortal() {
           <p className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <span>Ticketing · Social · Broadcasting</span>
             <span aria-hidden>·</span>
-            <span>Prices in Ghana cedis (₵)</span>
+            <span>View prices in each event’s currency</span>
           </p>
         </div>
       </footer>

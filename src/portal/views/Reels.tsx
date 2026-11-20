@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { MessageCircle, Play, ArrowRight, Volume2 } from 'lucide-react'
+import { MessageCircle, ArrowRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { api } from '../api'
@@ -91,12 +91,14 @@ export default function Reels() {
             <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-transparent to-black/30" />
           </div>
 
+          {/* Clips without a verified playable stream show an event preview.
+              Never present a like/reaction action as a working Play button. */}
           <button
-            className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-white/10 p-3 text-white backdrop-blur transition hover:bg-white/20"
-            aria-label="Play clip"
-            onClick={() => void react(c)}
+            className="absolute right-3 top-1/2 flex -translate-y-1/2 items-center gap-1 rounded-full bg-white/15 px-3 py-2 text-xs font-semibold text-white backdrop-blur transition hover:bg-white/25"
+            aria-label="Open event from preview"
+            onClick={() => navigate('/event/' + c.event.slug)}
           >
-            <Play className="h-6 w-6 fill-white" aria-hidden />
+            Open event <ArrowRight className="size-4" aria-hidden />
           </button>
 
           {/* Bottom info */}
@@ -105,9 +107,9 @@ export default function Reels() {
               <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">{c.org.name.slice(0, 2).toUpperCase()}</span>
               <div className="min-w-0">
                 <p className="truncate text-sm font-bold text-white" style={{ textShadow: '0 1px 4px rgba(0, 0, 0, 0.55)' }}>{c.org.name}</p>
-                <p className="text-[11px] text-white/70">{c.views.toLocaleString()} views · {relative(c.event.startsAt)}</p>
+                <p className="text-[11px] text-white/70">Event preview · {relative(c.event.startsAt)}</p>
               </div>
-              <Badge className="ml-auto border-white/25 bg-white/10 text-white backdrop-blur">{c.durationSec ?? 30}s</Badge>
+              <Badge className="ml-auto border-white/25 bg-white/10 text-white backdrop-blur">Preview</Badge>
             </div>
             {c.caption && <p className="text-sm font-medium text-white/95">{c.caption}</p>}
             <p className="text-xs text-white/80">From “{c.event.title}”</p>
@@ -191,8 +193,8 @@ export default function Reels() {
               </button>
             )}
             {!c.nextEvent && (
-              <Button className="w-full rounded-2xl bg-primary py-4 text-sm font-semibold" onClick={() => navigate(`/event/${c.event.slug}`)}>
-                {c.event.ticketTypes.some((t) => t.priceMinor > 0) ? `Get tickets · from ${money(Math.min(...c.event.ticketTypes.map((t) => t.priceMinor)))}` : 'Free RSVP'}
+              <Button className="w-full rounded-2xl bg-primary py-4 text-sm font-semibold" onClick={() => navigate('/event/' + c.event.slug)}>
+                View event and ticket options
               </Button>
             )}
           </div>
@@ -214,8 +216,7 @@ export default function Reels() {
         ))}
       </div>
       <p className="pb-3 text-center text-[10px] text-muted-foreground">
-        <Volume2 className="mr-1 inline h-3 w-3" aria-hidden />
-        Clips are synthetic development media (licensed artwork renders) — reactions, links and feeds are live.
+        Event previews currently use sample artwork, not verified playable videos. Open an event for its actual available ticket and live-access options.
       </p>
     </div>
   )

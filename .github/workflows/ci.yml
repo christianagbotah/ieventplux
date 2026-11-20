@@ -60,6 +60,9 @@ jobs:
       - name: Security policy unit tests (payments, realtime, check-in and private KYC)
         run: bun test src/server/hubtel/security-policy.test.ts mini-services/realtime/room-authorization.test.ts src/portal/lib/checkin-policy.test.ts src/server/kyc-storage.test.ts src/server/kyc-requirements.test.ts
 
+      - name: Following timeline privacy, multi-source pagination and follow safety
+        run: bun test src/server/following-feed-policy.test.ts
+
       - name: Global discovery timezone, online and checkout-currency safety
         run: bun test src/server/discovery-time.test.ts
 
@@ -89,6 +92,9 @@ jobs:
 
       - name: Organizer event tenant privacy regression (seeded users)
         run: bun run scripts/org-event-access-smoke.ts
+
+      - name: Following timeline HTTP privacy and follow/unfollow regression (dev seed only)
+        run: bun run scripts/following-feed-smoke.ts
 
       - name: Smoke suite (golden paths incl. rate-limit proof)
         run: bun run smoke
