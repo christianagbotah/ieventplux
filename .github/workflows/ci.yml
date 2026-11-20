@@ -60,6 +60,9 @@ jobs:
       - name: Security policy unit tests (payments, realtime, check-in and private KYC)
         run: bun test src/server/hubtel/security-policy.test.ts mini-services/realtime/room-authorization.test.ts src/portal/lib/checkin-policy.test.ts src/server/kyc-storage.test.ts src/server/kyc-requirements.test.ts
 
+      - name: Event ticket-selection capacity, pricing and currency safety
+        run: bun test src/portal/lib/ticket-selection.test.ts
+
       - name: Public editorial spotlight accessibility and truthful ticket currency
         run: bun test src/portal/components/public-experience.test.tsx
 
