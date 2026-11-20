@@ -16,6 +16,7 @@ import { usePortal } from '../store'
 import { money, dateLong, timeRange, relative, initials, humanize } from '../format'
 import { EmptyState } from '../components/EventCard'
 import { quoteTicketSelection, ticketCheckoutSupported, ticketAvailability } from '../lib/ticket-selection'
+import { countryLabel } from '../lib/global-locations'
 import { OrganizerEventCover } from '../components/OrganizerEventCover'
 import LiveEngagement from '../components/LiveEngagement'
 import ReviewsPanel from '../components/ReviewsPanel'
@@ -548,7 +549,8 @@ export default function EventDetail({ slug }: { slug: string }) {
                     <MapPin className="mt-0.5 h-5 w-5 text-primary" aria-hidden />
                     <div>
                       <p className="text-xs uppercase tracking-wide text-muted-foreground">Venue</p>
-                      <p className="font-semibold">{event.venue?.name ?? 'Online broadcast'}</p>
+                      <p className="font-semibold">{event.venue?.name ?? (event.mode === 'VIRTUAL' ? 'Online event' : 'Venue to be announced')}</p>
+                      {!event.venue?.name && event.mode !== 'VIRTUAL' && (event.city || event.country) && <p className="text-sm text-muted-foreground">{[event.city, event.country ? countryLabel(event.country) : null].filter(Boolean).join(', ')}</p>}
                       {event.venue?.address && <p className="text-sm text-muted-foreground">{event.venue.address}{event.venue.city ? `, ${event.venue.city}` : ''}</p>}
                       {event.venue?.accessibilityInfo && <p className="text-sm text-muted-foreground"><span className="font-medium">Accessibility:</span> {event.venue.accessibilityInfo}</p>}
                       {(event.directionsUrl ?? event.venue?.mapsUrl) && (
