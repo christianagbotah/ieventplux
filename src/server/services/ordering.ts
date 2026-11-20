@@ -239,7 +239,7 @@ export async function releaseExpiredReservations(): Promise<{ released: number; 
   let released = 0
   const orderIds = new Set<string>()
   for (const res of expired) {
-    await db.$transaction(async (tx) => {
+    const didRelease = await db.$transaction(async (tx) => {
       const fresh = await tx.inventoryReservation.findUnique({ where: { id: res.id },
         include: { order: { select: { status: true, payments: { select: { status: true } } } } },
       })
@@ -259,9 +259,10 @@ export async function releaseExpiredReservations(): Promise<{ released: number; 
         data: { reservedCount: { decrement: fresh.qty } },
       })
       if (ticketStock.count !== 1) throw errors.conflict('Ticket reserved stock needs reconciliation before expiry release.')
-      orderIds.add(res.orderId)
-      released += 1
+      return true
     })
+    // Only count committed transactions; callback success precedes COMMIT.
+    if (didRelease) { orderIds.add(res.orderId); released += 1 }
   }
   // A merchandise-only checkout has no ticket InventoryReservation. Release
   // overdue stock via line-level holds; never expire a confirmed or disputed
@@ -271,7 +272,7 @@ export async function releaseExpiredReservations(): Promise<{ released: number; 
     select: { id: true, orderId: true }, orderBy: [{ order: { expiresAt: 'asc' } }, { id: 'asc' }], take: 500,
   })
   for (const line of expiredSouvenirs) {
-    await db.$transaction(async (tx) => {
+    const didRelease = await db.$transaction(async (tx) => {
       const order = await tx.order.findUnique({ where: { id: line.orderId }, include: { payments: { select: { status: true } } } })
       if (!order || !order.expiresAt || order.expiresAt > new Date() || !['DRAFT', 'PENDING_PAYMENT', 'EXPIRED', 'CANCELLED'].includes(order.status) || order.payments.some((payment) => payment.status === 'SUCCESS')) return
       const updated = await tx.souvenirOrderItem.updateMany({ where: { id: line.id, holdStatus: 'ACTIVE' }, data: { holdStatus: 'RELEASED' } })
@@ -285,9 +286,9 @@ export async function releaseExpiredReservations(): Promise<{ released: number; 
         data: { stockReserved: { decrement: item.qty } },
       })
       if (stock.count !== 1) throw errors.conflict('Souvenir reserved stock needs reconciliation before expiry release.')
-      orderIds.add(line.orderId)
-      released += 1
+      return true
     })
+    if (didRelease) { orderIds.add(line.orderId); released += 1 }
   }
   let ordersExpired = 0
   for (const orderId of orderIds) {

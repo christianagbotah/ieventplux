@@ -53,3 +53,7 @@ Design and implement as a separate end-to-end financial release, with tests befo
 - Programme document permission tests, signed-out access checks, absent file handling and upload type/size tests.
 - Mobile review of the new organizer editor and public lineup/catalogue at narrow widths remains a manual sign-off gate.
 - Real payment, merchandise QR collection and final enterprise feature completeness **remain outstanding** until Release B and subsequent roadmap phases pass their gates.
+
+### Release B expiry-sweep accounting note (20 November 2026)
+
+The expiry worker must increment its returned `released` count and queue an order for expiry only **after** the corresponding PostgreSQL transaction commits. A transaction callback can return successfully while COMMIT still fails (e.g. a serialization conflict). Counters maintained inside the callback would incorrectly report released inventory and could trigger a follow-up order transition after rollback. Both ticket and merchandise hold paths now record success only after `$transaction` resolves. This is defensive accounting, **not** a substitute for isolated PostgreSQL concurrency and late-payment tests; keep charging and collection disabled.
