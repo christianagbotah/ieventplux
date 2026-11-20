@@ -69,3 +69,7 @@ The fulfilment exception branch now serializes duplicate-success handling per or
 ### Release B expiry recovery (20 November 2026)
 
 The bounded reservation sweep now also scans up to 500 overdue, unpaid orders with no active ticket or souvenir holds. This recovers stale orders whose last stock hold was released in a previous sweep but whose order-status transition was interrupted. Final `EXPIRED` updates still recheck payment success, status and absence of active holds atomically. This is not a substitute for isolated PostgreSQL concurrency, late-payment and refund reconciliation acceptance tests; merchandise checkout and pickup remain disabled.
+
+### 20 November 2026 — Isolated concurrency QA extension
+
+The isolated `scripts/merchandise-isolated-qa.ts` harness now includes two concurrent checkout attempts for the final unit of a synthetic SKU. It asserts exactly one accepted reservation, one rejected attempt, one active hold, and unchanged sold stock. The harness refuses to run unless `DATABASE_URL` selects `schema=ieventplux_merch_qa_20261119` and the isolated checkout flag is enabled. This is **not** a substitute for provider-backed payment/refund QA or a production activation gate. Run against a freshly migrated scratch schema and record the result before claiming database concurrency acceptance.

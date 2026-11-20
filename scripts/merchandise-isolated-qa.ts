@@ -46,6 +46,24 @@ async function main() {
   assert.equal(item.stockReserved, 2)
   console.log('PASS: atomic last-in-stock check prevents overselling and preserves original reservation')
 
+  // Two separate checkout requests race for the same last available SKU.
+  // Exactly one can reserve it, and the losing request must leave no hold.
+  const raceProduct = await db.eventSouvenirProduct.create({ data: {
+    eventId: event.id, name: 'Synthetic Race Shirt', sku: `QA-RACE-${tag}`, priceMinor: 1200, stockTotal: 1,
+  } })
+  const raceResults = await Promise.allSettled([
+    createOrder({ ...buyer, buyerEmail: `race-a-${tag}@example.invalid`, souvenirs: qty(raceProduct.id, 1) }),
+    createOrder({ ...buyer, buyerEmail: `race-b-${tag}@example.invalid`, souvenirs: qty(raceProduct.id, 1) }),
+  ])
+  assert.equal(raceResults.filter((result) => result.status === 'fulfilled').length, 1,
+    'Only one competing checkout may reserve the final SKU')
+  assert.equal(raceResults.filter((result) => result.status === 'rejected').length, 1)
+  const raceStock = await db.eventSouvenirProduct.findUniqueOrThrow({ where: { id: raceProduct.id } })
+  assert.equal(raceStock.stockReserved, 1)
+  assert.equal(raceStock.stockSold, 0)
+  assert.equal(await db.souvenirOrderItem.count({ where: { productId: raceProduct.id, holdStatus: 'ACTIVE' } }), 1)
+  console.log('PASS: concurrent last-SKU checkout permits exactly one stock hold')
+
   const order = await db.order.findUniqueOrThrow({ where: { reference: pending.orderReference } })
   const attempt = await db.paymentAttempt.create({ data: {
     orderId: order.id, reference: `QA-${tag.toUpperCase()}-A1`, provider: 'SIMULATOR',
