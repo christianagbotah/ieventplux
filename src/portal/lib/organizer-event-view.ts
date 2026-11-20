@@ -37,10 +37,10 @@ export function organizerEventCounts(events: OrganizerEventRow[], now: number) {
   return Object.fromEntries(ORGANIZER_EVENT_FILTERS.map(f => [f.value, events.filter(e => eventMatchesView(e, f.value, now)).length])) as Record<OrganizerEventFilter, number>
 }
 
-export function filterOrganizerEvents(
-  events: OrganizerEventRow[],
+export function filterOrganizerEvents<T extends OrganizerEventRow>(
+  events: T[],
   options: { view: OrganizerEventFilter; query: string; now?: number },
-): OrganizerEventRow[] {
+): T[] {
   const now = options.now ?? Date.now()
   const query = options.query.trim().toLocaleLowerCase()
   return events

@@ -709,7 +709,7 @@ function EventsManager({ orgId, role, autoNew }: { orgId: string; role: string; 
                     <Users className="size-4" aria-hidden />Invitations
                   </Button>}
                 </div>
-                {canPublish && (['DRAFT', 'SCHEDULED'].includes(e.status) || (canCancel && ['PUBLISHED', 'POSTPONED', 'SCHEDULED'].includes(e.status))) && (
+                {(eventTransitionAllowed(role, e.status, 'PUBLISHED') || eventTransitionAllowed(role, e.status, 'POSTPONED') || eventTransitionAllowed(role, e.status, 'CANCELLED')) && (
                   <div className="flex flex-wrap items-center justify-end gap-2 rounded-xl bg-muted/50 p-2">
                     <span className="mr-auto pl-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Status actions</span>
                     {eventTransitionAllowed(role, e.status, 'PUBLISHED') &&
