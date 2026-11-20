@@ -24,3 +24,26 @@ export function isSupportedVideo(bytes: Uint8Array, mime: string): boolean {
 export function videoUploadsEnabled(env: Record<string, string | undefined> = process.env): boolean {
   return env.IEVENTPLUX_CREATOR_VIDEO_UPLOAD_ENABLED === 'true'
 }
+
+/**
+ * Interpret one RFC 7233 byte range, including suffix requests.
+ * Reject multi-range/invalid requests rather than sending incorrect video bytes.
+ */
+export function parseVideoByteRange(range: string, size: number): { start: number; end: number } {
+  if (!Number.isSafeInteger(size) || size < 1) throw new Error('Invalid media size')
+  const match = /^bytes=(\d*)-(\d*)$/.exec(range)
+  if (!match || (!match[1] && !match[2])) throw new Error('Invalid byte range')
+  let start: number
+  let end = size - 1
+  if (!match[1]) {
+    const suffix = Number(match[2])
+    if (!Number.isSafeInteger(suffix) || suffix < 1) throw new Error('Invalid suffix range')
+    start = Math.max(0, size - suffix)
+  } else {
+    start = Number(match[1])
+    if (match[2]) end = Number(match[2])
+  }
+  if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end)
+    || start < 0 || start >= size || end < start) throw new Error('Unsatisfiable byte range')
+  return { start, end: Math.min(end, size - 1) }
+}
