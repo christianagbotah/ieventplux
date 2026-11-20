@@ -4,6 +4,7 @@ import { orderReference } from '../ids'
 import { activeFeeVersion, computePlatformFee } from '../fees'
 import { getSetting } from '../settings'
 import { checkoutLinePrice, normalizeCheckoutLines } from '../checkout-policy'
+import { supportedTicketCheckoutCurrency } from '../paid-currency-policy'
 
 /**
  * Order creation with database-enforced inventory reservations.
@@ -51,6 +52,7 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
     const qty = item.qty
     const tt = event.ticketTypes.find((t) => t.id === item.ticketTypeId)
     if (!tt) throw errors.badRequest('Invalid ticket type.')
+    if (!supportedTicketCheckoutCurrency(tt.priceMinor, tt.currency)) throw errors.unavailable('CURRENCY_NOT_SUPPORTED', 'Paid checkout in this ticket currency is not available yet. Please contact the organizer.')
     if (tt.saleStartsAt && tt.saleStartsAt > now) throw errors.conflict(`Sales for ${tt.name} have not opened yet.`)
     if (tt.saleEndsAt && tt.saleEndsAt < now) throw errors.conflict(`Sales for ${tt.name} have closed.`)
     // Re-check lifetime and reserved-order buyer caps inside the transaction,
@@ -101,6 +103,7 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
     for (const item of validated) {
       const tt = await tx.ticketType.findUnique({ where: { id: item.ticketTypeId } })
       if (!tt || tt.eventId !== event.id || !tt.active) throw errors.conflict('A ticket type is no longer available. Refresh your selection.')
+      if (!supportedTicketCheckoutCurrency(tt.priceMinor, tt.currency)) throw errors.unavailable('CURRENCY_NOT_SUPPORTED', 'Paid checkout in this ticket currency is not available yet.')
       if (input.userId) {
         const prior = await tx.orderItem.aggregate({
           where: {
@@ -127,6 +130,7 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
         WHERE "id" = ${item.ticketTypeId}
           AND "eventId" = ${event.id}
           AND "active" = TRUE
+          AND ("priceMinor" = 0 OR "currency" = 'GHS')
           AND "priceMinor" = ${item.unitPriceMinor}
           AND "groupMinQty" IS NOT DISTINCT FROM ${item.groupMinQty}::integer
           AND "groupPctOff" IS NOT DISTINCT FROM ${item.groupPctOff}::integer

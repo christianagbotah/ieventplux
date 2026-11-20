@@ -1,5 +1,6 @@
 import { db } from '../../lib/db'
 import { errors } from '../api'
+import { discoveryCalendarWindow } from '../discovery-time'
 
 /**
  * Event lifecycle + discovery visibility rules.
@@ -76,6 +77,8 @@ export async function transitionEvent(params: { eventId: string; to: string; act
 export interface DiscoveryFilters {
   q?: string
   country?: string
+  timezone?: string
+  onlineOnly?: boolean
   city?: string
   category?: string
   mode?: 'PHYSICAL' | 'VIRTUAL' | 'HYBRID'
@@ -93,36 +96,26 @@ export function buildDiscoveryWhere(filters: DiscoveryFilters, now = new Date())
   const where: Record<string, unknown> = { ...PUBLIC_EVENT_WHERE }
   if (filters.q) {
     where.OR = [
-      { title: { contains: filters.q } },
-      { summary: { contains: filters.q } },
-      { description: { contains: filters.q } },
+      { title: { contains: filters.q.slice(0, 120), mode: 'insensitive' } },
+      { summary: { contains: filters.q.slice(0, 120), mode: 'insensitive' } },
+      { description: { contains: filters.q.slice(0, 120), mode: 'insensitive' } },
+      { org: { name: { contains: filters.q.slice(0, 120), mode: 'insensitive' } } },
+      { city: { contains: filters.q.slice(0, 120), mode: 'insensitive' } },
     ]
   }
   if (filters.country) where.country = filters.country
-  if (filters.city) where.city = { contains: filters.city }
+  if (filters.city) where.city = { contains: filters.city.slice(0, 80), mode: 'insensitive' }
   if (filters.category) where.categorySlug = filters.category
-  if (filters.mode) where.mode = filters.mode
+  if (filters.onlineOnly) where.mode = { in: ['VIRTUAL', 'HYBRID'] }
+  else if (filters.mode) where.mode = filters.mode
   if (filters.orgId) where.orgId = filters.orgId
   if (filters.from || filters.to) {
     where.startsAt = {}
     if (filters.from) (where.startsAt as Record<string, unknown>).gte = new Date(filters.from)
     if (filters.to) (where.startsAt as Record<string, unknown>).lte = new Date(filters.to)
   }
-  if (filters.when === 'TODAY') {
-    const end = new Date(now)
-    end.setHours(23, 59, 59, 999)
-    where.startsAt = { gte: now, lte: end }
-  } else if (filters.when === 'THIS_WEEK') {
-    const end = new Date(now.getTime() + 7 * 86400_000)
-    where.startsAt = { gte: now, lte: end }
-  } else if (filters.when === 'THIS_WEEKEND') {
-    const sat = new Date(now)
-    const daysToSat = (6 - sat.getDay() + 7) % 7
-    sat.setDate(sat.getDate() + daysToSat)
-    sat.setHours(0, 0, 0, 0)
-    const sun = new Date(sat)
-    sun.setDate(sun.getDate() + 2)
-    where.startsAt = { gte: sat, lte: sun }
+  if (filters.when === 'TODAY' || filters.when === 'THIS_WEEK' || filters.when === 'THIS_WEEKEND') {
+    where.startsAt = discoveryCalendarWindow(filters.when, filters.timezone, now)
   }
   if (filters.price === 'FREE' || filters.price === 'PAID') {
     where.ticketTypes = {

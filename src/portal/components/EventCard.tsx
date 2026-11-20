@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { navigate } from '../router'
 import { money, dateShort, humanize } from '../format'
+import { countryLabel } from '../lib/global-locations'
 
 export interface EventCardData {
   id: string
@@ -26,7 +27,7 @@ export interface EventCardData {
   ratingAvg?: number
   ratingCount?: number
   org?: { name: string; slug?: string; verifiedAt?: string | null } | null
-  ticketTypes?: { priceMinor: number; quota?: number; soldCount?: number }[]
+  ticketTypes?: { priceMinor: number; currency?: string; quota?: number; soldCount?: number }[]
 }
 
 /** Real capacity signal from active ticket types (quota 0 = unlimited). */
@@ -49,11 +50,15 @@ export function inventoryState(event: EventCardData): 'SOLD_OUT' | 'SELLING_FAST
 export function priceLabel(event: EventCardData): string {
   const prices = (event.ticketTypes ?? []).map((t) => t.priceMinor)
   if (prices.length === 0) return '—'
+  const currencies = new Set((event.ticketTypes ?? []).map((t) => t.currency ?? 'GHS'))
   const min = Math.min(...prices)
   const max = Math.max(...prices)
   if (max === 0) return 'Free'
-  if (min === max) return money(min)
-  return `From ${money(min)}`
+  if (currencies.size > 1) return 'View ticket prices'
+  const currency = [...currencies][0] ?? 'GHS'
+  if (min === 0) return 'Free & paid'
+  if (min === max) return money(min, currency)
+  return `From ${money(min, currency)}`
 }
 
 export function EventCard({ event, index = 0, footer }: { event: EventCardData; index?: number; footer?: React.ReactNode }) {
@@ -123,10 +128,15 @@ export function EventCard({ event, index = 0, footer }: { event: EventCardData; 
           <div className="flex items-center gap-2 text-[11.5px] font-medium text-white/95">
             <CalendarDays className="h-3.5 w-3.5" aria-hidden />
             {dateShort(event.startsAt)}
-            {event.city && (
+            {event.mode === 'VIRTUAL' ? (
+              <>
+                <Monitor className="ml-1 h-3.5 w-3.5" aria-hidden />
+                Online · join anywhere
+              </>
+            ) : (event.city || event.country) && (
               <>
                 <MapPin className="ml-1 h-3.5 w-3.5" aria-hidden />
-                {event.city}
+                {[event.city, event.country ? countryLabel(event.country) : null].filter(Boolean).join(', ')}
               </>
             )}
           </div>
