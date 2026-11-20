@@ -69,7 +69,7 @@ async function serve(req: NextRequest, ctx: RouteContext) {
     const status = range ? 206 : 200
     if (req.method === 'HEAD') return new Response(null, { status, headers })
     const stream = createReadStream(fullPath, { start, end })
-    return new Response(Readable.toWeb(stream) as ReadableStream<Uint8Array>, { status, headers })
+    return new Response(Readable.toWeb(stream) as unknown as ReadableStream<Uint8Array>, { status, headers })
   } catch {
     return new Response('Media not found.', { status: 404, headers: { 'Cache-Control': 'no-store' } })
   }
