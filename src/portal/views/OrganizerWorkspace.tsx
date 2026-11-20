@@ -32,6 +32,7 @@ import { VerificationDocuments } from '../components/VerificationDocuments'
 import { WorkspaceNavigation } from '../components/WorkspaceNavigation'
 import { WorkspaceMetric } from '../components/WorkspaceMetric'
 import { AdmissionOperationsPanel } from '../components/AdmissionOperationsPanel'
+import { scannerSessionKey } from '../lib/scanner-session-local'
 import { GrowthCommandCenter } from '../components/GrowthCommandCenter'
 import { OrganizerEventCover } from '../components/OrganizerEventCover'
 import { EventCopyCopilot } from '../components/EventCopyCopilot'
@@ -1744,12 +1745,34 @@ function AttendeesView({ orgId, initialEventId }: { orgId: string; initialEventI
   const [syncBusy, setSyncBusy] = useState(false)
   const [online, setOnline] = useState(true)
   const [scanBusy, setScanBusy] = useState(false)
+  const [browserSessionId, setBrowserSessionId] = useState('')
   const [monitorRevision, setMonitorRevision] = useState(0)
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const scanBusyRef = useRef(false)
   const pendingRef = useRef<PendingScan[]>([])
   const selectedEventRef = useRef('')
   const recentScanRef = useRef<{ payload: string; eventId: string; at: number } | null>(null)
+
+  useEffect(() => {
+    setBrowserSessionId('')
+    if (!userId || !orgId || !eventId) return
+    try {
+      setBrowserSessionId(localStorage.getItem(scannerSessionKey(userId, orgId, eventId)) ?? '')
+    } catch {
+      // Browser storage can be disabled. Scanning without registration remains
+      // available, with events attributed to staff rather than a device.
+    }
+  }, [eventId, userId, orgId])
+
+  const registerBrowserSession = (id: string) => {
+    if (!userId || !eventId || !id) return
+    try {
+      localStorage.setItem(scannerSessionKey(userId, orgId, eventId), id)
+    } catch {
+      toast({ description: 'This browser could not remember the scanner session after reload.', variant: 'destructive' })
+    }
+    setBrowserSessionId(id)
+  }
 
   useEffect(() => { pendingRef.current = offlineQueue }, [offlineQueue])
 
@@ -1896,6 +1919,7 @@ function AttendeesView({ orgId, initialEventId }: { orgId: string; initialEventI
         eventId: targetEventId,
         payload: code,
         clientScanId,
+        ...(browserSessionId ? { deviceSessionId: browserSessionId } : {}),
       })
       if (selectedEventRef.current === targetEventId) {
         setLastResult(result)
@@ -2000,6 +2024,7 @@ function AttendeesView({ orgId, initialEventId }: { orgId: string; initialEventI
     try {
       const response = await api.post<{ synced: number; results: { result: string; detail: string }[] }>('/checkin/sync', {
         eventId: targetEventId,
+        ...(browserSessionId ? { deviceSessionId: browserSessionId } : {}),
         scans: batch.map((scan) => ({
           payload: scan.payload, clientScanId: scan.clientScanId, capturedOfflineAt: scan.at,
         })),
@@ -2103,7 +2128,15 @@ function AttendeesView({ orgId, initialEventId }: { orgId: string; initialEventI
         </div>
       )}
 
-      {eventId && <AdmissionOperationsPanel key={eventId} eventId={eventId} refreshKey={monitorRevision} />}
+      {eventId && (
+        <AdmissionOperationsPanel
+          key={eventId}
+          eventId={eventId}
+          refreshKey={monitorRevision}
+          browserSessionId={browserSessionId}
+          onSessionRegistered={registerBrowserSession}
+        />
+      )}
 
       <section aria-label="Offline scan recovery" className="rounded-2xl border border-border bg-card p-3.5 sm:p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
