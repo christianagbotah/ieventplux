@@ -5,7 +5,7 @@ import {
   Search, SlidersHorizontal, Radio, MapPin, TrendingUp, X, ArrowRight, Wand2,
   Church, Music, Presentation, Wrench, Code2, Heart, Users, Sparkles as SparklesIcon,
   PartyPopper, Activity, Smartphone, QrCode, CalendarCheck, Building2,
-  CalendarDays, ChevronRight, Monitor, Globe2,
+  CalendarDays, ChevronRight, Monitor, Globe2, Film, UsersRound, ArrowUpRight,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -21,6 +21,7 @@ import { ForYouRail } from '../components/ForYouRail'
 import { PlannerPanel } from '../components/PlannerPanel'
 import { usePortal } from '../store'
 import { countryLabel } from '../lib/global-locations'
+import { HeroSpotlight } from '../components/HeroSpotlight'
 
 interface Category {
   slug: string
@@ -66,13 +67,11 @@ const EMPTY_FILTERS = { q: '', category: '', country: '', city: '', mode: '', pr
 function useCountUp(target: number | null, durationMs = 900): number {
   const [value, setValue] = useState(0)
   useEffect(() => {
-    if (target === null || target === 0) {
-      setValue(target ?? 0)
-      return
-    }
-    if (typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      setValue(target)
-      return
+    if (target === null || target === 0 ||
+        (typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+      // Schedule instead of synchronously cascading state updates from an effect.
+      const raf = requestAnimationFrame(() => setValue(target ?? 0))
+      return () => cancelAnimationFrame(raf)
     }
     let raf = 0
     const start = performance.now()
@@ -288,74 +287,123 @@ export default function Discover({ route }: { route: Route }) {
     if (isSearch) navigate('/', { replace: true })
   }
 
+  const activeFilters: { key: keyof typeof filters; label: string }[] = [
+    ...(filters.q ? [{ key: 'q' as const, label: 'Search: ' + filters.q }] : []),
+    ...(filters.country ? [{ key: 'country' as const, label: countryLabel(filters.country) }] : []),
+    ...(filters.city ? [{ key: 'city' as const, label: 'City: ' + filters.city }] : []),
+    ...(filters.category ? [{ key: 'category' as const, label: (home?.categories ?? categories).find((c) => c.slug === filters.category)?.name ?? filters.category }] : []),
+    ...(filters.mode ? [{ key: 'mode' as const, label: filters.mode === 'ONLINE' ? 'Online & hybrid' : humanize(filters.mode) }] : []),
+    ...(filters.price ? [{ key: 'price' as const, label: filters.price === 'FREE' ? 'Free entry' : 'Paid entry' }] : []),
+    ...(filters.when ? [{ key: 'when' as const, label: WHEN_CHIPS.find((chip) => chip.value === filters.when)?.label ?? filters.when }] : []),
+  ]
+
+  const dismissFilter = (key: keyof typeof filters) => {
+    applyFilter(key, '')
+    if (key === 'q' && isSearch) navigate('/', { replace: true })
+  }
+
   const sponsoredEvents = home?.sponsored ?? []
   // Featured (or first upcoming) gathering powers the hero CTA.
   const primaryEvent = home?.featured[0] ?? home?.upcoming[0]
 
   return (
     <div>
-      {/* Editorial hero — focused discovery, clear actions, no visual-effects overload. */}
+      {/* Public entry: real-world discovery first, real featured media second. */}
       {!browsing && (
-        <section className="border-b border-border/40">
-          <div className="mx-auto max-w-[1500px] px-3 py-4 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
+        <section className="ievx-home-hero" aria-label="Discover events worldwide">
+          <div className="mx-auto max-w-[1500px] px-3 pt-3 pb-3 sm:px-6 sm:pt-5 sm:pb-5 lg:px-8 lg:pt-7 lg:pb-6">
             <div className="ievx-hero-panel">
-              <div className="relative z-10 w-full">
-                <span className="ievx-hero-kicker">
-                  <span className="size-2 rounded-full bg-[#7cdec4]" aria-hidden />
-                  Discover real events around the world
-                </span>
-                <h1 className="ievx-hero-title">
-                  Be where the moments happen.
-                  <span className="block text-[#b2e7d5]">Discover. Attend. Connect.</span>
-                </h1>
-                <p className="ievx-hero-copy">
-                  Discover concerts, conferences, worship, culture, sports and communities across borders.
-                  Join in person or online, and follow the organizers you trust.
-                </p>
-                <div className="mt-5 flex flex-wrap items-center gap-2.5">
-                  <button
-                    type="button"
-                    className="ievx-hero-action"
-                    aria-label={primaryEvent ? `View featured event: ${primaryEvent.title}` : 'Browse the event catalogue'}
-                    onClick={() => {
-                      if (primaryEvent) navigate(`/event/${primaryEvent.slug}`)
-                      else {
+              <div className="ievx-hero-layout">
+                <div className="ievx-hero-intro">
+                  <span className="ievx-hero-kicker">
+                    <span className="size-2 rounded-full bg-[#7cdec4]" aria-hidden />
+                    Your world. Your next experience.
+                  </span>
+                  <h1 className="ievx-hero-title">
+                    The world is happening.
+                    <span className="block text-[#b2e7d5]">You&apos;re invited.</span>
+                  </h1>
+                  <p className="ievx-hero-copy">
+                    Find concerts, conferences and communities worth showing up for.
+                    Join online or in person, wherever you are.
+                  </p>
+                  <div className="ievx-hero-cta flex flex-wrap items-center gap-2.5">
+                    <button type="button" className="ievx-hero-action"
+                      onClick={() => {
                         setBrowseAll(true)
                         setPage(1)
-                        document.getElementById('browse')?.scrollIntoView({ behavior: 'smooth' })
-                      }
-                    }}
-                  >
-                    {primaryEvent ? 'Explore featured event' : 'Browse events'} <ArrowRight className="size-4" aria-hidden />
-                  </button>
-                  <button type="button" className="ievx-hero-action ievx-hero-action-secondary" onClick={() => navigate('/live')}>
-                    <Radio className="size-4" aria-hidden /> Live events
-                  </button>
-                  <button type="button" className="rounded-lg px-3 py-2.5 text-xs font-semibold text-[#d4efe5] underline-offset-4 hover:underline" onClick={() => setPlannerOpen(true)}>
-                    <CalendarCheck className="mr-1.5 inline size-4" aria-hidden /> Plan your weekend
-                  </button>
-                  <button type="button" className="rounded-lg px-3 py-2.5 text-xs font-semibold text-[#d4efe5] underline-offset-4 hover:underline" onClick={() => document.getElementById('ai-search')?.scrollIntoView({ behavior: 'smooth' })}>
-                    <Wand2 className="mr-1.5 inline size-4" aria-hidden /> Ask AI
-                  </button>
-                </div>
-                <div className="ievx-hero-quick">
-                  <span className="mr-1 text-[11px] font-semibold text-[#b9d6d1]">Quick filters</span>
-                  {[
-                    { label: 'Today', filter: () => applyFilter('when', 'TODAY') },
-                    { label: 'This weekend', filter: () => applyFilter('when', 'THIS_WEEKEND') },
-                    { label: 'Free entry', filter: () => applyFilter('price', 'FREE') },
-                    { label: 'Join online anywhere', filter: () => applyFilter('mode', 'ONLINE') },
-                  ].map((quick) => (
-                    <button key={quick.label} type="button" onClick={quick.filter}>{quick.label}</button>
-                  ))}
-                  {home && (
-                    <span className="ml-auto hidden text-[11px] font-medium text-[#b9d6d1] sm:block">
-                      {statEvents} upcoming · {statOrgs} organizers · {statLive} live
-                    </span>
+                        document.getElementById('browse')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                      }}>
+                      Explore events <ArrowRight className="size-4" aria-hidden />
+                    </button>
+                    <button type="button" className="ievx-hero-action ievx-hero-action-secondary" onClick={() => navigate('/live')}>
+                      <Radio className="size-4" aria-hidden /> Watch live
+                    </button>
+                    <button type="button" className="ievx-hero-text-action" onClick={() => navigate(user ? '/create-org' : '/register')}>
+                      Host an event <ArrowUpRight className="size-4" aria-hidden />
+                    </button>
+                  </div>
+
+                  {primaryEvent && (
+                    <button type="button" className="ievx-hero-mobile-feature lg:hidden"
+                      onClick={() => navigate('/event/' + primaryEvent.slug)}
+                      aria-label={'See featured event ' + primaryEvent.title}>
+                      {primaryEvent.coverImageUrl ? (
+                        <img src={primaryEvent.coverImageUrl} loading="lazy" alt=""
+                          className="size-11 shrink-0 rounded-lg object-cover" />
+                      ) : (
+                        <span className="grid size-11 shrink-0 place-items-center rounded-lg bg-white/10"><CalendarDays className="size-5" aria-hidden /></span>
+                      )}
+                      <span className="min-w-0 flex-1 text-left">
+                        <span className="block text-[10px] font-bold uppercase tracking-[0.12em] text-[#abddce]">In the spotlight</span>
+                        <span className="block truncate text-sm font-semibold">{primaryEvent.title}</span>
+                      </span>
+                      <ChevronRight className="size-4 shrink-0 text-[#b2e7d5]" aria-hidden />
+                    </button>
                   )}
+
+                  <div className="ievx-hero-quick" aria-label="Quick ways to explore">
+                    <button type="button" onClick={() => applyFilter('when', 'TODAY')}>Today</button>
+                    <button type="button" onClick={() => applyFilter('when', 'THIS_WEEKEND')}>This weekend</button>
+                    <button type="button" onClick={() => applyFilter('price', 'FREE')}>Free events</button>
+                    <button type="button" onClick={() => applyFilter('mode', 'ONLINE')}>
+                      <Monitor className="size-3.5" aria-hidden /> Join online
+                    </button>
+                    <button type="button" onClick={() => navigate('/reels')}>
+                      <Film className="size-3.5" aria-hidden /> Explore clips
+                    </button>
+                    <button type="button" onClick={() => setPlannerOpen(true)}>
+                      <CalendarCheck className="size-3.5" aria-hidden /> Plan a weekend
+                    </button>
+                    <button type="button" onClick={() => document.getElementById('ai-search')?.scrollIntoView({ behavior: 'smooth' })}>
+                      <Wand2 className="size-3.5" aria-hidden /> Ask AI
+                    </button>
+                  </div>
                 </div>
+
+                {primaryEvent ? (
+                  <div className="ievx-hero-visual hidden min-w-0 lg:block">
+                    <HeroSpotlight event={primaryEvent} />
+                  </div>
+                ) : (
+                  <div className="ievx-hero-visual ievx-hero-no-feature hidden min-w-0 lg:flex">
+                    <div className="max-w-sm space-y-3 text-center">
+                      <Globe2 className="mx-auto size-11 text-[#b2e7d5]" aria-hidden />
+                      <p className="text-2xl font-extrabold leading-tight">The next connection starts with an event.</p>
+                      <p className="text-sm text-[#c9dedc]">Be among the organizers bringing real communities together.</p>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
+            {home && (
+              <div className="ievx-real-activity" aria-label="Current platform activity">
+                <span><CalendarDays className="size-4" aria-hidden /> <strong>{statEvents}</strong> upcoming</span>
+                <span><UsersRound className="size-4" aria-hidden /> <strong>{statOrgs}</strong> organizers</span>
+                <span><Radio className="size-4" aria-hidden /> <strong>{statLive}</strong> live now</span>
+                <button type="button" onClick={() => setPlannerOpen(true)}>Plan your weekend <ArrowRight className="size-3.5" aria-hidden /></button>
+              </div>
+            )}
           </div>
         </section>
       )}
@@ -369,8 +417,10 @@ export default function Discover({ route }: { route: Route }) {
             onSubmit={(e) => {
               e.preventDefault()
               const input = e.currentTarget.elements.namedItem('q') as HTMLInputElement
-              applyFilter('q', input.value)
-              if (input.value) navigate(`/search?q=${encodeURIComponent(input.value)}`, { replace: true })
+              const query = input.value.trim()
+              applyFilter('q', query)
+              if (query) navigate(`/search?q=${encodeURIComponent(query)}`, { replace: true })
+              else if (isSearch) navigate('/', { replace: true })
             }}
           >
             <div className="relative w-full max-w-[480px]">
@@ -430,7 +480,7 @@ export default function Discover({ route }: { route: Route }) {
                   <SlidersHorizontal className="h-4 w-4" aria-hidden /> <span className="hidden sm:inline">Filters</span>
                 </Button>
               </SheetTrigger>
-              <SheetContent side="right" className="w-[300px]">
+              <SheetContent side="right" className="w-[min(100vw,400px)] overflow-y-auto">
                 <SheetHeader>
                   <SheetTitle>Refine events</SheetTitle>
                 </SheetHeader>
@@ -533,15 +583,25 @@ export default function Discover({ route }: { route: Route }) {
             })}
           </div>
         )}
+        {browsing && activeFilters.length > 0 && (
+          <div className="mx-auto flex max-w-[1500px] items-center gap-2 overflow-x-auto px-3 pb-3 pt-1 sm:px-6 lg:px-8" aria-label="Active search filters">
+            <span className="shrink-0 text-[11px] font-semibold text-muted-foreground">Active filters</span>
+            {activeFilters.map(({ key, label }) => (
+              <button key={key} type="button" className="ievx-active-filter shrink-0" aria-label={'Remove filter: ' + label}
+                onClick={() => dismissFilter(key)}>
+                <span className="max-w-44 truncate">{label}</span>
+                <X className="size-3.5 shrink-0" aria-hidden />
+              </button>
+            ))}
+            {activeFilters.length > 1 && (
+              <button type="button" className="shrink-0 rounded-lg px-2 py-1 text-xs font-semibold text-primary hover:underline" onClick={clearFilters}>Clear all</button>
+            )}
+          </div>
+        )}
       </section>
 
       {/* Content */}
       <div className="mx-auto max-w-7xl px-4 py-6">
-        {/* Ask-iEventPlux: natural-language search over the real catalogue */}
-        <div className="mb-8">
-          <AiSearchPanel />
-        </div>
-
         {/* Sponsored placements (labelled) — compact native-ad style promo rows */}
         {!browsing && sponsoredEvents.length > 0 && (
           <section className="mb-8" aria-label="Sponsored events">
@@ -681,6 +741,10 @@ export default function Discover({ route }: { route: Route }) {
               )}
             </section>
 
+            <section id="ai-search" className="mb-8 scroll-mt-32" aria-label="Find events with AI">
+              <AiSearchPanel />
+            </section>
+
             {/* How it works — reassurance for first-time buyers */}
             <section className="mb-8" aria-label="How it works">
               <div className="mb-3 flex items-center gap-2">
@@ -711,8 +775,8 @@ export default function Discover({ route }: { route: Route }) {
                   <div className="max-w-xl">
                     <h2 className="text-xl font-extrabold sm:text-2xl">Organizing a gathering?</h2>
                     <p className="mt-2 text-sm leading-relaxed text-primary-foreground/85">
-                      Publish in minutes — ticketing with mobile-money checkout, QR check-in scanning, live broadcasts,
-                      promotions, payouts and finance reports built in. Verified organizers keep 95% of face value.
+                      Create an event page, invite your community and manage registrations, tickets,
+                      check-in and event updates from one workspace. Payment and streaming options depend on available integrations.
                     </p>
                   </div>
                   <div className="shrink-0">
