@@ -120,6 +120,17 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
     if (!currentEvent || currentEvent.deletedAt || !['PUBLISHED', 'LIVE', 'POSTPONED'].includes(currentEvent.status)) {
       throw errors.conflict('This event is no longer accepting bookings.')
     }
+    // The organizer may have been suspended after the initial catalogue read.
+    // Revalidate its approval inside the reservation transaction before
+    // claiming any physical stock; the outer read is only a preview.
+    if (merchLines.length) {
+      const organizer = await tx.organization.findUnique({
+        where: { id: event.orgId }, select: { status: true, deletedAt: true },
+      })
+      if (!organizer || organizer.deletedAt || organizer.status !== 'ACTIVE') {
+        throw errors.forbidden('Souvenir sales require an approved, active organizer.')
+      }
+    }
     const claimAt = new Date()
     for (const item of validated) {
       const tt = await tx.ticketType.findUnique({ where: { id: item.ticketTypeId } })
