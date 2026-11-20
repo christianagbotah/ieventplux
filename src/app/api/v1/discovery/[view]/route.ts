@@ -1,3 +1,4 @@
+import { publicNextOccurrence } from '@/server/reels-policy'
 import { NextRequest } from 'next/server'
 import { handle, jsonOk, jsonList, pagination, errors } from '@/server/api'
 import { db } from '@/lib/db'
@@ -100,10 +101,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ view: strin
           event: c.event,
           // A clip's next-occurrence link must not reveal a private, draft,
           // cancelled or unrelated organizer event.
-          nextEvent: c.linksTo && c.linksTo.orgId === c.orgId
-            && c.linksTo.visibility === 'PUBLIC' && !c.linksTo.deletedAt
-            && ['PUBLISHED', 'LIVE', 'POSTPONED'].includes(c.linksTo.status)
-            ? { id: c.linksTo.id, slug: c.linksTo.slug, title: c.linksTo.title } : null,
+          nextEvent: publicNextOccurrence(c.orgId, c.linksTo),
           org: c.org, views: c.views,
         })),
       })
