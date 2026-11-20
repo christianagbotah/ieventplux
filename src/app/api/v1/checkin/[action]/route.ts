@@ -15,6 +15,16 @@ import { sha256 } from '@/server/auth'
  */
 type RouteContext = { params: Promise<{ action: string }> }
 
+async function checkOwnedDeviceSession(id: string | undefined, eventId: string, userId: string): Promise<string | null> {
+  if (!id) return null
+  const owned = await db.deviceSession.findFirst({
+    where: { id, eventId, userId, revokedAt: null },
+    select: { id: true },
+  })
+  if (!owned) throw errors.forbidden('Device session is not authorized for this event and staff member.')
+  return owned.id
+}
+
 export async function POST(req: NextRequest, ctx: RouteContext) {
   return handle(async () => {
     const { action } = await ctx.params
@@ -41,14 +51,16 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
       if (!access.event) throw errors.notFound('Event not found.')
       if (!access.allowed) throw errors.forbidden('Check-in requires check-in staff permissions for this event.')
       if (!body.payload || !body.clientScanId) throw errors.badRequest('payload and clientScanId are required.')
+      const deviceSessionId = await checkOwnedDeviceSession(body.deviceSessionId, eventId, user.id)
       const { processScan } = await import('@/server/services/checkin')
       const result = await processScan({
         eventId,
         scannerId: user.id,
         payload: String(body.payload),
-        deviceSessionId: body.deviceSessionId ? String(body.deviceSessionId) : null,
+        deviceSessionId,
         clientScanId: String(body.clientScanId),
-        source: body.source === 'OFFLINE_SYNC' ? 'OFFLINE_SYNC' : 'ONLINE',
+        // A direct online scan cannot assert that it was offline.
+        source: 'ONLINE',
         capturedOfflineAt: body.capturedOfflineAt ? String(body.capturedOfflineAt) : null,
       })
       return jsonOk(result)
@@ -62,6 +74,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
       if (!access.event) throw errors.notFound('Event not found.')
       if (!access.allowed) throw errors.forbidden('Check-in requires check-in staff permissions for this event.')
       const scans = Array.isArray(body.scans) ? body.scans.slice(0, 200) : []
+      const deviceSessionId = await checkOwnedDeviceSession(body.deviceSessionId, eventId, user.id)
       const { processScan } = await import('@/server/services/checkin')
       const results: Awaited<ReturnType<typeof processScan>>[] = []
       for (const scan of scans) {
@@ -70,15 +83,15 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
             eventId,
             scannerId: user.id,
             payload: String(scan.payload ?? ''),
-            deviceSessionId: body.deviceSessionId ? String(body.deviceSessionId) : null,
+            deviceSessionId,
             clientScanId: String(scan.clientScanId ?? ''),
             source: 'OFFLINE_SYNC',
             capturedOfflineAt: scan.capturedOfflineAt,
           })
         )
       }
-      if (body.deviceSessionId) {
-        await db.deviceSession.update({ where: { id: String(body.deviceSessionId) }, data: { lastSyncAt: new Date() } }).catch(() => {})
+      if (deviceSessionId) {
+        await db.deviceSession.update({ where: { id: deviceSessionId }, data: { lastSyncAt: new Date() } })
       }
       return jsonOk({ synced: results.length, results })
     }
