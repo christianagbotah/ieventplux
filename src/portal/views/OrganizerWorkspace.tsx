@@ -1847,7 +1847,7 @@ function AttendeesView({ orgId, initialEventId }: { orgId: string; initialEventI
       setAttendees(att.items)
     } catch (err) {
       if (signal?.aborted || selectedEventRef.current !== targetEventId) return
-      setAttendeesError(err instanceof ApiClientError ? err.message : 'Could not load attendees or admission statistics.')
+      setAttendeesError(err instanceof ApiClientError ? err.message : 'Could not load the attendee list.')
       setAttendees([])
     }
   }, [eventId])
@@ -1856,7 +1856,6 @@ function AttendeesView({ orgId, initialEventId }: { orgId: string; initialEventI
     selectedEventRef.current = eventId
     setAttendees(eventId ? null : [])
     setAttendeesError('')
-    setStats(null)
     if (!eventId) return
     const controller = new AbortController()
     void refresh(controller.signal)
