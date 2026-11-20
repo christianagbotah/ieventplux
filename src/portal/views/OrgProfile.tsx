@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { ShieldCheck, MapPin, Users, ChevronLeft, Bookmark, Globe, Mail, Phone, ExternalLink } from 'lucide-react'
+import { ShieldCheck, MapPin, Users, ChevronLeft, Bookmark, Globe, Mail, Phone, ExternalLink, Film } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
@@ -11,6 +11,7 @@ import { navigate } from '../router'
 import { EventCard, EventCardSkeleton, EmptyState, type EventCardData } from '../components/EventCard'
 import { usePortal } from '../store'
 import { relative } from '../format'
+import { isDirectPlayableVideo } from '../lib/reel-media'
 import { ORGANIZER_TYPE_CONFIG, organizerType, type ProfileDetails } from '@/lib/organization-types'
 
 interface OrgProfilePayload {
@@ -41,7 +42,7 @@ interface OrgProfilePayload {
   followers: number
   following: boolean
   myOrg?: boolean
-  clips: { id: string; url: string; caption?: string | null }[]
+  clips: { id: string; url: string; posterUrl?: string | null; caption?: string | null }[]
 }
 
 export default function OrgProfile({ slug }: { slug: string }) {
@@ -216,10 +217,21 @@ export default function OrgProfile({ slug }: { slug: string }) {
             <h2 className="mb-3 text-lg font-bold">Recent clips</h2>
             <div className="ievx-scrollbar flex gap-3 overflow-x-auto pb-2">
               {data.clips.map((c) => (
-                <button key={c.id} className="group h-40 w-28 shrink-0 overflow-hidden rounded-xl" onClick={() => navigate('/reels')}>
-                  { }
-                  <img src={c.url} alt={c.caption ?? 'Clip'} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" loading="lazy" />
-                  {c.caption && <p className="sr-only">{c.caption}</p>}
+                <button
+                  key={c.id} type="button"
+                  className="group relative h-40 w-28 shrink-0 overflow-hidden rounded-xl bg-slate-800 text-white"
+                  onClick={() => navigate('/reels')}
+                  aria-label={`Open ${c.caption || 'event clip'} in Reels`}
+                >
+                  {isDirectPlayableVideo(c.url)
+                    ? (c.posterUrl
+                      ? <img src={c.posterUrl} alt="" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" loading="lazy" />
+                      : <div className="flex h-full items-center justify-center bg-gradient-to-b from-slate-700 to-slate-950"><Film className="size-9 opacity-80" aria-hidden /></div>)
+                    : <img src={c.posterUrl || c.url} alt="" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" loading="lazy" />}
+                  <span className="absolute inset-x-0 bottom-0 flex items-center gap-1 bg-black/60 px-2 py-2 text-[11px] font-semibold">
+                    <Film className="size-3.5 shrink-0" aria-hidden />
+                    <span className="truncate">{isDirectPlayableVideo(c.url) ? 'Video' : 'Preview'}</span>
+                  </span>
                 </button>
               ))}
             </div>
