@@ -74,7 +74,7 @@ export async function merchandiseReconciliation(orgId: string, requestedEventId:
  * cases where whitespace tries to conceal the formula prefix. */
 export function safeCsvCell(value: unknown): string {
   const raw = String(value ?? '').replace(/[\r\n\t]/g, ' ').replace(/\0/g, '')
-  const sanitized = /^[\s]*[=+@-]/.test(raw) ? `'${raw}` : raw
+  const sanitized = /^[\s\u200b-\u200f\u202a-\u202e\u2060\u2066-\u2069\ufeff]*[=+@-]/.test(raw) ? `'${raw}` : raw
   return `"${sanitized.replace(/"/g, '""')}"`
 }
 

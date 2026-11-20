@@ -3,7 +3,7 @@ import { merchandiseReportCsv, safeCsvCell } from './merchandise-reconciliation'
 
 describe('safe souvenir reconciliation export', () => {
   test('CSV formula injection is escaped including whitespace-prefix bypasses', () => {
-    for (const unsafe of ['=2+2', '+HYPERLINK(1)', '-SUM(1)', '@sum', '  =2+2', '\t=3']) {
+    for (const unsafe of ['=2+2', '+HYPERLINK(1)', '-SUM(1)', '@sum', '  =2+2', '\t=3', '\uFEFF=1+1', '\u200B=1+1', '\u202E=1+1', '\u2060+1']) {
       expect(safeCsvCell(unsafe)).toStartWith('"\'')
     }
     expect(safeCsvCell('Normal event')).toBe('"Normal event"')
