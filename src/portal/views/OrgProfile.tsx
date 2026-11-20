@@ -40,6 +40,7 @@ interface OrgProfilePayload {
   events: EventCardData[]
   followers: number
   following: boolean
+  myOrg?: boolean
   clips: { id: string; url: string; caption?: string | null }[]
 }
 
@@ -68,7 +69,7 @@ export default function OrgProfile({ slug }: { slug: string }) {
 
   const toggleFollow = async () => {
     if (!user) return navigate('/signin')
-    if (!data?.org.id || followingBusy) return
+    if (!data?.org.id || followingBusy || data.myOrg) return
     const wasFollowing = following
     setFollowingBusy(true)
     try {
@@ -140,7 +141,11 @@ export default function OrgProfile({ slug }: { slug: string }) {
               </p>
             </div>
           </div>
-          {following ? (
+          {data.myOrg ? (
+            <Button className="min-h-10 rounded-full" onClick={() => navigate('/organizer?tab=events')}>
+              Manage events
+            </Button>
+          ) : following ? (
             <Button className="rounded-full ievx-press" variant="outline" disabled={followingBusy} onClick={() => void toggleFollow()}>
               <Bookmark className="mr-1.5 h-4 w-4 fill-primary text-primary" aria-hidden />
               Following

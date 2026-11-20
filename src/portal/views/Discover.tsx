@@ -5,7 +5,7 @@ import {
   Search, SlidersHorizontal, Radio, MapPin, TrendingUp, X, ArrowRight, Wand2,
   Church, Music, Presentation, Wrench, Code2, Heart, Users, Sparkles as SparklesIcon,
   PartyPopper, Activity, Smartphone, QrCode, CalendarCheck, Building2,
-  CalendarDays, ChevronRight, Monitor, Globe2, Film, UsersRound, ArrowUpRight,
+  CalendarDays, ChevronRight, Monitor, Globe2, Film, UsersRound, ArrowUpRight, Pause, Play,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -39,6 +39,31 @@ interface HomePayload {
   sponsored: { campaignId: string; event: EventCardData; sponsored: boolean }[]
   stats: { upcomingEvents: number; organizers: number; liveNow: number }
 }
+
+/** Editorial stories, not fabricated events; the event tile always uses DB data. */
+const HERO_STORIES = [
+  {
+    kicker: 'Your world. Your next experience.',
+    line: 'The world is happening.',
+    accent: "You're invited.",
+    description: 'Find concerts, conferences and communities worth showing up for. Join online or in person, wherever you are.',
+    label: 'Explore real events',
+  },
+  {
+    kicker: 'More connection. Fewer borders.',
+    line: 'Your front row can be anywhere.',
+    accent: 'Explore online.',
+    description: 'Discover virtual and hybrid events you can join from your own city, home or wherever life takes you.',
+    label: 'Online experiences',
+  },
+  {
+    kicker: 'A stage for every community.',
+    line: 'Bring your people together.',
+    accent: 'Make it an event.',
+    description: 'Build an event page, introduce your lineup and invite your audience to be part of something memorable.',
+    label: 'Host an event',
+  },
+] as const
 
 const WHEN_CHIPS = [
   { value: '', label: 'Any date' },
@@ -207,6 +232,20 @@ export default function Discover({ route }: { route: Route }) {
   }, [])
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [plannerOpen, setPlannerOpen] = useState(false)
+  const [heroIndex, setHeroIndex] = useState(0)
+  const [heroPlaying, setHeroPlaying] = useState(true)
+  const [heroPausedByInteraction, setHeroPausedByInteraction] = useState(false)
+  useEffect(() => {
+    if (!heroPlaying || heroPausedByInteraction) return
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)')
+    if (reduced.matches) return
+    const interval = window.setInterval(() => {
+      if (!document.hidden) setHeroIndex((previous) => (previous + 1) % HERO_STORIES.length)
+    }, 6500)
+    return () => window.clearInterval(interval)
+  }, [heroPlaying, heroPausedByInteraction])
+  const heroStory = HERO_STORIES[heroIndex]
+
 
   useEffect(() => {
     setFilters((f) => ({ ...f, q: searchQuery }))
@@ -313,21 +352,24 @@ export default function Discover({ route }: { route: Route }) {
       {!browsing && (
         <section className="ievx-home-hero" aria-label="Discover events worldwide">
           <div className="mx-auto max-w-[1500px] px-3 pt-3 pb-3 sm:px-6 sm:pt-5 sm:pb-5 lg:px-8 lg:pt-7 lg:pb-6">
-            <div className="ievx-hero-panel">
+            <div className="ievx-hero-panel" data-hero-story={heroIndex}
+              onMouseEnter={() => setHeroPausedByInteraction(true)}
+              onMouseLeave={() => setHeroPausedByInteraction(false)}
+              onFocusCapture={() => setHeroPausedByInteraction(true)}
+              onBlurCapture={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setHeroPausedByInteraction(false) }}>
               <div className="ievx-hero-layout">
                 <div className="ievx-hero-intro">
-                  <span className="ievx-hero-kicker">
-                    <span className="size-2 rounded-full bg-[#7cdec4]" aria-hidden />
-                    Your world. Your next experience.
-                  </span>
-                  <h1 className="ievx-hero-title">
-                    The world is happening.
-                    <span className="block text-[#b2e7d5]">You&apos;re invited.</span>
-                  </h1>
-                  <p className="ievx-hero-copy">
-                    Find concerts, conferences and communities worth showing up for.
-                    Join online or in person, wherever you are.
-                  </p>
+                  <div key={heroIndex} className="ievx-hero-story-enter" aria-live="off">
+                    <span className="ievx-hero-kicker">
+                      <span className="size-2 rounded-full bg-[#7cdec4]" aria-hidden />
+                      {heroStory.kicker}
+                    </span>
+                    <h1 className="ievx-hero-title">
+                      {heroStory.line}
+                      <span className="block text-[#b2e7d5]">{heroStory.accent}</span>
+                    </h1>
+                    <p className="ievx-hero-copy">{heroStory.description}</p>
+                  </div>
                   <div className="ievx-hero-cta flex flex-wrap items-center gap-2.5">
                     <button type="button" className="ievx-hero-action"
                       onClick={() => {
@@ -345,7 +387,23 @@ export default function Discover({ route }: { route: Route }) {
                     </button>
                   </div>
 
-                  {primaryEvent && (
+                  <div className="ievx-hero-story-controls" role="group" aria-label="Homepage highlights">
+                    {HERO_STORIES.map((story, i) => (
+                      <button key={story.label} type="button" className={i === heroIndex ? 'is-active' : ''}
+                        aria-label={'Show highlight ' + (i + 1) + ': ' + story.label}
+                        aria-current={i === heroIndex ? 'true' : undefined}
+                        onClick={() => setHeroIndex(i)}>
+                        <span className="sr-only">{story.label}</span>
+                      </button>
+                    ))}
+                    <button type="button" className="ievx-hero-play-toggle"
+                      aria-label={heroPlaying ? 'Pause rotating highlights' : 'Resume rotating highlights'}
+                      aria-pressed={!heroPlaying} onClick={() => setHeroPlaying((playing) => !playing)}>
+                      {heroPlaying ? <Pause className="size-3.5" aria-hidden /> : <Play className="size-3.5" aria-hidden />}
+                    </button>
+                  </div>
+
+                  {heroIndex === 0 && primaryEvent ? (
                     <button type="button" className="ievx-hero-mobile-feature lg:hidden"
                       onClick={() => navigate('/event/' + primaryEvent.slug)}
                       aria-label={'See featured event ' + primaryEvent.title}>
@@ -361,7 +419,27 @@ export default function Discover({ route }: { route: Route }) {
                       </span>
                       <ChevronRight className="size-4 shrink-0 text-[#b2e7d5]" aria-hidden />
                     </button>
-                  )}
+                  ) : heroIndex === 1 ? (
+                    <button type="button" className="ievx-hero-mobile-feature lg:hidden"
+                      onClick={() => { setBrowseAll(true); applyFilter('mode', 'ONLINE') }}>
+                      <span className="grid size-11 shrink-0 place-items-center rounded-lg bg-white/10"><Monitor className="size-5" aria-hidden /></span>
+                      <span className="min-w-0 flex-1 text-left">
+                        <span className="block text-[10px] font-bold uppercase tracking-[0.12em] text-[#abddce]">Explore online</span>
+                        <span className="block truncate text-sm font-semibold">Events you can join remotely</span>
+                      </span>
+                      <ChevronRight className="size-4 shrink-0" aria-hidden />
+                    </button>
+                  ) : heroIndex === 2 ? (
+                    <button type="button" className="ievx-hero-mobile-feature lg:hidden"
+                      onClick={() => navigate(user ? '/create-org' : '/register')}>
+                      <span className="grid size-11 shrink-0 place-items-center rounded-lg bg-white/10"><CalendarCheck className="size-5" aria-hidden /></span>
+                      <span className="min-w-0 flex-1 text-left">
+                        <span className="block text-[10px] font-bold uppercase tracking-[0.12em] text-[#abddce]">For event creators</span>
+                        <span className="block truncate text-sm font-semibold">Create your own gathering</span>
+                      </span>
+                      <ChevronRight className="size-4 shrink-0" aria-hidden />
+                    </button>
+                  ) : null}
 
                   <div className="ievx-hero-quick" aria-label="Quick ways to explore">
                     <button type="button" onClick={() => applyFilter('when', 'TODAY')}>Today</button>
@@ -377,24 +455,36 @@ export default function Discover({ route }: { route: Route }) {
                       <CalendarCheck className="size-3.5" aria-hidden /> Plan a weekend
                     </button>
                     <button type="button" className="ievx-mobile-quick" onClick={() => document.getElementById('ai-search')?.scrollIntoView({ behavior: 'smooth' })}>
-                      <Wand2 className="size-3.5" aria-hidden /> Ask AI
+                      <Wand2 className="size-3.5" aria-hidden /> Find events
                     </button>
                   </div>
                 </div>
 
-                {primaryEvent ? (
-                  <div className="ievx-hero-visual hidden min-w-0 lg:block">
+                {heroIndex === 0 && primaryEvent ? (
+                  <div key="event" className="ievx-hero-visual ievx-hero-visual-enter hidden min-w-0 lg:block">
                     <HeroSpotlight event={primaryEvent} />
                   </div>
                 ) : (
-                  <div className="ievx-hero-visual ievx-hero-no-feature hidden min-w-0 lg:flex">
-                    <div className="max-w-sm space-y-3 text-center">
-                      <Globe2 className="mx-auto size-11 text-[#b2e7d5]" aria-hidden />
-                      <p className="text-2xl font-extrabold leading-tight">The next connection starts with an event.</p>
-                      <p className="text-sm text-[#c9dedc]">Be among the organizers bringing real communities together.</p>
+                  <div key={heroIndex} className="ievx-hero-visual ievx-hero-visual-enter ievx-hero-no-feature hidden min-w-0 lg:flex">
+                    <div className="relative z-10 max-w-sm space-y-4 text-center">
+                      <span className="mx-auto grid size-20 place-items-center rounded-3xl border border-white/25 bg-white/10 text-[#c5f9e7]">
+                        {heroIndex === 1 ? <Globe2 className="size-11" aria-hidden /> : <UsersRound className="size-11" aria-hidden />}
+                      </span>
+                      <p className="text-2xl font-extrabold leading-tight">{heroIndex === 1 ? 'Find experiences beyond borders.' : 'Every great community starts somewhere.'}</p>
+                      <p className="text-sm leading-relaxed text-[#c9dedc]">{heroIndex === 1 ? 'Explore the actual online and hybrid events in the catalogue.' : 'Your next audience can find you here.'}</p>
+                      <button type="button" className="mx-auto inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/30 bg-white/15 px-5 py-3 text-sm font-bold text-white hover:bg-white/25"
+                        onClick={() => heroIndex === 1 ? (setBrowseAll(true), applyFilter('mode', 'ONLINE')) : navigate(user ? '/create-org' : '/register')}>
+                        {heroIndex === 1 ? 'Find online events' : 'Get started'} <ArrowUpRight className="size-4" aria-hidden />
+                      </button>
                     </div>
                   </div>
                 )}
+              </div>
+            </div>
+            <div className="ievx-hero-ticker" aria-hidden="true">
+              <div className="ievx-hero-ticker-track">
+                <span>CONCERTS ✦ CONFERENCES ✦ FESTIVALS ✦ WORSHIP ✦ WORKSHOPS ✦ COMMUNITY ✦ </span>
+                <span>CONCERTS ✦ CONFERENCES ✦ FESTIVALS ✦ WORSHIP ✦ WORKSHOPS ✦ COMMUNITY ✦ </span>
               </div>
             </div>
             {home && (

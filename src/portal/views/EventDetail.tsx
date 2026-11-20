@@ -80,6 +80,7 @@ interface EventDetailPayload {
   stats: { followers: number; going: number; comments: number; ratingAvg: number; ratingCount: number }
   mine: { saved: boolean; going: boolean; following: boolean; rsvpStatus: string | null; rsvpGuests: number | null }
   canManage: boolean
+  isEventHost?: boolean
 }
 
 interface SeriesInfo {
@@ -236,7 +237,7 @@ export default function EventDetail({ slug }: { slug: string }) {
 
   const toggleFollow = async () => {
     if (!user) return navigate('/signin')
-    if (!event || followingBusy) return
+    if (!event || followingBusy || data?.canManage || data?.isEventHost) return
     const wasFollowing = mine.following
     setFollowingBusy(true)
     try {
@@ -438,7 +439,7 @@ export default function EventDetail({ slug }: { slug: string }) {
   const checkoutDisabled = selectionQuote.count === 0 || selectionQuote.invalid || selectionQuote.unsupported || placing
   const checkoutAvailable = supportedSaleable.length > 0
   const requiresInvitation = event.visibility === 'INVITE_ONLY' && !data.canManage && mine.rsvpStatus !== 'APPROVED'
-  const canBook = ['PUBLISHED', 'LIVE'].includes(event.status) && checkoutAvailable && !requiresInvitation
+  const canBook = !data.canManage && !data.isEventHost && ['PUBLISHED', 'LIVE'].includes(event.status) && checkoutAvailable && !requiresInvitation
 
   return (
     <div className="pb-36 md:pb-12">
@@ -818,7 +819,17 @@ export default function EventDetail({ slug }: { slug: string }) {
                     <h2 className="flex items-center gap-2 text-lg font-extrabold tracking-tight"><Ticket className="size-5 text-primary" aria-hidden /> Tickets & entry</h2>
                     <Badge variant="secondary" className="text-[10px]">{event.mode === 'VIRTUAL' ? 'Online event' : event.mode === 'HYBRID' ? 'In person & online' : 'In person'}</Badge>
                   </div>
-                  {['CANCELLED', 'ENDED', 'POSTPONED'].includes(event.status) ? (
+                  {(data.canManage || data.isEventHost) ? (
+                    <div className="space-y-3">
+                      <p className="rounded-xl border border-primary/20 bg-primary/5 p-3 text-sm leading-relaxed text-foreground">
+                        <span className="font-semibold">Organizer view.</span> You can review your public ticket types here.
+                        To manage registration, invitations, check-in or ticket availability, open your organizer workspace.
+                      </p>
+                      <Button className="min-h-11 w-full rounded-xl font-bold" onClick={() => navigate('/organizer?tab=events')}>
+                        <CalendarDays className="mr-2 size-4" aria-hidden /> Manage this event
+                      </Button>
+                    </div>
+                  ) : ['CANCELLED', 'ENDED', 'POSTPONED'].includes(event.status) ? (
                     <p className="rounded-xl border border-destructive/25 bg-destructive/5 p-3 text-sm text-destructive">
                       {event.status === 'CANCELLED' ? 'This event has been cancelled. Check the organizer’s refund policy and your ticket status.' : event.status === 'POSTPONED' ? 'This event has been postponed. Ticket checkout is paused until new arrangements are confirmed.' : 'This event has ended. Tickets are no longer available.'}
                     </p>
@@ -954,7 +965,7 @@ export default function EventDetail({ slug }: { slug: string }) {
                       )}
                     </>
                   )}
-                  {event.status !== 'CANCELLED' && (
+                  {!data.canManage && !data.isEventHost && event.status !== 'CANCELLED' && (
                     <button type="button" className="w-full rounded-xl border border-border bg-background px-4 py-3 text-sm font-semibold text-foreground transition-colors hover:bg-muted disabled:opacity-60" disabled={followingBusy} aria-pressed={mine.following} onClick={() => void toggleFollow()}>
                       {followingBusy ? 'Updating…' : mine.following ? 'Following · tap to unfollow' : 'Follow ' + event.org.name}
                     </button>
