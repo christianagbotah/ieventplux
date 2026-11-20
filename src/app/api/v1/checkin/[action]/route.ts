@@ -126,6 +126,17 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
       return jsonOk(await checkinStats(eventId))
     }
 
+    if (action === 'monitor') {
+      const eventId = url.searchParams.get('eventId') ?? ''
+      const access = await eventOrgAccess(user.id, eventId, 'checkin:scan')
+      if (!access.event) throw errors.notFound('Event not found.')
+      if (!access.allowed) throw errors.forbidden('Admission monitoring requires event check-in permissions.')
+      const { checkinOperations } = await import('@/server/services/checkin-monitor')
+      return jsonOk(await checkinOperations(eventId), {
+        headers: { 'Cache-Control': 'private, no-store' },
+      })
+    }
+
     if (action === 'roster') {
       // Encrypted/minimized offline roster: only id + code + name + status — no payment data.
       const eventId = url.searchParams.get('eventId') ?? ''

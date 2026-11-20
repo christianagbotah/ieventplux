@@ -69,6 +69,9 @@ jobs:
       - name: Attendee deep-link selection and event-scoped scanner regressions
         run: bun test src/portal/lib/attendee-event-context.test.ts
 
+      - name: Admission operations snapshot, outcome metrics and device sync policy
+        run: bun test src/portal/lib/admission-operations.test.ts
+
       - name: Organizer event control center filters, publication safety and public links
         run: bun test src/portal/lib/organizer-event-view.test.ts
 
