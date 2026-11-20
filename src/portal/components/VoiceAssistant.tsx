@@ -167,15 +167,19 @@ export function VoiceAssistant() {
     }
   }, [])
 
+  // Guests discover through the public catalogue and AI search panel; do not
+  // cover their mobile screen with an assistant that requires sign-in.
+  if (!user) return null
+
   if (!assistantOpen) {
     return (
       <button
         aria-label="Open AI voice concierge"
         onClick={() => setAssistantOpen(true)}
-        className={`fixed bottom-20 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/30 transition-[transform,opacity] duration-200 hover:scale-105 ievx-press md:bottom-6 md:opacity-100 ${inputFocused ? 'pointer-events-none scale-75 opacity-0' : 'opacity-100'}`}
+        className={`fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] right-3 z-40 flex h-11 w-11 sm:h-14 sm:w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/30 transition-[transform,opacity] duration-200 hover:scale-105 ievx-press md:bottom-6 md:opacity-100 ${inputFocused ? 'pointer-events-none scale-75 opacity-0' : 'opacity-100'}`}
         tabIndex={inputFocused ? -1 : 0}
       >
-        <Sparkles className="h-6 w-6" aria-hidden />
+        <Sparkles className="size-5 sm:size-6" aria-hidden />
         <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4" aria-hidden>
           <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-75" />
           <span className="relative inline-flex h-4 w-4 rounded-full bg-accent border-2 border-card" />
