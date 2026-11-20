@@ -38,6 +38,7 @@ import { TicketSalesEditor, TicketSalesFields, salesPayload, type TicketSalesRow
 import { VenueLocationFields } from '../components/VenueLocationFields'
 import { COUNTRY_NAMES } from '../lib/venue-locations'
 import { filterOrganizerEvents, organizerEventCounts, ORGANIZER_EVENT_FILTERS, eventStatusConfirmation, eventTransitionAllowed, isEventShareable, type OrganizerEventFilter } from '../lib/organizer-event-view'
+import { attendeeEventRoute, selectAttendeeEvent, validScopedEventId } from '../lib/attendee-event-context'
 
 interface OrgEvent {
   id: string
@@ -219,7 +220,7 @@ export default function OrganizerWorkspace({ route }: { route: Route }) {
           {section === 'growth' && (canViewGrowth ? <div className="space-y-5"><GrowthCommandCenter orgId={activeOrg.orgId} canCreate={canManageEvents} />{canViewReports && <AiAdvisorCard orgId={activeOrg.orgId} />}</div> : <RoleRestricted />)}
           {section === 'events' && <EventsManager orgId={activeOrg.orgId} role={activeOrg.role} autoNew={route.query.get('new') === '1'} />}
           {section === 'orders' && <OrdersView orgId={activeOrg.orgId} />}
-          {section === 'attendees' && <AttendeesView orgId={activeOrg.orgId} />}
+          {section === 'attendees' && <AttendeesView orgId={activeOrg.orgId} initialEventId={route.query.get('eventId') ?? ''} />}
           {section === 'studio' && <StudioView orgId={activeOrg.orgId} />}
           {section === 'live' && <LiveRoomView orgId={activeOrg.orgId} />}
           {section === 'promotions' && <PromotionsView orgId={activeOrg.orgId} />}
@@ -699,7 +700,7 @@ function EventsManager({ orgId, role, autoNew }: { orgId: string; role: string; 
                   {canPublish && <Button type="button" size="sm" variant="outline" className="min-h-10 grow rounded-lg sm:grow-0" onClick={() => { setEditing(e); setCreating(false) }}>
                     <Pencil className="size-4" aria-hidden />Edit
                   </Button>}
-                  <Button type="button" size="sm" variant="outline" className="min-h-10 grow rounded-lg sm:grow-0" onClick={() => navigate('/organizer?tab=attendees')}>
+                  <Button type="button" size="sm" variant="outline" className="min-h-10 grow rounded-lg sm:grow-0" onClick={() => navigate(attendeeEventRoute(e.id))}>
                     <Users className="size-4" aria-hidden />Attendees
                   </Button>
                   {isEventShareable(e) && <Button type="button" size="sm" variant="outline" className="min-h-10 grow rounded-lg sm:grow-0" onClick={() => void shareEvent(e)}>
@@ -1720,11 +1721,14 @@ function OrdersView({ orgId }: { orgId: string }) {
 
 // ── Attendees + check-in ────────────────────────────────────────────────────
 
-function AttendeesView({ orgId }: { orgId: string }) {
+function AttendeesView({ orgId, initialEventId }: { orgId: string; initialEventId: string }) {
   const { toast } = useToast()
   const [events, setEvents] = useState<OrgEvent[]>([])
   const [eventId, setEventId] = useState('')
+  const [eventsLoading, setEventsLoading] = useState(true)
+  const [eventsError, setEventsError] = useState('')
   const [attendees, setAttendees] = useState<unknown[] | null>(null)
+  const [attendeesError, setAttendeesError] = useState('')
   const [stats, setStats] = useState<{ ticketsIssued: number; admitted: number; remaining: number; anomalies: number } | null>(null)
   const [scanMode, setScanMode] = useState(false)
   const [scanValue, setScanValue] = useState('')
@@ -1736,37 +1740,110 @@ function AttendeesView({ orgId }: { orgId: string }) {
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const scanIdRef = useRef(0)
   const scanBusyRef = useRef(false)
-  const recentScanRef = useRef<{ payload: string; at: number } | null>(null)
+  const selectedEventRef = useRef('')
+  const recentScanRef = useRef<{ payload: string; eventId: string; at: number } | null>(null)
 
+  // An event-specific link can target an event older than the first 50.
+  // The separate lookup is intentionally tenant-scoped and membership-checked
+  // by the events API. No event id is trusted from the URL alone.
   useEffect(() => {
-    void api.get<{ items: OrgEvent[] }>(`/events?mine=1&orgId=${orgId}&status=ALL&pageSize=50`).then((d) => {
-      setEvents(d.items)
-      if (d.items[0]) setEventId(d.items[0].id)
-    })
-  }, [orgId])
+    const controller = new AbortController()
+    // Switching organizations must clear any previously selected event before
+    // allowing a new scan; responses from the former org are aborted.
+    selectedEventRef.current = ''
+    setEventId('')
+    setScanMode(false)
+    setEvents([])
+    const loadOptions = async () => {
+      setEventsLoading(true)
+      setEventsError('')
+      try {
+        const url = '/events?mine=1&orgId=' + encodeURIComponent(orgId) + '&status=ALL&pageSize=50'
+        const data = await api.get<{ items: OrgEvent[] }>(url, { signal: controller.signal })
+        let scopedMatch: OrgEvent | null = null
+        if (initialEventId && validScopedEventId(initialEventId) && !data.items.some((item) => item.id === initialEventId)) {
+          const scoped = await api.get<{ items: OrgEvent[] }>(
+            url + '&eventId=' + encodeURIComponent(initialEventId) + '&pageSize=1',
+            { signal: controller.signal },
+          )
+          scopedMatch = scoped.items.find((item) => item.id === initialEventId) ?? null
+        }
+        if (controller.signal.aborted) return
+        const selected = selectAttendeeEvent(data.items, initialEventId, scopedMatch)
+        selectedEventRef.current = selected.selectedId
+        setEvents(selected.events)
+        setEventId(selected.selectedId)
+        if (initialEventId && selected.selectedId !== initialEventId) {
+          setEventsError('That event was not found in this organization. Select an available event to manage its attendees.')
+        }
+      } catch (err) {
+        if (controller.signal.aborted) return
+        setEventsError(err instanceof ApiClientError ? err.message : 'Could not load the events for this organization.')
+        setEvents([])
+        setEventId('')
+      } finally {
+        if (!controller.signal.aborted) setEventsLoading(false)
+      }
+    }
+    void loadOptions()
+    return () => controller.abort()
+  }, [orgId, initialEventId])
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (signal?: AbortSignal) => {
     if (!eventId) return
-    const [att, st] = await Promise.all([
-      api.get<{ items: unknown[] }>(`/events/${eventId}/attendees?pageSize=100`).catch(() => ({ items: [] })),
-      api.get<{ ticketsIssued: number; admitted: number; remaining: number; anomalies: number }>(`/checkin/stats?eventId=${eventId}`).catch(() => null),
-    ])
-    setAttendees(att.items)
-    setStats(st)
+    const targetEventId = eventId
+    setAttendeesError('')
+    try {
+      const [att, st] = await Promise.all([
+        api.get<{ items: unknown[] }>('/events/' + encodeURIComponent(targetEventId) + '/attendees?pageSize=100', { signal }),
+        api.get<{ ticketsIssued: number; admitted: number; remaining: number; anomalies: number }>(
+          '/checkin/stats?eventId=' + encodeURIComponent(targetEventId), { signal },
+        ),
+      ])
+      if (signal?.aborted || selectedEventRef.current !== targetEventId) return
+      setAttendees(att.items)
+      setStats(st)
+    } catch (err) {
+      if (signal?.aborted || selectedEventRef.current !== targetEventId) return
+      setAttendeesError(err instanceof ApiClientError ? err.message : 'Could not load attendees or admission statistics.')
+      setAttendees([])
+      setStats(null)
+    }
   }, [eventId])
 
   useEffect(() => {
-    void refresh()
-  }, [refresh])
+    selectedEventRef.current = eventId
+    setAttendees(eventId ? null : [])
+    setAttendeesError('')
+    setStats(null)
+    if (!eventId) return
+    const controller = new AbortController()
+    void refresh(controller.signal)
+    return () => controller.abort()
+  }, [eventId, refresh])
+
+  const changeEvent = (nextEventId: string) => {
+    if (scanBusyRef.current || !events.some((item) => item.id === nextEventId)) return
+    selectedEventRef.current = nextEventId
+    setScanMode(false)
+    setLastResult(null)
+    setScanValue('')
+    setLookupQuery('')
+    setLookupError('')
+    setEventId(nextEventId)
+    // Preserve this component and its in-tab offline queue. Dispatching a hash
+    // change here would remount the portal and discard unsubmitted scans.
+    window.history.replaceState(null, '', window.location.pathname + window.location.search + '#' + attendeeEventRoute(nextEventId))
+  }
 
   // Manual + camera scan submission (declared before the camera effect that calls it).
   const submitScan = async (payload: string) => {
     const code = payload.trim()
     if (!eventId || !code || scanBusyRef.current) return
-    if (recentScanRef.current?.payload === code && Date.now() - recentScanRef.current.at < 5000) return
+    if (recentScanRef.current?.payload === code && recentScanRef.current.eventId === eventId && Date.now() - recentScanRef.current.at < 5000) return
     scanBusyRef.current = true
     setScanBusy(true)
-    recentScanRef.current = { payload: code, at: Date.now() }
+    recentScanRef.current = { payload: code, eventId: targetEventId, at: Date.now() }
     const targetEventId = eventId
     const clientScanId = 'web-' + Date.now() + '-' + scanIdRef.current++
     try {
@@ -1775,21 +1852,27 @@ function AttendeesView({ orgId }: { orgId: string }) {
         payload: code,
         clientScanId,
       })
-      setLastResult(result)
-      setScanValue('')
-      await refresh()
+      if (selectedEventRef.current === targetEventId) {
+        setLastResult(result)
+        setScanValue('')
+        await refresh()
+      }
     } catch (err) {
       // HTTP 400/401/403/409/429 errors are authoritative server decisions,
       // NOT evidence that this device is offline. Never queue rejected codes.
       const networkFailure = scanMayQueueOffline(err, typeof navigator === 'undefined' ? true : navigator.onLine)
       if (networkFailure) {
         setOfflineQueue((queue) => [...queue, { eventId: targetEventId, payload: code, clientScanId, at: new Date().toISOString() }])
-        setLastResult({ result: 'QUEUED_OFFLINE', detail: 'Network unavailable. Scan queued in this browser tab; keep the tab open until you sync.' })
-        setScanValue('')
+        if (selectedEventRef.current === targetEventId) {
+          setLastResult({ result: 'QUEUED_OFFLINE', detail: 'Network unavailable. Scan queued in this browser tab; keep the tab open until you sync.' })
+          setScanValue('')
+        }
       } else {
         const detail = err instanceof ApiClientError ? err.message : 'Could not verify this ticket.'
-        setLastResult({ result: 'ERROR', detail })
-        toast({ description: detail, variant: 'destructive' })
+        if (selectedEventRef.current === targetEventId) {
+          setLastResult({ result: 'ERROR', detail })
+          toast({ description: detail, variant: 'destructive' })
+        }
       }
     } finally {
       scanBusyRef.current = false
@@ -1799,12 +1882,17 @@ function AttendeesView({ orgId }: { orgId: string }) {
 
   // Camera preview + BarcodeDetector scanning where supported.
   useEffect(() => {
-    if (!scanMode) return
+    if (!scanMode || !eventId) return
+    let disposed = false
     let stream: MediaStream | null = null
     let timer: ReturnType<typeof setInterval> | null = null
     void (async () => {
       try {
         stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+        if (disposed) {
+          stream.getTracks().forEach((track) => track.stop())
+          return
+        }
         if (videoRef.current) {
           videoRef.current.srcObject = stream
           await videoRef.current.play()
@@ -1813,10 +1901,10 @@ function AttendeesView({ orgId }: { orgId: string }) {
         if (w.BarcodeDetector && videoRef.current) {
           const detector = new w.BarcodeDetector({ formats: ['qr_code'] })
           timer = setInterval(async () => {
-            if (!videoRef.current) return
+            if (disposed || !videoRef.current) return
             try {
               const codes = await detector.detect(videoRef.current)
-              if (codes[0]?.rawValue) {
+              if (!disposed && selectedEventRef.current === eventId && codes[0]?.rawValue) {
                 setScanValue(codes[0].rawValue)
                 void submitScan(codes[0].rawValue)
               }
@@ -1832,10 +1920,11 @@ function AttendeesView({ orgId }: { orgId: string }) {
       }
     })()
     return () => {
+      disposed = true
       if (timer) clearInterval(timer)
       stream?.getTracks().forEach((t) => t.stop())
     }
-  }, [scanMode])
+  }, [scanMode, eventId])
 
   const activeOfflineQueue = offlineQueue.filter((scan) => scan.eventId === eventId)
   const syncOffline = async () => {
@@ -1894,8 +1983,10 @@ function AttendeesView({ orgId }: { orgId: string }) {
           {stats && <p className="text-sm text-muted-foreground">{stats.admitted}/{stats.ticketsIssued} admitted · {stats.anomalies} anomalies</p>}
         </div>
         <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-          <Select value={eventId} onValueChange={(value) => { setEventId(value); setLookupQuery(''); setLookupError('') }}>
-            <SelectTrigger className="h-11 w-full min-w-0 rounded-xl sm:w-56" aria-label="Select event"><SelectValue /></SelectTrigger>
+          <Select value={eventId} onValueChange={changeEvent} disabled={eventsLoading || scanBusy || events.length === 0}>
+            <SelectTrigger className="h-11 w-full min-w-0 rounded-xl sm:w-56" aria-label="Select event for attendee check-in">
+              <SelectValue placeholder={eventsLoading ? 'Loading events…' : 'Choose an event'} />
+            </SelectTrigger>
             <SelectContent>{events.map((e) => <SelectItem key={e.id} value={e.id}>{e.title}</SelectItem>)}</SelectContent>
           </Select>
           {eventId && (
@@ -1905,7 +1996,7 @@ function AttendeesView({ orgId }: { orgId: string }) {
               </a>
             </Button>
           )}
-          <Button variant={scanMode ? 'default' : 'outline'} className="h-11 rounded-full" onClick={() => setScanMode((s) => !s)}>
+          <Button variant={scanMode ? 'default' : 'outline'} disabled={!eventId || eventsLoading} className="h-11 rounded-full" onClick={() => setScanMode((s) => !s)}>
             <ScanLine className="mr-1.5 h-4 w-4" /> {scanMode ? 'Close scanner' : 'Scan tickets'}
           </Button>
           <Button variant="outline" size="icon" className="h-11 w-11 rounded-full" aria-label="Refresh attendee list" disabled={!eventId} onClick={() => void refresh()}>
@@ -1913,6 +2004,22 @@ function AttendeesView({ orgId }: { orgId: string }) {
           </Button>
         </div>
       </div>
+
+      {eventsError && (
+        <div role="alert" className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
+          <p>{eventsError}</p>
+          <Button type="button" size="sm" variant="outline" className="mt-2 min-h-9 rounded-lg" onClick={() => navigate('/organizer?tab=attendees', { replace: true })}>
+            Reload event selection
+          </Button>
+        </div>
+      )}
+      {eventId && (
+        <div className="flex min-w-0 flex-wrap items-center gap-2 rounded-xl border border-primary/20 bg-primary/5 px-3 py-2 text-xs">
+          <span className="font-semibold text-muted-foreground">Managing admissions for</span>
+          <strong className="min-w-0 break-words text-foreground">{events.find((item) => item.id === eventId)?.title ?? 'Selected event'}</strong>
+          {offlineQueue.length > 0 && <span className="ml-auto font-semibold text-amber-700 dark:text-amber-400">{offlineQueue.length} pending offline scan{offlineQueue.length === 1 ? '' : 's'} across events</span>}
+        </div>
+      )}
 
       {scanMode && (
         <Card className="rounded-2xl border-primary/30">
@@ -1966,12 +2073,19 @@ function AttendeesView({ orgId }: { orgId: string }) {
       {lookupError && (
         <div role="alert" className="rounded-xl border border-destructive/25 bg-destructive/5 p-3 text-sm">{lookupError}</div>
       )}
+      {attendeesError && (
+        <div role="alert" className="rounded-xl border border-destructive/25 bg-destructive/5 p-3 text-sm">
+          <p>{attendeesError}</p>
+          <Button type="button" variant="outline" size="sm" className="mt-2 min-h-9 rounded-lg" onClick={() => void refresh()}>Retry attendee list</Button>
+        </div>
+      )}
       {attendees === null ? (
         <div role="status" aria-label="Loading attendee list" className="grid gap-2">
           {Array.from({ length: 4 }).map((_, i) => <div key={i} className="ievx-skeleton h-16 rounded-xl" />)}
         </div>
       ) : attendees.length === 0 ? (
-        <EmptyState title="No matching attendees" description="Try a different ticket code or attendee name, or refresh the selected event." />
+        <EmptyState title={eventId ? 'No matching attendees' : 'Choose an event first'}
+          description={eventId ? 'Try a different ticket code or attendee name, or refresh the selected event.' : 'Select an event above to view its attendees and manage admission.'} />
       ) : (
         <>
           <div className="mb-2 text-xs text-muted-foreground" aria-live="polite">{attendees.length} attendees shown</div>

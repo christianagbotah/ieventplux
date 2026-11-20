@@ -28,6 +28,12 @@ export async function GET(req: NextRequest) {
     if (mine) {
       const user = await requireUser()
       const requestedOrgId = url.searchParams.get('orgId')
+      const requestedEventId = url.searchParams.get('eventId')
+      // Targeted lookups for organizer attendee deep links remain behind the
+      // accepted-membership org guard; never expose unlisted events publicly.
+      if (requestedEventId && (requestedEventId.length > 128 || !/^[a-zA-Z0-9_-]+$/.test(requestedEventId))) {
+        throw errors.badRequest('Invalid organizer event identifier.')
+      }
       // Critical tenant boundary: the caller controls orgId and "mine" is not
       // inherently safe. Filter through ACCEPTED session-user memberships
       // before reading any draft, unlisted or invite-only event.
@@ -43,6 +49,7 @@ export async function GET(req: NextRequest) {
       const where = {
         orgId: requestedOrgId ?? { in: authorizedIds },
         deletedAt: null,
+        ...(requestedEventId ? { id: requestedEventId } : {}),
         ...(url.searchParams.get('status') && url.searchParams.get('status') !== 'ALL'
           ? { status: url.searchParams.get('status')! }
           : {}),

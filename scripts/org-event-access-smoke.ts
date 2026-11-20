@@ -63,6 +63,20 @@ async function main() {
   const own = await list(pastor, 'mine=1&orgId=' + chapel.id + '&pageSize=50')
   assert(own.status === 200 && own.data.total > 0, 'organizer accesses own organization')
   assert(own.data.items.every((item: any) => item.org.id === chapel.id), 'requested org listing is tenant scoped')
+  // Targeted attendee deep links must never bypass the accepted-membership
+  // organization boundary, even for an existing unlisted or older event.
+  const firstOwnId = own.data.items[0].id as string
+  const targeted = await list(pastor, 'mine=1&orgId=' + chapel.id + '&eventId=' + firstOwnId)
+  assert(targeted.status === 200 && targeted.data.total === 1 && targeted.data.items[0]?.id === firstOwnId,
+    'organizer may select a specific event through a tenant-scoped deep link')
+  const otherOrgEvent = await db.event.findFirstOrThrow({ where: { orgId: ministries.id }, select: { id: true } })
+  const crossOrgEvent = await list(pastor, 'mine=1&orgId=' + chapel.id + '&eventId=' + otherOrgEvent.id)
+  assert(crossOrgEvent.status === 200 && crossOrgEvent.data.total === 0 && crossOrgEvent.data.items.length === 0,
+    'organizer cannot retrieve another organization event by guessed id')
+  assert((await list(attendee, 'mine=1&orgId=' + chapel.id + '&eventId=' + firstOwnId)).status === 403,
+    'attendee cannot use targeted event lookup without an accepted membership')
+  assert((await list(pastor, 'mine=1&orgId=' + chapel.id + '&eventId=..%2Fsecret')).status === 400,
+    'malformed targeted event IDs are rejected')
   const allOwn = await list(pastor, 'mine=1&pageSize=50')
   assert(allOwn.status === 200 && allOwn.data.items.every((item: any) => item.org.id === chapel.id), 'unfiltered mine listing excludes unrelated organizations')
   assert((await list(pastor, 'mine=1&orgId=' + ministries.id)).status === 403, 'organizer cannot enumerate another organization')
@@ -137,6 +151,9 @@ async function main() {
     },
   })
   try {
+    const scopedDraft = await list(pastor, 'mine=1&orgId=' + chapel.id + '&eventId=' + draft.id)
+    assert(scopedDraft.status === 200 && scopedDraft.data.items[0]?.id === draft.id,
+      'accepted organizer can select its own unpublished event for private attendee management')
     const guestDraft = await fetch(base + '/events/' + draft.id)
     assert(guestDraft.status === 404, 'anonymous cannot read unpublished event details')
     const organizerDraft = await fetch(base + '/events/' + draft.id, { headers: { Cookie: pastor } })
