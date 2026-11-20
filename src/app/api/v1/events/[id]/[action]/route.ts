@@ -144,7 +144,7 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
     if (action === 'media') {
       const event = await db.event.findUnique({
         where: { id }, select: {
-          deletedAt: true, visibility: true, status: true,
+          orgId: true, deletedAt: true, visibility: true, status: true,
           org: { select: { status: true, deletedAt: true } },
         },
       })
@@ -167,6 +167,7 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
       // Anonymous users must never see moderation-pending or removed assets.
       const items = await db.mediaAsset.findMany({
         where: {
+          orgId: event.orgId,
           OR: [{ eventId: id }, { linksToEventId: id }],
           ...(organizerCanPreview ? {} : { status: 'READY' }),
         },
