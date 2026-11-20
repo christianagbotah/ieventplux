@@ -1,10 +1,12 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { MessageCircle, ArrowRight } from 'lucide-react'
+import { MessageCircle, ArrowRight, Flag, Play, Pause, Share2, Loader2 } from 'lucide-react'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { api } from '../api'
+import { api, ApiClientError } from '../api'
+import { isDirectPlayableVideo } from '../lib/reel-media'
 import { navigate } from '../router'
 import { usePortal } from '../store'
 import { money, relative } from '../format'
@@ -21,18 +23,25 @@ interface Clip {
   views: number
 }
 
-/**
- * Short-video event feed. Development media is synthetic (poster-based animated
- * clips — see docs/PROVIDER_CAPABILITIES.md); the feed, reactions and
- * previous-event → next-occurrence linking are real.
- */
+/** Public event-clip feed. Actual hosted files play when available; synthetic
+ * artwork is explicitly labelled as a preview, never a pretend video. */
 export default function Reels() {
   const { user } = usePortal()
   const [clips, setClips] = useState<Clip[] | null>(null)
   const [active, setActive] = useState(0)
   const [reacted, setReacted] = useState<Record<string, boolean>>({})
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [playingId, setPlayingId] = useState<string | null>(null)
+  const [videoFailed, setVideoFailed] = useState<Record<string, boolean>>({})
+  const [actionError, setActionError] = useState('')
+  const [reportClipId, setReportClipId] = useState<string | null>(null)
+  const [reportReason, setReportReason] = useState('SPAM')
+  const [reportDetails, setReportDetails] = useState('')
+  const [reportSubmitting, setReportSubmitting] = useState(false)
+  const [reported, setReported] = useState<Record<string, boolean>>({})
   const containerRef = useRef<HTMLDivElement>(null)
+  const videoRefs = useRef<Record<string, HTMLVideoElement | null>>({})
+  const pendingReactions = useRef(new Set<string>())
 
   useEffect(() => {
     void api
@@ -41,11 +50,86 @@ export default function Reels() {
       .catch(() => setClips([]))
   }, [])
 
+  // Server state, not a browser-only "liked" animation: refreshes and devices
+  // must agree on the current user's real reaction.
+  useEffect(() => {
+    if (!user?.id || !clips?.length) {
+      setReacted({})
+      return
+    }
+    let cancelled = false
+    const ids = clips.map((clip) => clip.id).slice(0, 30).join(',')
+    void api.get<{ reactions: { targetId: string; kind: string }[] }>('/social/reactions?ids=' + encodeURIComponent(ids))
+      .then(({ reactions }) => {
+        if (!cancelled) setReacted(Object.fromEntries(reactions.map((r) => [r.targetId, true])))
+      })
+      .catch(() => { if (!cancelled) setActionError('Unable to load your saved reactions. Try refreshing.') })
+    return () => { cancelled = true }
+  }, [user?.id, clips])
+
   const react = async (clip: Clip) => {
     if (!user) return navigate('/signin')
-    if (reacted[clip.id]) return
-    setReacted((r) => ({ ...r, [clip.id]: true }))
-    await api.post('/social/reaction', { targetType: 'MEDIA', targetId: clip.id, kind: 'HEART' }).catch(() => {})
+    if (pendingReactions.current.has(clip.id)) return
+    pendingReactions.current.add(clip.id)
+    const previous = Boolean(reacted[clip.id])
+    setReacted((r) => ({ ...r, [clip.id]: !previous }))
+    setActionError('')
+    try {
+      const response = await api.post<{ reacted: boolean }>('/social/reaction', {
+        targetType: 'MEDIA', targetId: clip.id, kind: 'HEART',
+      })
+      setReacted((r) => ({ ...r, [clip.id]: response.reacted }))
+    } catch (error) {
+      setReacted((r) => ({ ...r, [clip.id]: previous }))
+      setActionError(error instanceof ApiClientError ? error.message : 'Could not save your reaction. Try again.')
+    } finally {
+      pendingReactions.current.delete(clip.id)
+    }
+  }
+
+  const togglePlayback = async (clip: Clip) => {
+    const video = videoRefs.current[clip.id]
+    if (!video) return
+    if (!video.paused) {
+      video.pause()
+      setPlayingId(null)
+      return
+    }
+    Object.values(videoRefs.current).forEach((other) => { if (other && other !== video) other.pause() })
+    setActionError('')
+    try {
+      await video.play()
+      setPlayingId(clip.id)
+    } catch {
+      setActionError('This video could not play on your device. Open the event instead.')
+    }
+  }
+
+  // Off-screen media must not continue consuming bandwidth or playing audio.
+  useEffect(() => {
+    clips?.forEach((clip, index) => {
+      if (index !== active) videoRefs.current[clip.id]?.pause()
+    })
+    setPlayingId((current) => clips?.[active]?.id === current ? current : null)
+  }, [active, clips])
+
+  const submitReport = async () => {
+    if (!reportClipId || reportSubmitting) return
+    if (!user) { setReportClipId(null); navigate('/signin'); return }
+    setReportSubmitting(true)
+    setActionError('')
+    try {
+      await api.post('/social/report', {
+        targetType: 'MEDIA', targetId: reportClipId, reason: reportReason, details: reportDetails,
+      })
+      setReported((before) => ({ ...before, [reportClipId]: true }))
+      setReportClipId(null)
+      setReportDetails('')
+    } catch (error) {
+      setActionError(error instanceof ApiClientError ? error.message : 'Could not send the report. Try again.')
+    } finally {
+      setReportSubmitting(false)
+    }
   }
 
   const share = async (clip: Clip) => {
@@ -79,27 +163,46 @@ export default function Reels() {
     )
   }
 
-  const clip = clips[Math.min(active, clips.length - 1)]
-
   return (
-    <div ref={containerRef} className="ievx-reel-snap ievx-scrollbar mx-auto h-[calc(100vh-4rem-4rem)] max-w-md snap-y overflow-y-auto md:h-[calc(100vh-4rem)]" role="feed" aria-label="Event clips feed">
+    <div ref={containerRef} className="ievx-reel-snap ievx-scrollbar mx-auto h-[calc(100vh-4rem-4rem)] max-w-md snap-y overflow-y-auto md:h-[calc(100vh-4rem)]" role="feed" aria-label="Event clips feed"
+      onScroll={(event) => {
+        const viewport = event.currentTarget
+        const height = (viewport.firstElementChild as HTMLElement | null)?.offsetHeight ?? viewport.clientHeight
+        if (height > 0) setActive(Math.min(clips.length - 1, Math.max(0, Math.round(viewport.scrollTop / (height + 12)))))
+      }}>
       {clips.map((c, i) => (
         <article key={c.id} className="relative mb-3 h-[calc(100vh-9rem)] snap-start overflow-hidden rounded-3xl bg-black md:h-[calc(100vh-6.5rem)]">
-          {/* Synthetic animated clip: ken-burns poster + overlay */}
           <div className="absolute inset-0 overflow-hidden">
-            <img src={c.posterUrl} alt="" className="iefx-kenburns h-full w-full object-cover opacity-90" />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-transparent to-black/30" />
+            {isDirectPlayableVideo(c.url) && !videoFailed[c.id] ? (
+              <video
+                ref={(element) => { videoRefs.current[c.id] = element }}
+                src={c.url} poster={c.posterUrl || undefined} playsInline
+                preload="none" className="h-full w-full object-contain"
+                aria-label={`Clip from ${c.event.title}`}
+                onEnded={() => setPlayingId(null)}
+                onError={() => { setVideoFailed((previous) => ({ ...previous, [c.id]: true })); setPlayingId(null) }}
+              />
+            ) : c.posterUrl && !isDirectPlayableVideo(c.posterUrl) ? (
+              <img src={c.posterUrl} alt="" loading="lazy" className="iefx-kenburns h-full w-full object-cover opacity-90" />
+            ) : <div className="flex h-full items-center justify-center bg-gradient-to-b from-slate-800 to-black p-8 text-center text-sm text-white/70">Video preview unavailable. Open the event for details.</div>}
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/85 via-transparent to-black/30" />
           </div>
 
-          {/* Clips without a verified playable stream show an event preview.
-              Never present a like/reaction action as a working Play button. */}
-          <button
-            className="absolute right-3 top-1/2 flex -translate-y-1/2 items-center gap-1 rounded-full bg-white/15 px-3 py-2 text-xs font-semibold text-white backdrop-blur transition hover:bg-white/25"
-            aria-label="Open event from preview"
-            onClick={() => navigate('/event/' + c.event.slug)}
-          >
-            Open event <ArrowRight className="size-4" aria-hidden />
-          </button>
+          <div className="absolute right-3 top-3 z-10 flex flex-col gap-2">
+            {isDirectPlayableVideo(c.url) && !videoFailed[c.id] && (
+              <button type="button" className="inline-flex items-center justify-center gap-2 rounded-full bg-black/60 px-3 py-2 text-xs font-semibold text-white backdrop-blur hover:bg-black/80"
+                onClick={() => void togglePlayback(c)} aria-label={playingId === c.id ? 'Pause clip' : 'Play clip'}>
+                {playingId === c.id ? <Pause className="size-4" aria-hidden /> : <Play className="size-4" aria-hidden />}
+                {playingId === c.id ? 'Pause' : 'Play'}
+              </button>
+            )}
+            <button type="button"
+              className="inline-flex items-center justify-center gap-1 rounded-full bg-black/60 px-3 py-2 text-xs font-semibold text-white backdrop-blur hover:bg-black/80"
+              aria-label="Open associated event"
+              onClick={() => navigate('/event/' + c.event.slug)}>
+              Event <ArrowRight className="size-4" aria-hidden />
+            </button>
+          </div>
 
           {/* Bottom info */}
           <div className="absolute inset-x-0 bottom-0 space-y-3 p-4 pb-5">
@@ -109,7 +212,7 @@ export default function Reels() {
                 <p className="truncate text-sm font-bold text-white" style={{ textShadow: '0 1px 4px rgba(0, 0, 0, 0.55)' }}>{c.org.name}</p>
                 <p className="text-[11px] text-white/70">Event preview · {relative(c.event.startsAt)}</p>
               </div>
-              <Badge className="ml-auto border-white/25 bg-white/10 text-white backdrop-blur">Preview</Badge>
+              <Badge className="ml-auto border-white/25 bg-white/10 text-white backdrop-blur">{isDirectPlayableVideo(c.url) && !videoFailed[c.id] ? 'Video' : 'Preview'}</Badge>
             </div>
             {c.caption && <p className="text-sm font-medium text-white/95">{c.caption}</p>}
             <p className="text-xs text-white/80">From “{c.event.title}”</p>
@@ -136,48 +239,14 @@ export default function Reels() {
               <button className="flex items-center gap-1.5 text-white/90 hover:text-white" onClick={() => navigate(`/event/${c.event.slug}`)} aria-label="Open event">
                 <MessageCircle className="h-6 w-6" aria-hidden /> Event
               </button>
-              <label
-                className="efx-copy-success-checkmark"
-                style={{ margin: 0 }}
-              >
-                <input
-                  type="checkbox"
-                  className="efx-copy-success-checkmark__input"
-                  checked={copiedId === c.id}
-                  onChange={() => {}}
-                  onClick={(e) => {
-                    e.preventDefault()
-                    void share(c)
-                  }}
-                  aria-label="Share clip"
-                />
-                <span
-                  className="efx-copy-success-checkmark__button"
-                  style={
-                    copiedId === c.id
-                      ? { fontSize: '0.8rem', padding: '0.5rem 0.9rem', borderColor: '#10b981', background: 'rgba(16, 185, 139, 0.3)', color: '#ffffff' }
-                      : { fontSize: '0.8rem', padding: '0.5rem 0.9rem', borderColor: 'rgba(255, 255, 255, 0.35)', background: 'rgba(255, 255, 255, 0.12)', color: '#ffffff', backdropFilter: 'blur(6px)' }
-                  }
-                >
-                  <span
-                    className="efx-copy-success-checkmark__badge"
-                    aria-hidden
-                    style={
-                      copiedId === c.id
-                        ? { background: '#10b981', borderColor: '#059669', color: '#ffffff' }
-                        : { background: 'rgba(255, 255, 255, 0.16)', borderColor: 'rgba(255, 255, 255, 0.35)', color: '#ffffff' }
-                    }
-                  >
-                    <svg className="efx-copy-success-checkmark__icon" viewBox="0 0 24 24" aria-hidden>
-                      <path className="efx-copy-success-checkmark__path" d="M5 12.5l4.5 4.5L19 7.5" />
-                    </svg>
-                  </span>
-                  <span className="efx-copy-success-checkmark__text">
-                    <span className="efx-copy-success-checkmark__text-copy">Share</span>
-                    <span className="efx-copy-success-checkmark__text-done" style={{ color: '#ffffff' }}>Copied!</span>
-                  </span>
-                </span>
-              </label>
+              <button type="button" className="inline-flex items-center gap-1.5 text-sm font-semibold text-white/90 hover:text-white"
+                onClick={() => void share(c)} aria-label="Share event clip">
+                <Share2 className="size-5" aria-hidden /> {copiedId === c.id ? 'Copied!' : 'Share'}
+              </button>
+              <button type="button" className="inline-flex items-center gap-1.5 text-sm text-white/80 hover:text-white"
+                onClick={() => { setReportClipId(c.id); setActionError('') }} aria-label="Report this clip" disabled={reported[c.id]}>
+                <Flag className="size-4" aria-hidden /> {reported[c.id] ? 'Reported' : 'Report'}
+              </button>
             </div>
             {/* Previous-event media → next occurrence */}
             {c.nextEvent && (
@@ -201,6 +270,11 @@ export default function Reels() {
         </article>
       ))}
 
+      {actionError && <div role="alert" className="mx-3 mb-3 rounded-xl border border-red-400/60 bg-red-950/90 p-3 text-sm text-white">
+        {actionError}
+        <button type="button" className="ml-3 underline" onClick={() => setActionError('')}>Dismiss</button>
+      </div>}
+
       {/* Nav dots */}
       <div className="sticky bottom-3 flex justify-center gap-1.5 pb-3">
         {clips.map((_, i) => (
@@ -216,8 +290,32 @@ export default function Reels() {
         ))}
       </div>
       <p className="pb-3 text-center text-[10px] text-muted-foreground">
-        Event previews currently use sample artwork, not verified playable videos. Open an event for its actual available ticket and live-access options.
+        Only actual MP4/WebM uploads have a Play control. Poster-based previews are not videos. Clips play only when you choose.
       </p>
+      <Dialog open={reportClipId !== null} onOpenChange={(open) => { if (!open && !reportSubmitting) setReportClipId(null) }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Report a clip</DialogTitle>
+            <DialogDescription>Reports go to the moderation team. Do not include personal details unless needed to explain a safety concern.</DialogDescription>
+          </DialogHeader>
+          <label className="block space-y-2 text-sm font-medium">Reason
+            <select className="w-full rounded-lg border bg-background px-3 py-2" value={reportReason} onChange={(e) => setReportReason(e.target.value)}>
+              <option value="SPAM">Spam</option>
+              <option value="OFFENSIVE">Abusive or offensive content</option>
+              <option value="FRAUD">Fraud or impersonation</option>
+              <option value="COPYRIGHT">Copyright concern</option>
+              <option value="OTHER">Other</option>
+            </select>
+          </label>
+          <label className="block space-y-2 text-sm font-medium">More information (optional)
+            <textarea className="min-h-20 w-full rounded-lg border bg-background px-3 py-2" maxLength={1000} value={reportDetails} onChange={(e) => setReportDetails(e.target.value)} />
+          </label>
+          {actionError && <p role="alert" className="text-sm text-destructive">{actionError}</p>}
+          <Button className="w-full" disabled={reportSubmitting} onClick={() => void submitReport()}>
+            {reportSubmitting && <Loader2 className="mr-2 size-4 animate-spin" />} Submit report
+          </Button>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

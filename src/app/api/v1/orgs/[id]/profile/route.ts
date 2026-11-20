@@ -10,7 +10,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
     void req
     const { id } = await ctx.params
     const org = await db.organization.findUnique({ where: { slug: id } })
-    if (!org || org.deletedAt) throw errors.notFound('Organizer not found.')
+    if (!org || org.deletedAt || org.status !== 'ACTIVE') throw errors.notFound('Organizer not found.')
     const session = await getSession()
     const myOrg = Boolean(session && (session.user.id === org.ownerId ||
       await db.membership.findFirst({ where: { orgId: org.id, userId: session.user.id, acceptedAt: { not: null } }, select: { id: true } })))
@@ -23,7 +23,17 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
       select: { id: true, slug: true, title: true, summary: true, coverImageUrl: true, startsAt: true, city: true, mode: true, status: true, categorySlug: true, ticketTypes: { select: { priceMinor: true }, where: { active: true } } },
     })
     const followers = await db.follow.count({ where: { orgId: org.id } })
-    const clips = await db.mediaAsset.findMany({ where: { orgId: org.id, kind: 'CLIP' }, orderBy: { createdAt: 'desc' }, take: 8 })
+    // Do not leak draft/private event media, removed clips, moderation-pending
+    // uploads or clips belonging to a different organizer on public profiles.
+    const clips = await db.mediaAsset.findMany({
+      where: {
+        orgId: org.id, kind: 'CLIP', status: 'READY',
+        event: { orgId: org.id, visibility: 'PUBLIC', deletedAt: null, status: { in: ['PUBLISHED', 'LIVE', 'ENDED'] } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 8,
+      select: { id: true, url: true, posterUrl: true, caption: true },
+    })
     return jsonOk({
       org: {
         id: org.id, name: org.name, slug: org.slug, tagline: org.tagline, description: org.description,

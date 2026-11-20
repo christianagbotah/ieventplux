@@ -1,4 +1,5 @@
 import path from 'node:path'
+import { MAX_CLIP_UPLOAD_BYTES } from './video-upload-policy'
 
 /**
  * Uploaded posters are mutable operational data, NOT build assets. Standalone
@@ -10,10 +11,13 @@ const MEDIA_TYPES = {
   jpg: 'image/jpeg',
   png: 'image/png',
   webp: 'image/webp',
+  mp4: 'video/mp4',
+  webm: 'video/webm',
 } as const
 
 export const MAX_UPLOAD_BYTES = 5 * 1024 * 1024
-const PUBLIC_MEDIA_NAME = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.(?:jpg|png|webp)$/i
+export const MAX_VIDEO_UPLOAD_BYTES = MAX_CLIP_UPLOAD_BYTES
+const PUBLIC_MEDIA_NAME = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.(?:jpg|png|webp|mp4|webm)$/i
 
 export function isPublicUploadName(name: string): boolean {
   return PUBLIC_MEDIA_NAME.test(name)

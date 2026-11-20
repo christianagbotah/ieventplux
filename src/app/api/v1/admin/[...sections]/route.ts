@@ -344,6 +344,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
       if (action === 'REMOVE_CONTENT') {
         if (report.targetType === 'EVENT') await db.event.updateMany({ where: { id: report.targetId }, data: { status: 'CANCELLED', cancelReason: 'Removed by moderation.' } })
         if (report.targetType === 'COMMENT') await db.comment.updateMany({ where: { id: report.targetId }, data: { status: 'REMOVED' } })
+        if (report.targetType === 'MEDIA') await db.mediaAsset.updateMany({ where: { id: report.targetId }, data: { status: 'REMOVED' } })
         if (report.targetType === 'BROADCAST') await db.liveBroadcast.updateMany({ where: { id: report.targetId }, data: { status: 'ENDED' } })
       }
       if (action === 'SUSPEND_USER' && report.targetType === 'USER') {
