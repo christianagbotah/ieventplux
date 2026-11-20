@@ -24,6 +24,7 @@ import { money, dateLong, timeRange, humanize, statusTone, relative, moneyToInpu
 import { PlayerSim } from '../components/PlayerSim'
 import { EmptyState } from '../components/EventCard'
 import { scanMayQueueOffline } from '../lib/checkin-policy'
+import { acknowledgedScanIds, acknowledgePendingScans, isAlreadyPending, loadPendingScans, offlineScanScope, savePendingScan, type PendingScan } from '../lib/checkin-offline-storage'
 import { OrganizationIdentityFields, emptyOrgFields } from '../components/OrganizationIdentityFields'
 import { OrganizerTypeDetails } from '../components/OrganizerTypeDetails'
 import { ORGANIZER_TYPE_CONFIG, organizerType, type OrganizerType, type ProfileDetails } from '@/lib/organization-types'
@@ -1723,6 +1724,8 @@ function OrdersView({ orgId }: { orgId: string }) {
 
 function AttendeesView({ orgId, initialEventId }: { orgId: string; initialEventId: string }) {
   const { toast } = useToast()
+  const userId = usePortal((state) => state.user?.id)
+  const queueScope = useMemo(() => userId ? offlineScanScope(userId, orgId) : '', [userId, orgId])
   const [events, setEvents] = useState<OrgEvent[]>([])
   const [eventId, setEventId] = useState('')
   const [eventsLoading, setEventsLoading] = useState(true)
@@ -1735,13 +1738,54 @@ function AttendeesView({ orgId, initialEventId }: { orgId: string; initialEventI
   const [lookupQuery, setLookupQuery] = useState('')
   const [lookupError, setLookupError] = useState('')
   const [lastResult, setLastResult] = useState<{ result: string; detail: string; ticket?: { holderName: string; ticketType: string } } | null>(null)
-  const [offlineQueue, setOfflineQueue] = useState<{ eventId: string; payload: string; clientScanId: string; at: string }[]>([])
+  const [offlineQueue, setOfflineQueue] = useState<PendingScan[]>([])
+  const [queueReady, setQueueReady] = useState(false)
+  const [queueError, setQueueError] = useState('')
+  const [syncBusy, setSyncBusy] = useState(false)
+  const [online, setOnline] = useState(true)
   const [scanBusy, setScanBusy] = useState(false)
   const videoRef = useRef<HTMLVideoElement | null>(null)
-  const scanIdRef = useRef(0)
   const scanBusyRef = useRef(false)
+  const pendingRef = useRef<PendingScan[]>([])
   const selectedEventRef = useRef('')
   const recentScanRef = useRef<{ payload: string; eventId: string; at: number } | null>(null)
+
+  useEffect(() => { pendingRef.current = offlineQueue }, [offlineQueue])
+
+  // Recover this user's pending scans after refresh/reopening the browser.
+  // Only the authenticated staff member + active org scope is loaded.
+  useEffect(() => {
+    let disposed = false
+    const load = async () => {
+      setQueueReady(false)
+      setQueueError('')
+      setOfflineQueue([])
+      pendingRef.current = []
+      if (!queueScope) return
+      try {
+        const pending = await loadPendingScans(queueScope)
+        if (!disposed) { pendingRef.current = pending; setOfflineQueue(pending); setQueueReady(true) }
+      } catch (error) {
+        if (!disposed) {
+          setQueueError(error instanceof Error ? error.message : 'Local storage is unavailable.')
+          setQueueReady(true)
+        }
+      }
+    }
+    void load()
+    return () => { disposed = true }
+  }, [queueScope])
+
+  useEffect(() => {
+    const updateNetwork = () => setOnline(navigator.onLine)
+    updateNetwork()
+    window.addEventListener('online', updateNetwork)
+    window.addEventListener('offline', updateNetwork)
+    return () => {
+      window.removeEventListener('online', updateNetwork)
+      window.removeEventListener('offline', updateNetwork)
+    }
+  }, [])
 
   // An event-specific link can target an event older than the first 50.
   // The separate lookup is intentionally tenant-scoped and membership-checked
@@ -1839,13 +1883,18 @@ function AttendeesView({ orgId, initialEventId }: { orgId: string; initialEventI
   // Manual + camera scan submission (declared before the camera effect that calls it).
   const submitScan = async (payload: string) => {
     const code = payload.trim()
-    if (!eventId || !code || scanBusyRef.current) return
+    if (!eventId || !code || scanBusyRef.current || !queueReady || !queueScope) return
+    if (isAlreadyPending(pendingRef.current, eventId, code)) {
+      setLastResult({ result: 'QUEUED_OFFLINE', detail: 'This ticket is already pending for this event. Sync it before scanning again. It is not admitted yet.' })
+      setScanValue('')
+      return
+    }
     if (recentScanRef.current?.payload === code && recentScanRef.current.eventId === eventId && Date.now() - recentScanRef.current.at < 5000) return
     scanBusyRef.current = true
     setScanBusy(true)
     recentScanRef.current = { payload: code, eventId, at: Date.now() }
     const targetEventId = eventId
-    const clientScanId = 'web-' + Date.now() + '-' + scanIdRef.current++
+    const clientScanId = 'web-' + crypto.randomUUID()
     try {
       const result = await api.post<{ result: string; detail: string; ticket?: { holderName: string; ticketType: string } }>('/checkin/scan', {
         eventId: targetEventId,
@@ -1860,15 +1909,31 @@ function AttendeesView({ orgId, initialEventId }: { orgId: string; initialEventI
     } catch (err) {
       // HTTP 400/401/403/409/429 errors are authoritative server decisions,
       // NOT evidence that this device is offline. Never queue rejected codes.
-      const networkFailure = scanMayQueueOffline(err, typeof navigator === 'undefined' ? true : navigator.onLine)
-      if (networkFailure) {
-        setOfflineQueue((queue) => [...queue, { eventId: targetEventId, payload: code, clientScanId, at: new Date().toISOString() }])
-        if (selectedEventRef.current === targetEventId) {
-          setLastResult({ result: 'QUEUED_OFFLINE', detail: 'Network unavailable. Scan queued in this browser tab; keep the tab open until you sync.' })
-          setScanValue('')
+      const networkFailure = scanMayQueueOffline(err, online)
+      if (networkFailure && !queueError) {
+        try {
+          const pending: PendingScan = { eventId: targetEventId, payload: code, clientScanId, at: new Date().toISOString() }
+          await savePendingScan(queueScope, pending)
+          pendingRef.current = [...pendingRef.current, pending]
+          setOfflineQueue(pendingRef.current)
+          if (selectedEventRef.current === targetEventId) {
+            setLastResult({
+              result: 'QUEUED_OFFLINE',
+              detail: 'Scan saved on this device for later verification. It is NOT an admission. Sync when connected.',
+            })
+            setScanValue('')
+          }
+        } catch (storageError) {
+          const message = storageError instanceof Error ? storageError.message : 'Local storage is unavailable.'
+          if (selectedEventRef.current === targetEventId) {
+            setLastResult({ result: 'ERROR', detail: 'Could not save offline scan. No admission was recorded. ' + message })
+            toast({ description: 'Offline scan was NOT saved. ' + message, variant: 'destructive' })
+          }
         }
       } else {
-        const detail = err instanceof ApiClientError ? err.message : 'Could not verify this ticket.'
+        const detail = networkFailure && queueError
+          ? 'Offline storage is unavailable. This scan was NOT saved. ' + queueError
+          : err instanceof ApiClientError ? err.message : 'Could not verify this ticket.'
         if (selectedEventRef.current === targetEventId) {
           setLastResult({ result: 'ERROR', detail })
           toast({ description: detail, variant: 'destructive' })
@@ -1900,16 +1965,19 @@ function AttendeesView({ orgId, initialEventId }: { orgId: string; initialEventI
         const w = window as unknown as { BarcodeDetector?: new (opts: { formats: string[] }) => { detect: (v: HTMLVideoElement) => Promise<{ rawValue: string }[]> } }
         if (w.BarcodeDetector && videoRef.current) {
           const detector = new w.BarcodeDetector({ formats: ['qr_code'] })
+          let detecting = false
           timer = setInterval(async () => {
-            if (disposed || !videoRef.current) return
+            if (disposed || detecting || scanBusyRef.current || !videoRef.current) return
+            detecting = true
             try {
               const codes = await detector.detect(videoRef.current)
               if (!disposed && selectedEventRef.current === eventId && codes[0]?.rawValue) {
-                setScanValue(codes[0].rawValue)
                 void submitScan(codes[0].rawValue)
               }
             } catch {
               /* frame not ready */
+            } finally {
+              detecting = false
             }
           }, 700)
         } else {
@@ -1928,28 +1996,42 @@ function AttendeesView({ orgId, initialEventId }: { orgId: string; initialEventI
 
   const activeOfflineQueue = offlineQueue.filter((scan) => scan.eventId === eventId)
   const syncOffline = async () => {
-    if (activeOfflineQueue.length === 0 || !eventId) return
+    if (activeOfflineQueue.length === 0 || !eventId || !queueReady || !queueScope || syncBusy || !online) return
+    const targetEventId = eventId
     const batch = activeOfflineQueue.slice(0, 200)
+    setSyncBusy(true)
     try {
-      const result = await api.post<{ synced: number; results: { result: string; detail: string }[] }>('/checkin/sync', {
-        eventId,
-        scans: batch.map((scan) => ({ payload: scan.payload, clientScanId: scan.clientScanId, capturedOfflineAt: scan.at })),
+      const response = await api.post<{ synced: number; results: { result: string; detail: string }[] }>('/checkin/sync', {
+        eventId: targetEventId,
+        scans: batch.map((scan) => ({
+          payload: scan.payload, clientScanId: scan.clientScanId, capturedOfflineAt: scan.at,
+        })),
       })
-      const processedIds = new Set(batch.slice(0, result.synced).map((scan) => scan.clientScanId))
-      // Remove ONLY scans that the server says it processed. Preserve the rest
-      // for a later retry, and never sync another event's scans into this event.
-      setOfflineQueue((queue) => queue.filter((scan) => !(scan.eventId === eventId && processedIds.has(scan.clientScanId))))
-      const conflicts = result.results.filter((entry) => ['CONFLICT', 'DUPLICATE', 'INVALID'].includes(entry.result)).length
+      // The API processes scans in order, but may acknowledge only part of the
+      // batch; delete only corresponding IDs after validating its response.
+      const acknowledged = acknowledgedScanIds(batch, response.synced, response.results)
+      await acknowledgePendingScans(queueScope, acknowledged)
+      const remaining = await loadPendingScans(queueScope)
+      pendingRef.current = remaining
+      setOfflineQueue(remaining)
+      const admitted = response.results.filter((entry) => entry.result === 'ADMITTED').length
+      const conflicts = response.results.filter((entry) => ['CONFLICT', 'DUPLICATE', 'INVALID'].includes(entry.result)).length
       toast({
-        title: 'Synced ' + result.synced + ' offline scans',
-        description: conflicts > 0 ? conflicts + ' scans need review (duplicates/conflicts/invalid).' : 'All returned results reconciled.',
+        title: response.synced + ' scan' + (response.synced === 1 ? '' : 's') + ' reconciled',
+        description: admitted + ' admitted, ' + conflicts + ' conflict/duplicate/invalid. ' +
+          (remaining.some((scan) => scan.eventId === targetEventId) ? 'More scans remain pending.' : 'No pending scans for this event.'),
       })
-      await refresh()
+      if (targetEventId === selectedEventRef.current) await refresh()
     } catch (err) {
       toast({
-        description: err instanceof ApiClientError ? err.message + ' Scans remain queued in this tab.' : 'Still offline — scans remain queued in this tab.',
+        description: (err instanceof ApiClientError ? err.message : err instanceof Error ? err.message : 'Sync failed.') +
+          ' Unacknowledged scans remain on this device; retry safely using their original scan IDs.',
         variant: 'destructive',
       })
+      // If the server accepted some requests but confirmation was interrupted,
+      // replaying the exact same clientScanId safely retrieves its prior result.
+    } finally {
+      setSyncBusy(false)
     }
   }
 
@@ -1996,7 +2078,7 @@ function AttendeesView({ orgId, initialEventId }: { orgId: string; initialEventI
               </a>
             </Button>
           )}
-          <Button variant={scanMode ? 'default' : 'outline'} disabled={!eventId || eventsLoading} className="h-11 rounded-full" onClick={() => setScanMode((s) => !s)}>
+          <Button variant={scanMode ? 'default' : 'outline'} disabled={!eventId || eventsLoading || !queueReady} className="h-11 rounded-full" onClick={() => setScanMode((s) => !s)}>
             <ScanLine className="mr-1.5 h-4 w-4" /> {scanMode ? 'Close scanner' : 'Scan tickets'}
           </Button>
           <Button variant="outline" size="icon" className="h-11 w-11 rounded-full" aria-label="Refresh attendee list" disabled={!eventId} onClick={() => void refresh()}>
@@ -2021,6 +2103,42 @@ function AttendeesView({ orgId, initialEventId }: { orgId: string; initialEventI
         </div>
       )}
 
+      <section aria-label="Offline scan recovery" className="rounded-2xl border border-border bg-card p-3.5 sm:p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <p className="flex items-center gap-2 text-sm font-bold">
+              <ShieldAlert className="size-4 text-amber-600" aria-hidden />
+              Offline scan recovery
+              {offlineQueue.length > 0 && <Badge variant="secondary">{offlineQueue.length} pending</Badge>}
+            </p>
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+              {queueReady ? 'Pending scans are kept in this browser between reloads until server reconciliation.' : 'Checking this browser for saved scans…'}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Badge variant={online ? 'secondary' : 'outline'}>{online ? 'Network online' : 'Offline'}</Badge>
+            <Button variant="outline" size="sm" className="min-h-10 rounded-xl"
+              disabled={!eventId || !queueReady || !online || syncBusy || activeOfflineQueue.length === 0}
+              onClick={() => void syncOffline()}>
+              {syncBusy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <RefreshCw className="size-4" aria-hidden />}
+              Sync {activeOfflineQueue.length > 0 ? activeOfflineQueue.length : ''} for event
+            </Button>
+          </div>
+        </div>
+        {queueError && <p role="alert" className="mt-2 rounded-lg border border-destructive/25 bg-destructive/5 p-2.5 text-xs text-destructive">
+          Offline storage is unavailable: {queueError} Scans cannot be saved for later.
+        </p>}
+        {offlineQueue.length > 0 && (
+          <p role="status" className="mt-2 text-xs font-semibold text-amber-700 dark:text-amber-300">
+            These are PENDING, not admitted tickets. {activeOfflineQueue.length} belong to this event; select other events to reconcile the rest.
+          </p>
+        )}
+        <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+          Sync promptly. Browser storage can be cleared or evicted; avoid shared devices. This device holds pending ticket credentials,
+          not an attendee roster. Only the server decides admissions.
+        </p>
+      </section>
+
       {scanMode && (
         <Card className="rounded-2xl border-primary/30">
           <CardContent className="space-y-3 p-4">
@@ -2032,7 +2150,7 @@ function AttendeesView({ orgId, initialEventId }: { orgId: string; initialEventI
             </div>
             <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); void submitScan(scanValue) }}>
               <Input value={scanValue} onChange={(e) => setScanValue(e.target.value)} placeholder="…or paste/scan ticket code (TKT-…)" aria-label="Ticket code" />
-              <Button type="submit" className="rounded-full ievx-press" disabled={!scanValue.trim() || scanBusy}>{scanBusy ? 'Checking…' : 'Admit'}</Button>
+              <Button type="submit" className="rounded-full ievx-press" disabled={!scanValue.trim() || scanBusy || !queueReady}>{scanBusy ? 'Checking…' : 'Verify' }</Button>
             </form>
             {lastResult && (
               <div className={`rounded-xl p-3 text-sm ${lastResult.result === 'ADMITTED' ? 'bg-primary/10 text-primary' : lastResult.result === 'DUPLICATE' ? 'bg-amber-500/10 text-amber-800' : lastResult.result === 'CONFLICT' ? 'bg-destructive/10 text-destructive' : 'bg-secondary'}`}>
@@ -2041,13 +2159,10 @@ function AttendeesView({ orgId, initialEventId }: { orgId: string; initialEventI
                 {lastResult.ticket && <p className="mt-0.5 text-xs opacity-80">{lastResult.ticket.holderName} · {lastResult.ticket.ticketType}</p>}
               </div>
             )}
-            {activeOfflineQueue.length > 0 && (
-              <div className="flex items-center justify-between rounded-xl bg-amber-500/10 p-3">
-                <p className="text-sm text-amber-800"><Camera className="mr-1.5 inline h-4 w-4" />{activeOfflineQueue.length} offline scan(s) queued</p>
-                <Button size="sm" variant="outline" className="rounded-full" onClick={() => void syncOffline()}><RefreshCw className="mr-1 h-3.5 w-3.5" /> Sync now</Button>
-              </div>
-            )}
-            <p className="text-[11px] text-muted-foreground">Scans are queued only for network failures, in this browser tab. Keep it open until syncing; closing or reloading the tab loses unsubmitted scans. Server errors never become offline admissions.</p>
+            <p className="text-[11px] text-muted-foreground">
+              Connectivity failures can be saved as pending scans on this device when storage works. Server rejections are never
+              treated as offline admissions. Sync from the recovery panel after reconnecting.
+            </p>
           </CardContent>
         </Card>
       )}
