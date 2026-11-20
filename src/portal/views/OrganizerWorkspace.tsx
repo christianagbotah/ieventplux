@@ -1843,7 +1843,7 @@ function AttendeesView({ orgId, initialEventId }: { orgId: string; initialEventI
     if (recentScanRef.current?.payload === code && recentScanRef.current.eventId === eventId && Date.now() - recentScanRef.current.at < 5000) return
     scanBusyRef.current = true
     setScanBusy(true)
-    recentScanRef.current = { payload: code, eventId: targetEventId, at: Date.now() }
+    recentScanRef.current = { payload: code, eventId, at: Date.now() }
     const targetEventId = eventId
     const clientScanId = 'web-' + Date.now() + '-' + scanIdRef.current++
     try {
