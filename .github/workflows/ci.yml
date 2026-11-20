@@ -114,6 +114,9 @@ jobs:
       - name: Check-in replay isolation with synthetic admission record
         run: bun run scripts/checkin-replay-scope-smoke.ts
 
+      - name: Atomic check-in races across scanners and refund
+        run: bun run scripts/checkin-concurrent-admission-smoke.ts
+
       - name: Organizer event tenant privacy regression (seeded users)
         run: bun run scripts/org-event-access-smoke.ts
 
