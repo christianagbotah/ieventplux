@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from '@/components/ui/command'
 import {
-  Compass, Radio, Film, Search, Ticket, LayoutDashboard, ShieldCheck, LogOut,
+  Compass, Radio, Film, UsersRound, Search, Ticket, LayoutDashboard, ShieldCheck, LogOut,
   Sparkles, UserRound, Sun, Moon, Wand2, Loader2, CalendarDays, CalendarPlus,
 } from 'lucide-react'
 import { useTheme } from 'next-themes'
@@ -73,6 +73,7 @@ export function CommandPalette({ open, onOpenChange, onLogout }: PaletteProps) {
   const navItems = useMemo(
     () => [
       { label: 'Discover events', icon: Compass, action: () => navigate('/') },
+      { label: 'Following feed', icon: UsersRound, action: () => navigate('/following') },
       { label: 'Live now', icon: Radio, action: () => navigate('/live') },
       { label: 'Reels', icon: Film, action: () => navigate('/reels') },
       { label: 'AI search', icon: Wand2, action: () => navigate('/#ai-search') },

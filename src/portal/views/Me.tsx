@@ -130,7 +130,7 @@ export default function Me({ route }: { route: Route }) {
       api.get<{ items: NotificationRow[] }>('/notifications').catch(() => ({ items: [] })),
     ])
     setSaved(savedData.items)
-    setFollowing(followingData.items)
+    setFollowing(followingData.items.filter((item) => Boolean(item.orgId && item.org)))
     setNotifications(notifData.items)
   }, [])
 
@@ -422,12 +422,12 @@ export default function Me({ route }: { route: Route }) {
             <EmptyState title="Not following anyone yet" description="Follow organizers to build a personalized feed." />
           ) : (
             <>
-              <p className="text-sm text-muted-foreground">Your personalized feed blends followed organizers with featured picks.</p>
+              <p className="text-sm text-muted-foreground">Your Following feed shows only public events and announcements from followed organizers.</p>
               {following.map((f) => (
                 <button key={f.orgId} className="flex w-full items-center gap-3 rounded-xl border border-border/60 bg-card p-3 text-left ievx-card-hover" onClick={() => navigate(`/org/${f.org.slug}`)}>
                   <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-sm font-bold text-primary">{initials(f.org.name)}</span>
                   <p className="flex-1 truncate font-semibold">{f.org.name}</p>
-                  <Button variant="ghost" size="sm" className="rounded-full" onClick={(e) => { e.stopPropagation(); navigate('/social/feed') }}>View feed</Button>
+                  <Button variant="ghost" size="sm" className="rounded-full" onClick={(e) => { e.stopPropagation(); navigate('/following') }}>View feed</Button>
                 </button>
               ))}
             </>

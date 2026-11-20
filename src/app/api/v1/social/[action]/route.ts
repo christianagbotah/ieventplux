@@ -2,12 +2,30 @@ import { NextRequest } from 'next/server'
 import { handle, jsonOk, requireUser, readJson, errors, rateLimit, sanitizeText, jsonList, pagination } from '@/server/api'
 import { db } from '@/lib/db'
 import { getSession } from '@/server/auth'
+import {
+  cursorForFollowingRow, decodeFollowingCursor, followingOrgIds,
+  followingSourceSeek, sortFollowingRows,
+} from '@/server/following-feed-policy'
 
 /**
  * Social endpoints: follow | unfollow | interest | feed | saved | block | mute | report
  */
 
 type RouteContext = { params: Promise<{ action: string }> }
+
+/** Common public-event projection for followed organizer activities. */
+const followingEventSelect = {
+  id: true, slug: true, title: true, summary: true, coverImageUrl: true,
+  startsAt: true, endsAt: true, city: true, country: true, mode: true,
+  status: true, categorySlug: true, createdAt: true,
+  org: { select: { name: true, slug: true, verifiedAt: true } },
+  ticketTypes: {
+    where: { active: true },
+    select: { priceMinor: true, currency: true, soldCount: true, quota: true },
+  },
+} as const
+
+
 
 export async function POST(req: NextRequest, ctx: RouteContext) {
   return handle(async () => {
@@ -20,7 +38,30 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
       const userId = body.userId ? String(body.userId) : null
       if (!orgId && !userId) throw errors.badRequest('Specify an organization or user to follow.')
       if (userId === user.id) throw errors.badRequest('You cannot follow yourself.')
+      if (orgId && userId) throw errors.badRequest('Follow either an organizer or a user, not both.')
       if (action === 'follow') {
+        // A forged ID must not create a follow relationship with hidden,
+        // suspended or removed organizer profiles.
+        const target = orgId
+          ? await db.organization.findFirst({
+              where: { id: orgId, deletedAt: null, status: 'ACTIVE' },
+              select: { ownerId: true },
+            })
+          : await db.user.findFirst({
+              where: { id: userId as string, status: 'ACTIVE', deletedAt: null },
+              select: { id: true },
+            })
+        if (!target) throw errors.notFound('This profile is unavailable to follow.')
+        const ownerId = orgId ? ('ownerId' in target ? target.ownerId : null) : userId
+        if (ownerId && ownerId !== user.id) {
+          const blocked = await db.userBlock.findFirst({
+            where: { OR: [
+              { blockerId: user.id, blockedId: ownerId },
+              { blockerId: ownerId, blockedId: user.id },
+            ] }, select: { blockerId: true },
+          })
+          if (blocked) throw errors.forbidden('This profile cannot be followed.')
+        }
         await db.follow.upsert({
           where: orgId ? { followerId_orgId: { followerId: user.id, orgId } } : { followerId_userId: { followerId: user.id, userId: userId as string } },
           create: orgId ? { followerId: user.id, orgId } : { followerId: user.id, userId: userId as string },
@@ -121,19 +162,87 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
     if (action === 'feed') {
       const session = await getSession()
       if (!session) throw errors.unauthorized()
-      const follows = await db.follow.findMany({ where: { followerId: session.user.id }, select: { orgId: true, userId: true } })
-      const orgIds = follows.map((f) => f.orgId).filter((v): v is string => Boolean(v))
-      const { page, pageSize, offset } = pagination(req, 12, 36)
-      const where = {
-        visibility: 'PUBLIC', deletedAt: null, status: { in: ['PUBLISHED', 'LIVE', 'POSTPONED'] },
-        OR: [...(orgIds.length ? [{ orgId: { in: orgIds } }] : []), { isFeatured: true }],
+      const url = new URL(req.url)
+      const { pageSize } = pagination(req, 12, 24)
+      let cursor
+      try { cursor = decodeFollowingCursor(url.searchParams.get('cursor')) }
+      catch { throw errors.badRequest('Invalid feed cursor. Refresh your Following feed.') }
+
+      const userId = session.user.id
+      const [follows, blocks, mutes] = await Promise.all([
+        db.follow.findMany({
+          where: { followerId: userId, orgId: { not: null }, org: { deletedAt: null, status: 'ACTIVE' } },
+          select: { orgId: true, org: { select: { ownerId: true } } },
+        }),
+        db.userBlock.findMany({
+          where: { OR: [{ blockerId: userId }, { blockedId: userId }] },
+          select: { blockerId: true, blockedId: true },
+        }),
+        db.userMute.findMany({ where: { muterId: userId }, select: { mutedId: true } }),
+      ])
+      const excludedOwners = new Set([
+        ...blocks.map((block) => block.blockerId === userId ? block.blockedId : block.blockerId),
+        ...mutes.map((mute) => mute.mutedId),
+      ])
+      const orgIds = followingOrgIds(
+        follows.map((follow) => ({ orgId: follow.orgId, ownerId: follow.org?.ownerId ?? null })),
+        excludedOwners,
+      )
+
+      // A Following feed contains followed organizers ONLY. No unrelated
+      // featured/sponsored events, private drafts, unlisted or invitation events.
+      if (orgIds.length === 0) {
+        const result = jsonOk({ items: [], hasMore: false, nextCursor: null, followingCount: 0 })
+        result.headers.set('Cache-Control', 'private, no-store')
+        return result
       }
-      const items = await db.event.findMany({
-        where, orderBy: { startsAt: 'asc' }, skip: offset, take: pageSize,
-        select: { id: true, slug: true, title: true, summary: true, coverImageUrl: true, startsAt: true, city: true, mode: true, org: { select: { name: true, slug: true } }, ticketTypes: { select: { priceMinor: true }, where: { active: true } } },
+
+      const publicEvent = {
+        orgId: { in: orgIds }, visibility: 'PUBLIC', deletedAt: null,
+        status: { in: ['PUBLISHED', 'LIVE', 'POSTPONED'] },
+      }
+      const eventSeek = followingSourceSeek('EVENT', cursor)
+      const updateSeek = followingSourceSeek('UPDATE', cursor)
+      const [events, updates] = await Promise.all([
+        db.event.findMany({
+          where: { ...publicEvent, ...eventSeek },
+          select: followingEventSelect,
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          take: pageSize + 1,
+        }),
+        db.eventUpdate.findMany({
+          where: {
+            orgId: { in: orgIds },
+            event: publicEvent,
+            ...updateSeek,
+          },
+          select: { id: true, title: true, body: true, important: true, createdAt: true, event: { select: followingEventSelect } },
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          take: pageSize + 1,
+        }),
+      ])
+      const timeline = sortFollowingRows([
+        ...events.map((event) => ({
+          id: event.id, kind: 'EVENT' as const, activityAt: event.createdAt.toISOString(),
+          title: event.title, body: event.summary, important: false,
+          event: { ...event, createdAt: undefined },
+        })),
+        ...updates.map((update) => ({
+          id: update.id, kind: 'UPDATE' as const, activityAt: update.createdAt.toISOString(),
+          title: update.title, body: update.body, important: update.important,
+          event: { ...update.event, createdAt: undefined },
+        })),
+      ])
+      const page = timeline.slice(0, pageSize)
+      const hasMore = timeline.length > pageSize
+      const result = jsonOk({
+        items: page,
+        hasMore,
+        nextCursor: hasMore && page.length > 0 ? cursorForFollowingRow(page[page.length - 1]) : null,
+        followingCount: orgIds.length,
       })
-      const total = await db.event.count({ where })
-      return jsonList(items, total, page, pageSize)
+      result.headers.set('Cache-Control', 'private, no-store')
+      return result
     }
 
     if (action === 'saved') {
