@@ -15,10 +15,10 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "iEventPlux — Discover, Ticket & Broadcast Events in Ghana",
+  title: "iEventPlux — Discover Events, Join Online & Connect",
   description:
-    "iEventPlux by Lightworld Technologies: events discovery, ticketing, social feeds and live broadcasting for churches, ministries and organizations in Ghana. Prices in Ghana cedis.",
-  keywords: ["iEventPlux", "events", "Ghana", "Accra", "tickets", "live streaming", "church events", "conferences"],
+    "Discover public events worldwide, follow organizers, register for free gatherings and explore online or in-person experiences. Paid ticket checkout is available where supported.",
+  keywords: ["iEventPlux", "discover events", "online events", "event tickets", "live events", "concerts", "conferences", "communities", "Ghana"],
   applicationName: "iEventPlux",
   manifest: "/manifest.webmanifest",
   appleWebApp: {
@@ -29,15 +29,15 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     siteName: "iEventPlux",
-    title: "iEventPlux — Discover, Ticket & Broadcast Events in Ghana",
+    title: "iEventPlux — Discover Events, Join Online & Connect",
     description:
-      "Church services, concerts, conferences, workshops and community moments — secure mobile-money checkout, QR tickets and protected live broadcasts.",
-    locale: "en_GH",
+      "Concerts, conferences, worship, workshops and communities. Discover real events, join free gatherings and follow organizers worldwide.",
+    locale: "en_GB",
   },
   twitter: {
     card: "summary_large_image",
-    title: "iEventPlux — Discover, Ticket & Broadcast Events in Ghana",
-    description: "Events discovery, ticketing and live broadcasting for Ghana. Prices in Ghana cedis.",
+    title: "iEventPlux — Discover Events, Join Online & Connect",
+    description: "Explore events worldwide, discover online experiences and register for gatherings that matter to you.",
   },
   icons: {
     icon: "/logo.svg",
