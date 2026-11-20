@@ -52,6 +52,9 @@ model User {
   orders              Order[]
   tickets             Ticket[]
   scans               AdmissionScan[]        @relation("Scanner")
+  souvenirCollections SouvenirCollection[] @relation("SouvenirCollector")
+  souvenirReturnReceived SouvenirReturnIntake[] @relation("SouvenirReturnReceivedBy")
+  souvenirReturnReviewed SouvenirReturnIntake[] @relation("SouvenirReturnReviewedBy")
   deviceSessions      DeviceSession[]
   comments            Comment[]
   reactions           Reaction[]
@@ -179,7 +182,7 @@ model KycProviderJob {
   lastCheckedAt  DateTime?
   decisionNote   String?
   createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  updatedAt      DateTime  @default(now()) @updatedAt
   org            Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
   user           User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -310,6 +313,7 @@ model Event {
   agenda       AgendaItem[]
   contributors EventContributor[]
   souvenirs    EventSouvenirProduct[]
+  souvenirCollections SouvenirCollection[]
   media        MediaAsset[] @relation("EventMedia")
   linkedClips  MediaAsset[] @relation("ClipLinksTo")
   interests    EventInterest[]
@@ -398,6 +402,7 @@ model EventSouvenirProduct {
   updatedAt      DateTime @updatedAt
 
   event          Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  orderItems     SouvenirOrderItem[]
 
   @@unique([eventId, sku])
   @@index([eventId, active])
@@ -681,6 +686,7 @@ model Order {
   event       Event                 @relation(fields: [eventId], references: [id])
   user        User?                 @relation(fields: [userId], references: [id])
   items       OrderItem[]
+  souvenirItems SouvenirOrderItem[]
   reservations InventoryReservation[]
   payments    PaymentAttempt[]
   tickets     Ticket[]
@@ -705,6 +711,73 @@ model OrderItem {
   ticketType  TicketType @relation(fields: [ticketTypeId], references: [id])
 
   @@index([orderId])
+}
+
+// One paid receipt can include ticket and physical souvenir lines. A souvenir
+// variant retains its original price snapshot. Each line is reserved until
+// payment succeeds or the checkout hold expires. Individual collection is
+// recorded separately from venue admission.
+model SouvenirOrderItem {
+  id             String   @id @default(cuid())
+  orderId        String
+  productId      String
+  qty            Int
+  unitPriceMinor Int
+  lineTotalMinor Int
+  holdStatus     String   @default("ACTIVE") // ACTIVE|CONSUMED|RELEASED
+  collectedQty   Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  order          Order                @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product        EventSouvenirProduct @relation(fields: [productId], references: [id])
+  collections    SouvenirCollection[]
+  returnIntakes  SouvenirReturnIntake[]
+
+  @@unique([orderId, productId])
+  @@index([productId, holdStatus])
+}
+
+model SouvenirCollection {
+  id             String   @id @default(cuid())
+  orderItemId    String
+  eventId        String
+  collectorId    String
+  qty            Int
+  clientActionId String   @unique // idempotency for resubmits/retries
+  note           String?
+  createdAt      DateTime @default(now())
+  orderItem      SouvenirOrderItem @relation(fields: [orderItemId], references: [id])
+  event          Event             @relation(fields: [eventId], references: [id])
+  collector      User              @relation("SouvenirCollector", fields: [collectorId], references: [id])
+
+  @@index([eventId, createdAt])
+  @@index([orderItemId])
+}
+
+// Physical return evidence is separate from paid refund, admission and stock.
+// Neither receiving nor reviewing an item revokes an entitlement, returns money,
+// posts ledger entries or makes the unit available for resale.
+model SouvenirReturnIntake {
+  id             String   @id @default(cuid())
+  orderItemId    String
+  receivedById   String
+  qty            Int
+  clientActionId String   @unique
+  condition      String   // SEALED | OPENED | DAMAGED
+  reason         String
+  evidenceNote   String
+  status         String   @default("RECEIVED") // RECEIVED | ACCEPTED | REJECTED
+  reviewedById   String?
+  reviewNote     String?
+  createdAt      DateTime @default(now())
+  reviewedAt     DateTime?
+
+  orderItem      SouvenirOrderItem @relation(fields: [orderItemId], references: [id], onDelete: Restrict)
+  receivedBy     User              @relation("SouvenirReturnReceivedBy", fields: [receivedById], references: [id], onDelete: Restrict)
+  reviewedBy     User?             @relation("SouvenirReturnReviewedBy", fields: [reviewedById], references: [id], onDelete: Restrict)
+
+  @@index([orderItemId, status])
+  @@index([createdAt])
 }
 
 // ─────────────────────────────── Payments (Hubtel) ───────────────────────────────
@@ -831,7 +904,8 @@ model DeviceSession {
 model RefundCase {
   id               String    @id @default(cuid())
   orderId          String
-  requestedBy      String
+  requestedBy      String?  // nullable only for legitimate system-created financial exceptions
+  createdByKind    String   @default("USER") // USER | SYSTEM, never inferred from null alone
   type             String    @default("FULL") // FULL | PARTIAL | MANUAL_ONLY (unsupported by provider → tracked)
   amountMinor      Int
   status           String    @default("REQUESTED") // REQUESTED|APPROVED|PROCESSED|FAILED|MANUAL_TRACKED|REJECTED
@@ -844,7 +918,7 @@ model RefundCase {
   createdAt        DateTime  @default(now())
 
   order     Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  requester User  @relation("RefundRequester", fields: [requestedBy], references: [id])
+  requester User? @relation("RefundRequester", fields: [requestedBy], references: [id], onDelete: Restrict)
 
   @@index([status])
 }

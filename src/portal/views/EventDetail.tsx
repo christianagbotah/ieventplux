@@ -124,6 +124,7 @@ export default function EventDetail({ slug }: { slug: string }) {
   const [inviteCode, setInviteCode] = useState('')
   const [buyOpen, setBuyOpen] = useState(false)
   const [buyQty, setBuyQty] = useState<Record<string, number>>({})
+  const [souvenirQty, setSouvenirQty] = useState<Record<string, number>>({})
   const [discountCode, setDiscountCode] = useState('')
   const [buyerPhone, setBuyerPhone] = useState('')
   const [placing, setPlacing] = useState(false)
@@ -204,6 +205,10 @@ export default function EventDetail({ slug }: { slug: string }) {
       .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime())
     return future[0] ?? null
   }, [seriesInfo, event])
+
+  const selectedSouvenirTotal = useMemo(() => event?.souvenirs?.reduce(
+    (sum, product) => sum + (product.onlineOrderingEnabled ? (souvenirQty[product.id] ?? 0) * product.priceMinor : 0), 0,
+  ) ?? 0, [event, souvenirQty])
 
   const selectedTotal = useMemo(() => {
     if (!event) return 0
@@ -354,12 +359,14 @@ export default function EventDetail({ slug }: { slug: string }) {
     if (!user) return navigate('/signin')
     if (!event) return
     const items = Object.entries(buyQty).filter(([, qty]) => qty > 0).map(([ticketTypeId, qty]) => ({ ticketTypeId, qty }))
-    if (items.length === 0) return
+    const souvenirs = Object.entries(souvenirQty).filter(([, qty]) => qty > 0).map(([productId, qty]) => ({ productId, qty }))
+    if (!items.length && !souvenirs.length) return
     setPlacing(true)
     try {
       const order = await api.post<{ orderReference: string; totalMinor: number; kind: 'PAID' | 'FREE'; expiresAt: string }>('/orders', {
         eventId: event.id,
         items,
+        souvenirs,
         discountCode: discountCode.trim() || null,
         buyerPhone: buyerPhone.trim() || undefined,
       })
@@ -418,8 +425,8 @@ export default function EventDetail({ slug }: { slug: string }) {
 
   // Short taglines read well on the fixed 24ch typewriter; longer summaries stay plain text.
   const shortSummary = event.summary && event.summary.trim().length > 0 && event.summary.trim().length <= 24 ? event.summary.trim() : null
-  const nothingSelected = Object.values(buyQty).every((q) => q === 0)
-  const checkoutDisabled = (selectedTotal === 0 && nothingSelected) || placing || nothingSelected
+  const nothingSelected = Object.values(buyQty).every((q) => q === 0) && Object.values(souvenirQty).every((q) => q === 0)
+  const checkoutDisabled = placing || nothingSelected
 
   return (
     <div className="pb-10">
@@ -636,7 +643,9 @@ export default function EventDetail({ slug }: { slug: string }) {
                 <Card className="rounded-2xl" id="event-souvenirs">
                   <CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-base"><ShoppingBag className="size-4 text-primary" /> Event souvenirs & merchandise</CardTitle></CardHeader>
                   <CardContent className="space-y-3">
-                    <p className="text-xs leading-relaxed text-muted-foreground">The organizer's current product catalogue is displayed below. Online merchandise ordering and collection QR codes are not yet active, so no payment is collected for these items through this page.</p>
+                    <p className="text-xs leading-relaxed text-muted-foreground">Order event T-shirts and other items online for collection at the venue. Stock and prices are checked again at checkout. You will receive a separate merchandise collection QR after verified payment.</p>
+                    {event.souvenirs.some((product) => product.onlineOrderingEnabled) ? <Button type="button" className="min-h-10 w-full rounded-xl sm:w-auto" onClick={() => setBuyOpen(true)}><ShoppingBag className="mr-2 size-4" /> Order souvenirs</Button>
+                      : <p role="status" className="rounded-lg bg-secondary/60 p-2.5 text-xs text-muted-foreground">Online souvenir payment is not enabled yet. You can browse the catalogue, but no order or payment will be taken until the organizer's checkout is activated.</p>}
                     <div className="grid gap-3 sm:grid-cols-2">
                       {event.souvenirs.map((product) => (
                         <article key={product.id} className="grid grid-cols-[64px_minmax(0,1fr)] items-center gap-x-3 gap-y-2 rounded-xl border border-border/70 p-3">
@@ -976,8 +985,8 @@ export default function EventDetail({ slug }: { slug: string }) {
       <Dialog open={buyOpen} onOpenChange={(open) => { if (!placing) setBuyOpen(open) }}>
         <DialogContent className="flex max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] max-w-xl flex-col gap-0 overflow-hidden p-0 sm:max-h-[90dvh]">
           <DialogHeader className="shrink-0 border-b border-border/70 px-5 py-4">
-            <DialogTitle className="text-lg font-extrabold">Choose your tickets</DialogTitle>
-            <p className="text-sm text-muted-foreground">Select a ticket type and quantity. Availability is checked when you reserve.</p>
+            <DialogTitle className="text-lg font-extrabold">Tickets & event souvenirs</DialogTitle>
+            <p className="text-sm text-muted-foreground">Choose tickets, souvenirs or both. Stock and payment totals are confirmed by the server.</p>
           </DialogHeader>
           <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4 ievx-scrollbar sm:px-5">
             {saleable.map((tt) => {
@@ -999,6 +1008,24 @@ export default function EventDetail({ slug }: { slug: string }) {
                 </div>
               )
             })}
+            {event.souvenirs?.some((p) => p.onlineOrderingEnabled) && (
+              <div className="space-y-2 border-t border-border/70 pt-3">
+                <h3 className="text-sm font-bold">Souvenirs for venue collection</h3>
+                {event.souvenirs.filter((p) => p.onlineOrderingEnabled).map((product) => {
+                  const qty = souvenirQty[product.id] ?? 0
+                  const max = Math.min(20, product.available)
+                  return <div key={product.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-xl border border-border/70 p-3">
+                    <div className="min-w-0"><p className="text-sm font-semibold [overflow-wrap:break-word]">{product.name}{product.variantLabel ? ` — ${product.variantLabel}` : ''}</p><p className="text-xs text-muted-foreground">{money(product.priceMinor)} each · {product.available} currently available</p></div>
+                    <div className="flex items-center gap-2">
+                      <Button size="icon" variant="outline" className="size-10 rounded-full" aria-label={`Remove one ${product.name}`} disabled={!qty} onClick={() => setSouvenirQty((prior) => ({ ...prior, [product.id]: Math.max(0, qty - 1) }))}>−</Button>
+                      <span className="w-6 text-center text-sm font-bold tabular-nums" aria-live="polite">{qty}</span>
+                      <Button size="icon" variant="outline" className="size-10 rounded-full" aria-label={`Add one ${product.name}`} disabled={qty >= max} onClick={() => setSouvenirQty((prior) => ({ ...prior, [product.id]: qty + 1 }))}>+</Button>
+                    </div>
+                  </div>
+                })}
+                <p className="text-[11px] leading-relaxed text-muted-foreground">Souvenir quantities are reserved for a limited payment window. Present your collection QR to authorized staff. It does not replace the ticket check-in QR.</p>
+              </div>
+            )}
             {saleable.some((t) => t.priceMinor > 0) && (
               <div className="space-y-3 pt-2">
                 <div className="space-y-1.5">
@@ -1018,8 +1045,8 @@ export default function EventDetail({ slug }: { slug: string }) {
           </div>
           <DialogFooter className="shrink-0 flex-col gap-3 border-t border-border/70 bg-card px-4 py-4 sm:flex-col sm:px-5">
             <div className="flex w-full items-center justify-between gap-3 text-sm">
-              <span className="text-muted-foreground">Estimated ticket subtotal</span>
-              <span className="text-lg font-extrabold tabular-nums text-primary" aria-live="polite">{selectedTotal === 0 ? 'Free' : money(selectedTotal)}</span>
+              <span className="text-muted-foreground">Estimated tickets + souvenirs</span>
+              <span className="text-lg font-extrabold tabular-nums text-primary" aria-live="polite">{selectedTotal + selectedSouvenirTotal === 0 ? 'Free' : money(selectedTotal + selectedSouvenirTotal)}</span>
             </div>
             <button
               type="button"
@@ -1028,10 +1055,10 @@ export default function EventDetail({ slug }: { slug: string }) {
               disabled={checkoutDisabled}
               onClick={() => void placeOrder()}
             >
-              {placing ? 'Reserving…' : selectedTotal === 0 ? 'Confirm free RSVP' : 'Continue to secure checkout'}
+              {placing ? 'Reserving…' : selectedTotal + selectedSouvenirTotal === 0 ? 'Confirm free RSVP' : 'Continue to secure checkout'}
             </button>
             <p className="text-center text-xs leading-relaxed text-muted-foreground">
-              {selectedTotal === 0
+              {selectedTotal + selectedSouvenirTotal === 0
                 ? 'Your free registration is confirmed only after the server issues tickets.'
                 : 'Final total includes applicable processing fees and discount codes, calculated by the server. Reservations expire if payment is not completed.'}
             </p>

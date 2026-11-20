@@ -92,7 +92,7 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
           id: item.id, title: item.caption || 'Event programme', downloadUrl: `/api/v1/events/${event.id}/programmes/${item.id}`,
         })),
         souvenirs: event.souvenirs.map((p) => ({
-          ...p, available: Math.max(0, p.stockTotal - p.stockSold - p.stockReserved), onlineOrderingEnabled: false,
+          ...p, available: Math.max(0, p.stockTotal - p.stockSold - p.stockReserved), onlineOrderingEnabled: process.env.IEVENTPLUX_SOUVENIR_CHECKOUT_ENABLED === '1' && ['PUBLISHED', 'LIVE'].includes(event.status) && p.priceMinor > 0 && p.stockTotal > p.stockSold + p.stockReserved,
         })),
         broadcasts,
         venue: venueSafe,

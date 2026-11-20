@@ -92,6 +92,7 @@ export async function GET(req: NextRequest) {
         '/ai/{mode}': { post: { tags: ['ai'], summary: 'chat (text) | voice (multipart audio → transcript+reply+TTS audio)' } },
         '/orgs/{id}/ai-advisor': { post: { tags: ['ai'], summary: 'Organizer AI advisor — kind: pricing (validated suggestions) | digest (weekly narrative); advisory only' } },
         '/orgs/{id}/growth': { get: { tags: ['orgs'], summary: 'Membership-scoped growth intelligence — explainable event readiness and real ticket inventory, no AI forecasts' } },
+        '/orgs/{id}/merchandise': { get: { tags: ['orgs'], summary: 'Role-scoped souvenir stock, paid-order and collection reconciliation; eventId required for CSV export; financial fields restricted to finance roles' } },
         '/orders/{ref}/suggestions': { get: { tags: ['orders'], summary: 'DB-driven cross-sell for settled orders (same category/city first)' } },
         '/effects': { get: { tags: ['effects'], summary: 'CSS effects library (filter/search)' }, post: { tags: ['effects'], summary: 'Record a view' } },
         '/uploads': { post: { tags: ['events'], summary: 'Bounded media upload' } },
