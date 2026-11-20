@@ -301,7 +301,13 @@ export async function releaseExpiredReservations(): Promise<{ released: number; 
         // sweep's earlier read can be stale after a provider callback.
         const transition = await db.order.updateMany({
           where: { id: order.id, status: { in: ['DRAFT', 'PENDING_PAYMENT'] }, expiresAt: { lt: new Date() },
-            payments: { none: { status: 'SUCCESS' } } },
+            payments: { none: { status: 'SUCCESS' } },
+            // An order may have more than 500 reservation lines. Do not mark
+            // it EXPIRED while any ticket or souvenir stock is still held;
+            // later bounded sweeps must release the remaining lines first.
+            reservations: { none: { status: 'ACTIVE' } },
+            souvenirItems: { none: { holdStatus: 'ACTIVE' } },
+          },
           data: { status: 'EXPIRED' },
         })
         ordersExpired += transition.count

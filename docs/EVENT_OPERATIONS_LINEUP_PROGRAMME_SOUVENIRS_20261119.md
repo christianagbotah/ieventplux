@@ -57,3 +57,7 @@ Design and implement as a separate end-to-end financial release, with tests befo
 ### Release B expiry-sweep accounting note (20 November 2026)
 
 The expiry worker must increment its returned `released` count and queue an order for expiry only **after** the corresponding PostgreSQL transaction commits. A transaction callback can return successfully while COMMIT still fails (e.g. a serialization conflict). Counters maintained inside the callback would incorrectly report released inventory and could trigger a follow-up order transition after rollback. Both ticket and merchandise hold paths now record success only after `$transaction` resolves. This is defensive accounting, **not** a substitute for isolated PostgreSQL concurrency and late-payment tests; keep charging and collection disabled.
+
+### Release B expiry consistency guard (20 November 2026)
+
+The bounded expiry worker must not transition an order to `EXPIRED` while any ticket reservation or souvenir hold remains `ACTIVE`. The final order transition now conditionally requires both sets of active holds to be empty, alongside the existing payment-success and order-status checks. This avoids marking partially released mixed orders expired when the 500-line sweep limit is reached. PostgreSQL concurrency, late-provider-payment, and end-to-end refund testing remain required before activating merchandise checkout or pickup.
