@@ -1205,3 +1205,18 @@ body {
   .ievx-hero-mobile-feature { display: none !important; }
   .ievx-public .ievx-home-hero .ievx-hero-quick .ievx-mobile-quick { display: none; }
 }
+
+/* Event attendance: clean booking card and mobile CTA docked above bottom nav.
+   No overlay on payment selection; organizer/admin workspace unaffected. */
+.ievx-booking-panel { box-shadow: 0 12px 35px rgb(8 46 51 / 6%), 0 2px 5px rgb(8 46 51 / 3%); }
+.ievx-booking-ticket:hover { border-color: color-mix(in srgb, var(--ievx-teal) 30%, var(--ievx-line)); }
+.ievx-mobile-booking-bar { bottom: calc(4rem + env(safe-area-inset-bottom, 0px)); }
+.ievx-booking-panel :is(button, input):focus-visible,
+.ievx-mobile-booking-bar button:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--ievx-teal) 70%, white);
+  outline-offset: 3px;
+}
+@media (min-width: 1024px) { .ievx-mobile-booking-bar { display: none !important; } }
+@media (prefers-reduced-motion: reduce) {
+  .ievx-booking-panel button, .ievx-booking-ticket { transition: none !important; }
+}
