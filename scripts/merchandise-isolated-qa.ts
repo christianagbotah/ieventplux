@@ -152,6 +152,8 @@ async function main() {
   ])
   assert.equal(collectionRaceResults.filter((result) => result.status === 'fulfilled' && result.value.status === 'COLLECTED').length, 1,
     'Only one distinct action may collect the final unit')
+  assert.equal(collectionRaceResults.filter((result) => result.status === 'rejected').length, 1,
+    'The losing distinct collection action must be rejected, not silently acknowledged')
   assert.equal((await db.souvenirOrderItem.findUniqueOrThrow({ where: { id: collectionRaceLine.id } })).collectedQty, 1)
   assert.equal((await db.eventSouvenirProduct.findUniqueOrThrow({ where: { id: collectionRaceProduct.id } })).stockFulfilled, 1)
   assert.equal(await db.souvenirCollection.count({ where: { orderItemId: collectionRaceLine.id } }), 1)
