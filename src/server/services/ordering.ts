@@ -265,7 +265,14 @@ export async function releaseExpiredReservations(): Promise<{ released: number; 
       const updated = await tx.souvenirOrderItem.updateMany({ where: { id: line.id, holdStatus: 'ACTIVE' }, data: { holdStatus: 'RELEASED' } })
       if (!updated.count) return
       const item = await tx.souvenirOrderItem.findUniqueOrThrow({ where: { id: line.id } })
-      await tx.eventSouvenirProduct.update({ where: { id: item.productId }, data: { stockReserved: { decrement: item.qty } } })
+      // A corrupt or concurrently reconciled counter must never become negative.
+      // Throwing also rolls back the hold release in this same transaction so
+      // operations can investigate without losing the reservation evidence.
+      const stock = await tx.eventSouvenirProduct.updateMany({
+        where: { id: item.productId, stockReserved: { gte: item.qty } },
+        data: { stockReserved: { decrement: item.qty } },
+      })
+      if (stock.count !== 1) throw errors.conflict('Souvenir reserved stock needs reconciliation before expiry release.')
       orderIds.add(line.orderId)
       released += 1
     })
