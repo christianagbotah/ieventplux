@@ -142,12 +142,40 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
     }
 
     if (action === 'media') {
+      const event = await db.event.findUnique({
+        where: { id }, select: {
+          deletedAt: true, visibility: true, status: true,
+          org: { select: { status: true, deletedAt: true } },
+        },
+      })
+      if (!event || event.deletedAt || event.org.status !== 'ACTIVE' || event.org.deletedAt) {
+        throw errors.notFound('Event not found.')
+      }
+      const eventLiveToAudience = ['PUBLISHED', 'LIVE', 'ENDED', 'POSTPONED'].includes(event.status)
+      if (!organizerCanPreview && (!eventLiveToAudience || event.visibility !== 'PUBLIC')) {
+        if (!eventLiveToAudience) throw errors.notFound('Event not found.')
+        const session = await (await import('@/server/auth')).getSession()
+        if (!session) throw errors.notFound('Event not found.')
+        const [ticket, rsvp] = await Promise.all([
+          db.ticket.findFirst({ where: { eventId: id, userId: session.user.id, status: { in: ['VALID', 'CHECKED_IN'] } }, select: { id: true } }),
+          db.rsvp.findFirst({ where: { eventId: id, userId: session.user.id, status: 'APPROVED' }, select: { id: true } }),
+        ])
+        if (!ticket && !rsvp) throw errors.notFound('Event not found.')
+      }
+      // An event can reference clips from earlier occurrences. Both relationship
+      // branches are needed; the old eventId+OR conjunction hid most media.
+      // Anonymous users must never see moderation-pending or removed assets.
       const items = await db.mediaAsset.findMany({
-        where: { eventId: id, OR: [{ linksToEventId: id }] },
+        where: {
+          OR: [{ eventId: id }, { linksToEventId: id }],
+          ...(organizerCanPreview ? {} : { status: 'READY' }),
+        },
         select: { id: true, kind: true, url: true, posterUrl: true, durationSec: true, caption: true, status: true, views: true, createdAt: true },
         orderBy: { createdAt: 'desc' },
       })
-      return jsonOk({ items })
+      const response = jsonOk({ items })
+      response.headers.set('Cache-Control', organizerCanPreview ? 'private, no-store' : 'no-store')
+      return response
     }
 
     if (action === 'comments') {
