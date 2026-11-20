@@ -15,6 +15,12 @@ import { collectSouvenirItem } from '../src/server/services/souvenir-collection'
 
 const url = new URL(process.env.DATABASE_URL ?? '')
 assert.equal(url.searchParams.get('schema'), 'ieventplux_merch_qa_20261119', 'Refusing to run outside isolated QA schema.')
+// A schema name alone is insufficient: it could exist inside the live database.
+// Require an explicitly named disposable database on loopback as a second barrier.
+assert.match(decodeURIComponent(url.pathname).slice(1), /(?:^|[_-])(qa|test|scratch)(?:[_-]|$)/i,
+  'Refusing to run against a database not explicitly named QA/test/scratch.')
+assert.ok(['localhost', '127.0.0.1', '::1', '[::1]'].includes(url.hostname),
+  'Refusing to run synthetic QA against a non-loopback database host.')
 assert.equal(process.env.IEVENTPLUX_SOUVENIR_CHECKOUT_ENABLED, '1', 'Use the isolated QA feature flag.')
 const tag = Date.now().toString(36)
 const ownerEmail = `qa-owner-${tag}@example.invalid`

@@ -81,3 +81,7 @@ The isolated merchandise QA harness now issues two simultaneous fulfilment repla
 ### 20 November 2026 — competing final-unit collection QA
 
 The isolated merchandise QA harness now races two distinct collection action IDs against a paid synthetic one-unit SKU. It requires exactly one successful pickup, one collection audit record, one fulfilled stock unit, and no admission ticket. This is a **test scenario added, not a passing database test** until executed on the migrated scratch PostgreSQL schema. It does not replace real-device camera, staff authorization, provider reconciliation or refund QA. Live merchandise charging and collection stay disabled.
+
+### 20 November — isolated QA target hardening
+
+The merchandise concurrency harness now requires **all three**: the dedicated `ieventplux_merch_qa_20261119` schema, a database name explicitly containing `qa`, `test`, or `scratch` as a separate segment, and a loopback PostgreSQL host. This protects against accidentally running synthetic financial writes in the production database merely because someone created a QA-named schema there. Prepare a separate disposable local database, apply additive migrations only there, and run the concurrency suite before claiming it passed. No live money or fulfilment activation is authorized by this guard.
