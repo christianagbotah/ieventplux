@@ -230,7 +230,12 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
 /** Release expired reservations and expire stale orders (worker sweep). */
 export async function releaseExpiredReservations(): Promise<{ released: number; ordersExpired: number }> {
   const now = new Date()
-  const expired = await db.inventoryReservation.findMany({ where: { status: 'ACTIVE', expiresAt: { lt: now } }, include: { order: true } })
+  const expired = await db.inventoryReservation.findMany({
+    where: { status: 'ACTIVE', expiresAt: { lt: now } },
+    include: { order: true },
+    orderBy: [{ expiresAt: 'asc' }, { id: 'asc' }],
+    take: 500,
+  })
   let released = 0
   const orderIds = new Set<string>()
   for (const res of expired) {
@@ -263,7 +268,7 @@ export async function releaseExpiredReservations(): Promise<{ released: number; 
   // payment. Conditional row updates keep expiry and fulfilment idempotent.
   const expiredSouvenirs = await db.souvenirOrderItem.findMany({
     where: { holdStatus: 'ACTIVE', order: { expiresAt: { lt: now }, status: { in: ['DRAFT', 'PENDING_PAYMENT', 'EXPIRED', 'CANCELLED'] } } },
-    select: { id: true, orderId: true }, take: 500,
+    select: { id: true, orderId: true }, orderBy: [{ order: { expiresAt: 'asc' } }, { id: 'asc' }], take: 500,
   })
   for (const line of expiredSouvenirs) {
     await db.$transaction(async (tx) => {
