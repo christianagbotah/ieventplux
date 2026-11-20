@@ -98,7 +98,26 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
       const targetType = String(body.targetType ?? 'MEDIA')
       const targetId = String(body.targetId ?? '')
       const kind = ['LIKE', 'CELEBRATE', 'HEART', 'FIRE'].includes(String(body.kind)) ? String(body.kind) : 'LIKE'
-      if (!targetId) throw errors.badRequest('Missing target.')
+      if (!['MEDIA', 'COMMENT'].includes(targetType) || !targetId || targetId.length > 128) {
+        throw errors.badRequest('Invalid reaction target.')
+      }
+      // Never create orphaned reactions or let a forged ID react to unpublished,
+      // removed, private or suspended-organization content.
+      const visible = targetType === 'MEDIA'
+        ? await db.mediaAsset.findFirst({
+            where: { id: targetId, status: 'READY', event: {
+              visibility: 'PUBLIC', deletedAt: null, status: { in: ['PUBLISHED', 'LIVE', 'ENDED'] },
+            }, org: { status: 'ACTIVE', deletedAt: null } },
+            select: { id: true },
+          })
+        : await db.comment.findFirst({
+            where: { id: targetId, status: 'VISIBLE', event: {
+              visibility: 'PUBLIC', deletedAt: null, status: { in: ['PUBLISHED', 'LIVE', 'ENDED'] },
+              org: { status: 'ACTIVE', deletedAt: null },
+            } },
+            select: { id: true },
+          })
+      if (!visible) throw errors.notFound('This content is not available for reactions.')
       const existing = await db.reaction.findFirst({ where: { targetType, targetId, userId: user.id } })
       if (existing) {
         if (existing.kind === kind) {
@@ -109,21 +128,29 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
         return jsonOk({ reacted: true, kind })
       }
       await db.reaction.create({ data: { targetType, targetId, userId: user.id, kind } })
-      if (targetType === 'MEDIA') {
-        await db.mediaAsset.update({ where: { id: targetId }, data: { views: { increment: 1 } } }).catch(() => {})
-      }
+      // A reaction is not a video view. View metrics require a separate,
+      // consent-respecting playback/impression pipeline.
       return jsonOk({ reacted: true, kind })
     }
 
     if (action === 'report') {
       await rateLimit(req, 'report', 5, 60_000)
-      const targetType = ['EVENT', 'COMMENT', 'USER', 'ORG', 'BROADCAST'].includes(String(body.targetType)) ? String(body.targetType) : null
+      const targetType = ['EVENT', 'COMMENT', 'USER', 'ORG', 'BROADCAST', 'MEDIA'].includes(String(body.targetType)) ? String(body.targetType) : null
       if (!targetType) throw errors.badRequest('Invalid report target.')
+      const targetId = String(body.targetId ?? '')
+      if (!targetId || targetId.length > 128) throw errors.badRequest('Invalid report target.')
+      if (targetType === 'MEDIA') {
+        const media = await db.mediaAsset.findFirst({
+          where: { id: targetId, status: 'READY', event: { visibility: 'PUBLIC', deletedAt: null } },
+          select: { id: true },
+        })
+        if (!media) throw errors.notFound('This media is unavailable.')
+      }
       const report = await db.moderationReport.create({
         data: {
           reporterId: user.id,
           targetType,
-          targetId: String(body.targetId ?? ''),
+          targetId,
           reason: ['SPAM', 'OFFENSIVE', 'FRAUD', 'COPYRIGHT', 'OTHER'].includes(String(body.reason)) ? String(body.reason) : 'OTHER',
           details: sanitizeText(body.details, 1000) || null,
         },
@@ -159,6 +186,23 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
 export async function GET(req: NextRequest, ctx: RouteContext) {
   return handle(async () => {
     const { action } = await ctx.params
+
+    if (action === 'reactions') {
+      const session = await getSession()
+      if (!session) throw errors.unauthorized()
+      const raw = new URL(req.url).searchParams.get('ids') ?? ''
+      const ids = raw.split(',').filter(Boolean)
+      if (ids.length > 30 || ids.some((id) => !/^[a-zA-Z0-9_-]{1,128}$/.test(id))) {
+        throw errors.badRequest('Invalid clip IDs.')
+      }
+      const reactions = ids.length ? await db.reaction.findMany({
+        where: { userId: session.user.id, targetType: 'MEDIA', targetId: { in: ids } },
+        select: { targetId: true, kind: true },
+      }) : []
+      const response = jsonOk({ reactions })
+      response.headers.set('Cache-Control', 'private, no-store')
+      return response
+    }
 
     if (action === 'feed') {
       const session = await getSession()
