@@ -57,6 +57,9 @@ jobs:
       - name: Typecheck
         run: bun run typecheck
 
+      - name: Durable offline check-in queue and transport safety
+        run: bun test src/portal/lib/checkin-offline-storage.test.ts src/portal/lib/checkin-policy.test.ts
+
       - name: Security policy unit tests (payments, realtime, check-in and private KYC)
         run: bun test src/server/hubtel/security-policy.test.ts mini-services/realtime/room-authorization.test.ts src/portal/lib/checkin-policy.test.ts src/server/kyc-storage.test.ts src/server/kyc-requirements.test.ts
 
