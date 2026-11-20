@@ -1307,3 +1307,27 @@ body {
   .ievx-hero-ticker-track { animation: none !important; transform: none !important; }
   .ievx-hero-story-controls > button::after { transition: none !important; }
 }
+
+/* Organizer event control center: calm, dense operational UI with explicit
+   action bands. Mobile action buttons wrap without overflowing the viewport. */
+.ievx-eventops-header {
+  background:
+    radial-gradient(circle at 90% 5%, color-mix(in srgb, var(--ievx-teal) 11%, transparent), transparent 48%),
+    var(--card);
+  box-shadow: 0 8px 24px rgb(13 40 48 / 4%);
+}
+.ievx-eventops-card {
+  box-shadow: 0 2px 9px rgb(13 40 48 / 3%);
+  transition: border-color .16s ease, box-shadow .16s ease;
+}
+.ievx-eventops-card:hover, .ievx-eventops-card:focus-within {
+  border-color: color-mix(in srgb, var(--ievx-teal) 32%, var(--border));
+  box-shadow: 0 7px 22px rgb(13 40 48 / 6%);
+}
+.ievx-eventops-filter:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--ievx-teal) 45%, transparent);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ievx-eventops-card, .ievx-eventops-filter { transition: none !important; }
+}
