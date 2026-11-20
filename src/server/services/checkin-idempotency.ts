@@ -27,7 +27,9 @@ export function isSameScanCredential(
 }
 
 export function validClientScanId(value: string): boolean {
-  return /^[a-zA-Z0-9_-]{1,128}$/.test(value)
+  // Legacy mobile devices persist an ID that may end with a brace; their scan
+  // IDs use colon separators. Keep those existing offline queues replayable.
+  return /^[a-zA-Z0-9_:\-{}]{1,128}$/.test(value)
 }
 
 export function validCaptureTime(value: string | undefined): boolean {

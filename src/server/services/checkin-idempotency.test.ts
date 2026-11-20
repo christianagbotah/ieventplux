@@ -19,6 +19,8 @@ describe('Check-in anti-replay and access policy', () => {
   })
   test('stable random client identifiers are bounded and safe', () => {
     expect(validClientScanId('web-c6af4a4d-e8c0-4eca-85af-62a407dbcd22')).toBe(true)
+    expect(validClientScanId('12345678-1234-4abc-1234-123456789abc}:1763640000000:abcdef01')).toBe(true)
+    expect(validClientScanId('12345678-1234-4abc-1234-123456789abc:1763640000000:abcdef01')).toBe(true)
     expect(validClientScanId('')).toBe(false)
     expect(validClientScanId('../another')).toBe(false)
     expect(validClientScanId('a'.repeat(129))).toBe(false)

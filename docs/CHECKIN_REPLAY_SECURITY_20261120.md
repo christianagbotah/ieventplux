@@ -11,6 +11,7 @@
   All mismatches return a generic HTTP 409 without attendee data.
 - Legitimate offline retries continue to use their original stable scan IDs,
   event, staff user and credential after lost responses.
+- Legacy mobile scan IDs with colon delimiters and a historical trailing brace remain accepted; new mobile device IDs no longer include that trailing brace.
 - Identifiers and payloads are length checked; offline capture timestamps
   are verified before database writes.
 - POST checkin/scan treats direct scans as ONLINE regardless of an
