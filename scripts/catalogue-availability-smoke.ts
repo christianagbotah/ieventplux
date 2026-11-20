@@ -1,3 +1,4 @@
+export {} // Explicit module: do not merge top-level test vars with other scripts.
 /** Safe HTTP acceptance: provider visibility and genuine catalogue fallback. */
 const base = (process.env.SMOKE_BASE_URL ?? 'http://127.0.0.1:3000/api/v1').replace(/\/$/, '')
 const target = new URL(base)
