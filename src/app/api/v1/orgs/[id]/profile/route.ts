@@ -12,6 +12,8 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
     const org = await db.organization.findUnique({ where: { slug: id } })
     if (!org || org.deletedAt) throw errors.notFound('Organizer not found.')
     const session = await getSession()
+    const myOrg = Boolean(session && (session.user.id === org.ownerId ||
+      await db.membership.findFirst({ where: { orgId: org.id, userId: session.user.id, acceptedAt: { not: null } }, select: { id: true } })))
     const following = session ? Boolean(await db.follow.findFirst({ where: { followerId: session.user.id, orgId: org.id } })) : false
     // Only PUBLIC events appear on public organizer profiles (unlisted/invited never leak).
     const events = await db.event.findMany({
@@ -31,7 +33,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
         socialLinks: JSON.parse(org.socialLinks || '{}'),
         verifiedAt: org.verifiedAt, verified: Boolean(org.verifiedAt),
       },
-      events, followers, following, clips,
+      events, followers, following, myOrg, clips,
     })
   })
 }

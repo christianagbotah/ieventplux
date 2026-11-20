@@ -1220,3 +1220,90 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .ievx-booking-panel button, .ievx-booking-ticket { transition: none !important; }
 }
+
+/* ─── iEventPlux experiential home hero: 3 editorial stories, 1 real event. ──
+   Reduced-motion users never get autoplay, marquee movement or flash. */
+.ievx-public .ievx-hero-panel[data-hero-story="1"] {
+  background: radial-gradient(circle at 80% 9%, rgb(64 164 201 / 32%), transparent 48%),
+              linear-gradient(118deg, #071d35, #0d4d5d 62%, #086c68 100%);
+}
+.ievx-public .ievx-hero-panel[data-hero-story="2"] {
+  background: radial-gradient(circle at 82% 13%, rgb(181 151 90 / 23%), transparent 48%),
+              linear-gradient(118deg, #112133, #174b49 62%, #09614d 100%);
+}
+.ievx-hero-story-enter {
+  animation: ievx-story-enter .58s cubic-bezier(.2,.75,.2,1) both;
+}
+.ievx-hero-visual-enter {
+  animation: ievx-visual-enter .66s cubic-bezier(.2,.75,.2,1) both;
+}
+@keyframes ievx-story-enter {
+  from { opacity: .15; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes ievx-visual-enter {
+  from { opacity: .35; transform: translateX(14px) scale(.985); }
+  to   { opacity: 1; transform: translateX(0) scale(1); }
+}
+.ievx-hero-story-controls {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 10px;
+}
+.ievx-hero-story-controls > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  min-width: 35px;
+  border-radius: 9px;
+  color: #d7f4e7;
+}
+.ievx-hero-story-controls > button:not(.ievx-hero-play-toggle)::after {
+  content: '';
+  height: 4px;
+  width: 17px;
+  border-radius: 999px;
+  background: rgb(228 255 245 / 40%);
+  transition: width .22s ease, background-color .22s ease;
+}
+.ievx-hero-story-controls > button.is-active:not(.ievx-hero-play-toggle)::after {
+  width: 26px;
+  background: #a9f4dd;
+}
+.ievx-hero-story-controls > button:hover { background: rgb(255 255 255 / 10%); }
+.ievx-hero-play-toggle { margin-left: 5px; border: 1px solid rgb(211 255 238 / 22%); }
+.ievx-hero-story-controls > button:focus-visible {
+  outline: 3px solid #a9f4dd;
+  outline-offset: 2px;
+}
+.ievx-hero-ticker {
+  overflow: hidden;
+  white-space: nowrap;
+  width: 100%;
+  margin-top: 10px;
+  color: var(--ievx-teal);
+  opacity: .83;
+  font-size: 10px;
+  letter-spacing: .17em;
+  font-weight: 800;
+}
+.ievx-hero-ticker-track {
+  display: flex;
+  gap: 0;
+  width: max-content;
+  animation: ievx-ticker-scroll 32s linear infinite;
+}
+.ievx-hero-ticker-track > span { display: inline-block; padding-right: 1.5rem; }
+@keyframes ievx-ticker-scroll { to { transform: translateX(-50%); } }
+@media (max-width: 639px) {
+  .ievx-hero-ticker { font-size: 9px; margin-top: 6px; }
+  .ievx-hero-story-controls { margin-top: 5px; }
+  .ievx-hero-story-controls > button { min-height: 30px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ievx-hero-story-enter, .ievx-hero-visual-enter,
+  .ievx-hero-ticker-track { animation: none !important; transform: none !important; }
+  .ievx-hero-story-controls > button::after { transition: none !important; }
+}

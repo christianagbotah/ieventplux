@@ -66,6 +66,9 @@ jobs:
       - name: Public editorial spotlight accessibility and truthful ticket currency
         run: bun test src/portal/components/public-experience.test.tsx
 
+      - name: Honest offline catalogue query filters
+        run: bun test src/server/catalogue-search.test.ts
+
       - name: Following timeline privacy, multi-source pagination and follow safety
         run: bun test src/server/following-feed-policy.test.ts
 
@@ -98,6 +101,9 @@ jobs:
 
       - name: Organizer event tenant privacy regression (seeded users)
         run: bun run scripts/org-event-access-smoke.ts
+
+      - name: Concierge capability status and real-catalogue fallback
+        run: bun run scripts/catalogue-availability-smoke.ts
 
       - name: Following timeline HTTP privacy and follow/unfollow regression (dev seed only)
         run: bun run scripts/following-feed-smoke.ts

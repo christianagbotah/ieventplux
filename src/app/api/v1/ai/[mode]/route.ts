@@ -6,6 +6,7 @@ import { formatMoney } from '@/server/money'
 import { PUBLIC_EVENT_WHERE, buildDiscoveryWhere } from '@/server/services/events'
 import { llmClient, llmReply, llmJson } from '@/server/ai/llm'
 import { membershipFor, orgCan } from '@/server/permissions'
+import { interpretCatalogueQuery } from '@/server/catalogue-search'
 
 /**
  * AI surface (brief §7 — AI assistance is additive, never core-path):
@@ -110,8 +111,39 @@ const eventCardSelect = {
   mode: true, status: true, startsAt: true, endsAt: true, city: true, country: true,
   isFeatured: true, boostedUntil: true,
   org: { select: { name: true, slug: true, verifiedAt: true } },
-  ticketTypes: { select: { priceMinor: true, quota: true, soldCount: true }, where: { active: true } },
+  ticketTypes: { select: { priceMinor: true, currency: true, quota: true, soldCount: true }, where: { active: true } },
 } as const
+
+/** Honest no-model fallback; real public inventory, never fabricated AI. */
+async function runCatalogueSearch(query: string) {
+  const now = new Date()
+  const [categories, cityRows] = await Promise.all([
+    db.category.findMany({ where: { active: true }, select: { slug: true, name: true } }),
+    db.event.findMany({
+      where: { ...PUBLIC_EVENT_WHERE, city: { not: null }, endsAt: { gte: now } },
+      distinct: ['city'], take: 100, select: { city: true },
+    }),
+  ])
+  const filters = interpretCatalogueQuery(query, categories, cityRows.map((c) => c.city).filter((v): v is string => Boolean(v)))
+  const where = buildDiscoveryWhere({
+    q: filters.keywords ?? undefined,
+    category: filters.category ?? undefined,
+    city: filters.city ?? undefined,
+    mode: filters.mode ?? undefined,
+    price: filters.price ?? undefined,
+    when: filters.when ?? undefined,
+  }, now)
+  const [items, total] = await Promise.all([
+    db.event.findMany({ where, orderBy: { startsAt: 'asc' }, take: 12, select: eventCardSelect }),
+    db.event.count({ where }),
+  ])
+  return {
+    summary: total > 0
+      ? 'Found ' + total + ' real public event' + (total === 1 ? '' : 's') + ' in the catalogue. AI interpretation is off; these are keyword and category matches.'
+      : 'No matching public events were found. Try a different city, date or keyword. AI interpretation is currently off.',
+    filters, items, total, source: 'CATALOGUE' as const,
+  }
+}
 
 async function runSmartSearch(query: string) {
   const now = new Date()
@@ -472,21 +504,46 @@ async function runStudio(body: Record<string, unknown>) {
 
 // ── Router ────────────────────────────────────────────────────────────────────
 
+/** Public capability status for a graceful, non-misleading interface. */
+export async function GET(_req: NextRequest, ctx: RouteContext) {
+  return handle(async () => {
+    const { mode } = await ctx.params
+    if (mode !== 'status') throw errors.notFound('Unknown AI resource.')
+    let available = false
+    if (env.aiEnabled) {
+      try { await llmClient(); available = true } catch { /* client config not present */ }
+    }
+    return jsonOk({
+      available,
+      voiceAvailable: available,
+      catalogueSearch: true,
+      note: available
+        ? 'AI SDK configuration is readable. Successful provider generation has not been verified by this check.'
+        : 'AI chat and voice are disabled. Catalogue search uses real public events without a model.',
+    }, { headers: { 'Cache-Control': 'public, max-age=60' } })
+  })
+}
+
 export async function POST(req: NextRequest, ctx: RouteContext) {
   return handle(async () => {
     const { mode } = await ctx.params
     // Authentication must be enforced before exposing organizer AI feature state.
     if (mode === 'studio') await requireUser()
-    if (!env.aiEnabled) throw errors.unavailable('AI_DISABLED', 'AI generation is disabled on this deployment. Contact the platform administrator for activation.')
-
     if (mode === 'search') {
       await rateLimit(req, 'ai-search', 12, 60_000)
       const body = await readJson<{ query?: string }>(req)
       const query = sanitizeText(body.query, 300)
       if (query.length < 3) throw errors.badRequest('Describe what you are looking for (at least 3 characters).')
-      const result = await runSmartSearch(query)
-      return jsonOk(result)
+      if (!env.aiEnabled) {
+        return jsonOk(await runCatalogueSearch(query), { headers: { 'Cache-Control': 'no-store' } })
+      }
+      try {
+        return jsonOk({ ...(await runSmartSearch(query)), source: 'AI' as const }, { headers: { 'Cache-Control': 'no-store' } })
+      } catch {
+        return jsonOk(await runCatalogueSearch(query), { headers: { 'Cache-Control': 'no-store' } })
+      }
     }
+    if (!env.aiEnabled) throw errors.unavailable('AI_DISABLED', 'AI generation is disabled on this deployment. Contact the platform administrator for activation.')
 
     if (mode === 'planner') {
       await rateLimit(req, 'ai-planner', 8, 60_000)

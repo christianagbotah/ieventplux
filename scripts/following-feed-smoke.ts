@@ -33,6 +33,7 @@ async function main() {
   const cookie = 'ievx_session=' + token
   const testId = randomBytes(8).toString('hex')
   const eventIds: string[] = []
+  let organizerSessionId: string | null = null
 
   async function call(path: string, options: { method?: string; body?: Record<string, unknown>; authenticated?: boolean } = {}) {
     const response = await fetch(base + path, {
@@ -66,6 +67,31 @@ async function main() {
       status: 'PUBLISHED', visibility: 'UNLISTED',
     } })
     eventIds.push(privateEvent.id)
+    // Organizer can inspect their own event, and cannot follow themselves.
+    const creatorToken = randomBytes(32).toString('base64url')
+    const creatorSession = await db.session.create({
+      data: {
+        userId: chapel.ownerId,
+        tokenHash: createHash('sha256').update(creatorToken).digest('hex'),
+        expiresAt: new Date(Date.now() + 15 * 60_000),
+      },
+    })
+    organizerSessionId = creatorSession.id
+    const creatorHeaders = { Cookie: 'ievx_session=' + creatorToken }
+    const creatorEvent = await fetch(base + '/events/' + publicEvent.id, { headers: creatorHeaders })
+    const creatorEventData = await creatorEvent.json()
+    check(creatorEvent.status === 200 && creatorEventData.isEventHost === true,
+      'organizer owner is recognized as host, not attendee')
+    const creatorOrg = await fetch(base + '/orgs/' + chapel.slug + '/profile', { headers: creatorHeaders })
+    const creatorOrgData = await creatorOrg.json()
+    check(creatorOrg.status === 200 && creatorOrgData.myOrg === true,
+      'creator sees own organization as manageable')
+    const selfFollow = await fetch(base + '/social/follow', {
+      method: 'POST', headers: { ...creatorHeaders, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orgId: chapel.id }),
+    })
+    check(selfFollow.status === 400, 'organizer owner cannot follow their own organization')
+
     const publicUpdate = await db.eventUpdate.create({ data: {
       eventId: publicEvent.id, orgId: chapel.id, title: 'Public announcement ' + testId,
       body: 'Synthetic event update for the Following feed.', important: true,
@@ -106,6 +132,7 @@ async function main() {
     if (preexistingFollow) {
       await db.follow.create({ data: { id: preexistingFollow.id, followerId: attendee.id, orgId: chapel.id, createdAt: preexistingFollow.createdAt } })
     }
+    if (organizerSessionId) await db.session.deleteMany({ where: { id: organizerSessionId } })
     await db.session.delete({ where: { id: session.id } })
   }
 }

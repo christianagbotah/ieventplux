@@ -53,6 +53,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
             })
         if (!target) throw errors.notFound('This profile is unavailable to follow.')
         const ownerId = orgId ? ('ownerId' in target ? target.ownerId : null) : userId
+        if (ownerId === user.id) throw errors.badRequest('You already manage this organizer. You cannot follow yourself.')
         if (ownerId && ownerId !== user.id) {
           const blocked = await db.userBlock.findFirst({
             where: { OR: [

@@ -18,6 +18,7 @@ interface SearchResponse {
   filters: { category?: string | null; city?: string | null; mode?: string | null; price?: string | null; when?: string | null; keywords?: string | null }
   items: EventCardData[]
   total: number
+  source?: 'AI' | 'CATALOGUE'
 }
 
 const EXAMPLES = [
@@ -52,6 +53,15 @@ export function AiSearchPanel({ id }: { id?: string }) {
   const [state, setState] = useState<'idle' | 'loading' | 'done' | 'error'>('idle')
   const [result, setResult] = useState<SearchResponse | null>(null)
   const [error, setError] = useState('')
+  const [aiAvailable, setAiAvailable] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    let live = true
+    void api.get<{ available: boolean }>('/ai/status')
+      .then((capability) => { if (live) setAiAvailable(capability.available) })
+      .catch(() => { if (live) setAiAvailable(false) })
+    return () => { live = false }
+  }, [])
 
   const runSearch = useCallback(async (q: string) => {
     const trimmed = q.trim()
@@ -81,17 +91,22 @@ export function AiSearchPanel({ id }: { id?: string }) {
     const match = hash.match(/aiq=([^&]+)/)
     if (match) {
       const q = decodeURIComponent(match[1])
-      setQuery(q)
-      void runSearch(q)
+      const scheduled = requestAnimationFrame(() => {
+        setQuery(q)
+        void runSearch(q)
+      })
+      return () => cancelAnimationFrame(scheduled)
     }
   }, [runSearch])
+
+  const catalogueMode = result?.source === 'CATALOGUE' || aiAvailable === false
 
   const filterChips = result
     ? Object.entries(result.filters).filter(([, v]) => Boolean(v))
     : []
 
   return (
-    <section id={id ?? 'ai-search'} aria-label="AI powered event search" className="ievx-scale scroll-mt-48">
+    <section id={id ?? 'ai-search'} aria-label="Search actual events with AI or catalogue filters" className="ievx-scale scroll-mt-48">
       <div className="relative overflow-hidden rounded-3xl border border-primary/25 bg-gradient-to-br from-primary/10 via-card to-card p-4 shadow-sm sm:p-5">
         <div className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-primary/10 blur-2xl" aria-hidden />
         <div className="relative">
@@ -100,11 +115,11 @@ export function AiSearchPanel({ id }: { id?: string }) {
               <Wand2 className="h-4 w-4" aria-hidden />
             </span>
             <div className="min-w-0">
-              <h2 className="text-sm font-bold leading-tight sm:text-base">Ask iEventPlux</h2>
-              <p className="text-xs text-muted-foreground">Describe the event you want — AI turns it into filters and searches the real catalogue.</p>
+              <h2 className="text-sm font-bold leading-tight sm:text-base">{catalogueMode ? "Find events in the catalogue" : "Ask iEventPlux"}</h2>
+              <p className="text-xs text-muted-foreground">{catalogueMode ? "AI chat and voice are currently offline. Search real public events using keywords, city, dates and formats." : "Describe the event you want — AI turns it into filters and searches the real catalogue."}</p>
             </div>
             <Badge variant="secondary" className="ml-auto hidden gap-1 sm:inline-flex">
-              <Sparkles className="h-3 w-3" aria-hidden /> AI
+              <Sparkles className="h-3 w-3" aria-hidden /> {catalogueMode ? "Catalogue" : "AI"}
             </Badge>
           </div>
 
@@ -143,8 +158,8 @@ export function AiSearchPanel({ id }: { id?: string }) {
                 disabled={state === 'loading' || query.trim().length < 3}
               >
                 {state === 'loading' ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <SendHorizonal className="h-4 w-4" aria-hidden />}
-                <span className="sm:hidden">Ask</span>
-                <span className="hidden sm:inline">Search with AI</span>
+                <span className="sm:hidden">{catalogueMode ? "Find" : "Ask"}</span>
+                <span className="hidden sm:inline">{catalogueMode ? "Find events" : "Search with AI"}</span>
               </button>
               {state !== 'idle' && (
                 <Button type="button" variant="outline" className="h-auto rounded-full px-3" onClick={reset} aria-label="Reset AI search">
@@ -180,7 +195,7 @@ export function AiSearchPanel({ id }: { id?: string }) {
           {state === 'loading' && (
             <div className="mt-5" aria-live="polite">
               <div className="mb-4 flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin text-primary" aria-hidden /> Understanding your request and searching events…
+                <Loader2 className="h-4 w-4 animate-spin text-primary" aria-hidden /> Searching actual public events…
               </div>
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 {Array.from({ length: 4 }).map((_, i) => (
