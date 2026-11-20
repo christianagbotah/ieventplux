@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { api, ApiClientError } from '../api'
+import { isDirectPlayableVideo } from '../lib/reel-media'
 import { navigate } from '../router'
 import { usePortal } from '../store'
 import { money, relative } from '../format'
@@ -20,20 +21,6 @@ interface Clip {
   nextEvent: { id: string; title: string; slug: string } | null
   org: { name: string; slug: string }
   views: number
-}
-
-/**
- * Play only direct browser-supported files from secure URLs. A poster or
- * unverified streaming endpoint must never masquerade as playable video.
- * Hosted HLS/DASH will require a separately verified signed-player adapter.
- */
-export function isDirectPlayableVideo(url: string): boolean {
-  try {
-    const parsed = new URL(url, 'https://ieventplux.lightworldtech.com')
-    return ['https:', 'http:'].includes(parsed.protocol) && /\.(mp4|webm)$/i.test(parsed.pathname)
-  } catch {
-    return false
-  }
 }
 
 /** Public event-clip feed. Actual hosted files play when available; synthetic
