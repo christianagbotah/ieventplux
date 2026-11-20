@@ -1198,3 +1198,10 @@ body {
   .ievx-hero-mobile-feature,
   .ievx-public .ievx-home-hero .ievx-hero-action { transition: none !important; transform: none !important; }
 }
+
+/* Desktop editorial art owns the right column; the compact mobile teaser must
+   not duplicate it. Keep mobile-only quick actions out of the desktop hero. */
+@media (min-width: 1024px) {
+  .ievx-hero-mobile-feature { display: none !important; }
+  .ievx-public .ievx-home-hero .ievx-hero-quick .ievx-mobile-quick { display: none; }
+}

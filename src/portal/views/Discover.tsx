@@ -305,6 +305,7 @@ export default function Discover({ route }: { route: Route }) {
   const sponsoredEvents = home?.sponsored ?? []
   // Featured (or first upcoming) gathering powers the hero CTA.
   const primaryEvent = home?.featured[0] ?? home?.upcoming[0]
+  const otherFeatured = (home?.featured ?? []).filter((event) => event.id !== primaryEvent?.id)
 
   return (
     <div>
@@ -372,10 +373,10 @@ export default function Discover({ route }: { route: Route }) {
                     <button type="button" onClick={() => navigate('/reels')}>
                       <Film className="size-3.5" aria-hidden /> Explore clips
                     </button>
-                    <button type="button" onClick={() => setPlannerOpen(true)}>
+                    <button type="button" className="ievx-mobile-quick" onClick={() => setPlannerOpen(true)}>
                       <CalendarCheck className="size-3.5" aria-hidden /> Plan a weekend
                     </button>
-                    <button type="button" onClick={() => document.getElementById('ai-search')?.scrollIntoView({ behavior: 'smooth' })}>
+                    <button type="button" className="ievx-mobile-quick" onClick={() => document.getElementById('ai-search')?.scrollIntoView({ behavior: 'smooth' })}>
                       <Wand2 className="size-3.5" aria-hidden /> Ask AI
                     </button>
                   </div>
@@ -399,7 +400,7 @@ export default function Discover({ route }: { route: Route }) {
             {home && (
               <div className="ievx-real-activity" aria-label="Current platform activity">
                 <span><CalendarDays className="size-4" aria-hidden /> <strong>{statEvents}</strong> upcoming</span>
-                <span><UsersRound className="size-4" aria-hidden /> <strong>{statOrgs}</strong> organizers</span>
+                <span><UsersRound className="size-4" aria-hidden /> <strong>{statOrgs}</strong> {statOrgs === 1 ? 'organizer' : 'organizers'}</span>
                 <span><Radio className="size-4" aria-hidden /> <strong>{statLive}</strong> live now</span>
                 <button type="button" onClick={() => setPlannerOpen(true)}>Plan your weekend <ArrowRight className="size-3.5" aria-hidden /></button>
               </div>
@@ -602,21 +603,6 @@ export default function Discover({ route }: { route: Route }) {
 
       {/* Content */}
       <div className="mx-auto max-w-7xl px-4 py-6">
-        {/* Sponsored placements (labelled) — compact native-ad style promo rows */}
-        {!browsing && sponsoredEvents.length > 0 && (
-          <section className="mb-8" aria-label="Sponsored events">
-            <div className="mb-3 flex items-center gap-2">
-              <h2 className="text-lg font-bold">Promoted for you</h2>
-              <Badge variant="secondary" className="text-[10px]">Sponsored</Badge>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {sponsoredEvents.map((s, i) => (
-                <SponsoredCard key={s.event.id} event={s.event} index={i} />
-              ))}
-            </div>
-          </section>
-        )}
-
         {browsing ? (
           <section aria-label="Search results" aria-busy={loading}>
             <div className="mb-3 flex flex-wrap items-baseline justify-between gap-3">
@@ -689,7 +675,7 @@ export default function Discover({ route }: { route: Route }) {
                 </div>
               </section>
             )}
-            {home?.featured && home.featured.length > 0 && (
+            {otherFeatured.length > 0 && (
               <section className="mb-8" aria-label="Featured events">
                 <div className="mb-3 flex items-center justify-between">
                   <h2 className="text-lg font-bold">Featured gatherings</h2>
@@ -703,7 +689,7 @@ export default function Discover({ route }: { route: Route }) {
                   </button>
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  {home.featured.map((event, i) => <EventCard key={event.id} event={event} index={i} />)}
+                  {otherFeatured.map((event, i) => <EventCard key={event.id} event={event} index={i} />)}
                 </div>
               </section>
             )}
@@ -744,6 +730,22 @@ export default function Discover({ route }: { route: Route }) {
             <section id="ai-search" className="mb-8 scroll-mt-32" aria-label="Find events with AI">
               <AiSearchPanel />
             </section>
+
+        {/* Sponsored placements (labelled) — compact native-ad style promo rows */}
+        {!browsing && sponsoredEvents.length > 0 && (
+          <section className="mb-8" aria-label="Sponsored events">
+            <div className="mb-3 flex items-center gap-2">
+              <h2 className="text-lg font-bold">Promoted for you</h2>
+              <Badge variant="secondary" className="text-[10px]">Sponsored</Badge>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {sponsoredEvents.map((s, i) => (
+                <SponsoredCard key={s.event.id} event={s.event} index={i} />
+              ))}
+            </div>
+          </section>
+        )}
+
 
             {/* How it works — reassurance for first-time buyers */}
             <section className="mb-8" aria-label="How it works">

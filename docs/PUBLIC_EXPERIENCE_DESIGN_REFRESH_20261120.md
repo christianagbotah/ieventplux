@@ -16,9 +16,10 @@ database schema, or admin workspace scrolling.
 - **Mobile-first hero:** shorter copy, smaller padding, an actual featured
   preview row instead of large desktop cover art, single-row scrollable
   shortcuts with 44px+ controls where primary actions matter.
-- **Discovery before AI:** public event rails, real sponsored placements
-  labelled as promotions, real upcoming events and followed creators take
-  precedence over the large optional AI search panel.
+- **Discovery before AI and sponsored placements:** actual upcoming public
+  events and followed creators precede clearly labelled sponsored posts and
+  the optional AI search panel. The hero spotlight is not duplicated in a
+  separate featured-events rail.
 - **Cleaner navigation:** five equally spaced mobile bottom tabs instead of
   six; a mobile Live icon remains in the header. Desktop primary navigation
   and global account actions remain available. The duplicate desktop header
