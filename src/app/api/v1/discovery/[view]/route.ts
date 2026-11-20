@@ -81,10 +81,14 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ view: strin
     if (view === 'reels') {
       // Short-clip feed from public events (synthetic dev media; see docs/PROVIDER_CAPABILITIES.md).
       const clips = await db.mediaAsset.findMany({
-        where: { kind: 'CLIP', status: 'READY', event: { visibility: 'PUBLIC', deletedAt: null, status: { in: ['PUBLISHED', 'LIVE', 'ENDED'] } } },
+        where: { kind: 'CLIP', status: 'READY',
+          org: { status: 'ACTIVE', deletedAt: null },
+          event: { visibility: 'PUBLIC', deletedAt: null, status: { in: ['PUBLISHED', 'LIVE', 'ENDED'] },
+            org: { status: 'ACTIVE', deletedAt: null } },
+        },
         include: {
           event: { select: { id: true, slug: true, title: true, startsAt: true, org: { select: { name: true, slug: true } }, ticketTypes: { select: { priceMinor: true }, where: { active: true } } } },
-          linksTo: { select: { id: true, slug: true, title: true } },
+          linksTo: { select: { id: true, slug: true, title: true, visibility: true, deletedAt: true, status: true, orgId: true } },
           org: { select: { name: true, slug: true } },
         },
         orderBy: { createdAt: 'desc' },
@@ -93,7 +97,13 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ view: strin
       return jsonOk({
         clips: clips.map((c) => ({
           id: c.id, url: c.url, posterUrl: c.posterUrl ?? c.url, caption: c.caption, durationSec: c.durationSec,
-          event: c.event, nextEvent: c.linksTo ? { id: c.linksTo.id, slug: c.linksTo.slug, title: c.linksTo.title } : null,
+          event: c.event,
+          // A clip's next-occurrence link must not reveal a private, draft,
+          // cancelled or unrelated organizer event.
+          nextEvent: c.linksTo && c.linksTo.orgId === c.orgId
+            && c.linksTo.visibility === 'PUBLIC' && !c.linksTo.deletedAt
+            && ['PUBLISHED', 'LIVE', 'POSTPONED'].includes(c.linksTo.status)
+            ? { id: c.linksTo.id, slug: c.linksTo.slug, title: c.linksTo.title } : null,
           org: c.org, views: c.views,
         })),
       })
