@@ -4,6 +4,7 @@ import { stat } from 'node:fs/promises'
 import { Readable } from 'node:stream'
 import { db } from '@/lib/db'
 import { mediaFilePath, mimeForUploadName, MAX_UPLOAD_BYTES, MAX_VIDEO_UPLOAD_BYTES } from '@/server/media-storage'
+import { parseVideoByteRange } from '@/server/video-upload-policy'
 
 type RouteContext = { params: Promise<{ filename: string }> }
 
@@ -44,24 +45,14 @@ async function serve(req: NextRequest, ctx: RouteContext) {
     let end = info.size - 1
     const range = video ? req.headers.get('range') : null
     if (range) {
-      const match = /^bytes=(\d*)-(\d*)$/.exec(range)
-      if (!match || (!match[1] && !match[2])) {
-        return new Response(null, { status: 416, headers: { 'Content-Range': `bytes */${info.size}`, 'Cache-Control': 'no-store' } })
+      try {
+        ;({ start, end } = parseVideoByteRange(range, info.size))
+      } catch {
+        return new Response(null, {
+          status: 416,
+          headers: { 'Content-Range': `bytes */${info.size}`, 'Cache-Control': 'no-store' },
+        })
       }
-      if (!match[1]) {
-        const suffix = Number(match[2])
-        if (!Number.isSafeInteger(suffix) || suffix < 1) {
-          return new Response(null, { status: 416, headers: { 'Content-Range': `bytes */${info.size}`, 'Cache-Control': 'no-store' } })
-        }
-        start = Math.max(0, info.size - suffix)
-      } else {
-        start = Number(match[1])
-        if (match[2]) end = Number(match[2])
-      }
-      if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || start >= info.size || end < start) {
-        return new Response(null, { status: 416, headers: { 'Content-Range': `bytes */${info.size}`, 'Cache-Control': 'no-store' } })
-      }
-      end = Math.min(end, info.size - 1)
     }
 
     const size = end - start + 1
