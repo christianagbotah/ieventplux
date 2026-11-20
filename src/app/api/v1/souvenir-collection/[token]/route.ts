@@ -34,13 +34,20 @@ export async function GET(_req: NextRequest, ctx: Context) {
     const user = await requireUser()
     const { token } = await ctx.params
     const order = await authorizedOrder(user.id, token)
+    const returned = await db.souvenirReturnIntake.groupBy({
+      by: ['orderItemId'],
+      where: { orderItemId: { in: order.souvenirItems.map((item) => item.id) }, status: { in: ['RECEIVED', 'ACCEPTED'] } },
+      _sum: { qty: true },
+    })
+    const returnedByLine = new Map(returned.map((item) => [item.orderItemId, item._sum.qty ?? 0]))
     return jsonOk({
       receipt: {
         ...order,
         collectionEnabled: souvenirCollectionEnabled(),
         collectionAllowed: souvenirCollectionEnabled() && order.status === 'PAID' && order.souvenirItems.every((item) => item.holdStatus === 'CONSUMED'),
         items: order.souvenirItems.map(({ product, ...item }) => ({ ...item, product,
-          remaining: Math.max(0, item.qty - item.collectedQty) })),
+          remaining: Math.max(0, item.qty - item.collectedQty),
+          returnableQty: Math.max(0, item.collectedQty - (returnedByLine.get(item.id) ?? 0)) })),
         souvenirItems: undefined,
       },
       note: 'Ticket admission is independent. QR lookup does not redeem or grant entry.',

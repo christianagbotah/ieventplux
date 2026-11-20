@@ -222,7 +222,7 @@ export default function OrganizerWorkspace({ route }: { route: Route }) {
           {section === 'growth' && (canViewGrowth ? <div className="space-y-5"><GrowthCommandCenter orgId={activeOrg.orgId} canCreate={canManageEvents} />{canViewReports && <AiAdvisorCard orgId={activeOrg.orgId} />}</div> : <RoleRestricted />)}
           {section === 'events' && <EventsManager orgId={activeOrg.orgId} role={activeOrg.role} autoNew={route.query.get('new') === '1'} />}
           {section === 'orders' && <OrdersView orgId={activeOrg.orgId} />}
-          {section === 'merchandise' && (canViewMerchandise ? <MerchandiseReconciliationView key={activeOrg.orgId} orgId={activeOrg.orgId} /> : <RoleRestricted />)}
+          {section === 'merchandise' && (canViewMerchandise ? <MerchandiseReconciliationView key={activeOrg.orgId} orgId={activeOrg.orgId} role={activeOrg.role} /> : <RoleRestricted />)}
           {section === 'attendees' && <AttendeesView orgId={activeOrg.orgId} />}
           {section === 'studio' && <StudioView orgId={activeOrg.orgId} />}
           {section === 'live' && <LiveRoomView orgId={activeOrg.orgId} />}

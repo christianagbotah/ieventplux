@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { api, ApiClientError } from '../api'
 import { money } from '../format'
 import { navigate } from '../router'
+import { SouvenirReturnsInbox } from './SouvenirReturnsInbox'
 
 type EventOption = { id: string; title: string; startsAt: string; status: string }
 type Product = {
@@ -28,7 +29,7 @@ type Report = {
  * Authenticated server-side org membership and financial field redaction remain
  * authoritative; a role switch cannot reveal restricted amounts through the UI.
  */
-export function MerchandiseReconciliationView({ orgId }: { orgId: string }) {
+export function MerchandiseReconciliationView({ orgId, role }: { orgId: string; role: string }) {
   const [selectedId, setSelectedId] = useState('')
   const [revision, setRevision] = useState(0)
   const [data, setData] = useState<Report | null>(null)
@@ -110,6 +111,7 @@ export function MerchandiseReconciliationView({ orgId }: { orgId: string }) {
             <div className="min-w-0"><h4 className="break-words font-bold">{item.product}{item.variant ? ` · ${item.variant}` : ''}</h4><p className="mt-1 text-muted-foreground">{item.reference} · {item.buyerName}</p><p className="mt-1 text-muted-foreground">By {item.collector} · {new Date(item.createdAt).toLocaleString()}</p></div><Badge variant="secondary" className="h-fit">{item.qty} collected</Badge>
           </article>)}</div>}
       </div>
+      {role !== 'ANALYST' && <SouvenirReturnsInbox key={data.eventId} eventId={data.eventId} canReview={['OWNER', 'ADMIN', 'FINANCE'].includes(role)} />}
       <p className="text-xs leading-relaxed text-muted-foreground">Reporting is based on confirmed paid orders and persisted collection records, not payment requests or forecast estimates. Refund-pending and exception orders are excluded from available-to-collect totals; the stock counters remain visible for reconciliation.</p>
     </>}
   </section>

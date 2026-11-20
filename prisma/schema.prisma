@@ -53,6 +53,8 @@ model User {
   tickets             Ticket[]
   scans               AdmissionScan[]        @relation("Scanner")
   souvenirCollections SouvenirCollection[] @relation("SouvenirCollector")
+  souvenirReturnReceived SouvenirReturnIntake[] @relation("SouvenirReturnReceivedBy")
+  souvenirReturnReviewed SouvenirReturnIntake[] @relation("SouvenirReturnReviewedBy")
   deviceSessions      DeviceSession[]
   comments            Comment[]
   reactions           Reaction[]
@@ -729,6 +731,7 @@ model SouvenirOrderItem {
   order          Order                @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product        EventSouvenirProduct @relation(fields: [productId], references: [id])
   collections    SouvenirCollection[]
+  returnIntakes  SouvenirReturnIntake[]
 
   @@unique([orderId, productId])
   @@index([productId, holdStatus])
@@ -749,6 +752,32 @@ model SouvenirCollection {
 
   @@index([eventId, createdAt])
   @@index([orderItemId])
+}
+
+// Physical return evidence is separate from paid refund, admission and stock.
+// Neither receiving nor reviewing an item revokes an entitlement, returns money,
+// posts ledger entries or makes the unit available for resale.
+model SouvenirReturnIntake {
+  id             String   @id @default(cuid())
+  orderItemId    String
+  receivedById   String
+  qty            Int
+  clientActionId String   @unique
+  condition      String   // SEALED | OPENED | DAMAGED
+  reason         String
+  evidenceNote   String
+  status         String   @default("RECEIVED") // RECEIVED | ACCEPTED | REJECTED
+  reviewedById   String?
+  reviewNote     String?
+  createdAt      DateTime @default(now())
+  reviewedAt     DateTime?
+
+  orderItem      SouvenirOrderItem @relation(fields: [orderItemId], references: [id], onDelete: Restrict)
+  receivedBy     User              @relation("SouvenirReturnReceivedBy", fields: [receivedById], references: [id], onDelete: Restrict)
+  reviewedBy     User?             @relation("SouvenirReturnReviewedBy", fields: [reviewedById], references: [id], onDelete: Restrict)
+
+  @@index([orderItemId, status])
+  @@index([createdAt])
 }
 
 // ─────────────────────────────── Payments (Hubtel) ───────────────────────────────

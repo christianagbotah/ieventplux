@@ -108,3 +108,40 @@ This removes the previously detected KYC schema mismatch as a migration blocker.
 - The temporary restore database was deleted after the test; a final catalog query confirmed **zero** remaining restore-test databases. Production web and DB health stayed healthy. No real payment/collection was executed and **no live schema migration was applied**.
 
 **Production migration execution gate:** Revalidate a fresh pre-change archive, archived checksum and real `main`/PR head before executing this reviewed SQL. Run `psql` with `ON_ERROR_STOP` and a single transaction against the *explicit* target database (not against another cluster or an unreviewed schema change). Verify the exact same metadata after migration and keep both commerce rollout flags OFF. Prefer a separate off-host backup because VPS-local backups do not protect against total VPS/storage loss. Full provider settlement, returns/reversals, staff real-device acceptance and financial signoff are still required before enabling buyer checkout or physical collection.
+
+
+### Physical souvenir returns, independent custody review — 20 November 2026
+
+A physical goods return is **not** a payment-provider refund, a ticket
+cancellation, or restocked merchandise. This increment adds an audited,
+two-person process:
+
+- Accepted event pickup staff record actual physical custody with quantity,
+  condition (sealed/opened/damaged), reason, inspection evidence and unique
+  idempotent action ID. The quantity cannot exceed previously collected units
+  after subtracting pending/accepted returns.
+- A different finance-authorized member may accept or reject evidence.
+  Rejection releases the intake capacity. Acceptance never automatically
+  refunds money, reconciles accounts, revokes tickets, or restocks goods.
+- Protected collection receipts show remaining returnable units to
+  authorized staff. Organizers can view the audit and review trail.
+- A new additive SouvenirReturnIntake table has forward-only migration SQL
+  at docs/migrations/20261119_add_souvenir_return_intake.sql, which has NOT
+  been applied to the production database.
+- Both merchandise checkout and collection remain disabled in production.
+
+**Nov 20 test evidence:** Four Bun test files: **16 passed, 68 assertions**.
+Prisma schema validation passed. The isolated synthetic
+scripts/souvenir-return-isolated-qa.ts ran against the QA-only PostgreSQL
+schema ieventplux_merch_qa_20261119 and the localhost staging API at
+127.0.0.1:3179. It completed 20 labelled checks for anonymous/role denial,
+validation, receiving, retry idempotence, mismatched action ID, independent
+finance review, quantity limits, rejection/reevaluation, and audit listing.
+Final database comparisons confirmed no change to paid order state,
+tickets, stock, handover quantities, ledger, or refund cases. There were
+no production records or real provider charges, SMS, emails, or real goods.
+
+**Outstanding launch gates:** full CI; production migration and independent
+backup/restore verification; provider sandbox settlement; evidence-backed
+financial reversals/restock disposition; real Android/iPhone camera and
+receipt UAT. Do not enable live merchandise sales or physical collection.
