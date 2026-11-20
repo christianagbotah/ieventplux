@@ -65,3 +65,7 @@ The bounded expiry worker must not transition an order to `EXPIRED` while any ti
 ### 20 November: duplicate successful payment review idempotency
 
 The fulfilment exception branch now serializes duplicate-success handling per order with a PostgreSQL transaction advisory lock and checks for an existing system refund case keyed by the excess payment attempt. A replay must not create another manual refund case or resend a review notification. This does **not** initiate a provider refund, and it does not establish production readiness. Acceptance still requires two simultaneous callbacks for the same attempt, two distinct successful attempts, a refunded-order race, and provider reconciliation on an isolated staging database. Charging and physical collection remain disabled.
+
+### Release B expiry recovery (20 November 2026)
+
+The bounded reservation sweep now also scans up to 500 overdue, unpaid orders with no active ticket or souvenir holds. This recovers stale orders whose last stock hold was released in a previous sweep but whose order-status transition was interrupted. Final `EXPIRED` updates still recheck payment success, status and absence of active holds atomically. This is not a substitute for isolated PostgreSQL concurrency, late-payment and refund reconciliation acceptance tests; merchandise checkout and pickup remain disabled.

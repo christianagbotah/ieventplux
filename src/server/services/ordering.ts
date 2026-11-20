@@ -290,6 +290,19 @@ export async function releaseExpiredReservations(): Promise<{ released: number; 
     })
     if (didRelease) { orderIds.add(line.orderId); released += 1 }
   }
+  // Recover orders whose holds were released by an earlier sweep (or whose
+  // final status transition was interrupted). A sweep that finds zero ACTIVE
+  // lines must still eventually expire the stale order. Keep the scan bounded.
+  const strandedOrders = await db.order.findMany({
+    where: {
+      status: { in: ['DRAFT', 'PENDING_PAYMENT'] }, expiresAt: { lt: now },
+      payments: { none: { status: 'SUCCESS' } },
+      reservations: { none: { status: 'ACTIVE' } },
+      souvenirItems: { none: { holdStatus: 'ACTIVE' } },
+    },
+    select: { id: true }, orderBy: [{ expiresAt: 'asc' }, { id: 'asc' }], take: 500,
+  })
+  for (const order of strandedOrders) orderIds.add(order.id)
   let ordersExpired = 0
   for (const orderId of orderIds) {
     const order = await db.order.findUnique({ where: { id: orderId }, include: { reservations: true, payments: true } })
