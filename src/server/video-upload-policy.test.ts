@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { isSupportedVideo, MAX_CLIP_UPLOAD_BYTES, videoUploadsEnabled } from './video-upload-policy'
+import { isSupportedVideo, MAX_CLIP_UPLOAD_BYTES, parseVideoByteRange, videoUploadsEnabled } from './video-upload-policy'
 
 function bytes(size: number) { return new Uint8Array(size) }
 const mp4 = bytes(96)
@@ -25,5 +25,21 @@ describe('Creator video upload policy', () => {
     expect(isSupportedVideo(bytes(3), 'video/mp4')).toBe(false)
     expect(isSupportedVideo(mp4, 'video/quicktime')).toBe(false)
     expect(isSupportedVideo(bytes(MAX_CLIP_UPLOAD_BYTES + 1), 'video/mp4')).toBe(false)
+  })
+})
+
+describe('Browser video byte-range requests', () => {
+  test('serves bounded single and suffix ranges', () => {
+    expect(parseVideoByteRange('bytes=0-', 100)).toEqual({ start: 0, end: 99 })
+    expect(parseVideoByteRange('bytes=10-49', 100)).toEqual({ start: 10, end: 49 })
+    expect(parseVideoByteRange('bytes=99-999', 100)).toEqual({ start: 99, end: 99 })
+    expect(parseVideoByteRange('bytes=-20', 100)).toEqual({ start: 80, end: 99 })
+    expect(parseVideoByteRange('bytes=-500', 100)).toEqual({ start: 0, end: 99 })
+  })
+  test('rejects ranges that would mislead browser playback', () => {
+    for (const range of ['bytes=100-', 'bytes=30-20', 'bytes=-0', 'bytes=', 'bytes=0-1,5-10', 'items=0-5', 'bytes=0-1-2', 'bytes=NaN-10']) {
+      expect(() => parseVideoByteRange(range, 100)).toThrow()
+    }
+    expect(() => parseVideoByteRange('bytes=0-', 0)).toThrow()
   })
 })
