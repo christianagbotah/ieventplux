@@ -24,7 +24,7 @@ import { money, dateLong, timeRange, humanize, statusTone, relative, moneyToInpu
 import { PlayerSim } from '../components/PlayerSim'
 import { EmptyState } from '../components/EventCard'
 import { scanMayQueueOffline } from '../lib/checkin-policy'
-import { acknowledgedScanIds, acknowledgePendingScans, loadPendingScans, offlineScanScope, savePendingScan, type PendingScan } from '../lib/checkin-offline-storage'
+import { acknowledgedScanIds, acknowledgePendingScans, isAlreadyPending, loadPendingScans, offlineScanScope, savePendingScan, type PendingScan } from '../lib/checkin-offline-storage'
 import { OrganizationIdentityFields, emptyOrgFields } from '../components/OrganizationIdentityFields'
 import { OrganizerTypeDetails } from '../components/OrganizerTypeDetails'
 import { ORGANIZER_TYPE_CONFIG, organizerType, type OrganizerType, type ProfileDetails } from '@/lib/organization-types'
@@ -1746,8 +1746,11 @@ function AttendeesView({ orgId, initialEventId }: { orgId: string; initialEventI
   const [scanBusy, setScanBusy] = useState(false)
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const scanBusyRef = useRef(false)
+  const pendingRef = useRef<PendingScan[]>([])
   const selectedEventRef = useRef('')
   const recentScanRef = useRef<{ payload: string; eventId: string; at: number } | null>(null)
+
+  useEffect(() => { pendingRef.current = offlineQueue }, [offlineQueue])
 
   // Recover this user's pending scans after refresh/reopening the browser.
   // Only the authenticated staff member + active org scope is loaded.
@@ -1757,10 +1760,11 @@ function AttendeesView({ orgId, initialEventId }: { orgId: string; initialEventI
       setQueueReady(false)
       setQueueError('')
       setOfflineQueue([])
+      pendingRef.current = []
       if (!queueScope) return
       try {
         const pending = await loadPendingScans(queueScope)
-        if (!disposed) { setOfflineQueue(pending); setQueueReady(true) }
+        if (!disposed) { pendingRef.current = pending; setOfflineQueue(pending); setQueueReady(true) }
       } catch (error) {
         if (!disposed) {
           setQueueError(error instanceof Error ? error.message : 'Local storage is unavailable.')
@@ -1880,6 +1884,11 @@ function AttendeesView({ orgId, initialEventId }: { orgId: string; initialEventI
   const submitScan = async (payload: string) => {
     const code = payload.trim()
     if (!eventId || !code || scanBusyRef.current || !queueReady || !queueScope) return
+    if (isAlreadyPending(pendingRef.current, eventId, code)) {
+      setLastResult({ result: 'QUEUED_OFFLINE', detail: 'This ticket is already pending for this event. Sync it before scanning again. It is not admitted yet.' })
+      setScanValue('')
+      return
+    }
     if (recentScanRef.current?.payload === code && recentScanRef.current.eventId === eventId && Date.now() - recentScanRef.current.at < 5000) return
     scanBusyRef.current = true
     setScanBusy(true)
@@ -1905,7 +1914,8 @@ function AttendeesView({ orgId, initialEventId }: { orgId: string; initialEventI
         try {
           const pending: PendingScan = { eventId: targetEventId, payload: code, clientScanId, at: new Date().toISOString() }
           await savePendingScan(queueScope, pending)
-          setOfflineQueue((previous) => [...previous, pending])
+          pendingRef.current = [...pendingRef.current, pending]
+          setOfflineQueue(pendingRef.current)
           if (selectedEventRef.current === targetEventId) {
             setLastResult({
               result: 'QUEUED_OFFLINE',
@@ -1955,16 +1965,19 @@ function AttendeesView({ orgId, initialEventId }: { orgId: string; initialEventI
         const w = window as unknown as { BarcodeDetector?: new (opts: { formats: string[] }) => { detect: (v: HTMLVideoElement) => Promise<{ rawValue: string }[]> } }
         if (w.BarcodeDetector && videoRef.current) {
           const detector = new w.BarcodeDetector({ formats: ['qr_code'] })
+          let detecting = false
           timer = setInterval(async () => {
-            if (disposed || !videoRef.current) return
+            if (disposed || detecting || scanBusyRef.current || !videoRef.current) return
+            detecting = true
             try {
               const codes = await detector.detect(videoRef.current)
               if (!disposed && selectedEventRef.current === eventId && codes[0]?.rawValue) {
-                setScanValue(codes[0].rawValue)
                 void submitScan(codes[0].rawValue)
               }
             } catch {
               /* frame not ready */
+            } finally {
+              detecting = false
             }
           }, 700)
         } else {
@@ -1999,6 +2012,7 @@ function AttendeesView({ orgId, initialEventId }: { orgId: string; initialEventI
       const acknowledged = acknowledgedScanIds(batch, response.synced, response.results)
       await acknowledgePendingScans(queueScope, acknowledged)
       const remaining = await loadPendingScans(queueScope)
+      pendingRef.current = remaining
       setOfflineQueue(remaining)
       const admitted = response.results.filter((entry) => entry.result === 'ADMITTED').length
       const conflicts = response.results.filter((entry) => ['CONFLICT', 'DUPLICATE', 'INVALID'].includes(entry.result)).length

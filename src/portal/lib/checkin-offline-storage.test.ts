@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { acknowledgedScanIds, MAX_PENDING_SCANS, offlineScanScope, scanKey, validatePendingScan } from './checkin-offline-storage'
+import { acknowledgedScanIds, isAlreadyPending, MAX_PENDING_SCANS, offlineScanScope, scanKey, validatePendingScan } from './checkin-offline-storage'
 
 describe('Durable offline check-in policy', () => {
   const scan = { eventId: 'ev-1', payload: 'IEVX1.fake.test', clientScanId: 'web-abcd', at: '2026-11-20T12:30:00.000Z' }
@@ -7,6 +7,11 @@ describe('Durable offline check-in policy', () => {
     expect(offlineScanScope('user-1','org-1')).not.toBe(offlineScanScope('user-2','org-1'))
     expect(offlineScanScope('user-1','org-1')).not.toBe(offlineScanScope('user-1','org-2'))
     expect(scanKey(offlineScanScope('user-1','org-1'), scan.clientScanId)).toContain('web-abcd')
+  })
+  test('camera cannot enqueue the same unresolved ticket twice for one event', () => {
+    expect(isAlreadyPending([scan], scan.eventId, '  ievx1.fake.test ')).toBe(true)
+    expect(isAlreadyPending([scan], 'other-event', scan.payload)).toBe(false)
+    expect(isAlreadyPending([scan], scan.eventId, 'another-ticket')).toBe(false)
   })
   test('rejects unbounded codes, missing context and bad timestamps', () => {
     expect(() => validatePendingScan(scan)).not.toThrow()

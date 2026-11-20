@@ -9,6 +9,7 @@
 - Client scan IDs use crypto.randomUUID and remain stable across storage/replay. The server checks for prior matching IDs to prevent multiple admission records from a replay.
 - Only server-acknowledged results are removed from IndexedDB, after checking response shape and completion of the local delete transaction. Ambiguous or partial responses remain pending for safe retry.
 - Events are synchronized individually, using their original event ID. A browser reload restores the pending queue for the same signed-in user and organization.
+- A pending credential cannot be queued twice for the same event; the camera decoder also prevents overlapping detection passes.
 - Maximum 500 pending scans per user/organization; storage failures are shown as **not saved**, not queued.
 
 ## Limitations

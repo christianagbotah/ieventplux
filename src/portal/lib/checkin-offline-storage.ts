@@ -31,6 +31,13 @@ export function scanKey(scope: string, clientScanId: string): string {
   return scope + ':' + clientScanId
 }
 
+/** A code already pending for this event must not create repeated offline
+ * admission attempts when it remains in the camera frame. */
+export function isAlreadyPending(scans: PendingScan[], eventId: string, payload: string): boolean {
+  const normalized = payload.trim().toUpperCase()
+  return scans.some((scan) => scan.eventId === eventId && scan.payload.trim().toUpperCase() === normalized)
+}
+
 export function validatePendingScan(value: PendingScan): void {
   if (!value.eventId || !/^[a-zA-Z0-9_-]{1,128}$/.test(value.eventId)) throw new Error('Invalid event context.')
   if (!value.clientScanId || !/^[a-zA-Z0-9_-]{1,128}$/.test(value.clientScanId)) throw new Error('Invalid scan identifier.')
