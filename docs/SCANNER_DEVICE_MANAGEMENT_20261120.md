@@ -1,252 +1,28 @@
-# iEventPlux — CI (Round 32)
-#
-# Two jobs:
-#   web    — lint + typecheck + the golden-path smoke suite against a REAL stack
-#            (Next dev server + embedded worker/realtime services + a PostgreSQL
-#            service container), exactly the commands that run in the dev sandbox.
-#   mobile — bun test (40 pure-logic unit tests) + tsc --noEmit.
-#
-# Honest notes:
-#  - Authored and every command verified locally in the dev sandbox; the first
-#    run on GitHub's runners should be watched (runner images differ — e.g. wait
-#    loops may need adjusting).
-#  - The smoke suite expects the DEV payment simulator (no Hubtel credentials in
-#    CI) — which is exactly the point: the full order → callback → fulfilment →
-#    ticket path runs for real against the database.
+# iEventPlux — Scanner session management (20 November 2026)
 
-name: CI
+## Organizer controls
 
-on:
-  push:
-    branches: [main]
-  pull_request:
+Under Organizer → Attendees & Check-in → Admission Operations → Registered Devices, organizers can manage scanner sessions for each event.
 
-jobs:
-  web:
-    runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: ieventplux
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-    env:
-      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ieventplux
-      APP_URL: http://localhost:3000
-    steps:
-      - uses: actions/checkout@v4
+- Event owners, admins and event managers may rename or revoke any scanner session belonging to that event.
+- Check-in staff may rename or revoke only their own sessions.
+- Register this browser with a recognizable label (2–80 characters); subsequent online scans and offline syncs include that device-session ID.
+- A confirmation dialog precedes revocation. Revoked sessions are retained, along with their historical admission records.
+- Every successful rename or revocation writes an AuditLog entry in the same transaction as the session change.
 
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
+## Privacy and security
 
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
+Operations require authenticated accepted organization membership and checkin:scan permission. Device changes additionally require ownership of the session or event:edit permission. Device lists omit token hashes and raw credentials.
 
-      - name: Lint (0 errors required; warnings are the documented baseline)
-        run: bun run lint
+Only a nonsecret session ID is stored in browser localStorage, separately scoped to each user, organization and event. The raw device token is not saved. The server verifies session ownership, event match and nonrevocation before it accepts registered scans or syncs.
 
-      - name: Typecheck
-        run: bun run typecheck
+**Important:** Revoking a device-session ID does not revoke the staff user's sign-in or organization membership. Older clients may still submit scans without a device-session ID for backward compatibility. To remove all scanning rights, separately remove that staff user's event access.
 
-      - name: Check-in scan identity and replay authorization
-        run: bun test src/server/services/checkin-idempotency.test.ts
+Registration and a recent successful sync are not proof of live device presence. Offline scans remain pending until the server verifies and reconciles them.
 
-      - name: Durable offline check-in queue and transport safety
-        run: bun test src/portal/lib/checkin-offline-storage.test.ts src/portal/lib/checkin-policy.test.ts
+## Release acceptance
 
-      - name: Security policy unit tests (payments, realtime, check-in and private KYC)
-        run: bun test src/server/hubtel/security-policy.test.ts mini-services/realtime/room-authorization.test.ts src/portal/lib/checkin-policy.test.ts src/server/kyc-storage.test.ts src/server/kyc-requirements.test.ts
-
-      - name: Attendee deep-link selection and event-scoped scanner regressions
-        run: bun test src/portal/lib/attendee-event-context.test.ts
-
-      - name: Scanner management ownership, labels and browser scope
-        run: bun test src/server/checkin-device-policy.test.ts src/portal/lib/scanner-session-local.test.ts
-
-      - name: Admission operations snapshot, outcome metrics and device sync policy
-        run: bun test src/portal/lib/admission-operations.test.ts
-
-      - name: Organizer event control center filters, publication safety and public links
-        run: bun test src/portal/lib/organizer-event-view.test.ts
-
-      - name: Event ticket-selection capacity, pricing and currency safety
-        run: bun test src/portal/lib/ticket-selection.test.ts
-
-      - name: Public editorial spotlight accessibility and truthful ticket currency
-        run: bun test src/portal/components/public-experience.test.tsx
-
-      - name: Honest offline catalogue query filters
-        run: bun test src/server/catalogue-search.test.ts
-
-      - name: Following timeline privacy, multi-source pagination and follow safety
-        run: bun test src/server/following-feed-policy.test.ts
-
-      - name: Global discovery timezone, online and checkout-currency safety
-        run: bun test src/server/discovery-time.test.ts
-
-      - name: Provider health reconciles administrator-saved credentials
-        run: bun test src/server/provider-health.test.ts
-
-      - name: Push schema + seed
-        run: |
-          bunx prisma db push --accept-data-loss
-          bun run db:seed
-
-      - name: Start the stack
-        run: |
-          (bun run dev > dev.log 2>&1 &)
-          (cd mini-services/worker && bun install && (bun run dev > worker.log 2>&1 &))
-          (cd mini-services/realtime && bun install && (bun run dev > realtime.log 2>&1 &))
-          for i in $(seq 1 40); do
-            curl -sf http://localhost:3000/api/v1/health > /dev/null && curl -sf http://localhost:3001/health > /dev/null && curl -sf http://localhost:3003/health > /dev/null && break
-            sleep 3
-          done
-          curl -sf http://localhost:3000/api/v1/health | head -c 200
-          echo
-          curl -sf http://localhost:3001/health | head -c 200
-
-      - name: Realtime access smoke (public event, private notification and broadcast)
-        run: bun run scripts/realtime-smoke.ts
-
-      - name: Check-in replay isolation with synthetic admission record
-        run: bun run scripts/checkin-replay-scope-smoke.ts
-
-      - name: Atomic check-in races across scanners and refund
-        run: bun run scripts/checkin-concurrent-admission-smoke.ts
-
-      - name: Organizer event tenant privacy regression (seeded users)
-        run: bun run scripts/org-event-access-smoke.ts
-
-      - name: Concierge capability status and real-catalogue fallback
-        run: bun run scripts/catalogue-availability-smoke.ts
-
-      - name: Following timeline HTTP privacy and follow/unfollow regression (dev seed only)
-        run: bun run scripts/following-feed-smoke.ts
-
-      - name: Smoke suite (golden paths incl. rate-limit proof)
-        run: bun run smoke
-
-      - name: Ops check + backup (proves the ops tooling runs in CI too)
-        run: |
-          bun run ops:monitor -- --once
-          bun run ops:backup
-
-      - name: KYC privacy and manual approval regression (synthetic documents, seeded users only)
-        run: bun run scripts/kyc-access-smoke.ts
-
-      - name: Upload stack logs on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: stack-logs
-          path: |
-            dev.log
-            mini-services/worker/worker.log
-            mini-services/realtime/realtime.log
-          retention-days: 7
-
-  mobile:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
-      - name: Install dependencies
-        working-directory: mobile
-        run: bun install --frozen-lockfile
-
-      - name: Unit tests (offline queue + wallet logic)
-        working-directory: mobile
-        run: bun test
-
-      - name: Typecheck
-        working-directory: mobile
-        run: bunx tsc --noEmit
-
-  # Isolated from the dev-server smoke job: Next dev and next build must not
-  # write to the same .next directory concurrently.
-  production-build:
-    runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: ieventplux
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-    env:
-      NODE_ENV: production
-      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ieventplux
-      APP_URL: http://127.0.0.1:3100
-      APP_SECRET: ci-only-prod-build-not-a-real-secret-0123456789
-      PAYMENTS_SIMULATOR: auto
-      SMS_SIMULATOR: auto
-      NEXT_TELEMETRY_DISABLED: "1"
-      PROD_SMOKE_BASE_URL: http://127.0.0.1:3100/api/v1
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Verify production admin bootstrap help (no database writes)
-        run: bun run scripts/bootstrap-admin.ts --help
-
-      - name: Validate production payment safety policies
-        run: bun test src/server/hubtel/security-policy.test.ts
-
-      - name: Prepare ephemeral PostgreSQL schema
-        run: bunx prisma db push
-
-      - name: Build standalone artifact with production environment
-        run: bun run build
-
-      - name: Start standalone artifact and verify healthy no-simulator state
-        run: |
-          test -f .next/standalone/server.js
-          PORT=3100 HOSTNAME=127.0.0.1 bun .next/standalone/server.js > production.log 2>&1 &
-          for i in $(seq 1 30); do
-            if curl -fsS http://127.0.0.1:3100/api/v1/health 2>/dev/null | jq -e '.status == "healthy" and .database == "up" and (.validation.errors | length) == 0 and ([.integrations[] | select(.key == "hubtel-checkout" or .key == "hubtel-sms") | .mode] | all(. != "simulated"))' >/dev/null; then
-              echo "Production artifact healthy; payment and SMS simulators disabled."
-              exit 0
-            fi
-            sleep 2
-          done
-          echo "Production artifact did not reach the expected healthy state."
-          tail -100 production.log || true
-          exit 1
-
-      - name: Read-only production smoke (no demo accounts or payment mutation)
-        run: bun run prod:smoke
-
-      - name: Upload production boot logs on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: production-boot-logs
-          path: production.log
-          if-no-files-found: ignore
-          retention-days: 7
+- Pure tests: scanner role and ownership, safe label validation, browser key scoping across users, organizations and events.
+- Seeded integration: synthetic scanner registration, rename, cross-tenant and unauthorized denial, secret-free inventory, revocation, scan/sync denial and audit records.
+- GitHub CI: web, mobile, production-build; independent VPS candidate build, read-only smoke, and rollback verification.
+- No database schema migration, real ticket admission, payment transaction or paid provider change.
