@@ -1,8 +1,11 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Activity, AlertTriangle, CheckCircle2, Clock, RefreshCw, ShieldCheck, Smartphone, Ticket, Users } from 'lucide-react'
+import { Activity, AlertTriangle, CheckCircle2, Clock, Pencil, Plus, RefreshCw, ShieldCheck, Smartphone, Ticket, Users, XCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { useToast } from '@/hooks/use-toast'
 import { Badge } from '@/components/ui/badge'
 import { api, ApiClientError } from '../api'
 import { relative } from '../format'
@@ -11,7 +14,22 @@ import { admissionProgress, deviceSyncLabel, type AdmissionOperations } from '..
 /** Read-only near-live dashboard. Automatically pauses on hidden tabs.
  * This is 15-second polling, not a claimed WebSocket or true presence feed.
  */
-export function AdmissionOperationsPanel({ eventId, refreshKey }: { eventId: string; refreshKey: number }) {
+type ManagedDevice = AdmissionOperations['devices'][number]
+type DeviceAction = { type: 'REGISTER' | 'RENAME' | 'REVOKE'; device?: ManagedDevice }
+
+export function AdmissionOperationsPanel({
+  eventId, refreshKey, browserSessionId, onSessionRegistered,
+}: {
+  eventId: string
+  refreshKey: number
+  browserSessionId: string
+  onSessionRegistered: (id: string) => void
+}) {
+  const { toast } = useToast()
+  const [dialog, setDialog] = useState<DeviceAction | null>(null)
+  const [draftName, setDraftName] = useState('Browser scanner')
+  const [actionError, setActionError] = useState('')
+  const [actionBusy, setActionBusy] = useState(false)
   const [data, setData] = useState<AdmissionOperations | null>(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(true)
@@ -60,6 +78,49 @@ export function AdmissionOperationsPanel({ eventId, refreshKey }: { eventId: str
       window.removeEventListener('offline', onNetwork)
     }
   }, [eventId, refreshKey, revision])
+
+  const browserSession = data?.devices.find((row) => row.id === browserSessionId)
+  const browserRevoked = Boolean(browserSession?.revoked)
+
+  const openAction = (type: DeviceAction['type'], device?: ManagedDevice) => {
+    setActionError('')
+    setDraftName(type === 'REGISTER' ? 'Browser scanner' : device?.name ?? '')
+    setDialog({ type, device })
+  }
+
+  const submitDeviceAction = async () => {
+    if (!dialog || actionBusy) return
+    setActionBusy(true)
+    setActionError('')
+    try {
+      if (dialog.type === 'REGISTER') {
+        const result = await api.post<{ deviceSessionId: string }>('/checkin/device-sessions', {
+          eventId, name: draftName.trim(),
+        })
+        onSessionRegistered(result.deviceSessionId)
+        toast({ title: 'Browser scanner registered', description: 'New scans and syncs will carry this session reference.' })
+      } else {
+        const target = dialog.device
+        if (!target) throw new Error('No scanner was selected.')
+        await api.patch('/checkin/device-sessions', {
+          eventId, deviceSessionId: target.id,
+          operation: dialog.type, ...(dialog.type === 'RENAME' ? { name: draftName.trim() } : {}),
+        })
+        toast({
+          title: dialog.type === 'RENAME' ? 'Scanner renamed' : 'Scanner session revoked',
+          description: dialog.type === 'REVOKE'
+            ? 'This session ID can no longer be used for new scans. Staff account permissions are unchanged.'
+            : 'The scanner label has been updated.',
+        })
+      }
+      setDialog(null)
+      setRevision((current) => current + 1)
+    } catch (error) {
+      setActionError(error instanceof ApiClientError ? error.message : error instanceof Error ? error.message : 'Scanner action failed.')
+    } finally {
+      setActionBusy(false)
+    }
+  }
 
   const progress = data ? admissionProgress(data.totals.ticketsIssued, data.totals.admitted) : 0
   const cells = [
@@ -174,24 +235,54 @@ export function AdmissionOperationsPanel({ eventId, refreshKey }: { eventId: str
             Registered devices
             <Badge variant="outline">{data?.devices.length ?? '—'} shown</Badge>
           </span>
-          <span className="text-[11px] font-medium text-muted-foreground">View sync history</span>
+          <span className="text-[11px] font-medium text-muted-foreground">Manage & view history</span>
         </summary>
         <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
           A registered device or recent sync is not proof that it is currently connected. Only the last 12 registered sessions are shown.
+          Revoking a device blocks that session ID, but does not remove the staff member's event permissions or block older clients that scan without a device session.
         </p>
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-muted/40 p-2.5">
+          <p className="text-xs text-muted-foreground">
+            {browserRevoked
+              ? 'This browser session has been revoked. Register a replacement before scanning.'
+              : browserSessionId ? 'This browser has a saved scanner reference for the selected event.' : 'This browser is not registered for this event.'}
+          </p>
+          <Button type="button" variant="outline" size="sm" className="min-h-10 rounded-xl"
+            onClick={(event) => { event.preventDefault(); openAction('REGISTER') }}>
+            <Plus className="size-4" aria-hidden />
+            {browserSessionId ? 'Register replacement' : 'Register this browser'}
+          </Button>
+        </div>
         {data?.devices.length === 0 ? <p className="mt-3 text-xs text-muted-foreground">No device sessions have been registered for this event.</p> :
           <ul className="mt-3 grid gap-2 sm:grid-cols-2">
             {data?.devices.map((device) => (
               <li key={device.id} className="rounded-lg border border-border/60 bg-muted/30 p-2.5">
                 <div className="flex items-start justify-between gap-2">
                   <span className="min-w-0 truncate text-xs font-semibold">{device.name}</span>
-                  {device.revoked && <Badge variant="outline" className="text-[10px]">Revoked</Badge>}
+                  <div className="flex shrink-0 items-center gap-1">
+                    {browserSessionId === device.id && <Badge variant="secondary" className="text-[10px]">This browser</Badge>}
+                    {device.revoked && <Badge variant="outline" className="text-[10px]">Revoked</Badge>}
+                  </div>
                 </div>
                 <p className="mt-1 text-[11px] text-muted-foreground">{device.staffName}</p>
                 <p className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground">
                   <Clock className="size-3" aria-hidden />{deviceSyncLabel(device.lastSyncAt)}
                   {device.lastSyncAt ? ' · ' + relative(device.lastSyncAt) : ''}
                 </p>
+                {device.canManage && !device.revoked && (
+                  <div className="mt-2 flex flex-wrap gap-2 border-t border-border/60 pt-2">
+                    <Button type="button" variant="outline" size="sm" className="min-h-9 rounded-lg"
+                      aria-label={'Rename scanner ' + device.name}
+                      onClick={() => openAction('RENAME', device)}>
+                      <Pencil className="size-3.5" aria-hidden /> Rename
+                    </Button>
+                    <Button type="button" variant="outline" size="sm" className="min-h-9 rounded-lg text-destructive"
+                      aria-label={'Revoke scanner ' + device.name}
+                      onClick={() => openAction('REVOKE', device)}>
+                      <XCircle className="size-3.5" aria-hidden /> Revoke
+                    </Button>
+                  </div>
+                )}
               </li>
             ))}
           </ul>}
@@ -199,6 +290,43 @@ export function AdmissionOperationsPanel({ eventId, refreshKey }: { eventId: str
       <p className="text-[10px] leading-relaxed text-muted-foreground">
         This is a 15-second refresh snapshot, not a live video feed or a device-presence detector. Browser-offline scans remain pending until server verification.
       </p>
+      <Dialog open={Boolean(dialog)} onOpenChange={(isOpen) => { if (!isOpen && !actionBusy) setDialog(null) }}>
+        <DialogContent className="w-[min(94vw,440px)] rounded-2xl">
+          <DialogHeader>
+            <DialogTitle>
+              {dialog?.type === 'REGISTER' ? 'Register browser scanner'
+                : dialog?.type === 'RENAME' ? 'Rename scanner' : 'Revoke scanner session?'}
+            </DialogTitle>
+            <DialogDescription>
+              {dialog?.type === 'REVOKE'
+                ? 'This prevents further scans and syncs using this device session ID. Historical admissions remain in the audit log. Staff membership is not removed.'
+                : 'Give the scanner a recognizable label, such as Gate A or Main Hall. This makes device and staff activity easier to audit.'}
+            </DialogDescription>
+          </DialogHeader>
+          {dialog?.type !== 'REVOKE' ? (
+            <label className="grid gap-2 text-sm font-semibold">
+              Scanner label
+              <Input value={draftName} maxLength={80} autoFocus
+                onChange={(event) => setDraftName(event.target.value)}
+                placeholder="Gate A scanner" aria-label="Scanner label" />
+            </label>
+          ) : (
+            <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm">
+              <strong>{dialog?.device?.name ?? 'Selected scanner'}</strong>
+              <p className="mt-1 text-xs text-muted-foreground">If this staff member should stop checking in guests entirely, revoke their event access separately.</p>
+            </div>
+          )}
+          {actionError && <p role="alert" className="text-xs text-destructive">{actionError}</p>}
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button type="button" variant="outline" disabled={actionBusy} onClick={() => setDialog(null)}>Cancel</Button>
+            <Button type="button" disabled={actionBusy || (dialog?.type !== 'REVOKE' && draftName.trim().length < 2)}
+              variant={dialog?.type === 'REVOKE' ? 'destructive' : 'default'} onClick={() => void submitDeviceAction()}>
+              {actionBusy ? 'Saving…' : dialog?.type === 'REVOKE' ? 'Revoke session' :
+                dialog?.type === 'RENAME' ? 'Save name' : 'Register browser'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </section>
   )
 }

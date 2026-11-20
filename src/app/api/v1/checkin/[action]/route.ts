@@ -4,6 +4,7 @@ import { db } from '@/lib/db'
 import { eventOrgAccess, orgCan } from '@/server/permissions'
 import { deviceToken } from '@/server/ids'
 import { sha256 } from '@/server/auth'
+import { mayManageScannerSession, scannerLabel } from '@/server/checkin-device-policy'
 
 /**
  * Check-in endpoints:
@@ -31,16 +32,25 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     const user = await requireUser()
 
     if (action === 'device-sessions') {
+      await rateLimit(req, 'register-scanner', 12, 60 * 60_000)
       const body = await readJson<{ eventId?: string; name?: string }>(req)
       const eventId = String(body.eventId ?? '')
       const access = await eventOrgAccess(user.id, eventId, 'checkin:scan')
       if (!access.event) throw errors.notFound('Event not found.')
       if (!access.allowed) throw errors.forbidden('Check-in requires check-in staff permissions for this event.')
+      const name = scannerLabel(body.name ?? user.displayName)
+      if (!name) throw errors.badRequest('Scanner name must contain 2 to 80 printable characters.')
+      const active = await db.deviceSession.count({
+        where: { eventId, userId: user.id, revokedAt: null },
+      })
+      if (active >= 10) throw errors.conflict('You already have 10 active scanners for this event. Revoke an unused session first.')
       const token = deviceToken()
       const session = await db.deviceSession.create({
-        data: { eventId, userId: user.id, name: String(body.name ?? user.displayName).slice(0, 80), tokenHash: sha256(token) },
+        data: { eventId, userId: user.id, name, tokenHash: sha256(token) },
       })
-      return jsonOk({ deviceSessionId: session.id, deviceToken: token })
+      return jsonOk({ deviceSessionId: session.id, deviceToken: token }, {
+        headers: { 'Cache-Control': 'private, no-store' },
+      })
     }
 
     if (action === 'scan') {
@@ -100,6 +110,73 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
   })
 }
 
+/** Mutating scanner access requires an accepted event membership. A check-in
+ * staffer may rename/revoke their own scanner; event editors may manage any
+ * session in that event. Never return device tokens or their hashes. */
+export async function PATCH(req: NextRequest, ctx: RouteContext) {
+  return handle(async () => {
+    const { action } = await ctx.params
+    if (action !== 'device-sessions') throw errors.notFound('Unknown check-in action.')
+    const user = await requireUser()
+    await rateLimit(req, 'manage-scanner', 30, 60_000)
+    const body = await readJson<{
+      eventId?: string; deviceSessionId?: string;
+      operation?: string; name?: unknown
+    }>(req)
+    const eventId = String(body.eventId ?? '')
+    const access = await eventOrgAccess(user.id, eventId, 'checkin:scan')
+    if (!access.event) throw errors.notFound('Event not found.')
+    if (!access.allowed || !access.membership) throw errors.forbidden('Check-in access is required.')
+    const id = String(body.deviceSessionId ?? '')
+    if (!id || id.length > 128) throw errors.badRequest('A valid scanner session is required.')
+    if (body.operation !== 'RENAME' && body.operation !== 'REVOKE') {
+      throw errors.badRequest('Scanner action must be RENAME or REVOKE.')
+    }
+    const current = await db.deviceSession.findFirst({
+      where: { id, eventId },
+      select: { id: true, userId: true, name: true, revokedAt: true },
+    })
+    if (!current) throw errors.notFound('Scanner session not found.')
+    if (!mayManageScannerSession(access.membership.role, user.id, current.userId)) {
+      throw errors.forbidden('You can only manage your own scanner sessions.')
+    }
+    if (current.revokedAt) throw errors.conflict('This scanner session has already been revoked.')
+    const nextName = body.operation === 'RENAME' ? scannerLabel(body.name) : null
+    if (body.operation === 'RENAME' && !nextName) {
+      throw errors.badRequest('Scanner name must contain 2 to 80 printable characters.')
+    }
+    const changed = await db.$transaction(async (tx) => {
+      const updated = await tx.deviceSession.updateMany({
+        where: { id, eventId, revokedAt: null },
+        data: body.operation === 'REVOKE'
+          ? { revokedAt: new Date() } : { name: nextName! },
+      })
+      if (updated.count !== 1) return false
+      await tx.auditLog.create({
+        data: {
+          actorUserId: user.id,
+          actorLabel: user.displayName,
+          action: body.operation === 'REVOKE' ? 'CHECKIN_SCANNER_REVOKED' : 'CHECKIN_SCANNER_RENAMED',
+          entityType: 'DeviceSession',
+          entityId: id,
+          before: JSON.stringify({ eventId, name: current.name, revoked: false }),
+          after: JSON.stringify({
+            eventId,
+            ...(body.operation === 'RENAME' ? { name: nextName } : { revoked: true }),
+          }),
+        },
+      })
+      return true
+    })
+    if (!changed) throw errors.conflict('This scanner was modified. Refresh and try again.')
+    return jsonOk({
+      deviceSessionId: id, eventId,
+      revoked: body.operation === 'REVOKE',
+      ...(nextName ? { name: nextName } : {}),
+    }, { headers: { 'Cache-Control': 'private, no-store' } })
+  })
+}
+
 export async function GET(req: NextRequest, ctx: RouteContext) {
   return handle(async () => {
     const { action } = await ctx.params
@@ -132,7 +209,7 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
       if (!access.event) throw errors.notFound('Event not found.')
       if (!access.allowed) throw errors.forbidden('Admission monitoring requires event check-in permissions.')
       const { checkinOperations } = await import('@/server/services/checkin-monitor')
-      return jsonOk(await checkinOperations(eventId), {
+      return jsonOk(await checkinOperations(eventId, user.id, access.membership!.role), {
         headers: { 'Cache-Control': 'private, no-store' },
       })
     }
@@ -163,8 +240,11 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
       const eventId = url.searchParams.get('eventId') ?? ''
       const access = await eventOrgAccess(user.id, eventId, 'checkin:scan')
       if (!access.allowed) throw errors.forbidden()
-      const sessions = await db.deviceSession.findMany({ where: { eventId }, orderBy: { createdAt: 'desc' }, take: 20 })
-      return jsonOk({ items: sessions.map((s) => ({ ...s, tokenHash: undefined })) })
+      const sessions = await db.deviceSession.findMany({
+        where: { eventId }, orderBy: { createdAt: 'desc' }, take: 20,
+        select: { id: true, name: true, userId: true, createdAt: true, lastSyncAt: true, revokedAt: true },
+      })
+      return jsonOk({ items: sessions }, { headers: { 'Cache-Control': 'private, no-store' } })
     }
 
     throw errors.notFound('Unknown check-in endpoint.')

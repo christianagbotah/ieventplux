@@ -31,6 +31,7 @@ export interface AdmissionOperations {
     createdAt: string
     lastSyncAt: string | null
     revoked: boolean
+    canManage: boolean
   }[]
   alerts: {
     id: string

@@ -121,6 +121,61 @@ async function main() {
   const staffMine = await list(globalAdmin, 'mine=1')
   assert(staffMine.status === 200 && staffMine.data.items.length === 0, 'platform admin cannot bypass member tenant access')
 
+  // Synthetic scanner session: tenant ownership, audit, and immediate
+  // revocation are checked over real HTTP. No ticket is scanned.
+  const registerResponse = await fetch(base + '/checkin/device-sessions', {
+    method: 'POST', headers: { Cookie: pastor, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ eventId: firstOwnId, name: 'CI synthetic Gate A' }),
+  })
+  assert(registerResponse.status === 200, 'organizer may register a named device session')
+  const registered = await registerResponse.json()
+  const sessionId = String(registered.deviceSessionId)
+  try {
+    const updateSession = async (cookie: string, eventId: string, operation: string, name?: string) =>
+      fetch(base + '/checkin/device-sessions', {
+        method: 'PATCH', headers: { Cookie: cookie, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ eventId, deviceSessionId: sessionId, operation, name }),
+      })
+    const listing = await fetch(base + '/checkin/device-sessions?eventId=' + firstOwnId,
+      { headers: { Cookie: pastor } })
+    const listed = await listing.json()
+    assert(listing.status === 200 && !JSON.stringify(listed).includes('tokenHash'),
+      'scanner inventory never exposes token hashes')
+    assert((await updateSession(attendee, firstOwnId, 'REVOKE')).status === 403,
+      'unrelated attendee may not revoke the event scanner')
+    assert((await updateSession(pastor, otherOrgEvent.id, 'REVOKE')).status === 403,
+      'scanner mutations cannot cross organization boundaries')
+    assert((await updateSession(pastor, firstOwnId, 'RENAME', 'Approved Gate A')).status === 200,
+      'organizer may rename its scanner')
+    const snapshot = await fetch(base + '/checkin/monitor?eventId=' + firstOwnId,
+      { headers: { Cookie: pastor } }).then((response) => response.json())
+    assert(snapshot.devices.some((device: { id: string; canManage: boolean }) =>
+      device.id === sessionId && device.canManage),
+      'monitor marks organizer-owned scanners manageable')
+    assert((await updateSession(pastor, firstOwnId, 'REVOKE')).status === 200,
+      'organizer may revoke its scanner')
+    const revokedScan = await fetch(base + '/checkin/scan', {
+      method: 'POST', headers: { Cookie: pastor, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ eventId: firstOwnId, deviceSessionId: sessionId,
+        payload: 'SYNTHETIC-NO-TICKET', clientScanId: 'synthetic-revoked-smoke' }),
+    })
+    assert(revokedScan.status === 403, 'revoked scanner cannot submit ticket scans')
+    const revokedSync = await fetch(base + '/checkin/sync', {
+      method: 'POST', headers: { Cookie: pastor, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ eventId: firstOwnId, deviceSessionId: sessionId, scans: [] }),
+    })
+    assert(revokedSync.status === 403, 'revoked scanner cannot synchronize scans')
+    const actions = await db.auditLog.findMany({
+      where: { entityType: 'DeviceSession', entityId: sessionId }, select: { action: true },
+    })
+    assert(actions.some((row) => row.action === 'CHECKIN_SCANNER_RENAMED') &&
+      actions.some((row) => row.action === 'CHECKIN_SCANNER_REVOKED'),
+      'rename and revocation have durable audit events')
+  } finally {
+    await db.auditLog.deleteMany({ where: { entityType: 'DeviceSession', entityId: sessionId } })
+    await db.deviceSession.delete({ where: { id: sessionId } })
+  }
+
   const broadcast = await db.liveBroadcast.findFirstOrThrow({
     where: { event: { visibility: 'PUBLIC', status: 'LIVE' } },
     select: { eventId: true },

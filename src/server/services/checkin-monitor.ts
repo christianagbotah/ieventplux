@@ -1,12 +1,15 @@
 import { db } from '@/lib/db'
 import { checkinStats } from './checkin'
+import { mayManageScannerSession } from '@/server/checkin-device-policy'
 import { groupedRecentScanCounts, type AdmissionOperations, type AdmissionScanResult } from '@/portal/lib/admission-operations'
 
 /** One tenant-scoped server-side snapshot; caller has already passed checkin:scan.
  * Monitoring NEVER returns ticket identifiers, QR contents, holder info,
  * device tokens, or token hashes.
  */
-export async function checkinOperations(eventId: string): Promise<AdmissionOperations> {
+export async function checkinOperations(
+  eventId: string, callerUserId: string, membershipRole: string,
+): Promise<AdmissionOperations> {
   const asOf = new Date()
   const since = new Date(asOf.getTime() - 15 * 60_000)
   const [totals, validToAdmit, resultGroups, staffGroups, alerts, sessions] = await Promise.all([
@@ -62,6 +65,7 @@ export async function checkinOperations(eventId: string): Promise<AdmissionOpera
       createdAt: row.createdAt.toISOString(),
       lastSyncAt: row.lastSyncAt?.toISOString() ?? null,
       revoked: row.revokedAt !== null,
+      canManage: mayManageScannerSession(membershipRole, callerUserId, row.userId),
     })),
     alerts: alerts.map(row => ({
       id: row.id,
