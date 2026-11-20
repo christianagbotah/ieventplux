@@ -77,3 +77,7 @@ The isolated `scripts/merchandise-isolated-qa.ts` harness now includes two concu
 ### 20 November 2026 — concurrent payment replay QA coverage
 
 The isolated merchandise QA harness now issues two simultaneous fulfilment replays after the synthetic order has been paid, asserting both return `ALREADY_PAID`, exactly one paid invoice and one consumed merchandise line, and no ticket entitlement. This test must still be executed against a migrated isolated PostgreSQL schema; it does not validate real provider webhooks, signatures, reconciliation, or refunds. Live merchandise charging and handover remain disabled.
+
+### 20 November 2026 — competing final-unit collection QA
+
+The isolated merchandise QA harness now races two distinct collection action IDs against a paid synthetic one-unit SKU. It requires exactly one successful pickup, one collection audit record, one fulfilled stock unit, and no admission ticket. This is a **test scenario added, not a passing database test** until executed on the migrated scratch PostgreSQL schema. It does not replace real-device camera, staff authorization, provider reconciliation or refund QA. Live merchandise charging and collection stay disabled.

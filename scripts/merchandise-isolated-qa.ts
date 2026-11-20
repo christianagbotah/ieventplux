@@ -110,6 +110,37 @@ async function main() {
   assert.equal(await db.souvenirCollection.count({ where: { orderItemId: line.id } }), 2)
   console.log('PASS: partial collection, idempotent retries, correct fulfilled counts and overcollection rejection')
 
+  // Two distinct staff actions race to collect the final unit. Only one may
+  // commit; a losing action must not create an audit collection or overcount.
+  const collectionRaceProduct = await db.eventSouvenirProduct.create({ data: {
+    eventId: event.id, name: 'Synthetic Pickup Race Shirt', sku: `QA-PICKUP-${tag}`, priceMinor: 1800, stockTotal: 1,
+  } })
+  const collectionRacePending = await createOrder({ ...buyer, buyerEmail: `pickup-${tag}@example.invalid`,
+    souvenirs: qty(collectionRaceProduct.id, 1),
+  })
+  const collectionRaceOrder = await db.order.findUniqueOrThrow({ where: { reference: collectionRacePending.orderReference } })
+  const collectionRacePayment = await db.paymentAttempt.create({ data: {
+    orderId: collectionRaceOrder.id, reference: `QA-PICKUP-${tag.toUpperCase()}`,
+    provider: 'SIMULATOR', status: 'SUCCESS', amountMinor: collectionRacePending.totalMinor,
+  } })
+  assert.equal((await fulfilPaidOrder({ orderId: collectionRaceOrder.id,
+    paymentAttemptId: collectionRacePayment.id, amountMinor: collectionRacePending.totalMinor })).outcome, 'FULFILLED')
+  const collectionRaceLine = await db.souvenirOrderItem.findFirstOrThrow({ where: { orderId: collectionRaceOrder.id } })
+  const collectionRaceResults = await Promise.allSettled([
+    collectSouvenirItem({ orderId: collectionRaceOrder.id, eventId: event.id,
+      orderItemId: collectionRaceLine.id, collectorId: owner.id, qty: 1, clientActionId: randomUUID() }),
+    collectSouvenirItem({ orderId: collectionRaceOrder.id, eventId: event.id,
+      orderItemId: collectionRaceLine.id, collectorId: owner.id, qty: 1, clientActionId: randomUUID() }),
+  ])
+  assert.equal(collectionRaceResults.filter((result) => result.status === 'fulfilled' && result.value.status === 'COLLECTED').length, 1,
+    'Only one distinct action may collect the final unit')
+  assert.equal((await db.souvenirOrderItem.findUniqueOrThrow({ where: { id: collectionRaceLine.id } })).collectedQty, 1)
+  assert.equal((await db.eventSouvenirProduct.findUniqueOrThrow({ where: { id: collectionRaceProduct.id } })).stockFulfilled, 1)
+  assert.equal(await db.souvenirCollection.count({ where: { orderItemId: collectionRaceLine.id } }), 1)
+  assert.equal(await db.ticket.count({ where: { orderId: collectionRaceOrder.id } }), 0)
+  console.log('PASS: competing final-unit pickup actions cannot double-collect or create duplicate audit rows')
+
+
   const paidTicket = await db.ticketType.create({ data: {
     orgId: org.id, eventId: event.id, name: 'Synthetic Paid Admission',
     priceMinor: 2500, quota: 3, perBuyerLimit: 3,
