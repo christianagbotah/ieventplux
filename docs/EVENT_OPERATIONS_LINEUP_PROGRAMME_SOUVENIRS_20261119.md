@@ -85,3 +85,7 @@ The isolated merchandise QA harness now races two distinct collection action IDs
 ### 20 November — isolated QA target hardening
 
 The merchandise concurrency harness now requires **all three**: the dedicated `ieventplux_merch_qa_20261119` schema, a database name explicitly containing `qa`, `test`, or `scratch` as a separate segment, and a loopback PostgreSQL host. This protects against accidentally running synthetic financial writes in the production database merely because someone created a QA-named schema there. Prepare a separate disposable local database, apply additive migrations only there, and run the concurrency suite before claiming it passed. No live money or fulfilment activation is authorized by this guard.
+
+### 20 November — runtime PostgreSQL identity verification
+
+The isolated concurrency harness now queries `current_database()` and `current_schema()` **before inserting fixtures**, asserting that the actual connected session uses a QA/test/scratch-named database and exactly `ieventplux_merch_qa_20261119`. This supplements the URL host/name/schema checks and catches connection-routing or Prisma schema-selection mismatches. It is not a proof that the database is disposable or that the concurrency suite has passed; operators must independently provision a clean scratch database, verify its identity, apply migrations only there and record test results. Merchandise charging and collection remain disabled.

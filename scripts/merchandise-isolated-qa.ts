@@ -28,6 +28,18 @@ const buyerEmail = `qa-buyer-${tag}@example.invalid`
 const qty = (id: string, amount: number) => [{ productId: id, qty: amount }]
 
 async function main() {
+  // Verify the actual PostgreSQL session identity before creating any fixtures.
+  // A URL query parameter alone does not prove Prisma selected the intended schema.
+  const [identity] = await db.$queryRaw<Array<{ database_name: string; schema_name: string }>>`
+    SELECT current_database() AS database_name, current_schema() AS schema_name
+  `
+  assert.ok(identity, 'Unable to verify PostgreSQL session identity')
+  assert.match(identity.database_name, /(?:^|[_-])(qa|test|scratch)(?:[_-]|$)/i,
+    'Connected PostgreSQL database is not explicitly named QA/test/scratch')
+  assert.equal(identity.schema_name, 'ieventplux_merch_qa_20261119',
+    'Connected PostgreSQL schema differs from the isolated QA schema')
+  console.log('PASS: verified disposable PostgreSQL database and schema before fixture writes')
+
   const owner = await db.user.create({ data: { email: ownerEmail, passwordHash: 'TEST-NOT-LOGINABLE', displayName: 'Synthetic QA Owner' } })
   const org = await db.organization.create({ data: { name: 'Isolated Merchandise QA', slug: `merch-qa-${tag}`, ownerId: owner.id, status: 'ACTIVE', verifiedAt: new Date() } })
   const now = Date.now()
