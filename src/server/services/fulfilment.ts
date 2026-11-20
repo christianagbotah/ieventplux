@@ -74,18 +74,30 @@ export async function fulfilPaidOrder(params: { orderId: string; paymentAttemptI
     return { outcome: 'ALREADY_PAID', detail: 'Order was already fulfilled for this payment attempt.' }
   }
   if (successAttempts.length > 0) {
-    await db.refundCase.create({
-      data: {
-        orderId: order.id,
-        requestedBy: null, createdByKind: 'SYSTEM',
-        type: 'FULL',
-        amountMinor,
-        status: 'REQUESTED',
-        reason: `Multiple successful payments for order ${order.reference}. Excess payment detected and routed for refund resolution.`,
-      },
+    // Serialize duplicate-payment exception creation for this order. Provider
+    // callbacks can replay concurrently; never open multiple refund cases for
+    // the same excess payment attempt. This is NOT a provider refund.
+    const newlyFlagged = await db.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtext(${order.id}), 71931)`
+      const reason = `Duplicate successful payment attempt ${paymentAttemptId} for order ${order.reference}; manual refund review required.`
+      const existing = await tx.refundCase.findFirst({
+        where: { orderId: order.id, createdByKind: 'SYSTEM', reason }, select: { id: true },
+      })
+      if (existing) return false
+      await tx.refundCase.create({
+        data: {
+          orderId: order.id,
+          requestedBy: null, createdByKind: 'SYSTEM',
+          type: 'FULL', amountMinor, status: 'REQUESTED', reason,
+        },
+      })
+      await tx.order.updateMany({
+        where: { id: order.id, status: { notIn: ['REFUNDED', 'REFUND_PENDING'] } },
+        data: { status: 'EXCEPTION_REVIEW', exceptionReason: 'Duplicate successful payment attempts.' },
+      })
+      return true
     })
-    await db.order.update({ where: { id: order.id }, data: { status: 'EXCEPTION_REVIEW', exceptionReason: 'Duplicate successful payment attempts.' } })
-    await notifyUser({
+    if (newlyFlagged) await notifyUser({
       userId: order.userId ?? '',
       type: 'PAYMENT_REVIEW',
       title: 'Payment under review',

@@ -61,3 +61,7 @@ The expiry worker must increment its returned `released` count and queue an orde
 ### Release B expiry consistency guard (20 November 2026)
 
 The bounded expiry worker must not transition an order to `EXPIRED` while any ticket reservation or souvenir hold remains `ACTIVE`. The final order transition now conditionally requires both sets of active holds to be empty, alongside the existing payment-success and order-status checks. This avoids marking partially released mixed orders expired when the 500-line sweep limit is reached. PostgreSQL concurrency, late-provider-payment, and end-to-end refund testing remain required before activating merchandise checkout or pickup.
+
+### 20 November: duplicate successful payment review idempotency
+
+The fulfilment exception branch now serializes duplicate-success handling per order with a PostgreSQL transaction advisory lock and checks for an existing system refund case keyed by the excess payment attempt. A replay must not create another manual refund case or resend a review notification. This does **not** initiate a provider refund, and it does not establish production readiness. Acceptance still requires two simultaneous callbacks for the same attempt, two distinct successful attempts, a refunded-order race, and provider reconciliation on an isolated staging database. Charging and physical collection remain disabled.
