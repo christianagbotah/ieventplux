@@ -246,7 +246,14 @@ export async function releaseExpiredReservations(): Promise<{ released: number; 
         data: { status: 'EXPIRED', releasedAt: now },
       })
       if (!changed.count) return
-      await tx.ticketType.update({ where: { id: res.ticketTypeId }, data: { reservedCount: { decrement: fresh.qty } } })
+      // Keep ticket reservations consistent with merchandise holds: never
+      // release a reservation if its counter has already drifted below zero.
+      // A failed conditional update rolls back the reservation status change.
+      const ticketStock = await tx.ticketType.updateMany({
+        where: { id: res.ticketTypeId, reservedCount: { gte: fresh.qty } },
+        data: { reservedCount: { decrement: fresh.qty } },
+      })
+      if (ticketStock.count !== 1) throw errors.conflict('Ticket reserved stock needs reconciliation before expiry release.')
       orderIds.add(res.orderId)
       released += 1
     })
