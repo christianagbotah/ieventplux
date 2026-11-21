@@ -104,6 +104,11 @@ jobs:
           bunx prisma db push --accept-data-loss
           bun run db:seed
 
+      - name: Rehearse additive meeting SQL twice in isolated test schema
+        env:
+          IEVENTPLUX_ISOLATED_DB_TEST: "yes"
+        run: bash scripts/verify-meeting-migration.sh
+
       - name: Start the stack
         run: |
           (bun run dev > dev.log 2>&1 &)
