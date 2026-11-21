@@ -64,7 +64,7 @@ export async function POST(req: NextRequest, ctx: Context) {
     if (['start', 'end', 'settings', 'moderate', 'remove-participant', 'restore-participant'].includes(action) && !organizer) {
       throw errors.forbidden('Only event organizers can control or moderate this meeting.')
     }
-    const body = await readJson<Record<string, unknown>>(req).catch(() => ({}))
+    const body: Record<string, unknown> = await readJson<Record<string, unknown>>(req).catch(() => ({} as Record<string, unknown>))
     if (action === 'start') {
       await rateLimit(req, 'meeting-start', 10, 60_000)
       if (meeting.status === 'LIVE') return jsonOk({ status: 'LIVE' })
