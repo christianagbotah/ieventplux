@@ -1,0 +1,93 @@
+name: Source-light release artifact (CI pilot)
+
+# Produces a verified candidate bundle only. Never deploys, switches services,
+# runs migrations, or enables ticket/merchandise charging.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'prisma/**'
+      - 'public/**'
+      - 'next.config.*'
+      - 'package.json'
+      - 'bun.lock'
+      - '.github/workflows/release-artifact.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ieventplux-artifact-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-artifact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ieventplux_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ieventplux_ci
+      APP_URL: http://127.0.0.1:3100
+      APP_SECRET: ci-build-only-nonproduction-placeholder-0123456789
+      NODE_ENV: production
+      NEXT_TELEMETRY_DISABLED: '1'
+      PAYMENTS_SIMULATOR: auto
+      SMS_SIMULATOR: auto
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.14'
+      - name: Locked install and Prisma client
+        run: |
+          bun install --frozen-lockfile
+          bunx prisma generate
+      - name: Typecheck and transaction security policies
+        run: |
+          bun run typecheck
+          bun test src/server/hubtel/security-policy.test.ts src/portal/lib/checkin-policy.test.ts
+      - name: Prepare disposable CI database only
+        run: bunx prisma db push
+      - name: Build immutable source-SHA candidate
+        run: |
+          bun run build
+          test -f .next/standalone/server.js
+          test -d .next/standalone/.next/static
+          test -d .next/standalone/public
+      - name: Package minimum standalone runtime and checksum
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist-artifact
+          sha="${GITHUB_SHA}"
+          printf '%s\n' "$sha" > dist-artifact/SOURCE_SHA
+          printf '%s\n' "${GITHUB_RUN_ID}" > dist-artifact/CI_RUN_ID
+          tar -C .next/standalone -czf "dist-artifact/ieventplux-${sha}.tar.gz" .
+          cd dist-artifact
+          sha256sum "ieventplux-${sha}.tar.gz" > SHA256SUMS
+          sha256sum --check SHA256SUMS
+          du -h "ieventplux-${sha}.tar.gz"
+      - name: Publish candidate with bounded retention
+        uses: actions/upload-artifact@v4
+        with:
+          name: ieventplux-candidate-${{ github.sha }}
+          path: dist-artifact/
+          retention-days: 7
+          if-no-files-found: error
