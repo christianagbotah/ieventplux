@@ -343,9 +343,14 @@ export default function AppPortal() {
                       </DropdownMenuItem>
                     )}
                     {isOrganizer(user, memberships) && (
-                      <DropdownMenuItem onClick={() => navigate('/organizer')}>
-                        <LayoutDashboard className="h-4 w-4" /> Organizer Workspace
-                      </DropdownMenuItem>
+                      <>
+                        <DropdownMenuItem onClick={() => navigate('/organizer')}>
+                          <LayoutDashboard className="h-4 w-4" /> Organizer Workspace
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => navigate('/organizer?tab=meetings')}>
+                          <UsersRound className="h-4 w-4" /> Group Meetings
+                        </DropdownMenuItem>
+                      </>
                     )}
                     {!isOrganizer(user, memberships) && (
                       <DropdownMenuItem onClick={() => navigate('/create-org')}>
