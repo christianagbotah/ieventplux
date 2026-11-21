@@ -72,6 +72,7 @@ export default function MeetingView({ id }: { id: string }) {
   const [chatAllowed, setChatAllowed] = useState(true)
   const [screenAllowed, setScreenAllowed] = useState(true)
   const socket = useRef<Socket | null>(null)
+  const chatSocket = useRef<Socket | null>(null)
   const connections = useRef(new Map<string, PeerConnection>())
   const media = useRef<MediaStream | null>(null)
   const screen = useRef<MediaStream | null>(null)
@@ -124,8 +125,43 @@ export default function MeetingView({ id }: { id: string }) {
   }, [load, leave])
 
   useEffect(() => { chatEnd.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }) }, [messages.length])
-  // Chat is independent from the video room: refresh it while the host has not
-  // started the call, after the call ends, or if realtime transport is down.
+  // Persistent event-group chat uses its own authorized Socket.IO room.
+  // It stays connected before, during and after calls and does not count
+  // toward the small WebRTC participant limit. Chat remains durable via API.
+  useEffect(() => {
+    if (!data?.meeting.chatEnabled || !user) return
+    const realtime = connectRealtime()
+    chatSocket.current = realtime
+    realtime.on('connect', () => {
+      realtime.emit('join', { room: `meeting-chat:${id}` })
+    })
+    realtime.on('meeting:chat', (row: ChatRow) => {
+      setMessages((old) => old.some((entry) => entry.id === row.id)
+        ? old : [...old.slice(-99), row])
+    })
+    realtime.on('meeting:moderated', (payload: { id: string; status: string }) => {
+      setMessages((old) => old.map((row) => row.id === payload.id
+        ? { ...row, status: payload.status } : row))
+    })
+    realtime.on('meeting:removed', () => {
+      leave()
+      setError('The host has removed your access to this event group.')
+      realtime.disconnect()
+    })
+    realtime.on('room:denied', (payload: { code: string }) => {
+      if (payload.code === 'NOT_AUTHORIZED' || payload.code === 'AUTH_UNAVAILABLE') {
+        setNotice('Your event group chat connection is unavailable. Messages can be refreshed after access is restored.')
+        realtime.disconnect()
+      }
+    })
+    return () => {
+      if (chatSocket.current === realtime) chatSocket.current = null
+      realtime.disconnect()
+    }
+  }, [data?.meeting.chatEnabled, id, user?.id, leave])
+
+  // Refresh periodically as fallback if WebSocket delivery is interrupted.
+  // The group-chat socket receives new messages immediately when available.
   useEffect(() => {
     if (!data?.meeting.chatEnabled || !user) return
     let cancelled = false
@@ -133,7 +169,7 @@ export default function MeetingView({ id }: { id: string }) {
       void api.get<{ items: ChatRow[] }>(`/meetings/${id}/chat?pageSize=60`).then((result) => {
         if (!cancelled) setMessages(result.items)
       }).catch(() => {})
-    }, 8000)
+    }, 30_000)
     return () => { cancelled = true; window.clearInterval(timer) }
   }, [data?.meeting.chatEnabled, id, user?.id])
 
