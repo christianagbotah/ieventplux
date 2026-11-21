@@ -46,8 +46,8 @@ export function validMeetingSignal(value: unknown): value is MeetingSignal {
     const c = signal.candidate
     if (!c || typeof c !== 'object') return false
     const ice = c as Record<string, unknown>
-    return typeof ice.candidate === 'string' && ice.candidate.length <= 3000 &&
-      (ice.sdpMid === undefined || ice.sdpMid === null || typeof ice.sdpMid === 'string') &&
+    return typeof ice.candidate === 'string' && ice.candidate.length > 0 && ice.candidate.length <= 3000 &&
+      (ice.sdpMid === undefined || ice.sdpMid === null || (typeof ice.sdpMid === 'string' && ice.sdpMid.length <= 64)) &&
       (ice.sdpMLineIndex === undefined || ice.sdpMLineIndex === null ||
         (typeof ice.sdpMLineIndex === 'number' && Number.isInteger(ice.sdpMLineIndex) && ice.sdpMLineIndex >= 0))
   }
