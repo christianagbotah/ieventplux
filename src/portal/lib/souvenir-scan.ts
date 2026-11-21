@@ -13,6 +13,10 @@ export function parseSouvenirScan(value: string, allowedOrigin: string): Souveni
   if (TOKEN.test(text)) return { type: 'token', token: text }
   const printedReference = text.replace(/^RCPT-/i, '')
   if (REFERENCE.test(printedReference)) return { type: 'reference', reference: printedReference.toUpperCase() }
+  // URL() normalizes backslashes and accepts scheme-relative or other ambiguous
+  // forms. Only explicit HTTPS links or our exact root-relative collection path
+  // are valid QR link representations.
+  if (text.includes('\\') || !(text.startsWith('https://') || text.startsWith('/#/collect/'))) return null
   try {
     const url = new URL(text, allowedOrigin)
     const trusted = new URL(allowedOrigin)

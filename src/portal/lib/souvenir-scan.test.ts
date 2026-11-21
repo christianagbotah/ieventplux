@@ -36,6 +36,13 @@ describe('souvenir scanner accepts only internal collection credentials', () => 
       `https://ieventplux.lightworldtech.com/%2f#/collect/${token}`,
       `https://ieventplux.lightworldtech.com/?x=1#/collect/${token}`,
       `//attacker.example/#/collect/${token}`,
+      `https:\\ieventplux.lightworldtech.com/#/collect/${token}`,
+      `https:/ieventplux.lightworldtech.com/#/collect/${token}`,
+      `\\ieventplux.lightworldtech.com/#/collect/${token}`,
+      `#\/collect/${token}`,
+      `collect/${token}`,
+      `//ieventplux.lightworldtech.com/#/collect/${token}`,
+      `HTTPS://ieventplux.lightworldtech.com/#/collect/${token}`,
       `https://ieventplux.lightworldtech.com/#/collect/${token}#extra`,
     ]) expect(parseSouvenirScan(bad, origin)).toBeNull()
   })
