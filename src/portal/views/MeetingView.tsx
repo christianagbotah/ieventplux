@@ -258,8 +258,9 @@ export default function MeetingView({ id }: { id: string }) {
       active.current = true
       const realtime = connectRealtime()
       socket.current = realtime
+      let admitted = false
       joinTimeout.current = setTimeout(() => {
-        if (active.current && !realtime.connected) {
+        if (active.current && !admitted) {
           leave()
           setBusy(false)
           setError('The meeting signaling service is unavailable. Check your connection and try again.')
@@ -268,6 +269,7 @@ export default function MeetingView({ id }: { id: string }) {
       realtime.on('connect', () => realtime.emit('join', { room: `meeting:${id}` }))
       realtime.on('room:joined', (msg: { room: string }) => {
         if (msg.room === `meeting:${id}`) {
+          admitted = true
           if (joinTimeout.current) { clearTimeout(joinTimeout.current); joinTimeout.current = null }
           setJoined(true); setBusy(false)
         }
