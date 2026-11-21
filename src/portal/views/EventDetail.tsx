@@ -527,7 +527,7 @@ export default function EventDetail({ slug }: { slug: string }) {
           <div className="mt-6 grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-7">
             {/* Left column */}
             <div className="order-2 min-w-0 space-y-5 lg:order-1">
-              {['LIVE', 'PUBLISHED'].includes(event.status) && user && (
+              {['LIVE', 'PUBLISHED', 'ENDED'].includes(event.status) && user && (
                 <EventMeetingPanel eventId={event.id} />
               )}
               {['LIVE', 'PUBLISHED'].includes(event.status) && (
