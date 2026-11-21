@@ -494,17 +494,18 @@ export default function MeetingView({ id }: { id: string }) {
     } catch { setNotice('Message moderation failed. Please retry.') }
   }
 
-  const removeParticipant = async (peer: Peer) => {
-    if (!data?.access.canManage || !peer.userId) return
-    if (!window.confirm(`Remove ${peer.name} from this meeting? They will not be able to reconnect until restored.`)) return
+  const removeGroupMember = async (userId: string, displayName: string) => {
+    if (!data?.access.canManage || !userId || userId === user?.id) return
+    if (!window.confirm(`Remove ${displayName} from this event group? They will be blocked from chat and calls until restored.`)) return
     try {
-      await api.post(`/meetings/${id}/remove-participant`, { userId: peer.userId })
+      await api.post(`/meetings/${id}/remove-participant`, { userId })
       await load()
-      setNotice(`${peer.name} was removed from the meeting.`)
+      setNotice(`${displayName} has been removed from the event group.`)
     } catch (err) {
-      setError(err instanceof ApiClientError ? err.message : 'Could not remove participant.')
+      setError(err instanceof ApiClientError ? err.message : 'Could not remove group member.')
     }
   }
+  const removeParticipant = (peer: Peer) => removeGroupMember(peer.userId, peer.name)
 
   const restoreParticipant = async (userId: string) => {
     if (!data?.access.canManage) return
@@ -586,13 +587,6 @@ export default function MeetingView({ id }: { id: string }) {
             <Button variant="destructive" className="min-h-11" onClick={() => leave()}><PhoneOff className="mr-2 size-4" /> Leave</Button>
             {data?.access.canManage && <Button variant="outline" className="min-h-11 border-destructive text-destructive" onClick={() => void changeStatus('end')}><Square className="mr-2 size-4" /> End for everyone</Button>}
           </div>}
-          {data?.access.canManage && Boolean(data.removedParticipants?.length) && <div className="space-y-2 rounded-xl border bg-card p-3">
-            <h3 className="text-sm font-semibold">Removed participants</h3>
-            {data.removedParticipants?.map((row) => <div className="flex flex-wrap items-center justify-between gap-2 text-sm" key={row.userId}>
-              <span className="truncate">{row.user.displayName}</span>
-              <Button size="sm" variant="outline" onClick={() => void restoreParticipant(row.userId)}>Restore access</Button>
-            </div>)}
-          </div>}
           <p className="text-xs text-muted-foreground">Small-group mesh connection: up to six devices. Camera and screen capture require browser permission and HTTPS. TURN relay configuration is necessary for reliable calls across some networks. No recording is performed.</p>
         </div> : <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border bg-card p-8 text-center">
           <UsersRound className="size-10 text-primary" aria-hidden />
@@ -609,7 +603,10 @@ export default function MeetingView({ id }: { id: string }) {
                 <span className="text-[10px] text-muted-foreground">{new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
               </div>
               <p className={`mt-1 break-words text-sm ${msg.status === 'HIDDEN' ? 'italic text-muted-foreground' : ''}`}>{msg.status === 'HIDDEN' ? 'Message hidden by host' : msg.body}</p>
-              {data?.access.canManage && msg.status === 'VISIBLE' && <button type="button" className="mt-1 text-xs text-destructive hover:underline" onClick={() => void moderate(msg)}>Hide</button>}
+              {data?.access.canManage && <div className="mt-1 flex flex-wrap gap-3">
+                {msg.status === 'VISIBLE' && <button type="button" className="text-xs text-destructive hover:underline" onClick={() => void moderate(msg)}>Hide message</button>}
+                {msg.user.id !== user?.id && !data.removedParticipants?.some((entry) => entry.userId === msg.user.id) && <button type="button" className="text-xs text-destructive hover:underline" onClick={() => void removeGroupMember(msg.user.id, msg.user.displayName)}>Remove member</button>}
+              </div>}
             </div>)}
             {messages.length === 0 && <p className="py-10 text-center text-sm text-muted-foreground">No messages yet. Welcome your group.</p>}
             <div ref={chatEnd} />
@@ -620,6 +617,13 @@ export default function MeetingView({ id }: { id: string }) {
           </form> : <p className="border-t p-3 text-sm text-muted-foreground">Chat is disabled by the organizer.</p>}
         </Card>
       </div>
+      {data?.access.canManage && Boolean(data.removedParticipants?.length) && <section className="space-y-2 rounded-xl border bg-card p-3" aria-label="Removed group members">
+        <h3 className="text-sm font-semibold">Removed group members</h3>
+        {data.removedParticipants?.map((row) => <div className="flex flex-wrap items-center justify-between gap-2 text-sm" key={row.userId}>
+          <span className="truncate">{row.user.displayName}</span>
+          <Button size="sm" variant="outline" onClick={() => void restoreParticipant(row.userId)}>Restore access</Button>
+        </div>)}
+      </section>}
     </>}
   </div>
 }
