@@ -65,9 +65,15 @@ export function meetingIceServers(userId: string) {
   const stun = process.env.MEETING_STUN_URL || 'stun:stun.l.google.com:19302'
   const servers: Array<{ urls: string | string[]; username?: string; credential?: string }> = []
   if (/^stuns?:[^\s]+$/.test(stun)) servers.push({ urls: stun })
-  const turn = configuredMeetingTurnUrls(process.env)
-  const secret = process.env.MEETING_TURN_SHARED_SECRET
-  if (meetingTurnConfigured(process.env) && secret) {
+  // Pick only the TURN configuration fields explicitly. Node's ProcessEnv
+  // type is not assignable to a weak all-optional config interface on CI.
+  const turnConfig = {
+    MEETING_TURN_URLS: process.env.MEETING_TURN_URLS,
+    MEETING_TURN_SHARED_SECRET: process.env.MEETING_TURN_SHARED_SECRET,
+  }
+  const turn = configuredMeetingTurnUrls(turnConfig)
+  const secret = turnConfig.MEETING_TURN_SHARED_SECRET
+  if (meetingTurnConfigured(turnConfig) && secret) {
     const username = `${Math.floor(Date.now() / 1000) + 3600}:${userId}`
     const credential = createHmac('sha1', secret).update(username).digest('base64')
     servers.push({ urls: turn, username, credential })
