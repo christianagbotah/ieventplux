@@ -69,7 +69,7 @@ const NAV = [
   { key: 'orders', group: 'Events & tickets', label: 'Orders', icon: Ticket },
   { key: 'attendees', group: 'Events & tickets', label: 'Attendees & Check-in', icon: Users },
   { key: 'studio', group: 'Production', label: 'Streaming Studio', icon: Radio },
-  { key: 'meetings', group: 'Production', label: 'Group Meetings', icon: UsersRound },
+  { key: 'meetings', group: 'Production', label: 'Group Meetings', icon: Users },
   { key: 'live', group: 'Production', label: 'Live Room', icon: Activity },
   { key: 'promotions', group: 'Engagement', label: 'Promotions', icon: Megaphone },
   { key: 'messages', group: 'Engagement', label: 'Messaging', icon: MessageSquare },
