@@ -1,4 +1,4 @@
-import { AccessToken, RoomServiceClient } from 'livekit-server-sdk'
+import { AccessToken, RoomServiceClient, TrackSource } from 'livekit-server-sdk'
 import { currentMeetingMediaEngine } from './meeting-sfu-policy'
 
 type Settings = {
@@ -23,9 +23,19 @@ export function meetingSfuRoomName(meetingId: string): string {
   return 'ieventplux-meeting-' + meetingId
 }
 
+/** The organizer's presentation setting is a server-enforced JWT grant,
+ * not merely a hidden browser button. */
+export function meetingAllowedPublishSources(screenShareEnabled: boolean): TrackSource[] {
+  const permitted = [TrackSource.CAMERA, TrackSource.MICROPHONE]
+  return screenShareEnabled
+    ? [...permitted, TrackSource.SCREEN_SHARE, TrackSource.SCREEN_SHARE_AUDIO]
+    : permitted
+}
+
 export async function createMeetingSfuToken(
   meetingId: string,
   user: { id: string; displayName: string },
+  screenShareEnabled: boolean,
 ): Promise<{ token: string; serverUrl: string }> {
   const config = configuredMeetingSfu()
   if (!config) throw new Error('SFU not configured.')
@@ -39,6 +49,7 @@ export async function createMeetingSfuToken(
     roomJoin: true,
     canSubscribe: true,
     canPublish: true,
+    canPublishSources: meetingAllowedPublishSources(screenShareEnabled),
     canPublishData: false, // Durable group chat uses our own authorized API
   })
   return { token: await access.toJwt(), serverUrl: config.publicUrl }

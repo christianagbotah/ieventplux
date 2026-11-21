@@ -67,7 +67,7 @@ jobs:
         run: bun test src/server/hubtel/security-policy.test.ts mini-services/realtime/room-authorization.test.ts src/portal/lib/checkin-policy.test.ts src/server/kyc-storage.test.ts src/server/kyc-requirements.test.ts
 
       - name: Authenticated group meeting, WebRTC presentation and production TURN safety
-        run: bun test src/server/meeting-policy.test.ts src/server/meeting-turn-policy.test.ts src/server/meeting-sfu-policy.test.ts
+        run: bun test src/server/meeting-policy.test.ts src/server/meeting-turn-policy.test.ts src/server/meeting-sfu-policy.test.ts src/server/meeting-sfu-guard-policy.test.ts
 
       - name: Attendee deep-link selection and event-scoped scanner regressions
         run: bun test src/portal/lib/attendee-event-context.test.ts

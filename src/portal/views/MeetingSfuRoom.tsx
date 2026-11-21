@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { LiveKitRoom, GridLayout, ParticipantTile, ControlBar, RoomAudioRenderer, useTracks, ConnectionStateToast, useParticipants, useRoomContext } from '@livekit/components-react'
+import { LiveKitRoom, GridLayout, ParticipantTile, ControlBar, RoomAudioRenderer, useTracks, usePagination, ConnectionStateToast, useParticipants, useRoomContext } from '@livekit/components-react'
 import { Track } from 'livekit-client'
 import '@livekit/components-styles'
 import { Loader2, MonitorUp, ShieldCheck, UsersRound } from 'lucide-react'
@@ -17,12 +17,27 @@ function MeetingTracks({ screenSharingEnabled }: { screenSharingEnabled: boolean
     { source: Track.Source.Camera, withPlaceholder: true },
     { source: Track.Source.ScreenShare, withPlaceholder: false },
   ])
+  // Paging controls the number of mounted video elements, NOT who can join.
+  // All connected participants remain in the meeting regardless of page.
+  const pagination = usePagination(12, tracks)
+  const participants = useParticipants()
   return <div className="flex min-h-[280px] min-w-0 flex-col overflow-hidden rounded-xl bg-slate-950 text-white" data-lk-theme="default">
     <div className="min-h-[260px] flex-1 overflow-hidden p-2 sm:min-h-[360px]">
-      <GridLayout tracks={tracks}>
+      <GridLayout tracks={pagination.tracks}>
         <ParticipantTile />
       </GridLayout>
     </div>
+    {pagination.totalPageCount > 1 && <nav aria-label="Meeting video pages"
+      className="flex flex-wrap items-center justify-between gap-2 border-t border-white/10 px-3 py-2 text-xs">
+      <span>{participants.length} participants · Video tiles {pagination.firstItemIndex + 1}–{Math.min(pagination.lastItemIndex, tracks.length)} of {tracks.length}</span>
+      <div className="flex items-center gap-2">
+        <Button size="sm" variant="secondary" disabled={pagination.currentPage <= 1}
+          onClick={pagination.prevPage}>Previous</Button>
+        <span>Page {pagination.currentPage} of {pagination.totalPageCount}</span>
+        <Button size="sm" variant="secondary" disabled={pagination.currentPage >= pagination.totalPageCount}
+          onClick={pagination.nextPage}>Next</Button>
+      </div>
+    </nav>}
     <RoomAudioRenderer />
     <ConnectionStateToast />
     <div className="overflow-x-auto border-t border-white/10 p-2">

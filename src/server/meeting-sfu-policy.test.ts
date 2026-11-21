@@ -1,4 +1,6 @@
 import { describe, expect, test } from 'bun:test'
+import { TrackSource } from 'livekit-server-sdk'
+import { meetingAllowedPublishSources } from './meeting-sfu-service'
 import { meetingMediaEngine, meetingSfuConfigured, validMediaCapacity, meetingCapacityLabel } from './meeting-sfu-policy'
 
 const complete = {
@@ -9,6 +11,14 @@ const complete = {
   MEETING_SFU_API_SECRET: 'this-is-not-real-just-a-unit-test-secret-123',
 }
 describe('Scalable event meeting media policy', () => {
+  test('organizer disabled screen sharing is enforced in the server media token', () => {
+    expect(meetingAllowedPublishSources(false)).toEqual([TrackSource.CAMERA, TrackSource.MICROPHONE])
+    expect(meetingAllowedPublishSources(true)).toEqual([
+      TrackSource.CAMERA, TrackSource.MICROPHONE,
+      TrackSource.SCREEN_SHARE, TrackSource.SCREEN_SHARE_AUDIO,
+    ])
+  })
+
   test('large rooms require explicit, complete SFU configuration', () => {
     expect(meetingMediaEngine({})).toBe('mesh')
     expect(meetingMediaEngine({ IEVENTPLUX_MEETING_MEDIA_ENGINE: 'sfu' })).toBe('unavailable')
