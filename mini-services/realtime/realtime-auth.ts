@@ -16,7 +16,7 @@ function readSessionCookie(header: string | undefined): string | null {
   }
 }
 
-async function activeUserId(cookieHeader: string | undefined): Promise<string | null> {
+export async function activeUserId(cookieHeader: string | undefined): Promise<string | null> {
   const token = readSessionCookie(cookieHeader)
   if (!token) return null
   const tokenHash = createHash('sha256').update(token).digest('hex')
@@ -52,6 +52,22 @@ export async function mayJoinRealtimeRoom(rawRoom: unknown, cookieHeader: string
 
   const userId = await activeUserId(cookieHeader)
   if (room.kind === 'user') return canJoinRoom(room, userId)
+
+  if (room.kind === 'meeting') {
+    if (!userId) return false
+    const { getMeetingAccess, meetingFeatureEnabled } = await import('../../src/server/meeting-service')
+    if (!meetingFeatureEnabled()) return false
+    try {
+      const access = await getMeetingAccess(room.id, userId)
+      return canJoinRoom(room, userId, {
+        liveMeeting: access.canJoin,
+        orgMember: access.organizer,
+        validTicket: access.attendee,
+      })
+    } catch {
+      return false
+    }
+  }
 
   if (room.kind === 'broadcast') {
     if (!userId) return false
