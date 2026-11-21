@@ -15,6 +15,12 @@ export async function GET(req: NextRequest, ctx: Context) {
     const user = await requireUser()
     const { meeting, organizer, canJoin } = await getMeetingAccess(id, user.id)
     if (action === 'detail') {
+      const removedParticipants = organizer
+        ? await db.meetingBan.findMany({
+            where: { meetingId: id },
+            select: { userId: true, user: { select: { displayName: true } }, createdAt: true },
+            orderBy: { createdAt: 'desc' },
+          }) : []
       const response = jsonOk({
         meeting: {
           id: meeting.id, title: meeting.title, status: meeting.status,
@@ -24,6 +30,7 @@ export async function GET(req: NextRequest, ctx: Context) {
           event: { id: meeting.event.id, title: meeting.event.title, slug: meeting.event.slug, orgName: meeting.event.org.name },
         },
         access: { canManage: organizer, canJoin },
+        removedParticipants,
         iceServers: canJoin ? meetingIceServers(user.id) : [],
       })
       response.headers.set('Cache-Control', 'private, no-store')
@@ -54,7 +61,7 @@ export async function POST(req: NextRequest, ctx: Context) {
     const { id, action } = await ctx.params
     const user = await requireUser()
     const { meeting, organizer, canJoin } = await getMeetingAccess(id, user.id)
-    if (['start', 'end', 'settings', 'moderate'].includes(action) && !organizer) {
+    if (['start', 'end', 'settings', 'moderate', 'remove-participant', 'restore-participant'].includes(action) && !organizer) {
       throw errors.forbidden('Only event organizers can control or moderate this meeting.')
     }
     const body = await readJson<Record<string, unknown>>(req).catch(() => ({}))
@@ -109,6 +116,39 @@ export async function POST(req: NextRequest, ctx: Context) {
       await realtimeEmit(`meeting:${id}`, 'meeting:chat', record)
       return jsonOk({ message: record }, { status: 201 })
     }
+    if (action === 'remove-participant' || action === 'restore-participant') {
+      await rateLimit(req, 'meeting-participant-control', 20, 60_000)
+      const targetId = String(body.userId ?? '')
+      if (!targetId || targetId === user.id) throw errors.badRequest('Select another participant.')
+      const target = await db.user.findUnique({ where: { id: targetId }, select: { id: true } })
+      if (!target) throw errors.notFound('Participant not found.')
+      if (action === 'remove-participant') {
+        const host = await db.event.findUnique({
+          where: { id: meeting.eventId }, select: { org: { select: { ownerId: true } } },
+        })
+        const membership = await (await import('@/server/permissions')).eventOrgAccess(targetId, meeting.eventId, 'broadcast:manage')
+        if (membership.allowed || host?.org.ownerId === targetId) {
+          throw errors.forbidden('Event hosts cannot be removed through participant moderation.')
+        }
+        await db.meetingBan.upsert({
+          where: { meetingId_userId: { meetingId: id, userId: targetId } },
+          create: { meetingId: id, userId: targetId, removedById: user.id },
+          update: { removedById: user.id },
+        })
+        await realtimeEmit(`meeting:${id}`, 'meeting:remove', { userId: targetId })
+      } else {
+        await db.meetingBan.deleteMany({ where: { meetingId: id, userId: targetId } })
+      }
+      const { audit } = await import('@/server/audit')
+      await audit({
+        actorUserId: user.id, actorLabel: user.email,
+        action: action === 'remove-participant' ? 'meeting.participant_remove' : 'meeting.participant_restore',
+        entityType: 'EventMeeting', entityId: id,
+        after: JSON.stringify({ targetUserId: targetId }),
+      })
+      return jsonOk({ userId: targetId, removed: action === 'remove-participant' })
+    }
+
     if (action === 'moderate') {
       await rateLimit(req, 'meeting-moderate', 30, 60_000)
       const messageId = String(body.messageId ?? '')
