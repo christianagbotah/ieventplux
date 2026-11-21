@@ -105,3 +105,7 @@ Executed `scripts/merchandise-isolated-qa.ts` against a newly initialized, loopb
 ### 21 November 2026 — authenticated QA database identity gate
 
 The four HTTP/reporting merchandise QA scripts now invoke `requireIsolatedMerchandiseQaDatabase()` before creating synthetic users or sessions. This checks the configured schema, a QA/test/scratch database name, loopback host, and the **actual** PostgreSQL `current_database()` and `current_schema()`. The checks fail closed before fixture writes; they do not substitute for authenticated checkout, provider reconciliation, refund and smartphone-camera acceptance. Live merchandise charging and collection remain disabled.
+
+### 21 November 2026 — equal-length QR forgery regression
+
+The authenticated merchandise handover HTTP QA now checks a forged QR token with a **valid token length and format but a changed HMAC character**, in addition to the existing malformed/extended-token test. The staff endpoint must return 404 without revealing a receipt. This assertion has been added to the test harness; it is **not** evidence that authenticated staging or physical smartphone-camera acceptance has passed. Keep charging and collection disabled until the full payment, refund and QR release gates pass.

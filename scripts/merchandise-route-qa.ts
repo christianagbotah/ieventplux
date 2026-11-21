@@ -64,6 +64,8 @@ async function main() {
   await requireStatus('invited-but-unaccepted staff denied', call('GET', pendingSession.token), 403)
   await requireStatus('accepted analyst without scanner role denied', call('GET', analystSession.token), 403)
   await requireStatus('tampered QR token rejected', call('GET', staffSession.token, undefined, `${url}0`), 404)
+  const alteredSignature = `${token.slice(0, -1)}${token.endsWith('a') ? 'b' : 'a'}`
+  await requireStatus('same-length QR signature forgery rejected', call('GET', staffSession.token, undefined, `${base}/api/v1/souvenir-collection/${encodeURIComponent(alteredSignature)}`), 404)
   const staffGet = await requireStatus('accepted event check-in staff sees paid receipt', call('GET', staffSession.token), 200)
   assert.equal(staffGet.headers.get('cache-control'), 'private, no-store')
   const receipt = await staffGet.json() as { receipt: { collectionEnabled: boolean; collectionAllowed: boolean; items: { id: string; remaining: number }[] } }
