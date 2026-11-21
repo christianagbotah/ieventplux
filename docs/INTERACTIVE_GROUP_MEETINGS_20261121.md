@@ -35,6 +35,38 @@ automatic transcript, AI interpretation or webinars at arbitrary scale are claim
   room, size- and rate-limited, and rechecks session/meeting authorization.
   No SDP/ICE is persisted, and no recorded camera or screen media is stored.
 
+## Persistent event-group conversations and live presentation status
+
+- The organizer-approved group conversation is continuously available **before,
+  during and after** a call. An independent authenticated Socket.IO
+  `meeting-chat:{meetingId}` room delivers confirmed messages and moderation
+  updates in real time; the database remains authoritative and a periodic API
+  refresh provides transport fallback. This chat does not consume a WebRTC
+  video participant seat.
+- `meeting:{meetingId}` remains live-video-only and enforces the 2–6
+  participant cap. Joining or leaving video does not sign out of group chat.
+  Room keys are not invitations: each socket has independently verified
+  ticket/RSVP/host access, plus current ban status.
+- Hosts can remove members from the video roster **or** from conversation
+  messages, even after the event concludes. Bans block calls and chats until
+  explicitly restored, and the restore control remains available outside calls.
+  Removal IDs are never broadcast to other group members.
+- Screen-sharing presenter status is ephemeral, authenticated, rate-limited,
+  and never records or relays screen pixels. Already-sharing users appear as
+  presenters to peers who join later. The actual screen media is carried
+  through browser-permitted WebRTC tracks, not through the signaling service.
+- The production feature flag now fails closed without a syntactically valid
+  TURN relay and a sufficiently strong shared credential secret. Configured
+  does **not** mean externally reachable or load-tested.
+
+**TURN DNS warning:** The public iEventPlux website may sit behind an HTTP
+reverse proxy or Cloudflare-proxied DNS. TURN uses distinct UDP/TCP transports
+and must resolve to a **DNS-only, directly reachable** TURN hostname with the
+necessary firewall ports open (e.g. a dedicated `turn.*` hostname). A
+proxied website hostname is not by itself a working TURN endpoint. Confirm
+TURN allocation and cross-network relay candidates; do not use a fake
+`turns:` URL or publish private TURN secrets in the web bundle.
+
 ## Architecture and operational limits
 
 - Browser-based **peer-to-peer mesh** WebRTC is viable only for very small rooms,
