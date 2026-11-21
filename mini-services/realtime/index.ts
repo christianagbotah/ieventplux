@@ -2,7 +2,7 @@ import { createServer } from 'http'
 import { Server } from 'socket.io'
 import { mayJoinRealtimeRoom, activeUserId } from './realtime-auth'
 import { db } from '../../src/lib/db'
-import { validMeetingSignal } from '../../src/server/meeting-policy'
+import { validMeetingSignal, validMeetingScreenUpdate } from '../../src/server/meeting-policy'
 import { parseRoomKey } from './room-authorization'
 
 /**
@@ -245,7 +245,7 @@ io.on('connection', (socket) => {
   // signaling service. Restrict announcements to a live, permitted room.
   socket.on('meeting:screen', async (value: unknown) => {
     if (!joinedRoom?.startsWith('meeting:')) return
-    if (!value || typeof value !== 'object' || typeof (value as { sharing?: unknown }).sharing !== 'boolean') return
+    if (!validMeetingScreenUpdate(value)) return
     const now = Date.now()
     if (now - screenToggleWindow > 60_000) { screenToggleWindow = now; screenToggleCount = 0 }
     if (++screenToggleCount > 15) return
@@ -255,7 +255,7 @@ io.on('connection', (socket) => {
     })
     if (!meeting || meeting.status !== 'LIVE' || !meeting.screenShareEnabled) return
     if (!await mayJoinRealtimeRoom(joinedRoom, socket.handshake.headers.cookie)) return
-    const sharing = (value as { sharing: boolean }).sharing
+    const sharing = value.sharing
     socket.data.meetingSharing = sharing
     socket.to(joinedRoom).emit('meeting:screen', { peerId: socket.id, sharing })
   })
