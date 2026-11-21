@@ -53,7 +53,7 @@ export async function mayJoinRealtimeRoom(rawRoom: unknown, cookieHeader: string
   const userId = await activeUserId(cookieHeader)
   if (room.kind === 'user') return canJoinRoom(room, userId)
 
-  if (room.kind === 'meeting') {
+  if (room.kind === 'meeting' || room.kind === 'meeting-chat') {
     if (!userId) return false
     const { getMeetingAccess, meetingFeatureEnabled } = await import('../../src/server/meeting-service')
     if (!meetingFeatureEnabled()) return false
@@ -61,6 +61,7 @@ export async function mayJoinRealtimeRoom(rawRoom: unknown, cookieHeader: string
       const access = await getMeetingAccess(room.id, userId)
       return canJoinRoom(room, userId, {
         liveMeeting: access.canJoin,
+        meetingChat: access.meeting.chatEnabled,
         orgMember: access.organizer,
         validTicket: access.attendee,
       })
