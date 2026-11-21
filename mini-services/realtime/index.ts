@@ -127,6 +127,36 @@ io.on('connection', (socket) => {
   let meetingSignalWindow = Date.now()
   let screenToggleCount = 0
   let screenToggleWindow = Date.now()
+  let recheckPending = false
+
+  // A valid ticket or RSVP at connection time is not permanent permission.
+  // Re-evaluate active meeting AND conversation sockets after bans, session
+  // revocation, organization suspension or ticket cancellation. Client-only
+  // heartbeat checks cannot protect other participants from stale sockets.
+  const meetingAccessTimer = setInterval(() => {
+    if (!socket.connected || !joinedRoom || recheckPending) return
+    const room = joinedRoom
+    const kind = parseRoomKey(room)?.kind
+    if (kind !== 'meeting' && kind !== 'meeting-chat') return
+    recheckPending = true
+    void mayJoinRealtimeRoom(room, socket.handshake.headers.cookie)
+      .then((allowed) => {
+        if (socket.connected && joinedRoom === room && !allowed) {
+          socket.emit('room:denied', { code: 'NOT_AUTHORIZED' })
+          socket.disconnect(true)
+        }
+      })
+      .catch(() => {
+        // Fail closed: do not keep relaying private media/chat when the access
+        // database is unavailable. A recovered client can reconnect and retry.
+        if (socket.connected && joinedRoom === room) {
+          socket.emit('room:denied', { code: 'AUTH_UNAVAILABLE' })
+          socket.disconnect(true)
+        }
+      })
+      .finally(() => { recheckPending = false })
+  }, 30_000)
+  meetingAccessTimer.unref()
 
   function notifyMeetingDeparture(room: string) {
     if (room.startsWith('meeting:')) {
@@ -285,6 +315,7 @@ io.on('connection', (socket) => {
   })
 
   socket.on('disconnect', () => {
+    clearInterval(meetingAccessTimer)
     if (joinedRoom) {
       notifyMeetingDeparture(joinedRoom)
       const count = bumpRoom(joinedRoom, -1)
