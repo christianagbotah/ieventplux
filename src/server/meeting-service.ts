@@ -40,6 +40,12 @@ export async function getMeetingAccess(meetingId: string, userId: string) {
       db.ticket.findFirst({ where: { eventId: meeting.eventId, userId, status: { in: ['VALID', 'CHECKED_IN'] } }, select: { id: true } }),
     ])
   const attendee = Boolean(rsvp || ticket)
+  if (!organizer) {
+    const removed = await db.meetingBan.findUnique({
+      where: { meetingId_userId: { meetingId, userId } }, select: { meetingId: true },
+    })
+    if (removed) throw errors.forbidden('The host has removed your access to this meeting.')
+  }
   if (!organizer && !attendee) {
     throw errors.forbidden('An approved RSVP or a valid event ticket is required for this meeting.')
   }
