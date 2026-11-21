@@ -118,6 +118,29 @@ export default function MeetingView({ id }: { id: string }) {
   }, [load, leave])
 
   useEffect(() => { chatEnd.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }) }, [messages.length])
+  // A live call must not rely solely on the initial ticket/RSVP decision.
+  // Polling also closes calls when the meeting/event becomes unavailable.
+  useEffect(() => {
+    if (!joined) return
+    let cancelled = false
+    const timer = window.setInterval(() => {
+      void api.get<MeetingDetail>(`/meetings/${id}/detail`).then((fresh) => {
+        if (cancelled) return
+        if (fresh.meeting.status !== 'LIVE' || !fresh.access.canJoin) {
+          leave()
+          setNotice('This meeting ended or your admission is no longer valid.')
+        }
+      }).catch((err) => {
+        if (cancelled) return
+        if (err instanceof ApiClientError && [401, 403, 404, 503].includes(err.status)) {
+          leave()
+          setError('Your meeting access is no longer available. Please contact the organizer.')
+        }
+      })
+    }, 30_000)
+    return () => { cancelled = true; window.clearInterval(timer) }
+  }, [joined, id, leave])
+
 
   const syncPeer = (peerId: string, stream: MediaStream | null, state = 'connecting') => {
     const name = names.current.get(peerId) ?? 'Participant'
