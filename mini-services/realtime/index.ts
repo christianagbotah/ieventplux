@@ -1,6 +1,8 @@
 import { createServer } from 'http'
 import { Server } from 'socket.io'
-import { mayJoinRealtimeRoom } from './realtime-auth'
+import { mayJoinRealtimeRoom, activeUserId } from './realtime-auth'
+import { db } from '../../src/lib/db'
+import { validMeetingSignal } from '../../src/server/meeting-policy'
 import { parseRoomKey } from './room-authorization'
 
 /**
@@ -44,6 +46,16 @@ const httpServer = createServer((req, res) => {
       try {
         const parsed = JSON.parse(body) as { room: string; event: string; payload: unknown }
         io.to(parsed.room).emit(parsed.event, parsed.payload)
+        // Host stop must revoke ongoing signaling and clear attendance. A
+        // visitor cannot continue an ended meeting using an old socket.
+        if (parsed.event === 'meeting:ended' && parseRoomKey(parsed.room)?.kind === 'meeting') {
+          for (const socketId of io.sockets.adapter.rooms.get(parsed.room) ?? []) {
+            const peer = io.sockets.sockets.get(socketId)
+            peer?.leave(parsed.room)
+            peer?.emit('room:denied', { code: 'MEETING_ENDED' })
+          }
+          roomCounts.delete(parsed.room)
+        }
         res.writeHead(200, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify({ emitted: true, room: parsed.room }))
       } catch {
@@ -92,6 +104,14 @@ function bumpRoom(room: string, delta: number): number {
 io.on('connection', (socket) => {
   let joinedRoom: string | null = null
   let joinPending = false
+  let meetingSignalCount = 0
+  let meetingSignalWindow = Date.now()
+
+  function notifyMeetingDeparture(room: string) {
+    if (room.startsWith('meeting:')) {
+      socket.to(room).emit('meeting:peer-left', { peerId: socket.id })
+    }
+  }
 
   socket.on('join', async (data: { room?: string }) => {
     // A guessed user or broadcast room must never receive private pushes.
@@ -109,7 +129,34 @@ io.on('connection', (socket) => {
         return
       }
       if (joinedRoom === room) return // do not inflate presence on duplicate joins
+      let existingPeers: { peerId: string; name: string }[] = []
+      if (room!.startsWith('meeting:')) {
+        const meeting = await db.eventMeeting.findUnique({
+          where: { id: room!.slice('meeting:'.length) },
+          select: { maxParticipants: true, status: true },
+        })
+        if (!meeting || meeting.status !== 'LIVE') {
+          socket.emit('room:denied', { code: 'MEETING_NOT_LIVE' })
+          return
+        }
+        existingPeers = [...(io.sockets.adapter.rooms.get(room!) ?? [])].map((id) => {
+          const peer = io.sockets.sockets.get(id)
+          return { peerId: id, name: String(peer?.data.meetingName ?? 'Participant') }
+        })
+        if (existingPeers.length >= meeting.maxParticipants) {
+          socket.emit('room:denied', { code: 'ROOM_FULL' })
+          return
+        }
+        const identity = await activeUserId(socket.handshake.headers.cookie)
+        if (!identity) {
+          socket.emit('room:denied', { code: 'NOT_AUTHORIZED' })
+          return
+        }
+        const member = await db.user.findUnique({ where: { id: identity }, select: { displayName: true } })
+        socket.data.meetingName = (member?.displayName || 'Participant').slice(0, 70)
+      }
       if (joinedRoom) {
+        notifyMeetingDeparture(joinedRoom)
         socket.leave(joinedRoom)
         const count = bumpRoom(joinedRoom, -1)
         io.to(joinedRoom).emit('presence', { room: joinedRoom, viewers: count })
@@ -119,6 +166,12 @@ io.on('connection', (socket) => {
       const count = bumpRoom(room!, 1)
       io.to(room!).emit('presence', { room: room!, viewers: count })
       socket.emit('room:joined', { room })
+      if (room!.startsWith('meeting:')) {
+        socket.emit('meeting:peers', { peers: existingPeers, selfId: socket.id })
+        socket.to(room!).emit('meeting:peer-joined', {
+          peerId: socket.id, name: String(socket.data.meetingName ?? 'Participant'),
+        })
+      }
     } catch (error) {
       console.error('[realtime] authorization unavailable:', error instanceof Error ? error.message : 'unknown')
       socket.emit('room:denied', { code: 'AUTH_UNAVAILABLE' })
@@ -129,6 +182,7 @@ io.on('connection', (socket) => {
 
   socket.on('leave', () => {
     if (joinedRoom) {
+      notifyMeetingDeparture(joinedRoom)
       socket.leave(joinedRoom)
       const count = bumpRoom(joinedRoom, -1)
       io.to(joinedRoom).emit('presence', { room: joinedRoom, viewers: count })
@@ -142,8 +196,27 @@ io.on('connection', (socket) => {
     socket.to(joinedRoom).emit('typing', { user: String(data.user).slice(0, 60) })
   })
 
+  // WebRTC signaling is deliberately ephemeral and scoped to socket peers who
+  // have independently passed live-meeting admission. SDP/ICE never persists.
+  socket.on('meeting:signal', async (signal: unknown) => {
+    if (!joinedRoom?.startsWith('meeting:') || !validMeetingSignal(signal)) return
+    const now = Date.now()
+    if (now - meetingSignalWindow > 10_000) { meetingSignalWindow = now; meetingSignalCount = 0 }
+    if (++meetingSignalCount > 100) return
+    const peer = io.sockets.sockets.get(signal.to)
+    if (!peer || peer.id === socket.id || !peer.rooms.has(joinedRoom)) return
+    // Revalidate membership/session on relayed offers, answers and candidates.
+    // Ended rooms and revoked sessions fail closed even before a reload.
+    if (!await mayJoinRealtimeRoom(joinedRoom, socket.handshake.headers.cookie)) return
+    peer.emit('meeting:signal', {
+      from: socket.id, kind: signal.kind,
+      ...(signal.kind === 'candidate' ? { candidate: signal.candidate } : { sdp: signal.sdp }),
+    })
+  })
+
   socket.on('disconnect', () => {
     if (joinedRoom) {
+      notifyMeetingDeparture(joinedRoom)
       const count = bumpRoom(joinedRoom, -1)
       io.to(joinedRoom).emit('presence', { room: joinedRoom, viewers: count })
     }
