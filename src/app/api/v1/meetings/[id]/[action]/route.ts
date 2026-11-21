@@ -74,6 +74,14 @@ export async function POST(req: NextRequest, ctx: Context) {
       if (!meetingEventCallOpen(meeting.event) || meeting.status === 'ENDED') {
         throw errors.conflict('Guest invitations require an active event meeting.')
       }
+      // Meeting guest codes grant an approved RSVP. A priced event requires
+      // an issued ticket instead; hosts must not accidentally bypass checkout.
+      const paidType = await db.ticketType.findFirst({
+        where: { eventId: meeting.eventId, priceMinor: { gt: 0 } }, select: { id: true },
+      })
+      if (paidType) {
+        throw errors.forbidden('Paid event meetings require issued tickets. Share the event checkout link instead.')
+      }
       const now = new Date()
       const existing = await db.invitation.findFirst({
         where: {
