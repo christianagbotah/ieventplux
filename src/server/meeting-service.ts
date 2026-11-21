@@ -25,14 +25,14 @@ export async function getMeetingAccess(meetingId: string, userId: string) {
       event: {
         select: {
           id: true, orgId: true, title: true, slug: true, status: true, visibility: true, deletedAt: true,
-          org: { select: { name: true, status: true, deletedAt: true } },
+          org: { select: { name: true, ownerId: true, status: true, deletedAt: true } },
         },
       },
     },
   })
   if (!meeting || !meetingEventUsable(meeting.event)) throw errors.notFound('Meeting unavailable.')
   const orgRights = await eventOrgAccess(userId, meeting.eventId, 'broadcast:manage')
-  const organizer = orgRights.allowed
+  const organizer = orgRights.allowed || meeting.event.org.ownerId === userId
   const [rsvp, ticket] = organizer
     ? [null, null]
     : await Promise.all([
