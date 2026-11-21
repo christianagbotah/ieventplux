@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input'
 import { api, ApiClientError } from '../api'
 import { connectRealtime } from '../realtime'
 import { navigate } from '../router'
+import { meetingSignInRoute } from '../lib/meeting-invite-navigation'
 import { usePortal } from '../store'
 
 type Meeting = {
@@ -55,7 +56,7 @@ function VideoTile({ stream, name, local, sharing }: { stream: MediaStream | nul
 }
 
 export default function MeetingView({ id }: { id: string }) {
-  const { user } = usePortal()
+  const { user, booted } = usePortal()
   const [data, setData] = useState<MeetingDetail | null>(null)
   const [busy, setBusy] = useState(false)
   const [joined, setJoined] = useState(false)
@@ -117,14 +118,22 @@ export default function MeetingView({ id }: { id: string }) {
       setMessages(chat.items)
       setError('')
     } catch (err) {
+      setData(null)
       setError(err instanceof ApiClientError ? err.message : 'Unable to load this group meeting.')
     }
   }, [id])
 
+  // A meeting invite must survive sign-in, not lose the user on Discover.
+  // Wait until session bootstrap completes to avoid redirecting signed-in users.
   useEffect(() => {
+    if (!booted) return
+    if (!user) {
+      navigate(meetingSignInRoute(id))
+      return
+    }
     void load()
     return () => leave()
-  }, [load, leave])
+  }, [booted, user?.id, id, load, leave])
 
   useEffect(() => { chatEnd.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }) }, [messages.length])
   // Persistent event-group chat uses its own authorized Socket.IO room.
@@ -520,13 +529,22 @@ export default function MeetingView({ id }: { id: string }) {
 
   const shareLink = async () => {
     try {
-      await navigator.clipboard.writeText(window.location.origin + '/#/meeting/' + id)
-      setNotice('Meeting link copied. Invitees still need an approved RSVP or valid ticket.')
+      const meetingUrl = window.location.origin + '/#/meeting/' + id
+      const eventUrl = data?.meeting.event.slug
+        ? window.location.origin + '/#/event/' + data.meeting.event.slug
+        : null
+      const invitation = eventUrl
+        ? ['You are invited to an iEventPlux event meeting.', 'Meeting link: ' + meetingUrl,
+          '', 'Before joining, use the event page to register for free or purchase your ticket:',
+          eventUrl, '', 'Sign in with the SAME account used for the approved RSVP or valid ticket.'].join('\n')
+        : meetingUrl
+      await navigator.clipboard.writeText(invitation)
+      setNotice('Invitation copied with the event registration link. Attendees need approved RSVP or valid tickets.')
     } catch { setNotice('Unable to copy the link on this device.') }
   }
 
   const meeting = data?.meeting
-  return <div className="mx-auto max-w-[1420px] space-y-5 px-3 py-5 sm:px-6">
+  return <div className="mx-auto min-w-0 max-w-[1420px] space-y-4 overflow-x-clip px-3 py-4 sm:space-y-5 sm:px-6 sm:py-5">
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div className="min-w-0">
         <p className="text-xs font-semibold uppercase tracking-wider text-primary">iEventPlux • interactive events</p>
@@ -535,14 +553,23 @@ export default function MeetingView({ id }: { id: string }) {
       </div>
       <div className="flex flex-wrap gap-2">
         <Button variant="outline" size="sm" onClick={() => navigate(meeting ? '/event/' + meeting.event.slug : '/')}>Event page</Button>
-        <Button variant="outline" size="sm" onClick={() => void shareLink()} disabled={!meeting}><Copy className="mr-2 size-4" /> Share invite</Button>
+        <Button variant="outline" size="sm" onClick={() => void shareLink()} disabled={!meeting}><Copy className="mr-2 size-4" /> Copy invite + RSVP link</Button>
         <Button variant="outline" size="sm" onClick={() => void load()}><RefreshCw className="size-4" /></Button>
       </div>
     </div>
 
     {error && <div role="alert" className="flex items-start gap-2 rounded-xl border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive"><AlertTriangle className="size-4 shrink-0" />{error}</div>}
     {notice && <div role="status" className="flex items-start gap-2 rounded-xl border bg-secondary/60 p-3 text-sm"><CheckCircle2 className="size-4 shrink-0 text-primary" />{notice}</div>}
-    {!meeting ? <div className="rounded-2xl border p-10 text-center text-sm text-muted-foreground">Checking meeting access…</div> : <>
+    {!meeting ? <div className="rounded-2xl border bg-card px-4 py-8 text-center text-sm sm:p-10">
+      {error ? <div className="mx-auto max-w-xl space-y-3">
+        <p className="text-base font-bold">Meeting access requires event registration</p>
+        <p className="text-muted-foreground">A meeting link alone does not grant admission. Ask the organizer for the event registration link, then sign in with the same account used to obtain an approved RSVP or valid ticket. Paid events still require a valid ticket.</p>
+        <div className="flex flex-wrap justify-center gap-2">
+          <Button onClick={() => navigate(meetingSignInRoute(id))}>Sign in with eligible account</Button>
+          <Button variant="outline" onClick={() => navigate('/')}>Browse events</Button>
+        </div>
+      </div> : <p className="text-muted-foreground">Checking meeting access…</p>}
+    </div> : <>
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <span className={`rounded-full px-3 py-1 font-semibold ${meeting.status === 'LIVE' ? 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-200' : 'bg-secondary'}`}>{meeting.status === 'LIVE' ? 'Live meeting' : meeting.status === 'ENDED' ? 'Ended' : 'Waiting for host'}</span>
         <span className="inline-flex items-center gap-1 rounded-full border px-3 py-1"><UsersRound className="size-4" /> {joined ? peers.length + 1 : 0} / {meeting.maxParticipants} in call</span>
@@ -562,9 +589,9 @@ export default function MeetingView({ id }: { id: string }) {
           : <p className="text-xs text-muted-foreground">Event completed; group discussion remains available.</p>}
       </CardContent></Card>}
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
-        {meeting.status === 'LIVE' ? <div className="space-y-3">
-          <div className="grid auto-rows-fr gap-3 sm:grid-cols-2">
+      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
+        {meeting.status === 'LIVE' ? <div className="min-w-0 space-y-3">
+          <div className="grid min-w-0 auto-rows-fr grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-2">
             {joined ? <>
               <VideoTile name={user?.displayName || 'You'} stream={screen.current || media.current} local sharing={sharing} />
               {peers.map((peer) => <div key={peer.id} className={peer.sharing ? 'col-span-full space-y-1' : 'space-y-1'}>
@@ -573,14 +600,14 @@ export default function MeetingView({ id }: { id: string }) {
                   className="w-full rounded-lg border border-destructive/30 px-2 py-1.5 text-xs text-destructive hover:bg-destructive/10"
                   onClick={() => void removeParticipant(peer)}>Remove participant</button>}
               </div>)}
-            </> : <div className="col-span-full flex aspect-video flex-col items-center justify-center gap-4 rounded-2xl border bg-slate-950 px-6 text-center text-white">
+            </> : <div className="col-span-full flex min-h-[230px] min-w-0 flex-col items-center justify-center gap-4 rounded-2xl border bg-slate-950 px-4 py-6 text-center text-white sm:aspect-video sm:px-6">
               <UsersRound className="size-12 text-white/70" />
               <p className="max-w-md text-sm">Join this small-group call to speak, use your camera, share your screen, and chat with other approved attendees.</p>
               <Button disabled={!data?.access.canJoin || busy} onClick={() => void join()}>{busy && <Loader2 className="mr-2 size-4 animate-spin" />}{busy ? 'Joining…' : 'Join meeting'}</Button>
               {!data?.access.canJoin && <p className="text-xs text-amber-200">An approved RSVP or valid ticket is required to join.</p>}
             </div>}
           </div>
-          {joined && <div className="flex flex-wrap justify-center gap-2 rounded-2xl border bg-card p-3">
+          {joined && <div className="grid min-w-0 grid-cols-2 gap-2 rounded-2xl border bg-card p-2 sm:flex sm:flex-wrap sm:justify-center sm:p-3">
             <Button variant="outline" className="min-h-11" onClick={() => void toggleMicrophone()}>{microphoneOn ? <Mic className="mr-2 size-4" /> : <MicOff className="mr-2 size-4" />}{microphoneOn ? 'Mute' : 'Unmute'}</Button>
             <Button variant="outline" className="min-h-11" onClick={() => void toggleCamera()}>{cameraOn ? <Camera className="mr-2 size-4" /> : <CameraOff className="mr-2 size-4" />}{cameraOn ? 'Camera off' : 'Camera on'}</Button>
             {meeting.screenShareEnabled && <Button variant="outline" className="min-h-11" onClick={() => void toggleScreen()}>{sharing ? <MonitorX className="mr-2 size-4" /> : <MonitorUp className="mr-2 size-4" />}{sharing ? 'Stop sharing' : 'Share screen'}</Button>}
@@ -594,7 +621,7 @@ export default function MeetingView({ id }: { id: string }) {
           <p className="max-w-md text-sm text-muted-foreground">Group chat is available to authorized event attendees before and after the video call. New camera and screen sharing sessions start only when the host opens the room.</p>
         </div>}
 
-        <Card className="flex min-h-[350px] flex-col overflow-hidden rounded-2xl lg:max-h-[70vh]">
+        <Card className="flex min-h-[350px] min-w-0 flex-col overflow-hidden rounded-2xl lg:max-h-[70vh]">
           <div className="flex items-center gap-2 border-b px-4 py-3 font-semibold"><MessageSquare className="size-5 text-primary" /> Meeting chat</div>
           <div className="min-h-[230px] flex-1 space-y-2 overflow-y-auto px-3 py-3" aria-live="polite">
             {messages.filter((item) => item.status === 'VISIBLE' || data?.access.canManage).slice(-80).map((msg) => <div className="rounded-xl bg-secondary/60 p-2.5" key={msg.id}>
@@ -611,9 +638,9 @@ export default function MeetingView({ id }: { id: string }) {
             {messages.length === 0 && <p className="py-10 text-center text-sm text-muted-foreground">No messages yet. Welcome your group.</p>}
             <div ref={chatEnd} />
           </div>
-          {meeting.chatEnabled ? <form className="flex gap-2 border-t p-3" onSubmit={(e) => { e.preventDefault(); void send() }}>
-            <Input aria-label="Meeting chat message" value={draft} onChange={(e) => setDraft(e.target.value)} maxLength={700} placeholder="Message your event group…" />
-            <Button type="submit" size="icon" disabled={!draft.trim()} aria-label="Send chat"><Send className="size-4" /></Button>
+          {meeting.chatEnabled ? <form className="flex min-w-0 gap-2 border-t p-3" onSubmit={(e) => { e.preventDefault(); void send() }}>
+            <Input className="min-w-0 flex-1" aria-label="Meeting chat message" value={draft} onChange={(e) => setDraft(e.target.value)} maxLength={700} placeholder="Message your event group…" />
+            <Button className="shrink-0" type="submit" size="icon" disabled={!draft.trim()} aria-label="Send chat"><Send className="size-4" /></Button>
           </form> : <p className="border-t p-3 text-sm text-muted-foreground">Chat is disabled by the organizer.</p>}
         </Card>
       </div>
