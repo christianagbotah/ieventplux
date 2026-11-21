@@ -111,6 +111,11 @@ const io = new Server(httpServer, {
   pingInterval: 25000,
 })
 
+// Fast access revalidation is CI-only; production remains bounded at 30s.
+const MEETING_RECHECK_MS =
+  process.env.NODE_ENV !== 'production' && process.env.IEVENTPLUX_TEST_SHORT_MEETING_RECHECK === 'true'
+    ? 1500 : 30_000
+
 const roomCounts = new Map<string, number>()
 
 function bumpRoom(room: string, delta: number): number {
@@ -155,7 +160,7 @@ io.on('connection', (socket) => {
         }
       })
       .finally(() => { recheckPending = false })
-  }, 30_000)
+  }, MEETING_RECHECK_MS)
   meetingAccessTimer.unref()
 
   function notifyMeetingDeparture(room: string) {
