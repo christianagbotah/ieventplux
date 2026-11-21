@@ -41,8 +41,11 @@ function VideoTile({ stream, name, local, sharing }: { stream: MediaStream | nul
   }, [stream])
   const hasVideo = Boolean(stream?.getVideoTracks().some((track) => track.readyState === 'live' && track.enabled))
   return <div className="relative flex aspect-video min-h-32 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-slate-800 to-slate-950 text-white">
-    {hasVideo ? <video ref={video} autoPlay playsInline muted={local} className={`size-full object-contain ${local && !sharing ? '-scale-x-100' : ''}`} />
-      : <div className="grid size-16 place-items-center rounded-full bg-white/10 text-2xl font-bold">{name.slice(0, 2).toUpperCase()}</div>}
+    {/* Keep the media element mounted even for audio-only tracks; conditional
+        unmounting silences participants who have no camera. */}
+    <video ref={video} autoPlay playsInline muted={local}
+      className={`absolute inset-0 size-full object-contain ${hasVideo ? '' : 'pointer-events-none opacity-0'} ${local && !sharing ? '-scale-x-100' : ''}`} />
+    {!hasVideo && <div className="grid size-16 place-items-center rounded-full bg-white/10 text-2xl font-bold">{name.slice(0, 2).toUpperCase()}</div>}
     <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-black/60 px-3 py-2 text-xs">
       <span className="truncate font-semibold">{name}{local ? ' (You)' : ''}</span>
       {sharing && <span className="shrink-0 rounded-full bg-primary px-2 py-0.5 text-primary-foreground">Sharing screen</span>}
