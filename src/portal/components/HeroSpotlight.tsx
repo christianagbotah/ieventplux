@@ -6,14 +6,14 @@ import { dateShort } from '../format'
 import { priceLabel, type EventCardData } from './EventCard'
 
 /** Genuine editorial spotlight powered by a real published event — not a mock ad. */
-export function HeroSpotlight({ event }: { event: EventCardData }) {
+export function HeroSpotlight({ event, compact = false }: { event: EventCardData; compact?: boolean }) {
   const [imageFailed, setImageFailed] = useState(false)
   const canShowImage = Boolean(event.coverImageUrl && !imageFailed)
   return (
     <a
       href={'#/event/' + encodeURIComponent(event.slug)}
       aria-label={'Explore featured event: ' + event.title}
-      className="ievx-hero-spotlight group relative flex h-full min-h-64 w-full flex-col justify-end overflow-hidden rounded-2xl text-left text-white focus-visible:outline focus-visible:outline-4 focus-visible:outline-offset-4 focus-visible:outline-[#a8efd7]"
+      className={`ievx-hero-spotlight group relative flex h-full w-full flex-col justify-end overflow-hidden rounded-2xl text-left text-white focus-visible:outline focus-visible:outline-4 focus-visible:outline-offset-4 focus-visible:outline-[#a8efd7] ${compact ? 'min-h-[190px]' : 'min-h-64'}`}
     >
       {canShowImage ? (
         <img
@@ -36,12 +36,12 @@ export function HeroSpotlight({ event }: { event: EventCardData }) {
           <ArrowUpRight className="size-5" />
         </span>
       </div>
-      <div className="relative z-10 space-y-2.5 p-4 sm:p-6">
+      <div className={compact ? "relative z-10 space-y-1.5 p-3.5" : "relative z-10 space-y-2.5 p-4 sm:p-6"}>
         <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-white/90">
           <span className="inline-flex items-center gap-1.5"><CalendarDays className="size-3.5" aria-hidden />{dateShort(event.startsAt)}</span>
           {event.status === 'LIVE' && <span className="inline-flex items-center gap-1 text-[#a8efd7]"><Radio className="size-3.5" aria-hidden />Live now</span>}
         </div>
-        <h2 className="line-clamp-2 text-xl font-extrabold leading-tight tracking-tight sm:text-2xl">{event.title}</h2>
+        <h2 className={compact ? "line-clamp-2 text-[17px] font-extrabold leading-tight tracking-tight" : "line-clamp-2 text-xl font-extrabold leading-tight tracking-tight sm:text-2xl"}>{event.title}</h2>
         <p className="flex items-center gap-1.5 text-xs text-white/85">
           {event.org?.verifiedAt ? <ShieldCheck className="size-3.5 shrink-0 text-[#a8efd7]" aria-hidden /> : <MapPin className="size-3.5 shrink-0" aria-hidden />}
           <span className="min-w-0 truncate">{event.org?.name || (event.city ? event.city : 'Explore the event')}</span>

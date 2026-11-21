@@ -43,6 +43,15 @@ describe('public homepage spotlight accessibility and truthful event info', () =
     expect(markup).not.toContain('<button')
   })
 
+  test('mobile featured story displays the actual poster in a compact visual stage', () => {
+    const markup = renderToStaticMarkup(createElement(HeroSpotlight, { event, compact: true }))
+    expect(markup).toContain('min-h-[190px]')
+    expect(markup).toContain('business-summit.png')
+    expect(markup).toContain('The Global Community Conference')
+    expect(markup).toContain('href="#/event/real-conference"')
+    expect(markup).toContain('View details &amp; tickets')
+  })
+
   test('event cards support long press, open in new tab and distinct footer controls', () => {
     const footer = createElement('button', { type: 'button' }, 'Save this event')
     const markup = renderToStaticMarkup(createElement(EventCard, { event, footer }))

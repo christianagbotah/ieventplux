@@ -12,6 +12,9 @@ not meet this bar.
   events. Real hash links preserve existing SPA routes while enabling
   open-in-new-tab, copy-link, long-press and native keyboard activation.
   Separate footer actions on cards remain independently operable.
+- **Real editorial media on mobile:** the first rotating highlight presents
+  its genuine featured event poster as a compact visual card, not a 44-pixel
+  thumbnail. Title, organizer, status and ticket price use event API data.
 - **Mobile ergonomics:** primary nav remains usable above iOS home indicators
   and Android gesture/navigation bars. Main content reserves corresponding
   bottom space. Discovery quick actions and hero controls have minimum

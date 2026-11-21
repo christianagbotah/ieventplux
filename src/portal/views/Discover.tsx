@@ -402,21 +402,12 @@ export default function Discover({ route }: { route: Route }) {
                   </div>
 
                   {heroIndex === 0 && primaryEvent ? (
-                    <button type="button" className="ievx-hero-mobile-feature lg:hidden"
-                      onClick={() => navigate('/event/' + primaryEvent.slug)}
-                      aria-label={'See featured event ' + primaryEvent.title}>
-                      {primaryEvent.coverImageUrl ? (
-                        <img src={primaryEvent.coverImageUrl} loading="lazy" alt=""
-                          className="size-11 shrink-0 rounded-lg object-cover" />
-                      ) : (
-                        <span className="grid size-11 shrink-0 place-items-center rounded-lg bg-white/10"><CalendarDays className="size-5" aria-hidden /></span>
-                      )}
-                      <span className="min-w-0 flex-1 text-left">
-                        <span className="block text-[10px] font-bold uppercase tracking-[0.12em] text-[#abddce]">In the spotlight</span>
-                        <span className="block truncate text-sm font-semibold">{primaryEvent.title}</span>
-                      </span>
-                      <ChevronRight className="size-4 shrink-0 text-[#b2e7d5]" aria-hidden />
-                    </button>
+                    <div className="mt-3 min-w-0 lg:hidden">
+                      {/* The real event poster gets an editorial mobile stage.
+                          Content, organizer and price are all drawn from live
+                          event data — never generic mock promotion. */}
+                      <HeroSpotlight event={primaryEvent} compact />
+                    </div>
                   ) : heroIndex === 1 ? (
                     <button type="button" className="ievx-hero-mobile-feature lg:hidden"
                       onClick={() => { setBrowseAll(true); applyFilter('mode', 'ONLINE') }}>
