@@ -34,6 +34,7 @@ import { WorkspaceMetric } from '../components/WorkspaceMetric'
 import { AdmissionOperationsPanel } from '../components/AdmissionOperationsPanel'
 import { scannerSessionKey } from '../lib/scanner-session-local'
 import { GrowthCommandCenter } from '../components/GrowthCommandCenter'
+import { GroupMeetingsManager } from '../components/GroupMeetingsManager'
 import { OrganizerEventCover } from '../components/OrganizerEventCover'
 import { EventCopyCopilot } from '../components/EventCopyCopilot'
 import { EventOperationsEditor } from '../components/EventOperationsEditor'
@@ -68,6 +69,7 @@ const NAV = [
   { key: 'orders', group: 'Events & tickets', label: 'Orders', icon: Ticket },
   { key: 'attendees', group: 'Events & tickets', label: 'Attendees & Check-in', icon: Users },
   { key: 'studio', group: 'Production', label: 'Streaming Studio', icon: Radio },
+  { key: 'meetings', group: 'Production', label: 'Group Meetings', icon: UsersRound },
   { key: 'live', group: 'Production', label: 'Live Room', icon: Activity },
   { key: 'promotions', group: 'Engagement', label: 'Promotions', icon: Megaphone },
   { key: 'messages', group: 'Engagement', label: 'Messaging', icon: MessageSquare },
@@ -122,6 +124,7 @@ export default function OrganizerWorkspace({ route }: { route: Route }) {
   const visibleNav = NAV.filter((item) => {
     if (['insights', 'finance'].includes(item.key) && !canViewReports) return false
     if (item.key === 'growth' && !canViewGrowth) return false
+    if (item.key === 'meetings' && !canManageEvents) return false
     return true
   })
 
@@ -225,6 +228,7 @@ export default function OrganizerWorkspace({ route }: { route: Route }) {
           {section === 'orders' && <OrdersView orgId={activeOrg.orgId} />}
           {section === 'attendees' && <AttendeesView orgId={activeOrg.orgId} initialEventId={route.query.get('eventId') ?? ''} />}
           {section === 'studio' && <StudioView orgId={activeOrg.orgId} />}
+          {section === 'meetings' && (canManageEvents ? <GroupMeetingsManager orgId={activeOrg.orgId} /> : <RoleRestricted />)}
           {section === 'live' && <LiveRoomView orgId={activeOrg.orgId} />}
           {section === 'promotions' && <PromotionsView orgId={activeOrg.orgId} />}
           {section === 'messages' && <MessagesView orgId={activeOrg.orgId} />}
