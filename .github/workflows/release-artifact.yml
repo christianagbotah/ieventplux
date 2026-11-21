@@ -76,6 +76,13 @@ jobs:
         run: |
           bun run build
           test -f .next/standalone/server.js
+          # Next.js standalone does not copy public/ or .next/static automatically.
+          # Copy both into the runtime bundle before packaging, or static assets
+          # would 404 even though server.js exists.
+          test -d .next/static
+          mkdir -p .next/standalone/.next
+          cp -a .next/static .next/standalone/.next/static
+          if [ -d public ]; then cp -a public .next/standalone/public; fi
           test -d .next/standalone/.next/static
           test -d .next/standalone/public
       - name: Package minimum standalone runtime and checksum
