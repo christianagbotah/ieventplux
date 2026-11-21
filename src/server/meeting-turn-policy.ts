@@ -18,7 +18,7 @@ export function meetingTurnConfigured(env: MeetingTurnEnv): boolean {
   const secret = env.MEETING_TURN_SHARED_SECRET ?? ''
   if (secret.length < 32 || urls.length === 0 || urls.length > 8) return false
   return urls.every((url) => {
-    if (!/^turns?:[^\s/@]+(?::\d{2,5})?(?:\?transport=(?:udp|tcp))?$/.test(url)) return false
+    if (!/^turns?:(?:[A-Za-z0-9.-]+|\[[0-9a-fA-F:]+\])(?::\d{2,5})?(?:\?transport=(?:udp|tcp))?$/.test(url)) return false
     return !url.includes('localhost') && !url.includes('127.0.0.1')
   })
 }
