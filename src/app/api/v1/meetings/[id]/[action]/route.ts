@@ -116,7 +116,12 @@ export async function POST(req: NextRequest, ctx: Context) {
         data: { meetingId: id, userId: user.id, body: text },
         include: { user: { select: { id: true, displayName: true, avatarUrl: true } } },
       })
-      await realtimeEmit(`meeting:${id}`, 'meeting:chat', record)
+      // Call participants and group members outside the call receive the same
+      // persisted message. Each client deduplicates by message ID.
+      await Promise.all([
+        realtimeEmit(`meeting:${id}`, 'meeting:chat', record),
+        realtimeEmit(`meeting-chat:${id}`, 'meeting:chat', record),
+      ])
       return jsonOk({ message: record }, { status: 201 })
     }
     if (action === 'remove-participant' || action === 'restore-participant') {
@@ -138,7 +143,10 @@ export async function POST(req: NextRequest, ctx: Context) {
           create: { meetingId: id, userId: targetId, removedById: user.id },
           update: { removedById: user.id },
         })
-        await realtimeEmit(`meeting:${id}`, 'meeting:remove', { userId: targetId })
+        await Promise.all([
+          realtimeEmit(`meeting:${id}`, 'meeting:remove', { userId: targetId }),
+          realtimeEmit(`meeting-chat:${id}`, 'meeting:remove', { userId: targetId }),
+        ])
       } else {
         await db.meetingBan.deleteMany({ where: { meetingId: id, userId: targetId } })
       }
@@ -161,7 +169,10 @@ export async function POST(req: NextRequest, ctx: Context) {
         where: { id: messageId, meetingId: id }, data: { status },
       })
       if (!updated.count) throw errors.notFound('Message not found.')
-      await realtimeEmit(`meeting:${id}`, 'meeting:moderated', { id: messageId, status })
+      await Promise.all([
+        realtimeEmit(`meeting:${id}`, 'meeting:moderated', { id: messageId, status }),
+        realtimeEmit(`meeting-chat:${id}`, 'meeting:moderated', { id: messageId, status }),
+      ])
       const { audit } = await import('@/server/audit')
       await audit({ actorUserId: user.id, actorLabel: user.email, action: 'meeting.chat_moderate', entityType: 'MeetingMessage', entityId: messageId })
       return jsonOk({ id: messageId, status })
