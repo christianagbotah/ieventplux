@@ -69,8 +69,8 @@ jobs:
       - name: Authenticated group meeting, WebRTC presentation and production TURN safety
         run: bun test src/server/meeting-policy.test.ts src/server/meeting-turn-policy.test.ts
 
-      - name: Attendee deep-link selection and event-scoped scanner regressions
-        run: bun test src/portal/lib/attendee-event-context.test.ts
+      - name: Attendee and meeting-invite deep-link safety
+        run: bun test src/portal/lib/attendee-event-context.test.ts src/portal/lib/meeting-invite-navigation.test.ts
 
       - name: Scanner management ownership, labels and browser scope
         run: bun test src/server/checkin-device-policy.test.ts src/portal/lib/scanner-session-local.test.ts
