@@ -12,6 +12,13 @@ describe('iEventPlux group meeting access', () => {
     expect(canJoinMeeting({ ...input, organizer: true, roomStatus: 'ENDED' })).toBe(false)
     expect(canJoinMeeting({ ...input, validTicket: true, validEvent: false })).toBe(false)
   })
+  test('priced events cannot be entered using only an approved RSVP or generic guest invitation', () => {
+    expect(canJoinMeeting({ ...input, approvedRsvp: true, hasPaidTicketType: true })).toBe(false)
+    expect(canJoinMeeting({ ...input, approvedRsvp: true, hasPaidTicketType: true, validTicket: true })).toBe(true)
+    expect(canJoinMeeting({ ...input, organizer: true, hasPaidTicketType: true })).toBe(true)
+    expect(canJoinMeeting({ ...input, approvedRsvp: true, hasPaidTicketType: false })).toBe(true)
+    expect(canJoinMeeting({ ...input, approvedRsvp: false, hasPaidTicketType: true })).toBe(false)
+  })
   test('does not allow cancelled, draft, deleted or suspended event content', () => {
     const evt = { status: 'PUBLISHED', deletedAt: null, org: { status: 'ACTIVE', deletedAt: null } }
     expect(meetingEventUsable(evt)).toBe(true)
