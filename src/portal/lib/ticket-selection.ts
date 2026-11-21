@@ -29,6 +29,15 @@ export function ticketAvailability(ticket: Pick<TicketQuote, 'quota' | 'soldCoun
   return Math.max(0, Math.min(ticket.perBuyerLimit, available))
 }
 
+/** A free-only basket must not be presented as a paid checkout just because
+ * other priced ticket types appear on the same event page. */
+export function hasPaidAdmissionSelection(
+  tickets: Pick<TicketQuote, 'id' | 'priceMinor'>[],
+  quantities: Record<string, number>,
+): boolean {
+  return tickets.some((ticket) => ticket.priceMinor > 0 && (quantities[ticket.id] ?? 0) > 0)
+}
+
 /** Indicative base ticket subtotal; server remains authoritative on totals. */
 export function quoteTicketSelection(tickets: TicketQuote[], quantities: Record<string, number>) {
   let subtotalMinor = 0
