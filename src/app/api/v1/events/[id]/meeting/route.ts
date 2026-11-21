@@ -3,7 +3,7 @@ import { db } from '@/lib/db'
 import { errors, handle, jsonOk, readJson, requireUser, sanitizeText } from '@/server/api'
 import { eventOrgAccess } from '@/server/permissions'
 import { meetingFeatureEnabled, getMeetingAccess, requireMeetingFeature } from '@/server/meeting-service'
-import { meetingEventUsable, validMeetingCapacity } from '@/server/meeting-policy'
+import { meetingEventUsable, meetingEventCallOpen, validMeetingCapacity } from '@/server/meeting-policy'
 
 type Context = { params: Promise<{ id: string }> }
 
@@ -45,7 +45,7 @@ export async function POST(req: NextRequest, ctx: Context) {
     const event = await db.event.findUnique({
       where: { id }, select: { title: true, status: true, deletedAt: true, org: { select: { status: true, deletedAt: true } } },
     })
-    if (!event || !meetingEventUsable(event)) throw errors.conflict('Publish the event and activate its organizer before creating a meeting.')
+    if (!event || !meetingEventUsable(event) || !meetingEventCallOpen(event)) throw errors.conflict('Publish the event and activate its organizer before creating a meeting.')
     const body = await readJson<Record<string, unknown>>(req)
     const capacity = validMeetingCapacity(body.maxParticipants ?? 6)
     if (capacity === null) throw errors.badRequest('A small-group meeting accepts 2–6 participants.')
