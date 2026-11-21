@@ -140,18 +140,8 @@ function SponsoredCard({ event, index }: { event: EventCardData; index: number }
   const [imgFailed, setImgFailed] = useState(false)
   return (
     <Card
-      role="link"
-      tabIndex={0}
-      aria-label={`View promoted event: ${event.title}`}
-      className="ievx-card-hover ievx-event-card group flex-row items-stretch gap-0 overflow-hidden rounded-2xl border-border/70 bg-card py-0 cursor-pointer"
+      className="ievx-card-hover ievx-event-card group relative flex-row items-stretch gap-0 overflow-hidden rounded-2xl border-border/70 bg-card py-0"
       style={{ animationDelay: `${Math.min(index * 40, 320)}ms` }}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault()
-          navigate(`/event/${event.slug}`)
-        }
-      }}
-      onClick={() => navigate(`/event/${event.slug}`)}
     >
       <div className="relative w-24 shrink-0 overflow-hidden bg-muted sm:w-36">
         {event.coverImageUrl && !imgFailed ? (
@@ -195,6 +185,11 @@ function SponsoredCard({ event, index }: { event: EventCardData; index: number }
       <div className="flex items-center pr-3">
         <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" aria-hidden />
       </div>
+      <a
+        href={`#/event/${encodeURIComponent(event.slug)}`}
+        aria-label={`View promoted event: ${event.title}`}
+        className="absolute inset-0 z-10 rounded-2xl focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-primary"
+      />
     </Card>
   )
 }
@@ -391,8 +386,11 @@ export default function Discover({ route }: { route: Route }) {
                     {HERO_STORIES.map((story, i) => (
                       <button key={story.label} type="button" className={i === heroIndex ? 'is-active' : ''}
                         aria-label={'Show highlight ' + (i + 1) + ': ' + story.label}
-                        aria-current={i === heroIndex ? 'true' : undefined}
-                        onClick={() => setHeroIndex(i)}>
+                        aria-pressed={i === heroIndex}
+                        onClick={() => {
+                          setHeroIndex(i)
+                          setHeroPlaying(false) // Explicit choice must not auto-advance away.
+                        }}>
                         <span className="sr-only">{story.label}</span>
                       </button>
                     ))}

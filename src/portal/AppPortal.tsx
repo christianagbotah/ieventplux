@@ -217,24 +217,24 @@ export default function AppPortal() {
 
       <header className="ievx-application-bar sticky top-0 z-30">
         <div className="mx-auto flex h-[52px] max-w-[1600px] items-center gap-2 px-3 sm:px-5 lg:px-7">
-          <button type="button" className="flex shrink-0 items-center gap-2.5 ievx-press" onClick={() => navigate('/')} aria-label="iEventPlux home">
+          <a href="#/" className="flex min-h-11 shrink-0 items-center gap-2.5 rounded-lg ievx-press focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary" aria-label="iEventPlux home">
             <span className="ievx-brand-mark flex h-8 w-8 items-center justify-center rounded-lg">
               <Ticket className="h-5 w-5" aria-hidden />
             </span>
             <span className="ievx-brand-name hidden text-[16px] font-extrabold min-[380px]:inline sm:text-[17px]">
               iEvent<span className="text-primary">Plux</span>
             </span>
-          </button>
+          </a>
 
           <nav className={`hidden items-center gap-1 md:flex ${workspaceMode ? 'md:hidden' : ''}`} aria-label="Primary">
             {NAV.map((item) => (
-              <button
+              <a
                 key={item.path}
-                onClick={() => navigate(item.path)}
+                href={`#${item.path}`}
                 aria-current={activeNav(item.path) ? 'page' : undefined}
                 aria-label={item.label}
                 title={item.label}
-                className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-sm font-medium transition-colors ievx-press ${
+                className={`flex min-h-11 items-center gap-1.5 rounded-full px-2.5 py-1 text-sm font-medium transition-colors ievx-press focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${
                   activeNav(item.path) ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
                 }`}
               >
@@ -243,7 +243,7 @@ export default function AppPortal() {
                     account group overflowed 768px tablets by ~49px; labels
                     return at lg where the row has room again. */}
                 <span className="hidden lg:inline">{item.label}</span>
-              </button>
+              </a>
             ))}
           </nav>
 
@@ -278,7 +278,7 @@ export default function AppPortal() {
             </button>
           )}
           <div className={`ml-auto flex shrink-0 items-center gap-1 lg:gap-1.5 ${workspaceMode ? 'md:ml-2' : 'lg:ml-0'}`}>
-            <Button variant="ghost" size="icon" className="rounded-full lg:hidden" aria-label="Search events" onClick={() => navigate('/search')}>
+            <Button variant="ghost" size="icon" className="min-h-11 min-w-11 rounded-full lg:hidden" aria-label="Search events" onClick={() => navigate('/search')}>
               <Search className="h-5 w-5" aria-hidden />
             </Button>
             <Button
@@ -291,13 +291,13 @@ export default function AppPortal() {
             >
               <CommandIcon className="h-5 w-5" aria-hidden />
             </Button>
-            <Button variant="ghost" size="icon" className="rounded-full sm:hidden" aria-label="Watch live events" onClick={() => navigate('/live')}>
+            <Button variant="ghost" size="icon" className="min-h-11 min-w-11 rounded-full sm:hidden" aria-label="Watch live events" onClick={() => navigate('/live')}>
               <Radio className="size-5" aria-hidden />
             </Button>
             <div className="hidden sm:block"><ThemeToggle /></div>
             {user ? (
               <>
-                <Button variant="ghost" size="icon" className="relative rounded-lg" aria-label={`Notifications${unread ? ` (${unread} unread)` : ''}`} onClick={() => navigate('/me?tab=notifications')}>
+                <Button variant="ghost" size="icon" className="relative min-h-11 min-w-11 rounded-lg" aria-label={`Notifications${unread ? ` (${unread} unread)` : ''}`} onClick={() => navigate('/me?tab=notifications')}>
                   <Bell className="h-5 w-5" />
                   {/* Effects Studio: badge-ping ring behind the unread counter. */}
                   {unread > 0 && (
@@ -309,7 +309,7 @@ export default function AppPortal() {
                 </Button>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <button className="flex items-center gap-2 rounded-lg border border-border/70 bg-card p-1 pr-3 transition-colors hover:border-primary/30 ievx-press" aria-label="Account menu">
+                    <button className="flex min-h-11 items-center gap-2 rounded-lg border border-border/70 bg-card p-1 pr-3 transition-colors hover:border-primary/30 ievx-press" aria-label="Account menu">
                       <Avatar className="h-8 w-8">
                         <AvatarFallback className="bg-primary/15 text-xs font-bold text-primary">{initials(user.displayName)}</AvatarFallback>
                       </Avatar>
@@ -373,7 +373,7 @@ export default function AppPortal() {
         <ConnectionStatus />
       </header>
 
-      <main id="main" tabIndex={-1} ref={viewRef} className={`min-w-0 flex-1 outline-none ${workspaceMode ? 'ievx-workspace pb-6 md:h-[calc(100dvh-3.25rem)] md:min-h-0 md:flex-none md:overflow-hidden md:pb-0' : 'ievx-public pb-24 md:pb-10'}`}>
+      <main id="main" tabIndex={-1} ref={viewRef} className={`min-w-0 flex-1 outline-none ${workspaceMode ? 'ievx-workspace pb-6 md:h-[calc(100dvh-3.25rem)] md:min-h-0 md:flex-none md:overflow-hidden md:pb-0' : 'ievx-public pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-10'}`}>
         <Suspense fallback={<ViewFallback />}>
           <div key={route.path} className={`ievx-view-enter ${workspaceMode ? 'md:h-full' : ''}`}>{view}</div>
         </Suspense>
@@ -396,25 +396,24 @@ export default function AppPortal() {
 
       {/* Mobile bottom navigation */}
       <nav className={`${workspaceMode ? 'hidden' : 'fixed'} inset-x-0 bottom-0 z-30 border-t border-border/60 ievx-glass md:hidden`} aria-label="Mobile primary">
-        <div className="mx-auto flex h-16 max-w-lg items-center justify-around px-2 pb-[env(safe-area-inset-bottom)]">
+        <div className="mx-auto flex h-[calc(4rem+env(safe-area-inset-bottom))] max-w-lg items-center justify-around px-2 pb-[env(safe-area-inset-bottom)]">
           {MOBILE_NAV.map((item) => {
             const active = item.path.startsWith('/me')
               ? route.segments[0] === 'me' && (route.query.get('tab') ?? 'tickets') === item.tab
               : activeNav(item.path)
             return (
-              <button
+              <a
                 key={item.path}
-                type="button"
-                onClick={() => navigate(item.path)}
+                href={`#${item.path}`}
                 aria-current={active ? 'page' : undefined}
                 aria-label={item.label}
-                className={`flex min-h-12 min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-2xl px-1 py-1.5 text-[11px] font-semibold transition-colors ievx-press ${
+                className={`flex min-h-12 min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-2xl px-1 py-1.5 text-[11px] font-semibold transition-colors ievx-press focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${
                   active ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
                 }`}
               >
                 <item.icon className="h-5 w-5" aria-hidden />
                 <span className="truncate">{item.label}</span>
-              </button>
+              </a>
             )
           })}
         </div>

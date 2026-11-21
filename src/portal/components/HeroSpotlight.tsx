@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { ArrowUpRight, CalendarDays, MapPin, Radio, ShieldCheck } from 'lucide-react'
-import { navigate } from '../router'
 import { dateShort } from '../format'
 import { priceLabel, type EventCardData } from './EventCard'
 
@@ -11,9 +10,8 @@ export function HeroSpotlight({ event }: { event: EventCardData }) {
   const [imageFailed, setImageFailed] = useState(false)
   const canShowImage = Boolean(event.coverImageUrl && !imageFailed)
   return (
-    <button
-      type="button"
-      onClick={() => navigate('/event/' + event.slug)}
+    <a
+      href={'#/event/' + encodeURIComponent(event.slug)}
       aria-label={'Explore featured event: ' + event.title}
       className="ievx-hero-spotlight group relative flex h-full min-h-64 w-full flex-col justify-end overflow-hidden rounded-2xl text-left text-white focus-visible:outline focus-visible:outline-4 focus-visible:outline-offset-4 focus-visible:outline-[#a8efd7]"
     >
@@ -53,6 +51,6 @@ export function HeroSpotlight({ event }: { event: EventCardData }) {
           <span className="text-sm font-extrabold text-[#b6f4dc]">{priceLabel(event)}</span>
         </div>
       </div>
-    </button>
+    </a>
   )
 }

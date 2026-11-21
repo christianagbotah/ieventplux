@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { HeroSpotlight } from './HeroSpotlight'
-import { priceLabel, type EventCardData } from './EventCard'
+import { EventCard, EventRow, priceLabel, type EventCardData } from './EventCard'
 
 const event: EventCardData = {
   id: 'public-event-1',
@@ -35,6 +35,33 @@ describe('public homepage spotlight accessibility and truthful event info', () =
     expect(markup).toContain('Free')
     expect(markup).not.toContain('<img')
     expect(markup).not.toContain('Verified')
+  })
+
+  test('featured spotlight is a native deep link, not a simulated button', () => {
+    const markup = renderToStaticMarkup(createElement(HeroSpotlight, { event }))
+    expect(markup).toContain('href="#/event/real-conference"')
+    expect(markup).not.toContain('<button')
+  })
+
+  test('event cards support long press, open in new tab and distinct footer controls', () => {
+    const footer = createElement('button', { type: 'button' }, 'Save this event')
+    const markup = renderToStaticMarkup(createElement(EventCard, { event, footer }))
+    expect(markup).toContain('href="#/event/real-conference"')
+    expect(markup).toContain('aria-label="View event: The Global Community Conference"')
+    expect(markup).toContain('<button type="button">Save this event</button>')
+    expect(markup).not.toContain('role="link"')
+    expect(markup).not.toContain('tabindex="0"')
+    // Interactive footer is a sibling of the overlay link, not a nested button.
+    const linkStart = markup.indexOf('<a href="#/event/real-conference"')
+    const linkEnd = markup.indexOf('</a>', linkStart)
+    expect(linkStart).toBeGreaterThan(-1)
+    expect(markup.slice(linkStart, linkEnd)).not.toContain('<button')
+  })
+
+  test('compact event rows expose shareable deep links', () => {
+    const markup = renderToStaticMarkup(createElement(EventRow, { event }))
+    expect(markup).toContain('href="#/event/real-conference"')
+    expect(markup).toContain('aria-label="View event: The Global Community Conference"')
   })
 
   test('card prices stay in their original currency', () => {

@@ -4,7 +4,6 @@ import { useState } from 'react'
 import { CalendarDays, MapPin, Monitor, Users, Radio, Ticket, Star } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { navigate } from '../router'
 import { money, dateShort, humanize } from '../format'
 import { countryLabel } from '../lib/global-locations'
 
@@ -67,22 +66,8 @@ export function EventCard({ event, index = 0, footer }: { event: EventCardData; 
   const inventory = inventoryState(event)
   return (
     <Card
-      role="link"
-      tabIndex={0}
-      aria-label={`View event: ${event.title}`}
-      className="ievx-card-hover ievx-event-card group flex-col gap-0 overflow-hidden rounded-2xl border-border/70 bg-card py-0 cursor-pointer"
+      className="ievx-card-hover ievx-event-card group relative flex-col gap-0 overflow-hidden rounded-2xl border-border/70 bg-card py-0"
       style={{ animationDelay: `${Math.min(index * 40, 320)}ms` }}
-      onKeyDown={(e) => {
-        if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
-          e.preventDefault()
-          navigate(`/event/${event.slug}`)
-        }
-      }}
-      onClick={(e) => {
-        const target = e.target as HTMLElement
-        if (target.closest('button,a,input,select,textarea,[role="button"]')) return
-        navigate(`/event/${event.slug}`)
-      }}
     >
       {/* R19: landscape 16/10 banner (was portrait 3/4 — tall banners swallowed
           rails and the promoted rail; landscape is the standard event-ticketing
@@ -159,8 +144,16 @@ export function EventCard({ event, index = 0, footer }: { event: EventCardData; 
           </Badge>
           <span className="text-sm font-bold text-primary">{priceLabel(event)}</span>
         </div>
-        {footer}
+        {footer && <div className="relative z-20">{footer}</div>}
       </div>
+      {/* Real links preserve open-in-new-tab, long-press and copy-link behavior.
+          An optional footer stays above the full-card link so its independent
+          actions remain reachable by mouse, touch and keyboard. */}
+      <a
+        href={`#/event/${encodeURIComponent(event.slug)}`}
+        aria-label={`View event: ${event.title}`}
+        className="absolute inset-0 z-10 rounded-2xl focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-primary"
+      />
     </Card>
   )
 }
@@ -180,9 +173,10 @@ export function EventCardSkeleton() {
 
 export function EventRow({ event }: { event: EventCardData }) {
   return (
-    <button
-      className="flex w-full items-center gap-3 rounded-xl border border-border/60 bg-card p-3 text-left ievx-card-hover"
-      onClick={() => navigate(`/event/${event.slug}`)}
+    <a
+      href={`#/event/${encodeURIComponent(event.slug)}`}
+      aria-label={`View event: ${event.title}`}
+      className="flex w-full items-center gap-3 rounded-xl border border-border/60 bg-card p-3 text-left ievx-card-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
     >
       <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-muted">
         {event.coverImageUrl ? (
@@ -196,7 +190,7 @@ export function EventRow({ event }: { event: EventCardData }) {
         <p className="truncate text-xs text-muted-foreground">{event.org?.name} · {dateShort(event.startsAt)}</p>
       </div>
       <span className="text-sm font-bold text-primary">{priceLabel(event)}</span>
-    </button>
+    </a>
   )
 }
 
