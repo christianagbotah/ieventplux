@@ -78,8 +78,10 @@ export default function MeetingView({ id }: { id: string }) {
   const remoteStreams = useRef(new Map<string, MediaStream>())
   const active = useRef(false)
   const chatEnd = useRef<HTMLDivElement>(null)
+  const joinTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const leave = useCallback(() => {
+    if (joinTimeout.current) { clearTimeout(joinTimeout.current); joinTimeout.current = null }
     active.current = false
     socket.current?.emit('leave')
     socket.current?.disconnect()
@@ -256,9 +258,19 @@ export default function MeetingView({ id }: { id: string }) {
       active.current = true
       const realtime = connectRealtime()
       socket.current = realtime
+      joinTimeout.current = setTimeout(() => {
+        if (active.current && !realtime.connected) {
+          leave()
+          setBusy(false)
+          setError('The meeting signaling service is unavailable. Check your connection and try again.')
+        }
+      }, 25_000)
       realtime.on('connect', () => realtime.emit('join', { room: `meeting:${id}` }))
       realtime.on('room:joined', (msg: { room: string }) => {
-        if (msg.room === `meeting:${id}`) { setJoined(true); setBusy(false) }
+        if (msg.room === `meeting:${id}`) {
+          if (joinTimeout.current) { clearTimeout(joinTimeout.current); joinTimeout.current = null }
+          setJoined(true); setBusy(false)
+        }
       })
       realtime.on('room:denied', (msg: { code: string }) => {
         leave()
