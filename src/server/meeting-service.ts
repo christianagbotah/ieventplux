@@ -2,7 +2,7 @@ import { createHmac } from 'node:crypto'
 import { db } from '@/lib/db'
 import { errors } from './api'
 import { eventOrgAccess } from './permissions'
-import { canJoinMeeting, meetingEventUsable } from './meeting-policy'
+import { canJoinMeeting, meetingEventUsable, meetingEventCallOpen } from './meeting-policy'
 
 /**
  * Small-group meetings are disabled unless explicitly enabled in the runtime.
@@ -50,7 +50,7 @@ export async function getMeetingAccess(meetingId: string, userId: string) {
     throw errors.forbidden('An approved RSVP or a valid event ticket is required for this meeting.')
   }
   const canJoin = canJoinMeeting({
-    roomStatus: meeting.status, validEvent: true, signedIn: true,
+    roomStatus: meeting.status, validEvent: meetingEventCallOpen(meeting.event), signedIn: true,
     organizer, approvedRsvp: Boolean(rsvp), validTicket: Boolean(ticket),
   })
   return { meeting, organizer, attendee, canJoin }
