@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server'
 import { db } from '@/lib/db'
 import { errors, handle, jsonOk, readJson, requireUser, sanitizeText, rateLimit, pagination, jsonList } from '@/server/api'
 import { getMeetingAccess, meetingIceServers, requireMeetingFeature } from '@/server/meeting-service'
-import { MEETING_MAX_MESSAGE, validMeetingCapacity } from '@/server/meeting-policy'
+import { MEETING_MAX_MESSAGE, meetingEventCallOpen, validMeetingCapacity } from '@/server/meeting-policy'
 import { realtimeEmit } from '@/server/services/realtime'
 
 type Context = { params: Promise<{ id: string; action: string }> }
@@ -67,6 +67,7 @@ export async function POST(req: NextRequest, ctx: Context) {
     const body: Record<string, unknown> = await readJson<Record<string, unknown>>(req).catch(() => ({} as Record<string, unknown>))
     if (action === 'start') {
       await rateLimit(req, 'meeting-start', 10, 60_000)
+      if (!meetingEventCallOpen(meeting.event)) throw errors.conflict('An ended event cannot start a new meeting. Schedule a new event.')
       if (meeting.status === 'LIVE') return jsonOk({ status: 'LIVE' })
       const updated = await db.eventMeeting.updateMany({
         where: { id, status: { in: ['SCHEDULED', 'ENDED'] } },
