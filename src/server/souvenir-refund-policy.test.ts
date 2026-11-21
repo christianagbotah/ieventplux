@@ -15,6 +15,17 @@ describe('physical event merchandise refund safety policy', () => {
       expect(physicalRefundReview({ lines: 2, ordered: 3, collected })).toContain(`${collected} of 3 ordered units handed over`)
     }
   })
+  test('inconsistent aggregate snapshots cannot bypass physical refund review', () => {
+    for (const input of [
+      { lines: 0, ordered: 1, collected: 0 },
+      { lines: 0, ordered: 0, collected: 1 },
+      { lines: 1, ordered: 0, collected: 0 },
+      { lines: 2, ordered: 1, collected: 0 },
+      { lines: 1, ordered: 1, collected: 2 },
+    ]) {
+      expect(() => physicalRefundReview(input)).toThrow('Inconsistent souvenir refund quantities')
+    }
+  })
   test('invalid counter values are refused instead of silently waived', () => {
     for (const lines of [-1, 1.5, Infinity, NaN]) {
       expect(() => physicalRefundReview({ lines, ordered: 1, collected: 0 })).toThrow()

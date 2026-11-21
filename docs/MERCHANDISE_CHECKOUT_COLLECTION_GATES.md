@@ -145,3 +145,7 @@ no production records or real provider charges, SMS, emails, or real goods.
 backup/restore verification; provider sandbox settlement; evidence-backed
 financial reversals/restock disposition; real Android/iPhone camera and
 receipt UAT. Do not enable live merchandise sales or physical collection.
+
+### Refund aggregate consistency guard (21 November 2026)
+
+The physical-product refund policy now rejects inconsistent aggregate counts (collected greater than ordered, nonzero units with zero lines, or fewer ordered units than lines). These anomalies must fail closed rather than routing a merchandise refund through the ticket-only provider path. This is a pure policy guard; live provider refund and stock/ledger reconciliation remain disabled pending acceptance.

@@ -5,6 +5,10 @@ export function physicalRefundReview(input: { lines: number; ordered: number; co
   if (![lines, ordered, collected].every((n) => Number.isSafeInteger(n) && n >= 0)) {
     throw new Error('Invalid souvenir refund quantities')
   }
+  // Reject inconsistent aggregate snapshots instead of silently taking the ticket-only refund path.
+  if (collected > ordered || (lines === 0 && (ordered !== 0 || collected !== 0)) || (lines > 0 && ordered < lines)) {
+    throw new Error('Inconsistent souvenir refund quantities')
+  }
   if (lines === 0) return null // Existing ticket-only refund policy applies.
   return `Physical merchandise refund requires finance review and collection/return reconciliation (${collected} of ${ordered} ordered units handed over). No provider refund, stock adjustment, or ledger reversal has been initiated.`
 }
