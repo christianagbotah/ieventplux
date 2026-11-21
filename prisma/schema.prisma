@@ -73,6 +73,7 @@ model User {
   verifications       ContactVerification[]
   chatMessages        ChatMessage[]
   meetingMessages     MeetingMessage[]
+  meetingBans         MeetingBan[]
   identityProviderJobs KycProviderJob[]
   livePollVotes       LivePollVote[]
   questionsAsked      AudienceQuestion[]      @relation("QuestionAuthor")
@@ -1142,8 +1143,23 @@ model EventMeeting {
 
   event      Event            @relation(fields: [eventId], references: [id], onDelete: Cascade)
   messages   MeetingMessage[]
+  bans       MeetingBan[]
 
   @@index([status, createdAt])
+}
+
+/** A removal is durable until the organizer explicitly restores access. */
+model MeetingBan {
+  meetingId   String
+  userId      String
+  removedById String
+  createdAt   DateTime @default(now())
+
+  meeting EventMeeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  user    User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([meetingId, userId])
+  @@index([userId])
 }
 
 model MeetingMessage {
