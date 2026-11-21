@@ -118,6 +118,19 @@ export default function MeetingView({ id }: { id: string }) {
   }, [load, leave])
 
   useEffect(() => { chatEnd.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }) }, [messages.length])
+  // Chat is independent from the video room: refresh it while the host has not
+  // started the call, after the call ends, or if realtime transport is down.
+  useEffect(() => {
+    if (!data?.meeting.chatEnabled || !user) return
+    let cancelled = false
+    const timer = window.setInterval(() => {
+      void api.get<{ items: ChatRow[] }>(`/meetings/${id}/chat?pageSize=60`).then((result) => {
+        if (!cancelled) setMessages(result.items)
+      }).catch(() => {})
+    }, 8000)
+    return () => { cancelled = true; window.clearInterval(timer) }
+  }, [data?.meeting.chatEnabled, id, user?.id])
+
   // A live call must not rely solely on the initial ticket/RSVP decision.
   // Polling also closes calls when the meeting/event becomes unavailable.
   useEffect(() => {
@@ -390,7 +403,7 @@ export default function MeetingView({ id }: { id: string }) {
   }
 
   const send = async () => {
-    if (!joined || !draft.trim() || !data?.meeting.chatEnabled) return
+    if (!draft.trim() || !data?.meeting.chatEnabled) return
     const text = draft.trim()
     setDraft('')
     try {
@@ -470,8 +483,8 @@ export default function MeetingView({ id }: { id: string }) {
         <Button disabled={busy} onClick={() => void changeStatus('start')}><Play className="mr-2 size-4" /> Start meeting</Button>
       </CardContent></Card>}
 
-      {meeting.status === 'LIVE' && <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
-        <div className="space-y-3">
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
+        {meeting.status === 'LIVE' ? <div className="space-y-3">
           <div className="grid auto-rows-fr gap-3 sm:grid-cols-2">
             {joined ? <>
               <VideoTile name={user?.displayName || 'You'} stream={screen.current || media.current} local sharing={sharing} />
@@ -503,7 +516,11 @@ export default function MeetingView({ id }: { id: string }) {
             </div>)}
           </div>}
           <p className="text-xs text-muted-foreground">Small-group mesh connection: up to six devices. Camera and screen capture require browser permission and HTTPS. TURN relay configuration is necessary for reliable calls across some networks. No recording is performed.</p>
-        </div>
+        </div> : <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border bg-card p-8 text-center">
+          <UsersRound className="size-10 text-primary" aria-hidden />
+          <p className="font-semibold">{meeting.status === 'ENDED' ? 'The video meeting has ended' : 'Waiting for the organizer to start the call'}</p>
+          <p className="max-w-md text-sm text-muted-foreground">Group chat is available to authorized event attendees before and after the video call. New camera and screen sharing sessions start only when the host opens the room.</p>
+        </div>}
 
         <Card className="flex min-h-[350px] flex-col overflow-hidden rounded-2xl lg:max-h-[70vh]">
           <div className="flex items-center gap-2 border-b px-4 py-3 font-semibold"><MessageSquare className="size-5 text-primary" /> Meeting chat</div>
@@ -520,12 +537,11 @@ export default function MeetingView({ id }: { id: string }) {
             <div ref={chatEnd} />
           </div>
           {meeting.chatEnabled ? <form className="flex gap-2 border-t p-3" onSubmit={(e) => { e.preventDefault(); void send() }}>
-            <Input aria-label="Meeting chat message" value={draft} onChange={(e) => setDraft(e.target.value)} maxLength={700} disabled={!joined} placeholder={joined ? 'Message attendees…' : 'Join to chat'} />
-            <Button type="submit" size="icon" disabled={!joined || !draft.trim()} aria-label="Send chat"><Send className="size-4" /></Button>
+            <Input aria-label="Meeting chat message" value={draft} onChange={(e) => setDraft(e.target.value)} maxLength={700} placeholder="Message your event group…" />
+            <Button type="submit" size="icon" disabled={!draft.trim()} aria-label="Send chat"><Send className="size-4" /></Button>
           </form> : <p className="border-t p-3 text-sm text-muted-foreground">Chat is disabled by the organizer.</p>}
         </Card>
-      </div>}
-      {meeting.status !== 'LIVE' && <div className="rounded-2xl border bg-card p-8 text-center text-sm text-muted-foreground">{meeting.status === 'ENDED' ? 'This meeting has ended. The organizer may reopen it.' : 'The organizer has not started the meeting yet.'}</div>}
+      </div>
     </>}
   </div>
 }
