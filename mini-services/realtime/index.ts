@@ -48,7 +48,7 @@ const httpServer = createServer((req, res) => {
         io.to(parsed.room).emit(parsed.event, parsed.payload)
         // Host-initiated removal is enforced at the relay itself. The durable
         // ban prevents the removed participant from reconnecting.
-        if (parsed.event === 'meeting:remove' && parseRoomKey(parsed.room)?.kind === 'meeting') {
+        if (parsed.event === 'meeting:remove' && ['meeting', 'meeting-chat'].includes(parseRoomKey(parsed.room)?.kind ?? '')) {
           const removedId = (parsed.payload as { userId?: unknown } | null)?.userId
           if (typeof removedId === 'string') {
             for (const peerId of io.sockets.adapter.rooms.get(parsed.room) ?? []) {
@@ -143,6 +143,16 @@ io.on('connection', (socket) => {
         return
       }
       if (joinedRoom === room) return // do not inflate presence on duplicate joins
+      // The persistent group-chat socket is independent of video admission,
+      // but is still bound to the authenticated attendee for host removal.
+      if (room!.startsWith('meeting-chat:')) {
+        const identity = await activeUserId(socket.handshake.headers.cookie)
+        if (!identity) {
+          socket.emit('room:denied', { code: 'NOT_AUTHORIZED' })
+          return
+        }
+        socket.data.meetingUserId = identity
+      }
       let existingPeers: { peerId: string; name: string; userId: string }[] = []
       if (room!.startsWith('meeting:')) {
         const meeting = await db.eventMeeting.findUnique({
