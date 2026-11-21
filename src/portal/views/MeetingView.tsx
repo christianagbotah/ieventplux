@@ -69,6 +69,8 @@ export default function MeetingView({ id }: { id: string }) {
   const [sharing, setSharing] = useState(false)
   const [capacity, setCapacity] = useState('6')
   const [title, setTitle] = useState('')
+  const [chatAllowed, setChatAllowed] = useState(true)
+  const [screenAllowed, setScreenAllowed] = useState(true)
   const socket = useRef<Socket | null>(null)
   const connections = useRef(new Map<string, PeerConnection>())
   const media = useRef<MediaStream | null>(null)
@@ -106,6 +108,8 @@ export default function MeetingView({ id }: { id: string }) {
       setData(result)
       setTitle(result.meeting.title)
       setCapacity(String(result.meeting.maxParticipants))
+      setChatAllowed(result.meeting.chatEnabled)
+      setScreenAllowed(result.meeting.screenShareEnabled)
       const chat = await api.get<{ items: ChatRow[] }>(`/meetings/${id}/chat?pageSize=60`).catch(() => ({ items: [] }))
       setMessages(chat.items)
       setError('')
@@ -408,7 +412,7 @@ export default function MeetingView({ id }: { id: string }) {
     try {
       await api.post(`/meetings/${id}/settings`, {
         title, maxParticipants: Number(capacity),
-        chatEnabled: data.meeting.chatEnabled, screenShareEnabled: data.meeting.screenShareEnabled,
+        chatEnabled: chatAllowed, screenShareEnabled: screenAllowed,
       })
       await load()
       setNotice('Meeting settings saved.')
@@ -493,7 +497,11 @@ export default function MeetingView({ id }: { id: string }) {
       {data?.access.canManage && meeting.status !== 'LIVE' && <Card className="rounded-2xl"><CardContent className="flex flex-wrap items-end gap-3 pt-5">
         <label className="min-w-[190px] flex-1 space-y-1 text-sm"><span className="font-medium">Meeting title</span><Input value={title} maxLength={120} onChange={(e) => setTitle(e.target.value)} /></label>
         <label className="w-32 space-y-1 text-sm"><span className="font-medium">Participants</span><select className="h-10 w-full rounded-lg border bg-background px-2" value={capacity} onChange={(e) => setCapacity(e.target.value)}>{[2,3,4,5,6].map((n) => <option value={n} key={n}>{n}</option>)}</select></label>
-        <Button variant="outline" disabled={busy} onClick={() => void saveSettings()}>Save</Button>
+        <div className="flex flex-wrap gap-3">
+          <label className="inline-flex items-center gap-2 text-sm"><input type="checkbox" className="size-4" checked={chatAllowed} onChange={(e) => setChatAllowed(e.target.checked)} /> Group chat</label>
+          <label className="inline-flex items-center gap-2 text-sm"><input type="checkbox" className="size-4" checked={screenAllowed} onChange={(e) => setScreenAllowed(e.target.checked)} /> Screen sharing</label>
+        </div>
+        <Button variant="outline" disabled={busy} onClick={() => void saveSettings()}>Save settings</Button>
         {['PUBLISHED', 'LIVE'].includes(meeting.event.status)
           ? <Button disabled={busy} onClick={() => void changeStatus('start')}><Play className="mr-2 size-4" /> Start meeting</Button>
           : <p className="text-xs text-muted-foreground">Event completed; group discussion remains available.</p>}
