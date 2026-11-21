@@ -21,6 +21,16 @@ describe('private realtime room authorization', () => {
     expect(canJoinRoom(room, 'viewer123', {activePlayback:true})).toBe(true)
     expect(canJoinRoom(room, 'organizer123', {orgMember:true})).toBe(true)
   })
+  test('small group meeting rooms require active proof and never allow anonymous public visitors', () => {
+    const room = parseRoomKey('meeting:meeting0001')!
+    expect(room.kind).toBe('meeting')
+    expect(canJoinRoom(room, null, { liveMeeting: true, orgMember: true })).toBe(false)
+    expect(canJoinRoom(room, 'viewer123', { publicEvent: true })).toBe(false)
+    expect(canJoinRoom(room, 'viewer123', { validTicket: true, liveMeeting: true })).toBe(true)
+    expect(canJoinRoom(room, 'viewer123', { approvedRsvp: true, liveMeeting: true })).toBe(true)
+    expect(canJoinRoom(room, 'host123', { orgMember: true, liveMeeting: true })).toBe(true)
+    expect(canJoinRoom(room, 'host123', { orgMember: true, liveMeeting: false })).toBe(false)
+  })
   test('public event room supports visitors, invite-only room requires proof', () => {
     const room = parseRoomKey('event:event000123')!
     expect(canJoinRoom(room, null, {publicEvent:true})).toBe(true)
