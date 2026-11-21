@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { canJoinMeeting, meetingEventUsable, meetingEventCallOpen, validMeetingCapacity, validMeetingSignal } from './meeting-policy'
+import { canJoinMeeting, meetingEventUsable, meetingEventCallOpen, validMeetingCapacity, validMeetingSignal, validMeetingScreenUpdate } from './meeting-policy'
 
 describe('iEventPlux group meeting access', () => {
   const input = { roomStatus: 'LIVE', validEvent: true, signedIn: true, organizer: false, approvedRsvp: false, validTicket: false }
@@ -40,6 +40,17 @@ describe('WebRTC relay input shape', () => {
       { to, kind: 'offer', sdp: 'x'.repeat(24001) }, { to, kind: 'candidate', candidate: { candidate: 99 } },
       { to, kind: 'candidate', candidate: { candidate: 'x', sdpMLineIndex: -1 } }]) {
       expect(validMeetingSignal(item)).toBe(false)
+    }
+  })
+})
+
+describe('Authorized presenter signaling shape', () => {
+  test('screen updates require a boolean and no forged data fields', () => {
+    expect(validMeetingScreenUpdate({ sharing: true })).toBe(true)
+    expect(validMeetingScreenUpdate({ sharing: false })).toBe(true)
+    for (const value of [null, {}, [], 'true', { sharing: 1 },
+      { sharing: 'yes' }, { sharing: true, peerId: 'forged' }, { sharing: true, userId: 'other' }]) {
+      expect(validMeetingScreenUpdate(value)).toBe(false)
     }
   })
 })
