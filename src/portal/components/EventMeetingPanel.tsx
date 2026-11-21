@@ -15,7 +15,7 @@ type RoomRow = {
 type Payload = { enabled: boolean; meeting: RoomRow | null; canManage: boolean }
 
 /** Used on the event page and the organizer's Meetings dashboard. */
-export function EventMeetingPanel({ eventId }: { eventId: string }) {
+export function EventMeetingPanel({ eventId, showDisabled = false }: { eventId: string; showDisabled?: boolean }) {
   const { user } = usePortal()
   const [info, setInfo] = useState<Payload | null>(null)
   const [loading, setLoading] = useState(false)
@@ -58,6 +58,7 @@ export function EventMeetingPanel({ eventId }: { eventId: string }) {
 
   if (!user || (!info && !error)) return null
   if (info && !info.enabled) {
+    if (!showDisabled) return null // Never advertise an unavailable feature on public events.
     return <Card className="rounded-2xl"><CardContent className="flex items-start gap-3 p-4">
       <UsersRound className="mt-1 size-6 text-primary" aria-hidden />
       <div><p className="font-semibold">Interactive group meetings</p>
