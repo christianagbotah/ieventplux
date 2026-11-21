@@ -22,13 +22,13 @@ CREATE TABLE IF NOT EXISTS "EventMeeting" (
 
 CREATE UNIQUE INDEX IF NOT EXISTS "EventMeeting_eventId_key" ON "EventMeeting"("eventId");
 CREATE INDEX IF NOT EXISTS "EventMeeting_status_createdAt_idx" ON "EventMeeting"("status", "createdAt");
-DO $
+DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'EventMeeting_maxParticipants_check'
     AND conrelid = '"EventMeeting"'::regclass) THEN
     ALTER TABLE "EventMeeting" ADD CONSTRAINT "EventMeeting_maxParticipants_check" CHECK ("maxParticipants" BETWEEN 2 AND 6);
   END IF;
-END $;
+END $$;
 
 CREATE TABLE IF NOT EXISTS "MeetingMessage" (
   "id" TEXT NOT NULL,
