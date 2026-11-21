@@ -1,3 +1,5 @@
+import { validMediaCapacity, type MeetingMediaEngine } from './meeting-sfu-policy'
+
 /**
  * Small-group WebRTC room rules. P2P mesh is intentionally capped rather than
  * claiming it is suitable for webinars with hundreds of video participants.
@@ -5,9 +7,8 @@
 export const MEETING_MAX_PEERS = 6
 export const MEETING_MAX_MESSAGE = 700
 
-export function validMeetingCapacity(value: unknown): number | null {
-  const n = typeof value === 'number' ? value : Number(value)
-  return Number.isSafeInteger(n) && n >= 2 && n <= MEETING_MAX_PEERS ? n : null
+export function validMeetingCapacity(value: unknown, engine: MeetingMediaEngine = 'mesh'): number | null {
+  return validMediaCapacity(value, engine)
 }
 
 export function meetingEventUsable(event: {

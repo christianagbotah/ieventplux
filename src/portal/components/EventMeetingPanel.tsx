@@ -9,10 +9,10 @@ import { navigate } from '../router'
 import { usePortal } from '../store'
 
 type RoomRow = {
-  id: string; title: string; status: string; maxParticipants: number
+  id: string; title: string; status: string; maxParticipants: number; mediaEngine?: 'mesh' | 'sfu' | 'unavailable'
   screenShareEnabled: boolean; chatEnabled: boolean
 }
-type Payload = { enabled: boolean; meeting: RoomRow | null; canManage: boolean }
+type Payload = { enabled: boolean; meeting: RoomRow | null; canManage: boolean; mediaEngine?: 'mesh' | 'sfu' | 'unavailable' }
 
 /** Used on the event page and the organizer's Meetings dashboard. */
 export function EventMeetingPanel({ eventId, showDisabled = false }: { eventId: string; showDisabled?: boolean }) {
@@ -48,7 +48,7 @@ export function EventMeetingPanel({ eventId, showDisabled = false }: { eventId: 
     setWorking(true); setError('')
     try {
       const { meeting } = await api.post<{ meeting: RoomRow }>(`/events/${eventId}/meeting`, {
-        maxParticipants: Number(maxParticipants),
+        maxParticipants: info?.mediaEngine === 'sfu' ? 0 : Number(maxParticipants),
       })
       navigate('/meeting/' + meeting.id)
     } catch (err) {
@@ -83,7 +83,7 @@ export function EventMeetingPanel({ eventId, showDisabled = false }: { eventId: 
         <p className="truncate text-sm font-semibold">{info.meeting.title}</p>
         <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
           <span>{info.meeting.status === 'LIVE' ? 'Live now' : info.meeting.status === 'ENDED' ? 'Meeting ended' : 'Scheduled'}</span>
-          <span><UsersRound className="mr-1 inline size-3" /> Max {info.meeting.maxParticipants}</span>
+          <span><UsersRound className="mr-1 inline size-3" /> {info.meeting.mediaEngine === 'sfu' || info.meeting.maxParticipants === 0 ? 'No fixed attendee limit' : `Max ${info.meeting.maxParticipants}`}</span>
           {info.meeting.chatEnabled && <span><MessageSquare className="mr-1 inline size-3" /> Chat</span>}
           {info.meeting.screenShareEnabled && <span><MonitorUp className="mr-1 inline size-3" /> Screen sharing</span>}
         </p>
@@ -95,9 +95,9 @@ export function EventMeetingPanel({ eventId, showDisabled = false }: { eventId: 
     {info?.canManage && !info.meeting && <div className="mt-4 flex flex-wrap items-end gap-3">
       <label className="space-y-1 text-sm">
         <span className="font-medium">Max participants</span>
-        <select className="h-10 rounded-lg border bg-background px-3" value={maxParticipants} onChange={(e) => setMaxParticipants(e.target.value)}>
+        {info.mediaEngine === 'sfu' ? <span className="flex h-10 items-center rounded-lg border bg-background px-3">No fixed limit</span> : <select className="h-10 rounded-lg border bg-background px-3" value={maxParticipants} onChange={(e) => setMaxParticipants(e.target.value)}>
           {[2, 3, 4, 5, 6].map((n) => <option value={n} key={n}>{n}</option>)}
-        </select>
+        </select>}
       </label>
       <Button disabled={working} onClick={() => void create()} className="rounded-xl">
         {working ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Plus className="mr-2 size-4" />} Create meeting

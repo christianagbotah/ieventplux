@@ -3,6 +3,7 @@ import { Server } from 'socket.io'
 import { mayJoinRealtimeRoom, activeUserId } from './realtime-auth'
 import { db } from '../../src/lib/db'
 import { validMeetingSignal, validMeetingScreenUpdate } from '../../src/server/meeting-policy'
+import { currentMeetingMediaEngine } from '../../src/server/meeting-sfu-policy'
 import { parseRoomKey } from './room-authorization'
 
 /**
@@ -197,6 +198,10 @@ io.on('connection', (socket) => {
       }
       let existingPeers: { peerId: string; name: string; userId: string; sharing: boolean }[] = []
       if (room!.startsWith('meeting:')) {
+        if (currentMeetingMediaEngine() !== 'mesh') {
+          socket.emit('room:denied', { code: 'SFU_REQUIRED' })
+          return
+        }
         const meeting = await db.eventMeeting.findUnique({
           where: { id: room!.slice('meeting:'.length) },
           select: { maxParticipants: true, status: true },

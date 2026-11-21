@@ -5,6 +5,8 @@ import { errors, handle, jsonOk, readJson, requireUser, sanitizeText, rateLimit,
 import { getMeetingAccess, meetingIceServers, requireMeetingFeature } from '@/server/meeting-service'
 import { MEETING_MAX_MESSAGE, meetingEventCallOpen, validMeetingCapacity } from '@/server/meeting-policy'
 import { realtimeEmit } from '@/server/services/realtime'
+import { currentMeetingMediaEngine } from '@/server/meeting-sfu-policy'
+import { configuredMeetingSfu, createMeetingSfuToken, evictMeetingSfuParticipant, closeMeetingSfuRoom } from '@/server/meeting-sfu-service'
 
 type Context = { params: Promise<{ id: string; action: string }> }
 
@@ -16,6 +18,7 @@ export async function GET(req: NextRequest, ctx: Context) {
     const user = await requireUser()
     const { meeting, organizer, canJoin } = await getMeetingAccess(id, user.id)
     if (action === 'detail') {
+      const mediaEngine = currentMeetingMediaEngine()
       const removedParticipants = organizer
         ? await db.meetingBan.findMany({
             where: { meetingId: id },
@@ -25,14 +28,15 @@ export async function GET(req: NextRequest, ctx: Context) {
       const response = jsonOk({
         meeting: {
           id: meeting.id, title: meeting.title, status: meeting.status,
-          maxParticipants: meeting.maxParticipants,
+          maxParticipants: mediaEngine === 'sfu' ? 0 : meeting.maxParticipants,
+          mediaEngine,
           chatEnabled: meeting.chatEnabled, screenShareEnabled: meeting.screenShareEnabled,
           startedAt: meeting.startedAt, endedAt: meeting.endedAt,
           event: { id: meeting.event.id, title: meeting.event.title, slug: meeting.event.slug, status: meeting.event.status, orgName: meeting.event.org.name },
         },
         access: { canManage: organizer, canJoin },
         removedParticipants,
-        iceServers: canJoin ? meetingIceServers(user.id) : [],
+        iceServers: canJoin && mediaEngine === 'mesh' ? meetingIceServers(user.id) : [],
       })
       response.headers.set('Cache-Control', 'private, no-store')
       return response
@@ -65,6 +69,18 @@ export async function POST(req: NextRequest, ctx: Context) {
     if (['start', 'end', 'settings', 'moderate', 'remove-participant', 'restore-participant'].includes(action) && !organizer) {
       throw errors.forbidden('Only event organizers can control or moderate this meeting.')
     }
+    const mediaEngine = currentMeetingMediaEngine()
+    // The SFU issues access tokens only after the same entitlement and ban
+    // checks as ticketed chat. Never expose the server API secret to browsers.
+    if (action === 'sfu-token') {
+      await rateLimit(req, 'meeting-sfu-token', 20, 60_000)
+      if (mediaEngine !== 'sfu' || !configuredMeetingSfu()) throw errors.unavailable('SFU_NOT_READY', 'Scalable meeting media has not been enabled.')
+      if (!canJoin || meeting.status !== 'LIVE') throw errors.forbidden('You do not have active meeting admission.')
+      const credentials = await createMeetingSfuToken(id, { id: user.id, displayName: user.displayName })
+      const response = jsonOk(credentials)
+      response.headers.set('Cache-Control', 'private, no-store')
+      return response
+    }
     const body: Record<string, unknown> = await readJson<Record<string, unknown>>(req).catch(() => ({} as Record<string, unknown>))
     // Host-controlled, expiring RSVP invitations preserve existing room
     // admission, bans and real-time checks instead of bypassing them.
@@ -96,7 +112,9 @@ export async function POST(req: NextRequest, ctx: Context) {
           data: {
             eventId: meeting.eventId,
             code: 'MTG' + randomBytes(10).toString('hex').toUpperCase(),
-            maxGuests: Math.max(1, Math.min(10, meeting.maxParticipants - 1)),
+            // Limit a single invitation code, not the number of participants
+            // allowed in an SFU room. Hosts may create more invitations.
+            maxGuests: mediaEngine === 'sfu' ? 500 : Math.max(1, Math.min(10, meeting.maxParticipants - 1)),
             requireApproval: false,
             expiresAt: new Date(now.getTime() + 24 * 60 * 60 * 1000),
             createdBy: user.id,
@@ -123,6 +141,10 @@ export async function POST(req: NextRequest, ctx: Context) {
     }
     if (action === 'end') {
       await rateLimit(req, 'meeting-end', 10, 60_000)
+      if (mediaEngine === 'sfu') {
+        try { await closeMeetingSfuRoom(id) }
+        catch { throw errors.unavailable('SFU_END_FAILED', 'Could not disconnect media participants. Retry ending the meeting.') }
+      }
       const updated = await db.eventMeeting.updateMany({
         where: { id, status: 'LIVE' }, data: { status: 'ENDED', endedAt: new Date() },
       })
@@ -134,8 +156,9 @@ export async function POST(req: NextRequest, ctx: Context) {
     }
     if (action === 'settings') {
       if (meeting.status === 'LIVE') throw errors.conflict('End the meeting before changing settings.')
-      const maxParticipants = validMeetingCapacity(body.maxParticipants ?? meeting.maxParticipants)
-      if (maxParticipants === null) throw errors.badRequest('Choose 2–6 participants.')
+      if (mediaEngine === 'unavailable') throw errors.unavailable('SFU_NOT_READY', 'Scalable media configuration is incomplete.')
+      const maxParticipants = validMeetingCapacity(body.maxParticipants ?? (mediaEngine === 'sfu' ? 0 : meeting.maxParticipants), mediaEngine)
+      if (maxParticipants === null) throw errors.badRequest(mediaEngine === 'sfu' ? 'Choose no limit or a valid participant capacity.' : 'Choose 2–6 participants.')
       const title = sanitizeText(body.title ?? meeting.title, 120)
       if (!title) throw errors.badRequest('A meeting title is required.')
       const updated = await db.eventMeeting.update({
@@ -186,6 +209,10 @@ export async function POST(req: NextRequest, ctx: Context) {
           create: { meetingId: id, userId: targetId, removedById: user.id },
           update: { removedById: user.id },
         })
+        if (mediaEngine === 'sfu') {
+          try { await evictMeetingSfuParticipant(id, targetId) }
+          catch { throw errors.unavailable('SFU_EVICTION_FAILED', 'User was banned, but could not be disconnected from video. Contact the platform administrator.') }
+        }
         await Promise.all([
           realtimeEmit(`meeting:${id}`, 'meeting:remove', { userId: targetId }),
           realtimeEmit(`meeting-chat:${id}`, 'meeting:remove', { userId: targetId }),
