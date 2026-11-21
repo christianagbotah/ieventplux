@@ -64,6 +64,7 @@ export default function MeetingView({ id }: { id: string }) {
   const [draft, setDraft] = useState('')
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
+  const [inviteUrl, setInviteUrl] = useState('')
   const [microphoneOn, setMicrophoneOn] = useState(true)
   const [cameraOn, setCameraOn] = useState(true)
   const [sharing, setSharing] = useState(false)
@@ -520,13 +521,35 @@ export default function MeetingView({ id }: { id: string }) {
 
   const shareLink = async () => {
     try {
-      await navigator.clipboard.writeText(window.location.origin + '/#/meeting/' + id)
-      setNotice('Meeting link copied. Invitees still need an approved RSVP or valid ticket.')
-    } catch { setNotice('Unable to copy the link on this device.') }
+      if (data?.access.canManage) {
+        const invite = await api.post<{ link: string; guestsRemaining: number; expiresAt: string }>(
+          '/meetings/' + id + '/invite', {},
+        )
+        const link = window.location.origin + invite.link
+        setInviteUrl(link)
+        try {
+          await navigator.clipboard.writeText(link)
+          setNotice('Guest invitation copied for up to ' + invite.guestsRemaining + ' people. Guests must sign in and confirm their RSVP within 24 hours.')
+        } catch {
+          setNotice('Guest invitation created. Select and copy the link below to share it.')
+        }
+      } else {
+        const link = window.location.origin + '/#/meeting/' + id
+        setInviteUrl(link)
+        try {
+          await navigator.clipboard.writeText(link)
+          setNotice('Room link copied. Other attendees need an approved RSVP or valid ticket.')
+        } catch {
+          setNotice('Room link ready below. Other attendees need an approved RSVP or valid ticket.')
+        }
+      }
+    } catch (err) {
+      setError(err instanceof ApiClientError ? err.message : 'Unable to create or copy the invitation. Try again.')
+    }
   }
 
   const meeting = data?.meeting
-  return <div className="mx-auto max-w-[1420px] space-y-5 px-3 py-5 sm:px-6">
+  return <div className="mx-auto w-full min-w-0 max-w-[1420px] space-y-5 overflow-x-clip px-3 py-5 sm:px-6">
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div className="min-w-0">
         <p className="text-xs font-semibold uppercase tracking-wider text-primary">iEventPlux • interactive events</p>
@@ -540,9 +563,34 @@ export default function MeetingView({ id }: { id: string }) {
       </div>
     </div>
 
+    {inviteUrl && <div className="min-w-0 space-y-1.5 rounded-xl border bg-card p-3 text-sm">
+      <label htmlFor="meeting-invitation-url" className="font-medium">Invitation link</label>
+      <div className="flex min-w-0 flex-col gap-2 sm:flex-row">
+        <Input id="meeting-invitation-url" readOnly value={inviteUrl} className="min-w-0 flex-1 text-xs" onFocus={(event) => event.target.select()} />
+        <Button size="sm" variant="outline" onClick={() => {
+          if (!navigator.clipboard) {
+            setNotice('Select the text in the field to copy it manually.')
+            return
+          }
+          void navigator.clipboard.writeText(inviteUrl).then(
+            () => setNotice('Link copied.'),
+            () => setNotice('Select the text in the field to copy it manually.'),
+          )
+        }}>Copy link</Button>
+      </div>
+    </div>}
     {error && <div role="alert" className="flex items-start gap-2 rounded-xl border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive"><AlertTriangle className="size-4 shrink-0" />{error}</div>}
     {notice && <div role="status" className="flex items-start gap-2 rounded-xl border bg-secondary/60 p-3 text-sm"><CheckCircle2 className="size-4 shrink-0 text-primary" />{notice}</div>}
-    {!meeting ? <div className="rounded-2xl border p-10 text-center text-sm text-muted-foreground">Checking meeting access…</div> : <>
+    {!meeting ? error
+      ? <div className="space-y-3 rounded-2xl border bg-card p-5 text-sm sm:p-8">
+          <p className="font-semibold">Meeting access is restricted</p>
+          <p>Ask the host to use <strong>Share invite</strong> inside the meeting to send you a guest invitation. A copied room URL alone does not authorize entry.</p>
+          <div className="flex flex-wrap gap-2">
+            {!user && <Button size="sm" onClick={() => navigate('/signin')}>Sign in</Button>}
+            <Button size="sm" variant="outline" onClick={() => void load()}>Check access again</Button>
+          </div>
+        </div>
+      : <div className="rounded-2xl border p-10 text-center text-sm text-muted-foreground">Checking meeting access…</div> : <>
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <span className={`rounded-full px-3 py-1 font-semibold ${meeting.status === 'LIVE' ? 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-200' : 'bg-secondary'}`}>{meeting.status === 'LIVE' ? 'Live meeting' : meeting.status === 'ENDED' ? 'Ended' : 'Waiting for host'}</span>
         <span className="inline-flex items-center gap-1 rounded-full border px-3 py-1"><UsersRound className="size-4" /> {joined ? peers.length + 1 : 0} / {meeting.maxParticipants} in call</span>
@@ -562,9 +610,9 @@ export default function MeetingView({ id }: { id: string }) {
           : <p className="text-xs text-muted-foreground">Event completed; group discussion remains available.</p>}
       </CardContent></Card>}
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
-        {meeting.status === 'LIVE' ? <div className="space-y-3">
-          <div className="grid auto-rows-fr gap-3 sm:grid-cols-2">
+      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
+        {meeting.status === 'LIVE' ? <div className="min-w-0 space-y-3">
+          <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] auto-rows-fr gap-3 sm:grid-cols-2">
             {joined ? <>
               <VideoTile name={user?.displayName || 'You'} stream={screen.current || media.current} local sharing={sharing} />
               {peers.map((peer) => <div key={peer.id} className={peer.sharing ? 'col-span-full space-y-1' : 'space-y-1'}>
@@ -573,7 +621,7 @@ export default function MeetingView({ id }: { id: string }) {
                   className="w-full rounded-lg border border-destructive/30 px-2 py-1.5 text-xs text-destructive hover:bg-destructive/10"
                   onClick={() => void removeParticipant(peer)}>Remove participant</button>}
               </div>)}
-            </> : <div className="col-span-full flex aspect-video flex-col items-center justify-center gap-4 rounded-2xl border bg-slate-950 px-6 text-center text-white">
+            </> : <div className="col-span-full flex min-h-[280px] min-w-0 flex-col items-center justify-center gap-4 rounded-2xl border bg-slate-950 px-4 py-6 text-center text-white sm:aspect-video sm:min-h-0 sm:px-6">
               <UsersRound className="size-12 text-white/70" />
               <p className="max-w-md text-sm">Join this small-group call to speak, use your camera, share your screen, and chat with other approved attendees.</p>
               <Button disabled={!data?.access.canJoin || busy} onClick={() => void join()}>{busy && <Loader2 className="mr-2 size-4 animate-spin" />}{busy ? 'Joining…' : 'Join meeting'}</Button>
@@ -594,7 +642,7 @@ export default function MeetingView({ id }: { id: string }) {
           <p className="max-w-md text-sm text-muted-foreground">Group chat is available to authorized event attendees before and after the video call. New camera and screen sharing sessions start only when the host opens the room.</p>
         </div>}
 
-        <Card className="flex min-h-[350px] flex-col overflow-hidden rounded-2xl lg:max-h-[70vh]">
+        <Card className="flex min-h-[350px] min-w-0 flex-col overflow-hidden rounded-2xl lg:max-h-[70vh]">
           <div className="flex items-center gap-2 border-b px-4 py-3 font-semibold"><MessageSquare className="size-5 text-primary" /> Meeting chat</div>
           <div className="min-h-[230px] flex-1 space-y-2 overflow-y-auto px-3 py-3" aria-live="polite">
             {messages.filter((item) => item.status === 'VISIBLE' || data?.access.canManage).slice(-80).map((msg) => <div className="rounded-xl bg-secondary/60 p-2.5" key={msg.id}>

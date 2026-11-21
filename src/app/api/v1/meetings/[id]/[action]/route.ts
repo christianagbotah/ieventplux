@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server'
+import { randomBytes } from 'node:crypto'
 import { db } from '@/lib/db'
 import { errors, handle, jsonOk, readJson, requireUser, sanitizeText, rateLimit, pagination, jsonList } from '@/server/api'
 import { getMeetingAccess, meetingIceServers, requireMeetingFeature } from '@/server/meeting-service'
@@ -65,6 +66,40 @@ export async function POST(req: NextRequest, ctx: Context) {
       throw errors.forbidden('Only event organizers can control or moderate this meeting.')
     }
     const body: Record<string, unknown> = await readJson<Record<string, unknown>>(req).catch(() => ({} as Record<string, unknown>))
+    // Host-controlled, expiring RSVP invitations preserve existing room
+    // admission, bans and real-time checks instead of bypassing them.
+    if (action === 'invite') {
+      if (!organizer) throw errors.forbidden('Only the host can invite meeting guests.')
+      await rateLimit(req, 'meeting-guest-invite', 10, 60_000)
+      if (!meetingEventCallOpen(meeting.event) || meeting.status === 'ENDED') {
+        throw errors.conflict('Guest invitations require an active event meeting.')
+      }
+      const now = new Date()
+      const existing = await db.invitation.findFirst({
+        where: {
+          eventId: meeting.eventId,
+          createdBy: user.id, code: { startsWith: 'MTG' },
+          requireApproval: false, status: 'ACTIVE', expiresAt: { gt: now },
+        },
+        orderBy: { createdAt: 'desc' },
+      })
+      const invitation = existing && existing.guestsUsed < existing.maxGuests
+        ? existing : await db.invitation.create({
+          data: {
+            eventId: meeting.eventId,
+            code: 'MTG' + randomBytes(10).toString('hex').toUpperCase(),
+            maxGuests: Math.max(1, Math.min(10, meeting.maxParticipants - 1)),
+            requireApproval: false,
+            expiresAt: new Date(now.getTime() + 24 * 60 * 60 * 1000),
+            createdBy: user.id,
+          },
+        })
+      return jsonOk({
+        link: '/#/invite/' + invitation.code + '?meeting=' + encodeURIComponent(meeting.id),
+        guestsRemaining: Math.max(0, invitation.maxGuests - invitation.guestsUsed),
+        expiresAt: invitation.expiresAt,
+      })
+    }
     if (action === 'start') {
       await rateLimit(req, 'meeting-start', 10, 60_000)
       if (!meetingEventCallOpen(meeting.event)) throw errors.conflict('An ended event cannot start a new meeting. Schedule a new event.')

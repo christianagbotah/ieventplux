@@ -8,12 +8,18 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useToast } from '@/hooks/use-toast'
 import { api, ApiClientError } from '../api'
-import { navigate } from '../router'
+import { navigate, useRoute } from '../router'
 import { usePortal, isPlatformStaff } from '../store'
 import { humanize } from '../format'
 
 export default function AuthView({ mode }: { mode: 'signin' | 'register' }) {
   const { toast } = useToast()
+  const route = useRoute()
+  const proposedReturn = route.query.get('continue') ?? ''
+  const inviteReturn = /^\/invite\/[A-Za-z0-9_-]{6,32}(?:\?meeting=[A-Za-z0-9_-]{8,64})?$/.test(proposedReturn)
+    ? proposedReturn : null
+  const authDestination = (view: 'signin' | 'register') =>
+    '/' + view + (inviteReturn ? '?continue=' + encodeURIComponent(inviteReturn) : '')
   const { setUser, setMemberships } = usePortal()
   const [busy, setBusy] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
@@ -65,6 +71,11 @@ export default function AuthView({ mode }: { mode: 'signin' | 'register' }) {
     if (!me.user) throw new Error('Your credentials were accepted, but the sign-in session could not be verified. Please try signing in again.')
     setUser(me.user)
     setMemberships(me.memberships ?? [])
+    if (inviteReturn) {
+      toast({ title: 'Signed in — continue to your invitation' })
+      navigate(inviteReturn)
+      return
+    }
     // R20: platform staff (SUPPORT / MODERATOR / FINANCE_ADMIN / SUPER_ADMIN) sign in through
     // this same form — the session backend hands back their staff role, so we route them
     // straight into the admin console instead of the consumer landing page.
@@ -301,9 +312,9 @@ export default function AuthView({ mode }: { mode: 'signin' | 'register' }) {
         </form>
         <p className="mt-4 text-center text-sm text-muted-foreground">
           {mode === 'signin' ? (
-            <>New to iEventPlux? <button type="button" className="efx-underline-slide-link" style={{ fontSize: 'inherit', color: 'inherit', fontWeight: 600, paddingBottom: '2px' }} onClick={() => navigate('/register')}>Create an account</button></>
+            <>New to iEventPlux? <button type="button" className="efx-underline-slide-link" style={{ fontSize: 'inherit', color: 'inherit', fontWeight: 600, paddingBottom: '2px' }} onClick={() => navigate(authDestination('register'))}>Create an account</button></>
           ) : (
-            <>Already have an account? <button type="button" className="efx-underline-slide-link" style={{ fontSize: 'inherit', color: 'inherit', fontWeight: 600, paddingBottom: '2px' }} onClick={() => navigate('/signin')}>Sign in</button></>
+            <>Already have an account? <button type="button" className="efx-underline-slide-link" style={{ fontSize: 'inherit', color: 'inherit', fontWeight: 600, paddingBottom: '2px' }} onClick={() => navigate(authDestination('signin'))}>Sign in</button></>
           )}
         </p>
         {mode === 'signin' && (
