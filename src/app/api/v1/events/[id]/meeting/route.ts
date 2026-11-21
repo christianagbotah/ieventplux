@@ -4,6 +4,7 @@ import { errors, handle, jsonOk, readJson, requireUser, sanitizeText } from '@/s
 import { eventOrgAccess } from '@/server/permissions'
 import { meetingFeatureEnabled, getMeetingAccess, requireMeetingFeature } from '@/server/meeting-service'
 import { meetingEventUsable, meetingEventCallOpen, validMeetingCapacity } from '@/server/meeting-policy'
+import { currentMeetingMediaEngine } from '@/server/meeting-sfu-policy'
 
 type Context = { params: Promise<{ id: string }> }
 
@@ -16,19 +17,21 @@ export async function GET(_req: NextRequest, ctx: Context) {
     const event = await db.event.findUnique({ where: { id }, select: { id: true, orgId: true, status: true, deletedAt: true, org: { select: { ownerId: true, status: true, deletedAt: true } } } })
     if (!event || !meetingEventUsable(event)) throw errors.notFound('Event unavailable.')
     const access = await eventOrgAccess(user.id, id, 'broadcast:manage')
+    const mediaEngine = currentMeetingMediaEngine()
     const meeting = await db.eventMeeting.findUnique({ where: { eventId: id } })
     if (meeting) {
       const participant = await getMeetingAccess(meeting.id, user.id)
       const response = jsonOk({ enabled: true, canManage: participant.organizer, meeting: {
         id: meeting.id, title: meeting.title, status: meeting.status,
-        maxParticipants: meeting.maxParticipants, chatEnabled: meeting.chatEnabled,
+        maxParticipants: mediaEngine === 'sfu' ? 0 : meeting.maxParticipants, mediaEngine,
+        chatEnabled: meeting.chatEnabled,
         screenShareEnabled: meeting.screenShareEnabled, startedAt: meeting.startedAt,
       } })
       response.headers.set('Cache-Control', 'private, no-store')
       return response
     }
-    if (!access.allowed && event.org.ownerId !== user.id) return jsonOk({ enabled: true, meeting: null, canManage: false })
-    return jsonOk({ enabled: true, meeting: null, canManage: true })
+    if (!access.allowed && event.org.ownerId !== user.id) return jsonOk({ enabled: true, meeting: null, canManage: false, mediaEngine })
+    return jsonOk({ enabled: true, meeting: null, canManage: true, mediaEngine })
   })
 }
 
@@ -47,8 +50,10 @@ export async function POST(req: NextRequest, ctx: Context) {
     })
     if (!event || !meetingEventUsable(event) || !meetingEventCallOpen(event)) throw errors.conflict('Publish the event and activate its organizer before creating a meeting.')
     const body = await readJson<Record<string, unknown>>(req)
-    const capacity = validMeetingCapacity(body.maxParticipants ?? 6)
-    if (capacity === null) throw errors.badRequest('A small-group meeting accepts 2–6 participants.')
+    const mediaEngine = currentMeetingMediaEngine()
+    if (mediaEngine === 'unavailable') throw errors.unavailable('MEDIA_NOT_CONFIGURED', 'The SFU media service is not configured.')
+    const capacity = validMeetingCapacity(body.maxParticipants ?? (mediaEngine === 'sfu' ? 0 : 6), mediaEngine)
+    if (capacity === null) throw errors.badRequest(mediaEngine === 'sfu' ? 'Choose no limit or a valid participant capacity.' : 'Peer-to-peer meeting accepts 2–6 participants.')
     const title = sanitizeText(body.title, 120) || `${event.title} — Group meeting`
     const existing = await db.eventMeeting.findUnique({ where: { eventId: id }, select: { id: true } })
     if (existing) throw errors.conflict('This event already has a meeting. Use its settings instead.')

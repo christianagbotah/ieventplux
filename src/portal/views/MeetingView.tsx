@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import type { Socket } from 'socket.io-client'
 import {
   AlertTriangle, Camera, CameraOff, CheckCircle2, Copy, Loader2, MessageSquare,
@@ -14,8 +14,11 @@ import { connectRealtime } from '../realtime'
 import { navigate } from '../router'
 import { usePortal } from '../store'
 
+const MeetingSfuRoom = lazy(() => import('./MeetingSfuRoom'))
+
 type Meeting = {
-  id: string; title: string; status: string; maxParticipants: number; chatEnabled: boolean;
+  id: string; title: string; status: string; maxParticipants: number;
+  mediaEngine: 'mesh' | 'sfu' | 'unavailable'; chatEnabled: boolean;
   screenShareEnabled: boolean; startedAt: string | null; endedAt: string | null;
   event: { id: string; title: string; slug: string; status: string; orgName: string }
 }
@@ -111,7 +114,7 @@ export default function MeetingView({ id }: { id: string }) {
       const result = await api.get<MeetingDetail>(`/meetings/${id}/detail`)
       setData(result)
       setTitle(result.meeting.title)
-      setCapacity(String(result.meeting.maxParticipants))
+      setCapacity(String(result.meeting.mediaEngine === 'sfu' ? 0 : result.meeting.maxParticipants))
       setChatAllowed(result.meeting.chatEnabled)
       setScreenAllowed(result.meeting.screenShareEnabled)
       const chat = await api.get<{ items: ChatRow[] }>(`/meetings/${id}/chat?pageSize=60`).catch(() => ({ items: [] }))
@@ -593,13 +596,13 @@ export default function MeetingView({ id }: { id: string }) {
       : <div className="rounded-2xl border p-10 text-center text-sm text-muted-foreground">Checking meeting access…</div> : <>
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <span className={`rounded-full px-3 py-1 font-semibold ${meeting.status === 'LIVE' ? 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-200' : 'bg-secondary'}`}>{meeting.status === 'LIVE' ? 'Live meeting' : meeting.status === 'ENDED' ? 'Ended' : 'Waiting for host'}</span>
-        <span className="inline-flex items-center gap-1 rounded-full border px-3 py-1"><UsersRound className="size-4" /> {joined ? peers.length + 1 : 0} / {meeting.maxParticipants} in call</span>
+        <span className="inline-flex items-center gap-1 rounded-full border px-3 py-1"><UsersRound className="size-4" /> {meeting.mediaEngine === 'sfu' ? 'No fixed participant limit' : meeting.mediaEngine === 'unavailable' ? 'Media setup required' : `${joined ? peers.length + 1 : 0} / ${meeting.maxParticipants} in call`}</span>
         {data?.access.canManage && <span className="inline-flex items-center gap-1 text-primary"><ShieldCheck className="size-4" /> Host controls</span>}
       </div>
 
       {data?.access.canManage && meeting.status !== 'LIVE' && <Card className="rounded-2xl"><CardContent className="flex flex-wrap items-end gap-3 pt-5">
         <label className="min-w-[190px] flex-1 space-y-1 text-sm"><span className="font-medium">Meeting title</span><Input value={title} maxLength={120} onChange={(e) => setTitle(e.target.value)} /></label>
-        <label className="w-32 space-y-1 text-sm"><span className="font-medium">Participants</span><select className="h-10 w-full rounded-lg border bg-background px-2" value={capacity} onChange={(e) => setCapacity(e.target.value)}>{[2,3,4,5,6].map((n) => <option value={n} key={n}>{n}</option>)}</select></label>
+        <label className="min-w-[128px] space-y-1 text-sm"><span className="font-medium">Participants</span>{meeting.mediaEngine === 'sfu' ? <p className="flex h-10 items-center rounded-lg border bg-background px-3 text-sm">No fixed limit</p> : <select className="h-10 w-full rounded-lg border bg-background px-2" value={capacity} onChange={(e) => setCapacity(e.target.value)}>{[2,3,4,5,6].map((n) => <option value={n} key={n}>{n}</option>)}</select>}</label>
         <div className="flex flex-wrap gap-3">
           <label className="inline-flex items-center gap-2 text-sm"><input type="checkbox" className="size-4" checked={chatAllowed} onChange={(e) => setChatAllowed(e.target.checked)} /> Group chat</label>
           <label className="inline-flex items-center gap-2 text-sm"><input type="checkbox" className="size-4" checked={screenAllowed} onChange={(e) => setScreenAllowed(e.target.checked)} /> Screen sharing</label>
@@ -611,7 +614,13 @@ export default function MeetingView({ id }: { id: string }) {
       </CardContent></Card>}
 
       <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
-        {meeting.status === 'LIVE' ? <div className="min-w-0 space-y-3">
+        {meeting.status === 'LIVE' && meeting.mediaEngine === 'sfu'
+          ? <Suspense fallback={<div className="rounded-xl border p-6 text-sm">Loading scalable meeting…</div>}>
+              <MeetingSfuRoom meetingId={id} canJoin={Boolean(data?.access.canJoin)} canManage={Boolean(data?.access.canManage)} screenSharingEnabled={meeting.screenShareEnabled} onEnd={() => void changeStatus('end')} />
+            </Suspense>
+          : meeting.status === 'LIVE' && meeting.mediaEngine === 'unavailable'
+          ? <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-5 text-sm">Scalable media is configured but the server connection is not ready. Group chat remains available. Contact the platform administrator.</div>
+          : meeting.status === 'LIVE' ? <div className="min-w-0 space-y-3">
           <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] auto-rows-fr gap-3 sm:grid-cols-2">
             {joined ? <>
               <VideoTile name={user?.displayName || 'You'} stream={screen.current || media.current} local sharing={sharing} />
