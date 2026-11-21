@@ -23,12 +23,13 @@ type MeetingDetail = {
   meeting: Meeting
   access: { canManage: boolean; canJoin: boolean }
   iceServers: RTCIceServer[]
+  removedParticipants?: { userId: string; user: { displayName: string }; createdAt: string }[]
 }
 type ChatRow = {
   id: string; body: string; status: string; createdAt: string
   user: { id: string; displayName: string; avatarUrl: string | null }
 }
-type Peer = { id: string; name: string; stream: MediaStream | null; state: string }
+type Peer = { id: string; userId: string; name: string; stream: MediaStream | null; state: string }
 type Signal = { from: string; kind: 'offer' | 'answer' | 'candidate'; sdp?: string; candidate?: RTCIceCandidateInit }
 type PeerConnection = { pc: RTCPeerConnection; pendingCandidates: RTCIceCandidateInit[] }
 const VIDEO_ERRORS = 'Media permissions or browser restrictions prevented camera/microphone access. You can still join for chat or receive other participants.'
@@ -73,6 +74,7 @@ export default function MeetingView({ id }: { id: string }) {
   const media = useRef<MediaStream | null>(null)
   const screen = useRef<MediaStream | null>(null)
   const names = useRef(new Map<string, string>())
+  const identities = useRef(new Map<string, string>())
   const remoteStreams = useRef(new Map<string, MediaStream>())
   const active = useRef(false)
   const chatEnd = useRef<HTMLDivElement>(null)
@@ -86,6 +88,7 @@ export default function MeetingView({ id }: { id: string }) {
     connections.current.clear()
     remoteStreams.current.clear()
     names.current.clear()
+    identities.current.clear()
     screen.current?.getTracks().forEach((track) => track.stop())
     screen.current = null
     media.current?.getTracks().forEach((track) => track.stop())
@@ -118,10 +121,11 @@ export default function MeetingView({ id }: { id: string }) {
 
   const syncPeer = (peerId: string, stream: MediaStream | null, state = 'connecting') => {
     const name = names.current.get(peerId) ?? 'Participant'
+    const userId = identities.current.get(peerId) ?? ''
     setPeers((old) => {
       const current = old.find((row) => row.id === peerId)
-      return current ? old.map((row) => row.id === peerId ? { ...row, name, stream: stream ?? row.stream, state } : row)
-        : [...old, { id: peerId, name, stream, state }]
+      return current ? old.map((row) => row.id === peerId ? { ...row, name, userId, stream: stream ?? row.stream, state } : row)
+        : [...old, { id: peerId, userId, name, stream, state }]
     })
   }
 
@@ -227,11 +231,12 @@ export default function MeetingView({ id }: { id: string }) {
           : msg.code === 'MEETING_ENDED' ? 'The organizer has ended this meeting.'
             : 'Meeting access was denied. Check your event ticket, RSVP, or organizer permission.')
       })
-      realtime.on('meeting:peers', (payload: { peers: { peerId: string; name: string }[] }) => {
+      realtime.on('meeting:peers', (payload: { peers: { peerId: string; userId: string; name: string }[] }) => {
         if (!active.current) return
         void (async () => {
           for (const peer of payload.peers) {
             names.current.set(peer.peerId, peer.name)
+            identities.current.set(peer.peerId, peer.userId)
             const { pc } = await createPeer(peer.peerId)
             const offer = await pc.createOffer()
             await pc.setLocalDescription(offer)
@@ -239,14 +244,16 @@ export default function MeetingView({ id }: { id: string }) {
           }
         })().catch(() => setNotice('Connection setup failed. Try leaving and rejoining.'))
       })
-      realtime.on('meeting:peer-joined', (peer: { peerId: string; name: string }) => {
+      realtime.on('meeting:peer-joined', (peer: { peerId: string; userId: string; name: string }) => {
         names.current.set(peer.peerId, peer.name)
+        identities.current.set(peer.peerId, peer.userId)
         syncPeer(peer.peerId, null)
       })
       realtime.on('meeting:peer-left', (peer: { peerId: string }) => {
         connections.current.get(peer.peerId)?.pc.close()
         connections.current.delete(peer.peerId)
         names.current.delete(peer.peerId)
+        identities.current.delete(peer.peerId)
         remoteStreams.current.delete(peer.peerId)
         setPeers((old) => old.filter((row) => row.id !== peer.peerId))
       })
@@ -256,6 +263,10 @@ export default function MeetingView({ id }: { id: string }) {
       })
       realtime.on('meeting:moderated', (payload: { id: string; status: string }) => {
         setMessages((old) => old.map((row) => row.id === payload.id ? { ...row, status: payload.status } : row))
+      })
+      realtime.on('meeting:removed', (payload: { message: string }) => {
+        leave()
+        setError(payload.message || 'Your meeting access was removed by the organizer.')
       })
       realtime.on('meeting:ended', () => {
         leave()
@@ -363,6 +374,29 @@ export default function MeetingView({ id }: { id: string }) {
     } catch { setNotice('Message moderation failed. Please retry.') }
   }
 
+  const removeParticipant = async (peer: Peer) => {
+    if (!data?.access.canManage || !peer.userId) return
+    if (!window.confirm(`Remove ${peer.name} from this meeting? They will not be able to reconnect until restored.`)) return
+    try {
+      await api.post(`/meetings/${id}/remove-participant`, { userId: peer.userId })
+      await load()
+      setNotice(`${peer.name} was removed from the meeting.`)
+    } catch (err) {
+      setError(err instanceof ApiClientError ? err.message : 'Could not remove participant.')
+    }
+  }
+
+  const restoreParticipant = async (userId: string) => {
+    if (!data?.access.canManage) return
+    try {
+      await api.post(`/meetings/${id}/restore-participant`, { userId })
+      await load()
+      setNotice('Participant meeting access restored.')
+    } catch (err) {
+      setError(err instanceof ApiClientError ? err.message : 'Could not restore participant.')
+    }
+  }
+
   const shareLink = async () => {
     try {
       await navigator.clipboard.writeText(window.location.origin + '/#/meeting/' + id)
@@ -406,7 +440,12 @@ export default function MeetingView({ id }: { id: string }) {
           <div className="grid auto-rows-fr gap-3 sm:grid-cols-2">
             {joined ? <>
               <VideoTile name={user?.displayName || 'You'} stream={screen.current || media.current} local sharing={sharing} />
-              {peers.map((peer) => <VideoTile key={peer.id} name={peer.name} stream={peer.stream} />)}
+              {peers.map((peer) => <div key={peer.id} className="space-y-1">
+                <VideoTile name={peer.name} stream={peer.stream} />
+                {data?.access.canManage && peer.userId !== user?.id && <button type="button"
+                  className="w-full rounded-lg border border-destructive/30 px-2 py-1.5 text-xs text-destructive hover:bg-destructive/10"
+                  onClick={() => void removeParticipant(peer)}>Remove participant</button>}
+              </div>)}
             </> : <div className="col-span-full flex aspect-video flex-col items-center justify-center gap-4 rounded-2xl border bg-slate-950 px-6 text-center text-white">
               <UsersRound className="size-12 text-white/70" />
               <p className="max-w-md text-sm">Join this small-group call to speak, use your camera, share your screen, and chat with other approved attendees.</p>
@@ -420,6 +459,13 @@ export default function MeetingView({ id }: { id: string }) {
             {meeting.screenShareEnabled && <Button variant="outline" className="min-h-11" onClick={() => void toggleScreen()}>{sharing ? <MonitorX className="mr-2 size-4" /> : <MonitorUp className="mr-2 size-4" />}{sharing ? 'Stop sharing' : 'Share screen'}</Button>}
             <Button variant="destructive" className="min-h-11" onClick={() => leave()}><PhoneOff className="mr-2 size-4" /> Leave</Button>
             {data?.access.canManage && <Button variant="outline" className="min-h-11 border-destructive text-destructive" onClick={() => void changeStatus('end')}><Square className="mr-2 size-4" /> End for everyone</Button>}
+          </div>}
+          {data?.access.canManage && Boolean(data.removedParticipants?.length) && <div className="space-y-2 rounded-xl border bg-card p-3">
+            <h3 className="text-sm font-semibold">Removed participants</h3>
+            {data.removedParticipants?.map((row) => <div className="flex flex-wrap items-center justify-between gap-2 text-sm" key={row.userId}>
+              <span className="truncate">{row.user.displayName}</span>
+              <Button size="sm" variant="outline" onClick={() => void restoreParticipant(row.userId)}>Restore access</Button>
+            </div>)}
           </div>}
           <p className="text-xs text-muted-foreground">Small-group mesh connection: up to six devices. Camera and screen capture require browser permission and HTTPS. TURN relay configuration is necessary for reliable calls across some networks. No recording is performed.</p>
         </div>
