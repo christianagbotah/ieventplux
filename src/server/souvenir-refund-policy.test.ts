@@ -27,8 +27,12 @@ describe('physical event merchandise refund safety policy', () => {
     }
   })
   test('invalid counter values are refused instead of silently waived', () => {
-    for (const lines of [-1, 1.5, Infinity, NaN]) {
-      expect(() => physicalRefundReview({ lines, ordered: 1, collected: 0 })).toThrow()
+    for (const invalid of [-1, 1.5, Infinity, -Infinity, NaN, Number.MAX_SAFE_INTEGER + 1]) {
+      for (const field of ['lines', 'ordered', 'collected'] as const) {
+        const input = { lines: 1, ordered: 1, collected: 0 }
+        input[field] = invalid
+        expect(() => physicalRefundReview(input)).toThrow('Invalid souvenir refund quantities')
+      }
     }
   })
 })
