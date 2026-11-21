@@ -86,6 +86,23 @@ TURN allocation and cross-network relay candidates; do not use a fake
 - Existing live broadcast/chat and ticket commerce are separate systems;
   meeting access does not purchase or issue a ticket.
 
+### VPS relay preparation (21 November 2026)
+
+The shared Lightworld VPS now has the `coturn` server package installed and a
+locally protected, randomized REST-auth configuration prepared at
+`/etc/coturn/turnserver.conf` (root/coturn ownership, no public secrets).
+The coturn service was deliberately left **disabled and inactive**, with no
+new firewall ports opened and no production feature flag activated. The
+installation alone does **not** provide a functioning public relay.
+
+Next infrastructure verification: provision a dedicated **DNS-only** TURN
+hostname, review firewall policy for the TURN listener and bounded UDP relay
+range, use trusted TLS for restrictive networks, verify TURN allocations and
+relay candidates from separate mobile/broadband connections, and monitor
+bandwidth before opening the feature flag. The existing VPS is shared with
+other applications and should not be treated as a globally scalable video
+network or an unlimited TURN relay.
+
 ## Safe staging enablement
 
 1. Preserve a verified PostgreSQL logical backup and test restore. Review the
