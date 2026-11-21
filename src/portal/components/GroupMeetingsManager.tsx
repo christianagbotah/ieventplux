@@ -52,7 +52,7 @@ export function GroupMeetingsManager({ orgId }: { orgId: string }) {
           {events.map((event) => <option key={event.id} value={event.id}>{event.title} · {event.status}</option>)}
         </select>
       </label>
-      {selected && <EventMeetingPanel key={selected} eventId={selected} />}
+      {selected && <EventMeetingPanel key={selected} eventId={selected} showDisabled />}
       <p className="text-xs text-muted-foreground">For larger public events, use Streaming Studio. Interactive browser-to-browser rooms intentionally limit simultaneous participants until a secure media server and TURN relay are validated.</p>
     </div> : !loading && <div className="rounded-2xl border border-dashed bg-card p-7 text-center">
       <Video className="mx-auto mb-3 size-10 text-primary" />
