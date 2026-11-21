@@ -125,6 +125,8 @@ io.on('connection', (socket) => {
   let joinPending = false
   let meetingSignalCount = 0
   let meetingSignalWindow = Date.now()
+  let screenToggleCount = 0
+  let screenToggleWindow = Date.now()
 
   function notifyMeetingDeparture(room: string) {
     if (room.startsWith('meeting:')) {
@@ -158,7 +160,7 @@ io.on('connection', (socket) => {
         }
         socket.data.meetingUserId = identity
       }
-      let existingPeers: { peerId: string; name: string; userId: string }[] = []
+      let existingPeers: { peerId: string; name: string; userId: string; sharing: boolean }[] = []
       if (room!.startsWith('meeting:')) {
         const meeting = await db.eventMeeting.findUnique({
           where: { id: room!.slice('meeting:'.length) },
@@ -170,7 +172,7 @@ io.on('connection', (socket) => {
         }
         existingPeers = [...(io.sockets.adapter.rooms.get(room!) ?? [])].map((id) => {
           const peer = io.sockets.sockets.get(id)
-          return { peerId: id, name: String(peer?.data.meetingName ?? 'Participant'), userId: String(peer?.data.meetingUserId ?? '') }
+          return { peerId: id, name: String(peer?.data.meetingName ?? 'Participant'), userId: String(peer?.data.meetingUserId ?? ''), sharing: Boolean(peer?.data.meetingSharing) }
         })
         if (existingPeers.length >= meeting.maxParticipants) {
           socket.emit('room:denied', { code: 'ROOM_FULL' })
@@ -184,6 +186,7 @@ io.on('connection', (socket) => {
         const member = await db.user.findUnique({ where: { id: identity }, select: { displayName: true } })
         socket.data.meetingName = (member?.displayName || 'Participant').slice(0, 70)
         socket.data.meetingUserId = identity
+        socket.data.meetingSharing = false
         // Recount at the final synchronous join boundary: simultaneous joins
         // must never exceed the host's published small-room capacity.
         const latest = [...(io.sockets.adapter.rooms.get(room!) ?? [])]
@@ -193,7 +196,7 @@ io.on('connection', (socket) => {
         }
         existingPeers = latest.map((id) => {
           const peer = io.sockets.sockets.get(id)
-          return { peerId: id, name: String(peer?.data.meetingName ?? 'Participant'), userId: String(peer?.data.meetingUserId ?? '') }
+          return { peerId: id, name: String(peer?.data.meetingName ?? 'Participant'), userId: String(peer?.data.meetingUserId ?? ''), sharing: Boolean(peer?.data.meetingSharing) }
         })
       }
       if (joinedRoom) {
@@ -210,7 +213,7 @@ io.on('connection', (socket) => {
       if (room!.startsWith('meeting:')) {
         socket.emit('meeting:peers', { peers: existingPeers, selfId: socket.id })
         socket.to(room!).emit('meeting:peer-joined', {
-          peerId: socket.id, name: String(socket.data.meetingName ?? 'Participant'), userId: String(socket.data.meetingUserId ?? ''),
+          peerId: socket.id, name: String(socket.data.meetingName ?? 'Participant'), userId: String(socket.data.meetingUserId ?? ''), sharing: false,
         })
       }
     } catch (error) {
@@ -235,6 +238,26 @@ io.on('connection', (socket) => {
   socket.on('typing', (data: { room?: string; user?: string }) => {
     if (!joinedRoom || !data?.user) return
     socket.to(joinedRoom).emit('typing', { user: String(data.user).slice(0, 60) })
+  })
+
+  // Presenter's screen-sharing indicator is purely ephemeral. The browser
+  // owns all screen capture; neither frames nor device permissions cross this
+  // signaling service. Restrict announcements to a live, permitted room.
+  socket.on('meeting:screen', async (value: unknown) => {
+    if (!joinedRoom?.startsWith('meeting:')) return
+    if (!value || typeof value !== 'object' || typeof (value as { sharing?: unknown }).sharing !== 'boolean') return
+    const now = Date.now()
+    if (now - screenToggleWindow > 60_000) { screenToggleWindow = now; screenToggleCount = 0 }
+    if (++screenToggleCount > 15) return
+    const meeting = await db.eventMeeting.findUnique({
+      where: { id: joinedRoom.slice('meeting:'.length) },
+      select: { status: true, screenShareEnabled: true },
+    })
+    if (!meeting || meeting.status !== 'LIVE' || !meeting.screenShareEnabled) return
+    if (!await mayJoinRealtimeRoom(joinedRoom, socket.handshake.headers.cookie)) return
+    const sharing = (value as { sharing: boolean }).sharing
+    socket.data.meetingSharing = sharing
+    socket.to(joinedRoom).emit('meeting:screen', { peerId: socket.id, sharing })
   })
 
   // WebRTC signaling is deliberately ephemeral and scoped to socket peers who
