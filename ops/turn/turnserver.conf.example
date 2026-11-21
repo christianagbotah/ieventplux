@@ -1,0 +1,52 @@
+# iEventPlux controlled small-group TURN pilot — coturn
+# DO NOT COMMIT an actual static-auth-secret or your real host address.
+# The TURN hostname must have DNS-only A/AAAA records, not a Cloudflare
+# proxied web record. Configure required UDP/TCP ports separately.
+#
+# Use the same random 32+ byte secret as MEETING_TURN_SHARED_SECRET in the
+# Next.js and realtime production service runtime environments.
+#
+# Browser ICE URLs example (after DNS, firewall, TCP/UDP QA):
+#   MEETING_TURN_URLS=turn:turn.example.com:3478?transport=udp,turn:turn.example.com:3478?transport=tcp
+# To enable turns: TLS, provision a trusted certificate for turn.example.com.
+# Direct raw-IP pilot TURN is NOT a global production transport.
+
+listening-port=3478
+fingerprint
+lt-cred-mech
+use-auth-secret
+static-auth-secret=GENERATE_A_PRIVATE_RANDOM_32_BYTE_OR_LONGER_SECRET
+realm=turn.example.com
+server-name=turn.example.com
+stale-nonce=600
+
+# Limit transient relay usage. Adjust based on capacity/load testing.
+min-port=49200
+max-port=49300
+user-quota=6
+total-quota=48
+bps-capacity=30000000
+max-bps=4000000
+
+# The pilot deliberately disables TLS until the TURN certificate is ready.
+# For production remove these toggles and configure cert/pkey paths.
+no-tls
+no-dtls
+no-cli
+no-loopback-peers
+no-multicast-peers
+no-tcp-relay
+
+# Never relay to loopback, RFC1918 or link-local endpoints.
+denied-peer-ip=0.0.0.0-0.255.255.255
+denied-peer-ip=10.0.0.0-10.255.255.255
+denied-peer-ip=127.0.0.0-127.255.255.255
+denied-peer-ip=169.254.0.0-169.254.255.255
+denied-peer-ip=172.16.0.0-172.31.255.255
+denied-peer-ip=192.168.0.0-192.168.255.255
+denied-peer-ip=224.0.0.0-255.255.255.255
+
+# Logs require regular rotation/retention and no credential disclosure.
+simple-log
+log-file=/var/log/coturn/turnserver.log
+no-stdout-log
