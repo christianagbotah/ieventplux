@@ -34,6 +34,14 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     const invitation = await db.invitation.findUnique({ where: { code: code.toUpperCase() }, include: { event: true } })
     if (!invitation || invitation.status === 'REVOKED') throw errors.notFound('This invitation is no longer valid.')
     if (invitation.expiresAt && invitation.expiresAt < new Date()) throw errors.notFound('This invitation has expired.')
+    // Legacy meeting codes may predate a ticket-price change. Do not turn an
+    // approved meeting RSVP into unpaid admission to a paid event.
+    if (invitation.code.startsWith('MTG')) {
+      const paidType = await db.ticketType.findFirst({
+        where: { eventId: invitation.eventId, priceMinor: { gt: 0 } }, select: { id: true },
+      })
+      if (paidType) throw errors.forbidden('This event requires a valid ticket. Use the event checkout instead.')
+    }
     const remaining = invitation.maxGuests - invitation.guestsUsed
     if (remaining <= 0) throw errors.conflict('This invitation is fully used.')
     const guests = Math.max(1, Math.min(remaining, Number(body.guests ?? 1)))
