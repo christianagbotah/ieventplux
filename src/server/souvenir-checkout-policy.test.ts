@@ -22,7 +22,10 @@ describe('Souvenir checkout policy (no payments or stock writes)', () => {
   })
   test('available stock excludes sold and reserved units', () => {
     expect(availableSouvenirStock(20, 5, 8)).toBe(7)
-    expect(availableSouvenirStock(5, 5, 2)).toBe(0)
+    expect(availableSouvenirStock(5, 5, 0)).toBe(0)
+    expect(() => availableSouvenirStock(5, 5, 2)).toThrow()
+    expect(() => availableSouvenirStock(5, 6, 0)).toThrow()
+    expect(() => availableSouvenirStock(Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER, 1)).toThrow()
     expect(() => availableSouvenirStock(10, -1, 0)).toThrow()
   })
 })

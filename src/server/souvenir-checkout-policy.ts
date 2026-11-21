@@ -32,5 +32,8 @@ export function souvenirLinePrice(unitPriceMinor: number, qty: number): number {
  * an atomic conditional UPDATE and then create an expiry-bound reservation. */
 export function availableSouvenirStock(total: number, sold: number, reserved: number): number {
   if (![total, sold, reserved].every((n) => Number.isSafeInteger(n) && n >= 0)) throw errors.badRequest('Invalid souvenir stock counters.')
-  return Math.max(0, total - sold - reserved)
+  // Inconsistent counters must fail closed instead of presenting a corrupt
+  // catalogue snapshot as legitimate zero stock.
+  if (sold > total || reserved > total - sold) throw errors.badRequest('Inconsistent souvenir stock counters.')
+  return total - sold - reserved
 }
