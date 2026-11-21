@@ -34,13 +34,18 @@ export async function getMeetingAccess(meetingId: string, userId: string) {
   if (!meeting || !meetingEventUsable(meeting.event)) throw errors.notFound('Meeting unavailable.')
   const orgRights = await eventOrgAccess(userId, meeting.eventId, 'broadcast:manage')
   const organizer = orgRights.allowed || meeting.event.org.ownerId === userId
-  const [rsvp, ticket] = organizer
-    ? [null, null]
+  // A guest RSVP must never act as a free substitute for a purchased ticket.
+  // Use ALL priced ticket types, not just currently active ones: pausing sales
+  // must not silently turn a paid event into a free meeting.
+  const [rsvp, ticket, paidType] = organizer
+    ? [null, null, null]
     : await Promise.all([
       db.rsvp.findFirst({ where: { eventId: meeting.eventId, userId, status: 'APPROVED' }, select: { id: true } }),
       db.ticket.findFirst({ where: { eventId: meeting.eventId, userId, status: { in: ['VALID', 'CHECKED_IN'] } }, select: { id: true } }),
+      db.ticketType.findFirst({ where: { eventId: meeting.eventId, priceMinor: { gt: 0 } }, select: { id: true } }),
     ])
-  const attendee = Boolean(rsvp || ticket)
+  const approvedRsvp = Boolean(rsvp && !paidType)
+  const attendee = Boolean(approvedRsvp || ticket)
   if (!organizer) {
     const removed = await db.meetingBan.findUnique({
       where: { meetingId_userId: { meetingId, userId } }, select: { meetingId: true },
@@ -48,11 +53,13 @@ export async function getMeetingAccess(meetingId: string, userId: string) {
     if (removed) throw errors.forbidden('The host has removed your access to this meeting.')
   }
   if (!organizer && !attendee) {
-    throw errors.forbidden('An approved RSVP or a valid event ticket is required for this meeting.')
+    throw errors.forbidden(paidType
+      ? 'A valid issued ticket is required to join this paid event meeting. RSVP invitations alone are insufficient.'
+      : 'An approved RSVP or a valid event ticket is required for this meeting.')
   }
   const canJoin = canJoinMeeting({
     roomStatus: meeting.status, validEvent: meetingEventCallOpen(meeting.event), signedIn: true,
-    organizer, approvedRsvp: Boolean(rsvp), validTicket: Boolean(ticket),
+    organizer, approvedRsvp, validTicket: Boolean(ticket), hasPaidTicketType: Boolean(paidType),
   })
   return { meeting, organizer, attendee, canJoin }
 }
