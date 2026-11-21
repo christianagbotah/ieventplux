@@ -45,7 +45,12 @@ const httpServer = createServer((req, res) => {
     req.on('end', () => {
       try {
         const parsed = JSON.parse(body) as { room: string; event: string; payload: unknown }
-        io.to(parsed.room).emit(parsed.event, parsed.payload)
+        // Participant removals contain a private user ID; only the affected
+        // socket should receive the eviction notice. Other room members
+        // should not see moderation identities or the backend command.
+        if (parsed.event !== 'meeting:remove') {
+          io.to(parsed.room).emit(parsed.event, parsed.payload)
+        }
         // Host-initiated removal is enforced at the relay itself. The durable
         // ban prevents the removed participant from reconnecting.
         if (parsed.event === 'meeting:remove' && ['meeting', 'meeting-chat'].includes(parseRoomKey(parsed.room)?.kind ?? '')) {
