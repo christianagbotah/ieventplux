@@ -27,7 +27,7 @@ export async function GET(req: NextRequest, ctx: Context) {
           maxParticipants: meeting.maxParticipants,
           chatEnabled: meeting.chatEnabled, screenShareEnabled: meeting.screenShareEnabled,
           startedAt: meeting.startedAt, endedAt: meeting.endedAt,
-          event: { id: meeting.event.id, title: meeting.event.title, slug: meeting.event.slug, orgName: meeting.event.org.name },
+          event: { id: meeting.event.id, title: meeting.event.title, slug: meeting.event.slug, status: meeting.event.status, orgName: meeting.event.org.name },
         },
         access: { canManage: organizer, canJoin },
         removedParticipants,
