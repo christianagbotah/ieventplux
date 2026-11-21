@@ -143,6 +143,23 @@ async function main() {
     })
     assert((await request('GET', `/meetings/${meetingId}/detail`, guest)).status === 200,
       'approved RSVP unlocks meeting details')
+    // A host-created free meeting invitation may approve an RSVP without
+    // checkout. As soon as this event has priced tickets, that RSVP must
+    // not grant paid-media access; the real API and Socket.IO must agree.
+    const pricedType = await db.ticketType.create({
+      data: { eventId, orgId: chapel.id, name: 'CI priced admission', priceMinor: 250, quota: 8 },
+    })
+    assert((await request('GET', `/meetings/${meetingId}/detail`, guest)).status === 403,
+      'paid event rejects RSVP-only meeting detail access')
+    assert((await request('POST', `/meetings/${meetingId}/invite`, host, {})).status === 403,
+      'host cannot mint free guest access to a paid event')
+    const paidGuestChat = await connect(guest)
+    sockets.push(paidGuestChat)
+    assert(await join(paidGuestChat, `meeting-chat:${meetingId}`) === 'denied',
+      'priced event RSVP cannot bypass realtime group chat authorization')
+    await db.ticketType.delete({ where: { id: pricedType.id } })
+    assert((await request('GET', `/meetings/${meetingId}/detail`, guest)).status === 200,
+      'free event remains accessible through approved RSVP')
     const hostChat = await connect(host)
     const guestChat = await connect(guest)
     sockets.push(hostChat, guestChat)
