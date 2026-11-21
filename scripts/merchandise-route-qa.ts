@@ -7,6 +7,7 @@
 import { strict as assert } from 'node:assert'
 import { randomUUID } from 'node:crypto'
 import { db } from '../src/lib/db'
+import { requireIsolatedMerchandiseQaDatabase } from './merchandise-qa-db-guard'
 import { createSession, SESSION_COOKIE } from '../src/server/auth'
 import { souvenirCollectionToken } from '../src/server/souvenir-policy'
 
@@ -17,6 +18,7 @@ assert.equal(process.env.IEVENTPLUX_SOUVENIR_COLLECTION_ENABLED, '1')
 const base = 'http://127.0.0.1:3179'
 
 async function main() {
+  await requireIsolatedMerchandiseQaDatabase()
   const response = await fetch(`${base}/api/v1/health`, { signal: AbortSignal.timeout(15_000) })
   assert.equal(response.status, 200, 'Staging API must be available on local-only port')
   const order = await db.order.findFirst({

@@ -3,6 +3,7 @@
  * or a physical handover. */
 import { strict as assert } from 'node:assert'
 import { db } from '../src/lib/db'
+import { requireIsolatedMerchandiseQaDatabase } from './merchandise-qa-db-guard'
 import { createSession, SESSION_COOKIE } from '../src/server/auth'
 import { verifySouvenirCollectionToken } from '../src/server/souvenir-policy'
 
@@ -10,6 +11,7 @@ assert.equal(new URL(process.env.DATABASE_URL ?? 'http://invalid.invalid').searc
 assert.equal(process.env.IEVENTPLUX_SOUVENIR_CHECKOUT_ENABLED, '1', 'QA must explicitly opt into souvenir lookup')
 const url = 'http://127.0.0.1:3179/api/v1/souvenir-collection/lookup'
 async function main() {
+  await requireIsolatedMerchandiseQaDatabase()
   const order = await db.order.findFirst({ where: { status: 'PAID', event: { slug: { startsWith: 'merch-qa-event-' } }, souvenirItems: { some: { holdStatus: 'CONSUMED' } } }, orderBy: { createdAt: 'desc' }, select: { reference: true, orgId: true } })
   assert.ok(order, 'Run merchandise-isolated-qa.ts in the isolated schema first')
   const tag = Date.now().toString(36)

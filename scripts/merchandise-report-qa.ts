@@ -1,10 +1,12 @@
 /** Synthetic merchandise reporting QA; refuses anything except isolated DB. */
 import { strict as assert } from 'node:assert'
 import { db } from '../src/lib/db'
+import { requireIsolatedMerchandiseQaDatabase } from './merchandise-qa-db-guard'
 import { merchandiseReconciliation, merchandiseReportCsv } from '../src/server/services/merchandise-reconciliation'
 
 assert.equal(new URL(process.env.DATABASE_URL ?? 'http://invalid.invalid').searchParams.get('schema'), 'ieventplux_merch_qa_20261119')
 async function main() {
+  await requireIsolatedMerchandiseQaDatabase()
   const event = await db.event.findFirst({
     where: { slug: { startsWith: 'merch-qa-event-' }, orders: { some: { status: 'PAID', souvenirItems: { some: {} } } } },
     orderBy: { createdAt: 'desc' }, select: { id: true, orgId: true },

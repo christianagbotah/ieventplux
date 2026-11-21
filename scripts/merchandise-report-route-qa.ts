@@ -2,11 +2,13 @@
  * schema and localhost-only endpoint. Synthetic users and historical QA orders. */
 import { strict as assert } from 'node:assert'
 import { db } from '../src/lib/db'
+import { requireIsolatedMerchandiseQaDatabase } from './merchandise-qa-db-guard'
 import { createSession, SESSION_COOKIE } from '../src/server/auth'
 
 assert.equal(new URL(process.env.DATABASE_URL ?? 'http://invalid.invalid').searchParams.get('schema'), 'ieventplux_merch_qa_20261119', 'Refusing any non-QA database!')
 const base = 'http://127.0.0.1:3179'
 async function main() {
+  await requireIsolatedMerchandiseQaDatabase()
   const event = await db.event.findFirst({
     where: { slug: { startsWith: 'merch-qa-event-' }, orders: { some: { status: 'PAID', souvenirItems: { some: {} } } } },
     orderBy: { createdAt: 'desc' }, select: { id: true, orgId: true },
