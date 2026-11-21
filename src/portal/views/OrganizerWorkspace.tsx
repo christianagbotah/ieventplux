@@ -35,6 +35,8 @@ import { AdmissionOperationsPanel } from '../components/AdmissionOperationsPanel
 import { scannerSessionKey } from '../lib/scanner-session-local'
 import { GrowthCommandCenter } from '../components/GrowthCommandCenter'
 import { GroupMeetingsManager } from '../components/GroupMeetingsManager'
+import { FieldError, FieldHelp } from '@/components/ui/field'
+import { eventDraftIsReady, validateEventDraftTiming } from '../lib/event-editor-validation'
 import { OrganizerEventCover } from '../components/OrganizerEventCover'
 import { EventCopyCopilot } from '../components/EventCopyCopilot'
 import { EventOperationsEditor } from '../components/EventOperationsEditor'
@@ -1074,6 +1076,8 @@ function EventEditor({ orgId, event, onClose }: { orgId: string; event: OrgEvent
   const [ticketOptionsOpen, setTicketOptionsOpen] = useState(false)
   const [ticketEditing, setTicketEditing] = useState<TicketTypeRow | null>(null)
   const [busy, setBusy] = useState(false)
+  const [saveError, setSaveError] = useState('')
+  const scheduleErrors = validateEventDraftTiming(form)
   const [savingTt, setSavingTt] = useState(false)
   const [repeat, setRepeat] = useState(false)
   const [repeatWeeks, setRepeatWeeks] = useState('3')
@@ -1132,7 +1136,13 @@ function EventEditor({ orgId, event, onClose }: { orgId: string; event: OrgEvent
   }, [orgId])
 
   const save = async () => {
+    const errors = validateEventDraftTiming(form)
+    if (Object.keys(errors).length > 0) {
+      setSaveError('Review the event title and schedule before saving.')
+      return
+    }
     setBusy(true)
+    setSaveError('')
     try {
       const payload = {
         ...form,
@@ -1151,7 +1161,9 @@ function EventEditor({ orgId, event, onClose }: { orgId: string; event: OrgEvent
       }
       onClose()
     } catch (err) {
-      toast({ title: 'Could not save', description: err instanceof ApiClientError ? err.message : undefined, variant: 'destructive' })
+      const message = err instanceof ApiClientError ? err.message : 'Could not save this event. Check your connection and try again.'
+      setSaveError(message)
+      toast({ title: 'Could not save', description: message, variant: 'destructive' })
     } finally {
       setBusy(false)
     }
@@ -1245,15 +1257,30 @@ function EventEditor({ orgId, event, onClose }: { orgId: string; event: OrgEvent
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto ievx-scrollbar">
-        <DialogHeader>
-          <DialogTitle>{event ? `Edit: ${event.title}` : createdEvent ? `Add tickets — ${createdEvent.title}` : 'Create event'}</DialogTitle>
+      <DialogContent className="max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] max-w-4xl gap-0 overflow-y-auto overscroll-contain p-0 sm:max-w-4xl ievx-scrollbar">
+        <DialogHeader className="sticky top-0 z-10 border-b border-border/70 bg-card/95 px-4 py-4 text-left backdrop-blur-md sm:px-6">
+          <p className="text-[11px] font-bold uppercase tracking-[0.15em] text-primary">Organizer Studio · Event production</p>
+          <DialogTitle className="pr-8 text-xl font-extrabold tracking-tight">{event ? `Edit: ${event.title}` : createdEvent ? `Add tickets — ${createdEvent.title}` : 'Create your event'}</DialogTitle>
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            {createdEvent ? 'Draft saved. Add free or paid ticket types, then publish from Events.' : event ? 'Update your event information, ticket types and programme.' : 'Start with the essentials. Your event remains a draft until you choose to publish.'}
+          </p>
         </DialogHeader>
-        <div className="grid gap-4">
-          <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid min-w-0 gap-5 px-4 py-5 sm:px-6">
+          {!createdEvent && <div className="grid min-w-0 gap-4 sm:grid-cols-2">
+            <div className="sm:col-span-2 flex items-center gap-3 border-b border-border/70 pb-3">
+              <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-sm font-bold text-primary">01</span>
+              <div className="min-w-0">
+                <h3 className="text-base font-bold tracking-tight">Event essentials</h3>
+                <p className="text-xs text-muted-foreground">Tell guests what you're hosting and why they should attend.</p>
+              </div>
+            </div>
             <div className="space-y-1.5 sm:col-span-2">
-              <Label htmlFor="title">Title</Label>
-              <Input id="title" value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} />
+              <Label htmlFor="title">Event title <span className="text-destructive">*</span></Label>
+              <Input id="title" value={form.title} maxLength={180}
+                aria-invalid={form.title.length > 0 && Boolean(scheduleErrors.title)}
+                aria-describedby="event-title-help" placeholder="e.g. Global Worship Summit 2027"
+                onChange={(e) => { setSaveError(''); setForm((f) => ({ ...f, title: e.target.value })) }} />
+              <FieldHelp id="event-title-help">Use a clear, searchable name (at least 3 characters).</FieldHelp>
             </div>
             <div className="space-y-1.5 sm:col-span-2">
               <Label htmlFor="summary">Summary</Label>
@@ -1317,6 +1344,13 @@ function EventEditor({ orgId, event, onClose }: { orgId: string; event: OrgEvent
                 </SelectContent>
               </Select>
             </div>
+            <div className="sm:col-span-2 flex items-center gap-3 border-b border-border/70 pb-3 pt-2">
+              <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-sm font-bold text-primary">02</span>
+              <div className="min-w-0">
+                <h3 className="text-base font-bold tracking-tight">Where &amp; when</h3>
+                <p className="text-xs text-muted-foreground">Choose your location and exact event times.</p>
+              </div>
+            </div>
             <div className="space-y-1.5">
               <Label htmlFor="city">City</Label>
               <Input id="city" value={form.city} onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))} placeholder="Accra" />
@@ -1337,17 +1371,31 @@ function EventEditor({ orgId, event, onClose }: { orgId: string; event: OrgEvent
               </div>
             )}
             <div className="space-y-1.5">
-              <Label htmlFor="startsAt">Starts (local, Africa/Accra)</Label>
-              <Input id="startsAt" type="datetime-local" value={form.startsAt} onChange={(e) => setForm((f) => ({ ...f, startsAt: e.target.value }))} />
+              <Label htmlFor="startsAt">Starts <span className="text-destructive">*</span></Label>
+              <Input id="startsAt" type="datetime-local" value={form.startsAt}
+                aria-invalid={Boolean(scheduleErrors.startsAt)} aria-describedby="event-start-help"
+                onChange={(e) => { setSaveError(''); setForm((f) => ({ ...f, startsAt: e.target.value })) }} />
+              <FieldHelp id="event-start-help">Uses your device's local time zone.</FieldHelp>
+              {scheduleErrors.startsAt && <FieldError>{scheduleErrors.startsAt}</FieldError>}
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="endsAt">Ends</Label>
-              <Input id="endsAt" type="datetime-local" value={form.endsAt} onChange={(e) => setForm((f) => ({ ...f, endsAt: e.target.value }))} />
+              <Label htmlFor="endsAt">Ends <span className="text-destructive">*</span></Label>
+              <Input id="endsAt" type="datetime-local" value={form.endsAt}
+                aria-invalid={Boolean(scheduleErrors.endsAt)} aria-describedby={scheduleErrors.endsAt ? 'event-end-error' : undefined}
+                onChange={(e) => { setSaveError(''); setForm((f) => ({ ...f, endsAt: e.target.value })) }} />
+              {scheduleErrors.endsAt && <FieldError id="event-end-error">{scheduleErrors.endsAt}</FieldError>}
             </div>
-            <div className="space-y-1.5 sm:col-span-2">
+            <div className="sm:col-span-2 flex items-center gap-3 border-b border-border/70 pb-3 pt-2">
+              <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-sm font-bold text-primary">03</span>
+              <div className="min-w-0">
+                <h3 className="text-base font-bold tracking-tight">Artwork &amp; policies</h3>
+                <p className="text-xs text-muted-foreground">Add visual identity and any extra attendee guidance.</p>
+              </div>
+            </div>
+            <div className="min-w-0 space-y-1.5 sm:col-span-2">
               <Label htmlFor="cover">Poster image</Label>
-              <div className="flex gap-2">
-                <Input id="cover" value={form.coverImageUrl} onChange={(e) => setForm((f) => ({ ...f, coverImageUrl: e.target.value }))} placeholder="/uploads/… or paste a URL" />
+              <div className="flex min-w-0 flex-wrap gap-2 sm:flex-nowrap">
+                <Input id="cover" className="min-w-0 flex-1" value={form.coverImageUrl} onChange={(e) => setForm((f) => ({ ...f, coverImageUrl: e.target.value }))} placeholder="/uploads/… or paste a URL" />
                 <input
                   ref={posterFileRef}
                   type="file"
@@ -1361,11 +1409,12 @@ function EventEditor({ orgId, event, onClose }: { orgId: string; event: OrgEvent
                     e.target.value = ''
                   }}
                 />
-                <Button type="button" variant="outline" className="shrink-0 rounded-full" disabled={uploading} onClick={() => posterFileRef.current?.click()}>
-                  {uploading ? <Loader2 className="mr-1 h-4 w-4 animate-spin" aria-hidden /> : <Upload className="mr-1 h-4 w-4" aria-hidden />}
-                  {uploading ? 'Uploading…' : 'Upload'}
+                <Button type="button" variant="outline" className="shrink-0" loading={uploading} onClick={() => posterFileRef.current?.click()}>
+                  {!uploading && <Upload className="size-4" aria-hidden />}
+                  {uploading ? 'Uploading' : 'Upload poster'}
                 </Button>
               </div>
+              <FieldHelp>Use a clear event poster or paste a previously uploaded image URL.</FieldHelp>
             </div>
             {/* R23: the four optional policy fields collapse behind "More options"
                 — the create form now shows 11 fields instead of 15, with nothing
@@ -1415,17 +1464,23 @@ function EventEditor({ orgId, event, onClose }: { orgId: string; event: OrgEvent
                 )}
               </div>
             )}
-          </div>
+          </div>}
 
           {activeEvent && (
-            <div className="rounded-xl border border-border/70 p-4">
+            <section aria-label="Event tickets and admission" className="min-w-0 rounded-2xl border border-border/80 bg-muted/20 p-4 sm:p-5">
               {createdEvent && (
                 <div role="status" className="mb-3 flex items-center gap-2 rounded-xl border border-primary/30 bg-primary/5 p-3 text-sm">
                   <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" aria-hidden />
                   <span>Draft created. Add a ticket type below, then publish from Events.</span>
                 </div>
               )}
-              <p className="mb-2 text-sm font-bold">Ticket types</p>
+              <div className="mb-4 flex items-center gap-3 border-b border-border/70 pb-3">
+                <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-sm font-bold text-primary">04</span>
+                <div className="min-w-0">
+                  <h3 className="text-base font-bold tracking-tight">Ticket types &amp; admission</h3>
+                  <p className="text-xs leading-relaxed text-muted-foreground">Offer free RSVP, paid entry or both. You can change ticket availability later.</p>
+                </div>
+              </div>
               <div className="mb-3 space-y-1.5">
                 {(ticketTypes ?? []).map((t) => (
                   <div key={t.id} className="flex items-center justify-between gap-2 rounded-lg bg-secondary/50 px-3 py-2 text-sm">
@@ -1443,20 +1498,44 @@ function EventEditor({ orgId, event, onClose }: { orgId: string; event: OrgEvent
                 ))}
                 {(ticketTypes ?? []).length === 0 && <p className="text-xs text-muted-foreground">No ticket types yet — add free RSVP or paid admission.</p>}
               </div>
-              <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_110px_100px] lg:grid-cols-[minmax(0,1fr)_120px_100px_100px_120px_auto]">
-                <Input value={tt.name} onChange={(e) => setTt((s) => ({ ...s, name: e.target.value }))} placeholder="Ticket name" aria-label="Ticket name" />
-                <Input value={tt.price} onChange={(e) => setTt((s) => ({ ...s, price: e.target.value }))} placeholder="₵ price" inputMode="decimal" aria-label="Price in cedis" />
-                <Input value={tt.quota} onChange={(e) => setTt((s) => ({ ...s, quota: e.target.value }))} placeholder="Quota" inputMode="numeric" aria-label="Quota" />
-                <Input value={tt.perBuyerLimit} onChange={(e) => setTt((s) => ({ ...s, perBuyerLimit: e.target.value }))} placeholder="Max/buyer" inputMode="numeric" aria-label="Per buyer limit" />
-                <Select value={tt.kind} onValueChange={(v) => setTt((s) => ({ ...s, kind: v }))}>
-                  <SelectTrigger aria-label="Ticket kind"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="PHYSICAL">In person</SelectItem>
-                    <SelectItem value="VIRTUAL">Online</SelectItem>
-                    <SelectItem value="HYBRID">Hybrid</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Button size="sm" className="rounded-full" disabled={!tt.name.trim() || savingTt} onClick={() => void addTicketType()}>Add</Button>
+              <div className="grid min-w-0 gap-3 rounded-xl border border-border/65 bg-card p-3.5 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="min-w-0 space-y-1.5">
+                  <Label htmlFor="editor-ticket-name">Ticket name</Label>
+                  <Input id="editor-ticket-name" value={tt.name} maxLength={100}
+                    onChange={(e) => setTt((s) => ({ ...s, name: e.target.value }))} placeholder="General admission" />
+                </div>
+                <div className="min-w-0 space-y-1.5">
+                  <Label htmlFor="editor-ticket-price">Price (₵)</Label>
+                  <Input id="editor-ticket-price" value={tt.price} onChange={(e) => setTt((s) => ({ ...s, price: e.target.value }))}
+                    placeholder="0.00" inputMode="decimal" />
+                </div>
+                <div className="min-w-0 space-y-1.5">
+                  <Label htmlFor="editor-ticket-quota">Tickets available</Label>
+                  <Input id="editor-ticket-quota" value={tt.quota} onChange={(e) => setTt((s) => ({ ...s, quota: e.target.value }))}
+                    placeholder="100" inputMode="numeric" />
+                </div>
+                <div className="min-w-0 space-y-1.5">
+                  <Label htmlFor="editor-ticket-limit">Maximum per buyer</Label>
+                  <Input id="editor-ticket-limit" value={tt.perBuyerLimit} onChange={(e) => setTt((s) => ({ ...s, perBuyerLimit: e.target.value }))}
+                    placeholder="4" inputMode="numeric" />
+                </div>
+                <div className="min-w-0 space-y-1.5">
+                  <Label htmlFor="editor-ticket-kind">Admission format</Label>
+                  <Select value={tt.kind} onValueChange={(v) => setTt((s) => ({ ...s, kind: v }))}>
+                    <SelectTrigger id="editor-ticket-kind" aria-label="Admission format"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="PHYSICAL">In person</SelectItem>
+                      <SelectItem value="VIRTUAL">Online</SelectItem>
+                      <SelectItem value="HYBRID">Hybrid</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-end sm:col-span-2 lg:col-span-1">
+                  <Button type="button" variant="premium" className="w-full" loading={savingTt}
+                    disabled={!tt.name.trim()} onClick={() => void addTicketType()}>
+                    <Plus className="size-4" aria-hidden /> Add ticket type
+                  </Button>
+                </div>
               </div>
               <div className="mt-3">
                 <button type="button" aria-expanded={ticketOptionsOpen} className="flex items-center gap-2 rounded-lg px-2 py-2 text-xs font-semibold text-primary hover:bg-primary/5" onClick={() => setTicketOptionsOpen((open) => !open)}>
@@ -1468,7 +1547,7 @@ function EventEditor({ orgId, event, onClose }: { orgId: string; event: OrgEvent
                 <Switch checked={tt.includesVirtualAccess} onCheckedChange={(v) => setTt((s) => ({ ...s, includesVirtualAccess: v }))} aria-label="Includes virtual access" />
                 Includes online stream access (a physical-only ticket never unlocks virtual-only benefits)
               </label>
-            </div>
+            </section>
           )}
           {activeEvent && <EventOperationsEditor key={activeEvent.id} eventId={activeEvent.id} />}
           {event?.seriesId && (
@@ -1521,14 +1600,13 @@ function EventEditor({ orgId, event, onClose }: { orgId: string; event: OrgEvent
             </DialogFooter>
           </DialogContent>
         </Dialog>
-        <DialogFooter>
-          <Button variant="outline" className="rounded-full" onClick={onClose}>{event ? 'Close' : createdEvent ? 'Done' : 'Cancel'}</Button>
-          {busy && (
-            <span className="efx-dual-ring-loader shrink-0" role="status" aria-label="Saving event" style={{ width: 36, height: 36, margin: 0, borderWidth: 4 }} />
-          )}
+        <DialogFooter className="sticky bottom-0 z-10 flex-wrap gap-2 border-t border-border/70 bg-card/95 px-4 py-3 backdrop-blur-md sm:px-6">
+          {saveError && <p role="alert" className="w-full text-xs font-semibold text-destructive">{saveError}</p>}
+          <Button type="button" variant="outline" onClick={onClose}>{event ? 'Close' : createdEvent ? 'Done' : 'Cancel'}</Button>
           {!createdEvent && (
-            <Button className="rounded-full ievx-press" onClick={() => void save()} disabled={busy || form.title.trim().length < 3}>
-              {event ? 'Save event' : 'Create event'}
+            <Button type="button" variant="premium" loading={busy}
+              onClick={() => void save()} disabled={!eventDraftIsReady(form)}>
+              {event ? 'Save changes' : 'Create draft event'}
             </Button>
           )}
         </DialogFooter>

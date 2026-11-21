@@ -8,6 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
+import { Input } from '@/components/ui/input'
+import { Field, FieldLabel, FieldHelp } from '@/components/ui/field'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { useToast } from '@/hooks/use-toast'
 import { api, ApiClientError, qs } from '../api'
@@ -15,7 +17,7 @@ import { navigate } from '../router'
 import { usePortal } from '../store'
 import { money, dateLong, timeRange, relative, initials, humanize } from '../format'
 import { EmptyState } from '../components/EventCard'
-import { quoteTicketSelection, ticketCheckoutSupported, ticketAvailability } from '../lib/ticket-selection'
+import { quoteTicketSelection, ticketCheckoutSupported, ticketAvailability, hasPaidAdmissionSelection } from '../lib/ticket-selection'
 import { countryLabel } from '../lib/global-locations'
 import { OrganizerEventCover } from '../components/OrganizerEventCover'
 import LiveEngagement from '../components/LiveEngagement'
@@ -217,6 +219,7 @@ export default function EventDetail({ slug }: { slug: string }) {
   // international tickets is still allowed. Never silently sum EUR/USD as cedis.
   const selectionQuote = useMemo(() => quoteTicketSelection(supportedSaleable, buyQty), [supportedSaleable, buyQty])
   const selectedTotal = selectionQuote.subtotalMinor
+  const selectedPaidAdmission = hasPaidAdmissionSelection(supportedSaleable, buyQty)
 
   const openBooking = () => {
     setBuyQty({})
@@ -381,7 +384,7 @@ export default function EventDetail({ slug }: { slug: string }) {
       const order = await api.post<{ orderReference: string; totalMinor: number; kind: 'PAID' | 'FREE'; expiresAt: string }>('/orders', {
         eventId: event.id,
         items,
-        discountCode: discountCode.trim() || null,
+        discountCode: hasPaidAdmissionSelection(supportedSaleable, buyQty) ? (discountCode.trim() || null) : null,
         buyerPhone: buyerPhone.trim() || undefined,
       })
       if (order.kind === 'FREE') {
@@ -961,9 +964,11 @@ export default function EventDetail({ slug }: { slug: string }) {
                               Invitation approved — private address unlocked{mine.rsvpGuests ? ` · ${mine.rsvpGuests} ${mine.rsvpGuests === 1 ? 'place' : 'places'}` : ''}
                             </p>
                           )}
-                          {checkoutAvailable ? <button type="button" className="min-h-11 w-full rounded-xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:opacity-50" disabled={!canBook} onClick={openBooking}>
+                          {checkoutAvailable ? <Button type="button" variant="premium" size="lg" className="w-full"
+                            disabled={!canBook} onClick={openBooking}>
+                            <Ticket className="size-4" aria-hidden />
                             {supportedSaleable.some((t) => t.priceMinor > 0) ? 'Choose tickets' : 'Register for free'}
-                          </button> : <p className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 text-sm text-foreground">Online payment for these ticket currencies is not available yet. Contact the organizer for alternatives.</p>}
+                          </Button> : <p className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 text-sm text-foreground">Online payment for these ticket currencies is not available yet. Contact the organizer for alternatives.</p>}
                           {checkoutAvailable && <p className="text-center text-xs leading-relaxed text-muted-foreground">{supportedSaleable.some((t) => t.priceMinor > 0) ? 'Final payment methods are shown at checkout.' : 'Free registration is confirmed when your tickets are issued.'}</p>}
                         </>
                       )}
@@ -1033,65 +1038,80 @@ export default function EventDetail({ slug }: { slug: string }) {
       {/* Buy dialog */}
       <Dialog open={buyOpen} onOpenChange={(open) => { if (!placing) setBuyOpen(open) }}>
         <DialogContent className="flex max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] max-w-xl flex-col gap-0 overflow-hidden p-0 sm:max-h-[90dvh]">
-          <DialogHeader className="shrink-0 border-b border-border/70 px-5 py-4">
-            <DialogTitle className="text-lg font-extrabold">Choose your tickets</DialogTitle>
-            <p className="text-sm text-muted-foreground">Choose how many tickets you need. Seats and final pricing are verified when you reserve.</p>
+          <DialogHeader className="shrink-0 border-b border-border/70 bg-card px-4 py-4 text-left sm:px-5">
+            <p className="flex items-center gap-2 pr-9 text-[11px] font-bold uppercase tracking-[0.12em] text-primary"><Ticket className="size-4" aria-hidden /> Secure event registration</p>
+            <DialogTitle className="pr-8 text-xl font-extrabold tracking-tight">Choose your tickets</DialogTitle>
+            <p className="text-xs leading-relaxed text-muted-foreground">Select an available ticket type and quantity. The server confirms the final amount and availability before issuing tickets.</p>
           </DialogHeader>
           <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4 ievx-scrollbar sm:px-5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Available tickets</p>
+              <span className="rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-bold text-primary">
+                {selectionQuote.count} selected
+              </span>
+            </div>
             {supportedSaleable.map((tt) => {
               const qty = buyQty[tt.id] ?? 0
               const max = ticketAvailability(tt)
               return (
-                <div key={tt.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-muted/20 p-3 sm:flex-nowrap">
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold">{tt.name}</p>
-                    <p className="text-xs text-muted-foreground">{tt.priceMinor === 0 ? 'Free' : money(tt.priceMinor, tt.currency)} each{tt.perBuyerLimit ? ` · max ${tt.perBuyerLimit}` : ''}</p>
-                    {tt.quota > 0 && <p className="mt-1 text-[11px] text-muted-foreground">{Math.max(0, tt.quota - tt.soldCount - tt.reservedCount)} seats remaining</p>}
-                    {tt.includesVirtualAccess && <Badge variant="secondary" className="mt-1 text-[10px]">Includes online access</Badge>}
-                  </div>
-                  <div className="ml-auto flex shrink-0 items-center gap-2">
-                    <Button variant="outline" size="icon" className="h-11 w-11 rounded-full" aria-label={`Remove one ${tt.name}`} disabled={qty === 0} onClick={() => setBuyQty((q) => ({ ...q, [tt.id]: Math.max(0, qty - 1) }))}>−</Button>
-                    <span className="w-8 text-center font-bold tabular-nums" aria-live="polite">{qty}</span>
-                    <Button variant="outline" size="icon" className="h-11 w-11 rounded-full" aria-label={`Add one ${tt.name}`} disabled={qty >= max} onClick={() => setBuyQty((q) => ({ ...q, [tt.id]: qty + 1 }))}>+</Button>
+                <div key={tt.id} className={`min-w-0 rounded-2xl border p-3.5 transition-[border-color,background-color,box-shadow] sm:p-4 ${qty > 0 ? 'border-primary/50 bg-primary/[0.055] shadow-[0_0_0_1px_rgb(8_122_109_/_0.06)]' : 'border-border/80 bg-card hover:border-primary/30'}`}>
+                  <div className="flex flex-wrap items-center justify-between gap-3 sm:flex-nowrap">
+                    <div className="min-w-0 flex-1">
+                      <p className="break-words text-sm font-bold tracking-tight">{tt.name}</p>
+                      {tt.description && <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-muted-foreground">{tt.description}</p>}
+                      <p className="mt-1 text-sm font-extrabold tabular-nums text-primary">{tt.priceMinor === 0 ? 'Free' : money(tt.priceMinor, tt.currency)} <span className="text-xs font-normal text-muted-foreground">per ticket</span></p>
+                      <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] text-muted-foreground">
+                        {tt.quota > 0 && <span className="rounded-full bg-secondary px-2 py-1">{Math.max(0, tt.quota - tt.soldCount - tt.reservedCount)} remaining</span>}
+                        <span className="rounded-full bg-secondary px-2 py-1">Up to {tt.perBuyerLimit} per order</span>
+                        {tt.includesVirtualAccess && <span className="rounded-full bg-primary/10 px-2 py-1 font-semibold text-primary">Online access included</span>}
+                        {tt.groupMinQty && tt.groupPctOff && <span className="rounded-full bg-amber-500/10 px-2 py-1 font-semibold text-amber-800 dark:text-amber-300">{tt.groupPctOff}% off {tt.groupMinQty}+ tickets</span>}
+                      </div>
+                    </div>
+                    <div role="group" aria-label={`Choose quantity for ${tt.name}`} className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-xl border border-border/80 bg-background p-1 shadow-sm">
+                      <Button type="button" variant="ghost" size="icon" className="size-10 rounded-lg text-lg" aria-label={`Remove one ${tt.name}`} disabled={qty === 0} onClick={() => setBuyQty((q) => ({ ...q, [tt.id]: Math.max(0, (q[tt.id] ?? 0) - 1) }))}>−</Button>
+                      <output className="min-w-8 text-center text-base font-extrabold tabular-nums" aria-live="polite">{qty}</output>
+                      <Button type="button" variant="ghost" size="icon" className="size-10 rounded-lg text-lg" aria-label={`Add one ${tt.name}`} disabled={qty >= max} onClick={() => setBuyQty((q) => ({ ...q, [tt.id]: Math.min(max, (q[tt.id] ?? 0) + 1) }))}>+</Button>
+                    </div>
                   </div>
                 </div>
               )
             })}
-            {supportedSaleable.some((t) => t.priceMinor > 0) && (
-              <div className="space-y-3 pt-2">
-                <div className="space-y-1.5">
-                  <Label htmlFor="discount">Discount code (optional)</Label>
-                  <div className="efx-glow-focus-input" style={{ maxWidth: '100%', margin: 0 }}>
-                    <input id="discount" className="efx-glow-focus-input__field" value={discountCode} onChange={(e) => setDiscountCode(e.target.value.toUpperCase())} placeholder="e.g. GOSPEL10" />
-                  </div>
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="phone">Phone for ticket notifications (optional)</Label>
-                  <div className="efx-glow-focus-input" style={{ maxWidth: '100%', margin: 0 }}>
-                    <input id="phone" className="efx-glow-focus-input__field" value={buyerPhone} onChange={(e) => setBuyerPhone(e.target.value)} placeholder="+233 24 000 0000" inputMode="tel" />
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-          <DialogFooter className="shrink-0 flex-col gap-3 border-t border-border/70 bg-card px-4 py-4 sm:flex-col sm:px-5">
-            <div className="flex w-full items-center justify-between gap-3 text-sm">
-              <span className="text-muted-foreground">Estimated ticket subtotal</span>
-              <span className="text-lg font-extrabold tabular-nums text-primary" aria-live="polite">{selectedTotal === 0 ? 'Free' : money(selectedTotal, 'GHS')}</span>
+            <div className="grid min-w-0 gap-3 border-t border-border/70 pt-4 sm:grid-cols-2">
+              {selectedPaidAdmission && (
+                <Field>
+                  <FieldLabel htmlFor="checkout-discount">Promo code <span className="font-normal text-muted-foreground">(optional)</span></FieldLabel>
+                  <Input id="checkout-discount" className="uppercase" value={discountCode}
+                    onChange={(e) => setDiscountCode(e.target.value.toUpperCase())} placeholder="ENTER PROMO CODE" autoComplete="off" />
+                  <FieldHelp>The server validates any discount when you reserve.</FieldHelp>
+                </Field>
+              )}
+              <Field className={selectedPaidAdmission ? '' : 'sm:col-span-2'}>
+                <FieldLabel htmlFor="checkout-phone">Phone for ticket updates <span className="font-normal text-muted-foreground">(optional)</span></FieldLabel>
+                <Input id="checkout-phone" type="tel" value={buyerPhone}
+                  onChange={(e) => setBuyerPhone(e.target.value)} placeholder="+233 24 000 0000"
+                  inputMode="tel" autoComplete="tel" />
+                <FieldHelp>Used for ticket messages if SMS is enabled.</FieldHelp>
+              </Field>
             </div>
-            <button
-              type="button"
-              className="min-h-12 w-full rounded-xl bg-primary px-4 py-3 text-sm font-extrabold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed"
-              style={checkoutDisabled ? { opacity: 0.55, cursor: 'not-allowed', animation: 'none' } : undefined}
-              disabled={checkoutDisabled}
-              onClick={() => void placeOrder()}
-            >
-              {placing ? 'Reserving…' : selectedTotal === 0 ? 'Confirm free RSVP' : 'Continue to secure checkout'}
-            </button>
-            <p className="text-center text-xs leading-relaxed text-muted-foreground">
-              {selectedTotal === 0
-                ? 'Your free registration is confirmed only after the server issues tickets.'
-                : 'Final total includes applicable processing fees and discount codes, calculated by the server. Reservations expire if payment is not completed.'}
+          </div>
+          <DialogFooter className="shrink-0 flex-col gap-3 border-t border-border/70 bg-card/95 px-4 py-4 backdrop-blur-sm sm:flex-col sm:px-5">
+            <div className="flex w-full items-center justify-between gap-3 text-sm">
+              <div className="min-w-0">
+                <p className="text-xs text-muted-foreground">Estimated ticket subtotal</p>
+                <p className="text-xs font-semibold text-foreground">{selectionQuote.count} {selectionQuote.count === 1 ? 'ticket' : 'tickets'}</p>
+              </div>
+              <span className="text-xl font-extrabold tabular-nums text-primary" aria-live="polite">{selectedTotal === 0 ? 'Free' : money(selectedTotal, 'GHS')}</span>
+            </div>
+            <Button type="button" variant="premium" size="lg" className="w-full"
+              loading={placing} disabled={checkoutDisabled} onClick={() => void placeOrder()}>
+              <ShieldCheck className="size-4" aria-hidden />
+              {selectedPaidAdmission ? 'Continue to secure checkout' : 'Confirm free registration'}
+            </Button>
+            <p className="flex items-start gap-2 text-left text-xs leading-relaxed text-muted-foreground">
+              <ShieldCheck className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />
+              <span>{selectedPaidAdmission
+                ? 'Final total, any promo discount and processing fees are calculated by the server before payment. Reservations expire if payment is not completed.'
+                : 'Free registration is confirmed only when the server issues your tickets. No payment is required for free admission.'}</span>
             </p>
           </DialogFooter>
         </DialogContent>
