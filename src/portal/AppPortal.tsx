@@ -175,7 +175,7 @@ export default function AppPortal() {
         return param ? <OrgProfile key={param} slug={param} /> : <Discover route={route} />
       case 'signin':
       case 'register':
-        return <AuthView mode={head === 'register' ? 'register' : 'signin'} />
+        return <AuthView mode={head === 'register' ? 'register' : 'signin'} next={route.query.get('next')} />
       case 'me':
         return <Me route={route} />
       case 'order':
