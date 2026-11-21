@@ -19,6 +19,7 @@ import { quoteTicketSelection, ticketCheckoutSupported, ticketAvailability } fro
 import { countryLabel } from '../lib/global-locations'
 import { OrganizerEventCover } from '../components/OrganizerEventCover'
 import LiveEngagement from '../components/LiveEngagement'
+import { EventMeetingPanel } from '../components/EventMeetingPanel'
 import ReviewsPanel from '../components/ReviewsPanel'
 import UpdatesPanel from '../components/UpdatesPanel'
 
@@ -526,6 +527,9 @@ export default function EventDetail({ slug }: { slug: string }) {
           <div className="mt-6 grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-7">
             {/* Left column */}
             <div className="order-2 min-w-0 space-y-5 lg:order-1">
+              {['LIVE', 'PUBLISHED', 'ENDED'].includes(event.status) && user && (
+                <EventMeetingPanel eventId={event.id} />
+              )}
               {['LIVE', 'PUBLISHED'].includes(event.status) && (
                 <LiveEngagement eventId={event.id} slug={event.slug} live={event.status === 'LIVE'} />
               )}

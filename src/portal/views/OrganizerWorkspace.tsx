@@ -34,6 +34,7 @@ import { WorkspaceMetric } from '../components/WorkspaceMetric'
 import { AdmissionOperationsPanel } from '../components/AdmissionOperationsPanel'
 import { scannerSessionKey } from '../lib/scanner-session-local'
 import { GrowthCommandCenter } from '../components/GrowthCommandCenter'
+import { GroupMeetingsManager } from '../components/GroupMeetingsManager'
 import { OrganizerEventCover } from '../components/OrganizerEventCover'
 import { EventCopyCopilot } from '../components/EventCopyCopilot'
 import { EventOperationsEditor } from '../components/EventOperationsEditor'
@@ -68,6 +69,7 @@ const NAV = [
   { key: 'orders', group: 'Events & tickets', label: 'Orders', icon: Ticket },
   { key: 'attendees', group: 'Events & tickets', label: 'Attendees & Check-in', icon: Users },
   { key: 'studio', group: 'Production', label: 'Streaming Studio', icon: Radio },
+  { key: 'meetings', group: 'Production', label: 'Group Meetings', icon: Users },
   { key: 'live', group: 'Production', label: 'Live Room', icon: Activity },
   { key: 'promotions', group: 'Engagement', label: 'Promotions', icon: Megaphone },
   { key: 'messages', group: 'Engagement', label: 'Messaging', icon: MessageSquare },
@@ -122,6 +124,7 @@ export default function OrganizerWorkspace({ route }: { route: Route }) {
   const visibleNav = NAV.filter((item) => {
     if (['insights', 'finance'].includes(item.key) && !canViewReports) return false
     if (item.key === 'growth' && !canViewGrowth) return false
+    if (item.key === 'meetings' && !canManageEvents) return false
     return true
   })
 
@@ -208,14 +211,27 @@ export default function OrganizerWorkspace({ route }: { route: Route }) {
               <h1 className="ievx-workspace-toolbar-title">{NAV.find((item) => item.key === section)?.label ?? 'Dashboard'}</h1>
             </div>
           </div>
-          {canManageEvents && <Button
-            size="sm"
-            className="shrink-0 rounded-lg"
-            onClick={() => navigate('/organizer?tab=events&new=1', { replace: true })}
-          >
-            <Plus className="size-4" aria-hidden />
-            <span className="hidden min-[380px]:inline">New event</span>
-          </Button>}
+          {canManageEvents && <div className="flex shrink-0 items-center gap-1.5">
+            {section !== 'meetings' && <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="min-h-9 rounded-lg px-2.5"
+              onClick={() => navigate('/organizer?tab=meetings', { replace: true })}
+              aria-label="Open Group Meetings"
+            >
+              <Users className="size-4" aria-hidden />
+              <span className="ml-1.5 hidden min-[390px]:inline">Meetings</span>
+            </Button>}
+            <Button
+              size="sm"
+              className="min-h-9 shrink-0 rounded-lg px-2.5"
+              onClick={() => navigate('/organizer?tab=events&new=1', { replace: true })}
+            >
+              <Plus className="size-4" aria-hidden />
+              <span className="hidden min-[390px]:inline">New event</span>
+            </Button>
+          </div>}
         </div>
         <div key={section} className="ievx-view-enter">
           {section === 'dashboard' && <Dashboard orgId={activeOrg.orgId} role={activeOrg.role} />}
@@ -225,6 +241,7 @@ export default function OrganizerWorkspace({ route }: { route: Route }) {
           {section === 'orders' && <OrdersView orgId={activeOrg.orgId} />}
           {section === 'attendees' && <AttendeesView orgId={activeOrg.orgId} initialEventId={route.query.get('eventId') ?? ''} />}
           {section === 'studio' && <StudioView orgId={activeOrg.orgId} />}
+          {section === 'meetings' && (canManageEvents ? <GroupMeetingsManager orgId={activeOrg.orgId} /> : <RoleRestricted />)}
           {section === 'live' && <LiveRoomView orgId={activeOrg.orgId} />}
           {section === 'promotions' && <PromotionsView orgId={activeOrg.orgId} />}
           {section === 'messages' && <MessagesView orgId={activeOrg.orgId} />}
@@ -300,6 +317,7 @@ function Dashboard({ orgId, role }: { orgId: string; role: string }) {
             <p className="mt-2 max-w-xl text-sm leading-relaxed text-white/80">Manage your events, stay ahead of the next launch and bring your audience together. Your workspace is updated from real organizer records.</p>
             <div className="mt-4 flex flex-wrap gap-2">
               {canCreate && <Button size="sm" className="border-none bg-white text-emerald-950 hover:bg-emerald-50" onClick={() => navigate('/organizer?tab=events&new=1')}><Plus className="mr-1.5 size-4" /> Create event</Button>}
+              {canCreate && <Button size="sm" variant="outline" className="border-white/40 bg-white/5 text-white hover:bg-white/15 hover:text-white" onClick={() => navigate('/organizer?tab=meetings')}><Users className="mr-1.5 size-4" /> Group Meetings</Button>}
               {canGrowth && <Button size="sm" variant="outline" className="border-white/40 bg-white/5 text-white hover:bg-white/15 hover:text-white" onClick={() => navigate('/organizer?tab=growth')}><Sparkles className="mr-1.5 size-4" /> Growth & AI</Button>}
             </div>
           </div>

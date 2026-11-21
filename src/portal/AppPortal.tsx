@@ -31,6 +31,7 @@ const AuthView = lazy(() => import('./views/AuthView'))
 const Me = lazy(() => import('./views/Me'))
 const OrderView = lazy(() => import('./views/OrderView'))
 const BroadcastView = lazy(() => import('./views/BroadcastView'))
+const MeetingView = lazy(() => import('./views/MeetingView'))
 const OrganizerWorkspace = lazy(() => import('./views/OrganizerWorkspace'))
 const AdminConsole = lazy(() => import('./views/AdminConsole'))
 const CreateOrg = lazy(() => import('./views/CreateOrg'))
@@ -174,13 +175,15 @@ export default function AppPortal() {
         return param ? <OrgProfile key={param} slug={param} /> : <Discover route={route} />
       case 'signin':
       case 'register':
-        return <AuthView mode={head === 'register' ? 'register' : 'signin'} />
+        return <AuthView mode={head === 'register' ? 'register' : 'signin'} next={route.query.get('next')} />
       case 'me':
         return <Me route={route} />
       case 'order':
         return param ? <OrderView key={param} reference={param} /> : <Discover route={route} />
       case 'broadcast':
         return param ? <BroadcastView key={param} id={param} /> : <LiveNow />
+      case 'meeting':
+        return param ? <MeetingView key={param} id={param} /> : <Discover route={route} />
       case 'organizer':
         return <OrganizerWorkspace route={route} />
       case 'admin':
@@ -340,9 +343,14 @@ export default function AppPortal() {
                       </DropdownMenuItem>
                     )}
                     {isOrganizer(user, memberships) && (
-                      <DropdownMenuItem onClick={() => navigate('/organizer')}>
-                        <LayoutDashboard className="h-4 w-4" /> Organizer Workspace
-                      </DropdownMenuItem>
+                      <>
+                        <DropdownMenuItem onClick={() => navigate('/organizer')}>
+                          <LayoutDashboard className="h-4 w-4" /> Organizer Workspace
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => navigate('/organizer?tab=meetings')}>
+                          <UsersRound className="h-4 w-4" /> Group Meetings
+                        </DropdownMenuItem>
+                      </>
                     )}
                     {!isOrganizer(user, memberships) && (
                       <DropdownMenuItem onClick={() => navigate('/create-org')}>

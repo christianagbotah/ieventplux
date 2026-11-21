@@ -72,6 +72,8 @@ model User {
   refundRequests      RefundCase[]           @relation("RefundRequester")
   verifications       ContactVerification[]
   chatMessages        ChatMessage[]
+  meetingMessages     MeetingMessage[]
+  meetingBans         MeetingBan[]
   identityProviderJobs KycProviderJob[]
   livePollVotes       LivePollVote[]
   questionsAsked      AudienceQuestion[]      @relation("QuestionAuthor")
@@ -322,6 +324,7 @@ model Event {
   scans        AdmissionScan[]
   deviceSessions DeviceSession[]
   broadcasts   LiveBroadcast[]
+  meeting      EventMeeting?
   comments     Comment[]
   updates      EventUpdate[]
   campaigns    PromotionCampaign[]
@@ -1117,6 +1120,60 @@ model ChatMessage {
   broadcast LiveBroadcast @relation(fields: [broadcastId], references: [id], onDelete: Cascade)
   user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   org       Organization? @relation(fields: [orgId], references: [id], onDelete: SetNull)
+}
+
+/**
+ * Small-group interactive meetings are event-scoped. WebRTC audio/video and
+ * screen-share are peer-to-peer; only chat is durable. Keep mesh room caps
+ * small until an SFU and TURN relay are operational and load-tested.
+ */
+model EventMeeting {
+  id                 String    @id @default(cuid())
+  eventId            String    @unique
+  title              String
+  status             String    @default("SCHEDULED") // SCHEDULED | LIVE | ENDED
+  maxParticipants    Int       @default(6)
+  chatEnabled        Boolean   @default(true)
+  screenShareEnabled Boolean   @default(true)
+  startedAt          DateTime?
+  endedAt            DateTime?
+  createdById        String
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  event      Event            @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  messages   MeetingMessage[]
+  bans       MeetingBan[]
+
+  @@index([status, createdAt])
+}
+
+/** A removal is durable until the organizer explicitly restores access. */
+model MeetingBan {
+  meetingId   String
+  userId      String
+  removedById String
+  createdAt   DateTime @default(now())
+
+  meeting EventMeeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  user    User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([meetingId, userId])
+  @@index([userId])
+}
+
+model MeetingMessage {
+  id        String   @id @default(cuid())
+  meetingId String
+  userId    String
+  body      String
+  status    String   @default("VISIBLE") // VISIBLE | HIDDEN
+  createdAt DateTime @default(now())
+
+  meeting EventMeeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  user    User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([meetingId, createdAt])
 }
 
 // ─────────────────────────────── Messaging & notifications ───────────────────────────────
