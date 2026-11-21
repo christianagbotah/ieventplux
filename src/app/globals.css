@@ -1070,10 +1070,10 @@ body {
   justify-content: center;
   flex: 0 0 auto;
   gap: 5px;
-  min-height: 35px;
-  padding: 7px 11px;
+  min-height: 44px;
+  padding: 9px 13px;
   border-radius: 999px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 650;
   white-space: nowrap;
   border-color: rgb(185 245 226 / 24%);
@@ -1183,10 +1183,10 @@ body {
   .ievx-public .ievx-home-hero .ievx-hero-title { font-size: clamp(27px, 7.55vw, 35px); line-height: 1.11; letter-spacing: -.048em; }
   .ievx-public .ievx-home-hero .ievx-hero-copy { font-size: 13px; line-height: 1.55; margin-top: 11px; }
   .ievx-hero-cta { margin-top: 15px; gap: 6px; }
-  .ievx-public .ievx-home-hero .ievx-hero-action { min-height: 42px; padding: 8px 12px; font-size: 12px; flex: 1 1 auto; }
+  .ievx-public .ievx-home-hero .ievx-hero-action { min-height: 44px; padding: 9px 12px; font-size: 12px; flex: 1 1 auto; }
   .ievx-hero-text-action { min-height: 37px; font-size: 12px; padding: 5px 3px; }
   .ievx-public .ievx-home-hero .ievx-hero-quick { margin-top: 12px; padding-top: 11px; gap: 6px; margin-right: -18px; padding-right: 18px; }
-  .ievx-public .ievx-home-hero .ievx-hero-quick button { min-height: 33px; font-size: 11px; }
+  .ievx-public .ievx-home-hero .ievx-hero-quick button { min-height: 44px; font-size: 12px; }
   .ievx-hero-mobile-feature { margin-top: 11px; padding: 7px 9px; }
   .ievx-real-activity { gap: 5px 12px; font-size: 11px; padding-top: 8px; }
   .ievx-real-activity > button { display: none; }
@@ -1255,9 +1255,9 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 34px;
-  min-width: 35px;
-  border-radius: 9px;
+  min-height: 44px;
+  min-width: 44px;
+  border-radius: 10px;
   color: #d7f4e7;
 }
 .ievx-hero-story-controls > button:not(.ievx-hero-play-toggle)::after {
@@ -1300,7 +1300,7 @@ body {
 @media (max-width: 639px) {
   .ievx-hero-ticker { font-size: 9px; margin-top: 6px; }
   .ievx-hero-story-controls { margin-top: 5px; }
-  .ievx-hero-story-controls > button { min-height: 30px; }
+  .ievx-hero-story-controls > button { min-height: 44px; min-width: 44px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .ievx-hero-story-enter, .ievx-hero-visual-enter,

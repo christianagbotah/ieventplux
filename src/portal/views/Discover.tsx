@@ -140,18 +140,8 @@ function SponsoredCard({ event, index }: { event: EventCardData; index: number }
   const [imgFailed, setImgFailed] = useState(false)
   return (
     <Card
-      role="link"
-      tabIndex={0}
-      aria-label={`View promoted event: ${event.title}`}
-      className="ievx-card-hover ievx-event-card group flex-row items-stretch gap-0 overflow-hidden rounded-2xl border-border/70 bg-card py-0 cursor-pointer"
+      className="ievx-card-hover ievx-event-card group relative flex-row items-stretch gap-0 overflow-hidden rounded-2xl border-border/70 bg-card py-0"
       style={{ animationDelay: `${Math.min(index * 40, 320)}ms` }}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault()
-          navigate(`/event/${event.slug}`)
-        }
-      }}
-      onClick={() => navigate(`/event/${event.slug}`)}
     >
       <div className="relative w-24 shrink-0 overflow-hidden bg-muted sm:w-36">
         {event.coverImageUrl && !imgFailed ? (
@@ -195,6 +185,11 @@ function SponsoredCard({ event, index }: { event: EventCardData; index: number }
       <div className="flex items-center pr-3">
         <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" aria-hidden />
       </div>
+      <a
+        href={`#/event/${encodeURIComponent(event.slug)}`}
+        aria-label={`View promoted event: ${event.title}`}
+        className="absolute inset-0 z-10 rounded-2xl focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-primary"
+      />
     </Card>
   )
 }
@@ -391,8 +386,11 @@ export default function Discover({ route }: { route: Route }) {
                     {HERO_STORIES.map((story, i) => (
                       <button key={story.label} type="button" className={i === heroIndex ? 'is-active' : ''}
                         aria-label={'Show highlight ' + (i + 1) + ': ' + story.label}
-                        aria-current={i === heroIndex ? 'true' : undefined}
-                        onClick={() => setHeroIndex(i)}>
+                        aria-pressed={i === heroIndex}
+                        onClick={() => {
+                          setHeroIndex(i)
+                          setHeroPlaying(false) // Explicit choice must not auto-advance away.
+                        }}>
                         <span className="sr-only">{story.label}</span>
                       </button>
                     ))}
@@ -404,21 +402,12 @@ export default function Discover({ route }: { route: Route }) {
                   </div>
 
                   {heroIndex === 0 && primaryEvent ? (
-                    <button type="button" className="ievx-hero-mobile-feature lg:hidden"
-                      onClick={() => navigate('/event/' + primaryEvent.slug)}
-                      aria-label={'See featured event ' + primaryEvent.title}>
-                      {primaryEvent.coverImageUrl ? (
-                        <img src={primaryEvent.coverImageUrl} loading="lazy" alt=""
-                          className="size-11 shrink-0 rounded-lg object-cover" />
-                      ) : (
-                        <span className="grid size-11 shrink-0 place-items-center rounded-lg bg-white/10"><CalendarDays className="size-5" aria-hidden /></span>
-                      )}
-                      <span className="min-w-0 flex-1 text-left">
-                        <span className="block text-[10px] font-bold uppercase tracking-[0.12em] text-[#abddce]">In the spotlight</span>
-                        <span className="block truncate text-sm font-semibold">{primaryEvent.title}</span>
-                      </span>
-                      <ChevronRight className="size-4 shrink-0 text-[#b2e7d5]" aria-hidden />
-                    </button>
+                    <div className="mt-3 min-w-0 lg:hidden">
+                      {/* The real event poster gets an editorial mobile stage.
+                          Content, organizer and price are all drawn from live
+                          event data — never generic mock promotion. */}
+                      <HeroSpotlight event={primaryEvent} compact />
+                    </div>
                   ) : heroIndex === 1 ? (
                     <button type="button" className="ievx-hero-mobile-feature lg:hidden"
                       onClick={() => { setBrowseAll(true); applyFilter('mode', 'ONLINE') }}>
