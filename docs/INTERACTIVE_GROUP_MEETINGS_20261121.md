@@ -95,6 +95,35 @@ The coturn service was deliberately left **disabled and inactive**, with no
 new firewall ports opened and no production feature flag activated. The
 installation alone does **not** provide a functioning public relay.
 
+### Verified isolated release rehearsals — 21 November 2026
+
+- The additive PostgreSQL migration was executed **twice** in a disposable
+  PostgreSQL 18 cluster. The three tables, repeatability, valid foreign keys
+  and database-enforced six-peer capacity check passed; the cluster and
+  synthetic rows were destroyed afterward.
+- `scripts/verify-meeting-migration.sh` now executes the same rehearsal in a
+  disposable **GitHub CI PostgreSQL** test schema, with strict localhost,
+  CI-only and explicit opt-in guards. It never targets production data.
+- After resolving coturn 4.18 incompatible config directives, a **temporary
+  loopback-only TURN service** passed STUN Binding, rejected unauthenticated
+  allocation with a nonce challenge, and completed an authenticated TURN
+  allocation using short-lived REST/HMAC credentials. The transient service
+  was stopped afterward and port 36788 was confirmed closed.
+- The full-stack GitHub CI meeting smoke now tests real seeded host/attendee
+  HTTP and WebSocket flows: meeting creation, RSVP access, durable group chat,
+  protected SDP relay, screen presenter state, capacity, bans, restoration,
+  host ending, and chat after event completion. Its test event is deleted.
+- **Not tested yet:** internet TURN reachability, TLS, UDP/TCP relay across
+  separate networks, camera/microphone playback on physical devices, actual
+  `getDisplayMedia()` screen capture, native mobile device support and load.
+
+The authoritative DNS for `lightworldtech.com` is hosted at **Cloudflare**
+(nameservers chance/clara). As checked, `turn.ieventplux.lightworldtech.com`
+has no public A/AAAA record. A **DNS-only** record must be established in the
+authoritative zone and verified before opening the restricted TURN firewall
+ports. No public TURN listener was enabled and no production feature flag
+was changed.
+
 Next infrastructure verification: provision a dedicated **DNS-only** TURN
 hostname, review firewall policy for the TURN listener and bounded UDP relay
 range, use trusted TLS for restrictive networks, verify TURN allocations and
