@@ -30,7 +30,7 @@ An event-social, ticketing, organizer and media platform should feel like one pr
 ## Revised flows
 
 - **Group Meetings**: professional branded context header, accessible event selector, accurate SFU no-fixed-participant-cap explanation, polished room status and create/open actions. Old 2–6-person warning removed (that applies only to retired P2P mode; deployed SFU has no fixed application cap).
-- **Authentication**: primary sign-in and registration CTAs now use the same premium button and loading state as the organizer app. The existing password reset and safe invitation return route are preserved.
+- **Authentication**: visible, persistent name/email/phone/password labels replace placeholder-only floating inputs; accessible inline help and clear show/hide-password control are retained. Primary sign-in and registration CTAs use the same premium button and loading state as the organizer app. Existing password reset and safe invitation return routes are preserved.
 - **Organizer creation**: explicit profile → verification → publication stages, elevated selectable cards with `aria-pressed`, consistent name field, clear guidance and a strong async CTA.
 - Existing free RSVP, paid ticket gates, event records, sign-in/auth and meeting permissions are not changed.
 
