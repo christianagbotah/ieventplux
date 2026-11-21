@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { errors } from './api'
 import { eventOrgAccess } from './permissions'
 import { canJoinMeeting, meetingEventUsable, meetingEventCallOpen } from './meeting-policy'
+import { configuredMeetingTurnUrls, meetingRuntimeEnabled, meetingTurnConfigured } from './meeting-turn-policy'
 
 /**
  * Small-group meetings are disabled unless explicitly enabled in the runtime.
@@ -10,7 +11,7 @@ import { canJoinMeeting, meetingEventUsable, meetingEventCallOpen } from './meet
  * the interface is compiled. All durable authorization happens server-side.
  */
 export function meetingFeatureEnabled(): boolean {
-  return process.env.IEVENTPLUX_GROUP_MEETINGS_ENABLED === 'true'
+  return meetingRuntimeEnabled(process.env)
 }
 export function requireMeetingFeature() {
   if (!meetingFeatureEnabled()) {
@@ -64,9 +65,9 @@ export function meetingIceServers(userId: string) {
   const stun = process.env.MEETING_STUN_URL || 'stun:stun.l.google.com:19302'
   const servers: Array<{ urls: string | string[]; username?: string; credential?: string }> = []
   if (/^stuns?:[^\s]+$/.test(stun)) servers.push({ urls: stun })
-  const turn = (process.env.MEETING_TURN_URLS ?? '').split(',').map((url) => url.trim()).filter(Boolean)
+  const turn = configuredMeetingTurnUrls(process.env)
   const secret = process.env.MEETING_TURN_SHARED_SECRET
-  if (turn.length && secret && turn.every((url) => /^turns?:[^\s]+$/.test(url))) {
+  if (meetingTurnConfigured(process.env) && secret) {
     const username = `${Math.floor(Date.now() / 1000) + 3600}:${userId}`
     const credential = createHmac('sha1', secret).update(username).digest('base64')
     servers.push({ urls: turn, username, credential })
