@@ -13,7 +13,7 @@ export async function GET(_req: NextRequest, ctx: Context) {
     const { id } = await ctx.params
     const user = await requireUser()
     if (!meetingFeatureEnabled()) return jsonOk({ enabled: false, meeting: null, canManage: false })
-    const event = await db.event.findUnique({ where: { id }, select: { id: true, orgId: true, status: true, deletedAt: true, org: { select: { status: true, deletedAt: true } } } })
+    const event = await db.event.findUnique({ where: { id }, select: { id: true, orgId: true, status: true, deletedAt: true, org: { select: { ownerId: true, status: true, deletedAt: true } } } })
     if (!event || !meetingEventUsable(event)) throw errors.notFound('Event unavailable.')
     const access = await eventOrgAccess(user.id, id, 'broadcast:manage')
     const meeting = await db.eventMeeting.findUnique({ where: { eventId: id } })
@@ -27,7 +27,7 @@ export async function GET(_req: NextRequest, ctx: Context) {
       response.headers.set('Cache-Control', 'private, no-store')
       return response
     }
-    if (!access.allowed) return jsonOk({ enabled: true, meeting: null, canManage: false })
+    if (!access.allowed && event.org.ownerId !== user.id) return jsonOk({ enabled: true, meeting: null, canManage: false })
     return jsonOk({ enabled: true, meeting: null, canManage: true })
   })
 }
@@ -39,7 +39,9 @@ export async function POST(req: NextRequest, ctx: Context) {
     const user = await requireUser()
     const access = await eventOrgAccess(user.id, id, 'broadcast:manage')
     if (!access.event) throw errors.notFound('Event not found.')
-    if (!access.allowed) throw errors.forbidden('Only an event organizer may create its meeting.')
+    // Organization owners may not have a duplicate accepted membership row.
+    const isOwner = Boolean(await db.organization.findFirst({ where: { id: access.event.orgId, ownerId: user.id, status: 'ACTIVE', deletedAt: null }, select: { id: true } }))
+    if (!access.allowed && !isOwner) throw errors.forbidden('Only an event organizer may create its meeting.')
     const event = await db.event.findUnique({
       where: { id }, select: { title: true, status: true, deletedAt: true, org: { select: { status: true, deletedAt: true } } },
     })
