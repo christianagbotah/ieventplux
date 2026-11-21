@@ -1,6 +1,8 @@
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import { errors } from './api'
 import { env } from './env'
+// Single fail-closed stock-counter policy shared by checkout and collection code.
+export { availableSouvenirStock } from './souvenir-checkout-policy'
 
 export type SouvenirSelection = { productId: string; qty: number }
 export function normalizeSouvenirLines(value: unknown): SouvenirSelection[] {
@@ -32,10 +34,6 @@ export function verifySouvenirCollectionToken(token: string): string | null {
   const supplied = Buffer.from(match[2], 'hex')
   return supplied.length === target.length && timingSafeEqual(target, supplied) ? match[1] : null
 }
-export function availableSouvenirStock(total: number, sold: number, reserved: number) {
-  return Math.max(0, total - sold - reserved)
-}
-
 /** Explicit launch control: keep commerce closed until DB migration, sandbox
  * payment and collection QA, and finance review are all verified. */
 export function souvenirCheckoutEnabled(): boolean {

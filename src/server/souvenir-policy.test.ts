@@ -36,6 +36,9 @@ describe('souvenir inventory and collection policy', () => {
   })
   test('sold and reserved units are unavailable to new buyers', () => {
     expect(availableSouvenirStock(30,8,7)).toBe(15)
-    expect(availableSouvenirStock(9,9,2)).toBe(0)
+    expect(availableSouvenirStock(9,9,0)).toBe(0)
+    for (const counters of [[9,9,2], [9,10,0], [9,-1,0], [9,0,NaN], [9,0,1.5]] as const) {
+      expect(() => availableSouvenirStock(...counters)).toThrow()
+    }
   })
 })
