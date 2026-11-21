@@ -236,7 +236,13 @@ io.on('connection', (socket) => {
     if (!await mayJoinRealtimeRoom(joinedRoom, socket.handshake.headers.cookie)) return
     peer.emit('meeting:signal', {
       from: socket.id, kind: signal.kind,
-      ...(signal.kind === 'candidate' ? { candidate: signal.candidate } : { sdp: signal.sdp }),
+      ...(signal.kind === 'candidate'
+        ? { candidate: {
+          candidate: signal.candidate?.candidate,
+          sdpMid: signal.candidate?.sdpMid ?? null,
+          sdpMLineIndex: signal.candidate?.sdpMLineIndex ?? null,
+        } }
+        : { sdp: signal.sdp }),
     })
   })
 
