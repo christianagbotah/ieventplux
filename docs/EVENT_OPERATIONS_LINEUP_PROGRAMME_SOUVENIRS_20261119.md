@@ -111,3 +111,5 @@ The four HTTP/reporting merchandise QA scripts now invoke `requireIsolatedMercha
 The authenticated merchandise handover HTTP QA now checks a forged QR token with a **valid token length and format but a changed HMAC character**, in addition to the existing malformed/extended-token test. The staff endpoint must return 404 without revealing a receipt. This assertion has been added to the test harness; it is **not** evidence that authenticated staging or physical smartphone-camera acceptance has passed. Keep charging and collection disabled until the full payment, refund and QR release gates pass.
 
 - 2026-11-21: The isolated merchandise QA database guard additionally rejects non-PostgreSQL URL schemes and URL-level host overrides before opening synthetic test fixtures; this is a defence-in-depth check, not provider-backed staging certification.
+
+- 2026-11-21 QA isolation hardening: reject duplicate PostgreSQL `schema` parameters and connection `options` overrides before synthetic fixtures can be created. This is a test guard only, not evidence of payment-provider staging acceptance.

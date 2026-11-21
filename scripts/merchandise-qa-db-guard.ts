@@ -9,6 +9,8 @@ export async function requireIsolatedMerchandiseQaDatabase() {
   const url = new URL(process.env.DATABASE_URL ?? 'http://invalid.invalid')
   assert.ok(['postgresql:', 'postgres:'].includes(url.protocol), 'QA requires a PostgreSQL URL')
   assert.ok(!url.searchParams.has('host'), 'QA must not override the loopback database host')
+  assert.equal(url.searchParams.getAll('schema').length, 1, 'QA requires exactly one schema parameter')
+  assert.ok(!url.searchParams.has('options'), 'QA must not override PostgreSQL connection options')
   assert.equal(url.searchParams.get('schema'), schema, 'QA requires the isolated schema')
   assert.match(decodeURIComponent(url.pathname).slice(1), qaName, 'QA requires a disposable database name')
   assert.ok(['localhost', '127.0.0.1', '::1', '[::1]'].includes(url.hostname), 'QA requires loopback PostgreSQL')
