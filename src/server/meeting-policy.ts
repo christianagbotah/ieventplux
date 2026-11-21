@@ -29,9 +29,11 @@ export function canJoinMeeting(input: {
   organizer: boolean
   approvedRsvp: boolean
   validTicket: boolean
+  /** Any priced ticket type makes this a ticket-gated meeting. */
+  hasPaidTicketType?: boolean
 }): boolean {
   return input.roomStatus === 'LIVE' && input.validEvent && input.signedIn
-    && (input.organizer || input.approvedRsvp || input.validTicket)
+    && (input.organizer || input.validTicket || (input.approvedRsvp && !input.hasPaidTicketType))
 }
 
 export type MeetingSignal = {
