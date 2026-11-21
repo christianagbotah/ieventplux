@@ -9,10 +9,12 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { useToast } from '@/hooks/use-toast'
 import { api, ApiClientError } from '../api'
 import { navigate } from '../router'
+import { meetingAuthRoute, safeMeetingReturnPath } from '../lib/meeting-invite-navigation'
 import { usePortal, isPlatformStaff } from '../store'
 import { humanize } from '../format'
 
-export default function AuthView({ mode }: { mode: 'signin' | 'register' }) {
+export default function AuthView({ mode, next }: { mode: 'signin' | 'register'; next?: string | null }) {
+  const returnToMeeting = safeMeetingReturnPath(next)
   const { toast } = useToast()
   const { setUser, setMemberships } = usePortal()
   const [busy, setBusy] = useState(false)
@@ -65,6 +67,13 @@ export default function AuthView({ mode }: { mode: 'signin' | 'register' }) {
     if (!me.user) throw new Error('Your credentials were accepted, but the sign-in session could not be verified. Please try signing in again.')
     setUser(me.user)
     setMemberships(me.memberships ?? [])
+    // Preserve a shared meeting invitation across sign-in and registration.
+    // Only a validated same-app meeting route can override the default landing.
+    if (returnToMeeting) {
+      toast({ title: 'Signed in — opening your event meeting' })
+      navigate(returnToMeeting)
+      return
+    }
     // R20: platform staff (SUPPORT / MODERATOR / FINANCE_ADMIN / SUPER_ADMIN) sign in through
     // this same form — the session backend hands back their staff role, so we route them
     // straight into the admin console instead of the consumer landing page.
@@ -150,7 +159,7 @@ export default function AuthView({ mode }: { mode: 'signin' | 'register' }) {
       await api.post('/auth/password-reset-confirm', { email: resetEmail, code: resetCode, password: newPassword })
       toast({ title: 'Password updated', description: 'Sign in with your new password.' })
       setResetOpen(false)
-      navigate('/signin')
+      navigate(meetingAuthRoute('signin', returnToMeeting))
     } catch (err) {
       const message = err instanceof ApiClientError ? err.message : 'Could not update your password. Check your connection and try again.'
       setResetError(message)
@@ -301,9 +310,9 @@ export default function AuthView({ mode }: { mode: 'signin' | 'register' }) {
         </form>
         <p className="mt-4 text-center text-sm text-muted-foreground">
           {mode === 'signin' ? (
-            <>New to iEventPlux? <button type="button" className="efx-underline-slide-link" style={{ fontSize: 'inherit', color: 'inherit', fontWeight: 600, paddingBottom: '2px' }} onClick={() => navigate('/register')}>Create an account</button></>
+            <>New to iEventPlux? <button type="button" className="efx-underline-slide-link" style={{ fontSize: 'inherit', color: 'inherit', fontWeight: 600, paddingBottom: '2px' }} onClick={() => navigate(meetingAuthRoute('register', returnToMeeting))}>Create an account</button></>
           ) : (
-            <>Already have an account? <button type="button" className="efx-underline-slide-link" style={{ fontSize: 'inherit', color: 'inherit', fontWeight: 600, paddingBottom: '2px' }} onClick={() => navigate('/signin')}>Sign in</button></>
+            <>Already have an account? <button type="button" className="efx-underline-slide-link" style={{ fontSize: 'inherit', color: 'inherit', fontWeight: 600, paddingBottom: '2px' }} onClick={() => navigate(meetingAuthRoute('signin', returnToMeeting))}>Sign in</button></>
           )}
         </p>
         {mode === 'signin' && (
