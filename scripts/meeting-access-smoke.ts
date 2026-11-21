@@ -137,7 +137,7 @@ async function main() {
     assert(await join(guestBefore, `meeting-chat:${meetingId}`) === 'denied',
       'guessing the chat room cannot bypass RSVPs')
 
-    await db.rsvp.create({
+    const approvedRsvp = await db.rsvp.create({
       data: { eventId, userId: attendee.id, name: attendee.displayName, email: attendee.email,
         status: 'APPROVED', guests: 1, decidedAt: new Date(), decidedBy: pastor.id },
     })
@@ -210,6 +210,22 @@ async function main() {
     assert((await request('POST', `/meetings/${meetingId}/chat`, guest, {
       body: 'Group conversation continues after the event',
     })).status === 201, 'ended events retain access-controlled chat')
+
+    // Tickets/RSVPs may be revoked while a conversation is open. The private
+    // server socket must terminate independently of browser UI polling.
+    const revokedGuest = await connect(guest)
+    sockets.push(revokedGuest)
+    assert(await join(revokedGuest, `meeting-chat:${meetingId}`) === 'joined',
+      'approved attendee maintains chat access after the event')
+    const forcedDisconnect = new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('Stale chat socket survived revoked RSVP')), 8500)
+      revokedGuest.once('disconnect', () => { clearTimeout(timer); resolve() })
+    })
+    await db.rsvp.update({ where: { id: approvedRsvp.id }, data: { status: 'DECLINED' } })
+    await forcedDisconnect
+    assert((await request('GET', `/meetings/${meetingId}/chat`, guest)).status === 403,
+      'revoked RSVP loses access to durable group chat')
+    console.log('PASS revoked attendee was evicted from a pre-existing private chat socket')
     console.log('PASS: full interactive event meeting API + socket authorization smoke.')
   } finally {
     for (const socket of sockets) socket.disconnect()
