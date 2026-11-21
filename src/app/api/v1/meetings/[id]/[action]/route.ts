@@ -76,7 +76,7 @@ export async function POST(req: NextRequest, ctx: Context) {
       await rateLimit(req, 'meeting-sfu-token', 20, 60_000)
       if (mediaEngine !== 'sfu' || !configuredMeetingSfu()) throw errors.unavailable('SFU_NOT_READY', 'Scalable meeting media has not been enabled.')
       if (!canJoin || meeting.status !== 'LIVE') throw errors.forbidden('You do not have active meeting admission.')
-      const credentials = await createMeetingSfuToken(id, { id: user.id, displayName: user.displayName })
+      const credentials = await createMeetingSfuToken(id, { id: user.id, displayName: user.displayName }, meeting.screenShareEnabled)
       const response = jsonOk(credentials)
       response.headers.set('Cache-Control', 'private, no-store')
       return response
