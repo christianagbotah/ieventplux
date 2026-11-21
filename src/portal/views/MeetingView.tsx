@@ -17,7 +17,7 @@ import { usePortal } from '../store'
 type Meeting = {
   id: string; title: string; status: string; maxParticipants: number; chatEnabled: boolean;
   screenShareEnabled: boolean; startedAt: string | null; endedAt: string | null;
-  event: { id: string; title: string; slug: string; orgName: string }
+  event: { id: string; title: string; slug: string; status: string; orgName: string }
 }
 type MeetingDetail = {
   meeting: Meeting
@@ -480,7 +480,9 @@ export default function MeetingView({ id }: { id: string }) {
         <label className="min-w-[190px] flex-1 space-y-1 text-sm"><span className="font-medium">Meeting title</span><Input value={title} maxLength={120} onChange={(e) => setTitle(e.target.value)} /></label>
         <label className="w-32 space-y-1 text-sm"><span className="font-medium">Participants</span><select className="h-10 w-full rounded-lg border bg-background px-2" value={capacity} onChange={(e) => setCapacity(e.target.value)}>{[2,3,4,5,6].map((n) => <option value={n} key={n}>{n}</option>)}</select></label>
         <Button variant="outline" disabled={busy} onClick={() => void saveSettings()}>Save</Button>
-        <Button disabled={busy} onClick={() => void changeStatus('start')}><Play className="mr-2 size-4" /> Start meeting</Button>
+        {['PUBLISHED', 'LIVE'].includes(meeting.event.status)
+          ? <Button disabled={busy} onClick={() => void changeStatus('start')}><Play className="mr-2 size-4" /> Start meeting</Button>
+          : <p className="text-xs text-muted-foreground">Event completed; group discussion remains available.</p>}
       </CardContent></Card>}
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
