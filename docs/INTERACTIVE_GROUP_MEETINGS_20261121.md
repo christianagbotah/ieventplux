@@ -22,8 +22,11 @@ automatic transcript, AI interpretation or webinars at arbitrary scale are claim
 - Participants can join/leave, mute/unmute, toggle camera, share/stop sharing
   their screen where supported, see a peer roster and copy the room link.
   Screen-share capture automatically stops on browser sharing-end and leaving.
-- Chat is persisted in `MeetingMessage` and relayed only after a successful
-  authenticated API write; organizers can hide messages and see moderated rows.
+- **Event group chat stays available before, during and after the video call**
+  for approved attendees. It persists in `MeetingMessage`, is relayed only
+  after a successful authenticated API write, and refetches as a fallback when
+  the meeting socket is unavailable. Organizers can hide messages and see
+  moderated rows.
 - Host can remove a participant. A durable `MeetingBan` row blocks all
   reconnects until an organizer explicitly restores access. Trusted server
   eviction closes current socket connections immediately. Audit records apply
