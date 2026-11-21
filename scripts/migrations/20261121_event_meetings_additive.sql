@@ -38,4 +38,16 @@ CREATE TABLE IF NOT EXISTS "MeetingMessage" (
 
 CREATE INDEX IF NOT EXISTS "MeetingMessage_meetingId_createdAt_idx" ON "MeetingMessage"("meetingId", "createdAt");
 
+
+CREATE TABLE IF NOT EXISTS "MeetingBan" (
+  "meetingId" TEXT NOT NULL,
+  "userId" TEXT NOT NULL,
+  "removedById" TEXT NOT NULL,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "MeetingBan_pkey" PRIMARY KEY ("meetingId", "userId"),
+  CONSTRAINT "MeetingBan_meetingId_fkey" FOREIGN KEY ("meetingId") REFERENCES "EventMeeting"("id") ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT "MeetingBan_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE
+);
+CREATE INDEX IF NOT EXISTS "MeetingBan_userId_idx" ON "MeetingBan"("userId");
+
 COMMIT;
