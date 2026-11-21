@@ -137,12 +137,22 @@ async function main() {
     assert(await join(guestBefore, `meeting-chat:${meetingId}`) === 'denied',
       'guessing the chat room cannot bypass RSVPs')
 
-    const approvedRsvp = await db.rsvp.create({
-      data: { eventId, userId: attendee.id, name: attendee.displayName, email: attendee.email,
-        status: 'APPROVED', guests: 1, decidedAt: new Date(), decidedBy: pastor.id },
-    })
+    // Exercise the exact public journey a second user follows, rather than
+    // inserting an approved RSVP directly into the synthetic database.
+    const invite = await request('POST', `/meetings/${meetingId}/invite`, host, {})
+    assert(invite.status === 200 && typeof invite.data.link === 'string',
+      'organizer creates expiring free meeting guest invitation')
+    const code = String(invite.data.link).match(/^\/#\/invite\/(MTG[A-Z0-9]+)\?meeting=[A-Za-z0-9_-]+$/)?.[1]
+    assert(!!code, 'guest invitation points to authenticated event RSVP flow')
+    const invitationDetails = await request('GET', `/invitations/${code}`)
+    assert(invitationDetails.status === 200 && invitationDetails.data.invitation?.event?.id === eventId,
+      'guest invitation resolves to the correct published event')
+    const redeemed = await request('POST', `/invitations/${code}`, guest, { guests: 1 })
+    assert(redeemed.status === 200 && redeemed.data.approved === true && !!redeemed.data.rsvp?.id,
+      'second user redeems invitation and receives approved free-event RSVP')
+    const approvedRsvp = redeemed.data.rsvp
     assert((await request('GET', `/meetings/${meetingId}/detail`, guest)).status === 200,
-      'approved RSVP unlocks meeting details')
+      'redeemed RSVP unlocks meeting details')
     // A host-created free meeting invitation may approve an RSVP without
     // checkout. As soon as this event has priced tickets, that RSVP must
     // not grant paid-media access; the real API and Socket.IO must agree.
