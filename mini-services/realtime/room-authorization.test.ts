@@ -31,6 +31,17 @@ describe('private realtime room authorization', () => {
     expect(canJoinRoom(room, 'host123', { orgMember: true, liveMeeting: true })).toBe(true)
     expect(canJoinRoom(room, 'host123', { orgMember: true, liveMeeting: false })).toBe(false)
   })
+  test('event group chat remains private even before and after a video call', () => {
+    const room = parseRoomKey('meeting-chat:meeting0001')!
+    expect(room.kind).toBe('meeting-chat')
+    expect(canJoinRoom(room, null, { meetingChat: true, orgMember: true })).toBe(false)
+    expect(canJoinRoom(room, 'random123', { publicEvent: true, meetingChat: true })).toBe(false)
+    expect(canJoinRoom(room, 'guest123', { approvedRsvp: true, meetingChat: true })).toBe(true)
+    expect(canJoinRoom(room, 'guest123', { validTicket: true, meetingChat: true })).toBe(true)
+    expect(canJoinRoom(room, 'host123', { orgMember: true, meetingChat: true })).toBe(true)
+    expect(canJoinRoom(room, 'host123', { orgMember: true, liveMeeting: true, meetingChat: false })).toBe(false)
+    expect(parseRoomKey('meeting-chat:bad/id')).toBeNull()
+  })
   test('public event room supports visitors, invite-only room requires proof', () => {
     const room = parseRoomKey('event:event000123')!
     expect(canJoinRoom(room, null, {publicEvent:true})).toBe(true)
