@@ -237,7 +237,7 @@ export default function AppPortal() {
                 aria-current={activeNav(item.path) ? 'page' : undefined}
                 aria-label={item.label}
                 title={item.label}
-                className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-sm font-medium transition-colors ievx-press ${
+                className={`flex items-center gap-1.5 ievx-primary-nav-item rounded-xl px-3 py-2 text-sm font-semibold transition-colors ievx-press ${
                   activeNav(item.path) ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
                 }`}
               >
@@ -266,7 +266,7 @@ export default function AppPortal() {
                 type="search"
                 placeholder="Search events, organizers…"
                 aria-label="Search events"
-                className="h-9 w-full rounded-full border border-border bg-background pl-9 pr-4 text-sm outline-none transition-shadow focus:border-primary focus:ring-2 focus:ring-primary/20"
+                className="h-10 w-full rounded-xl border border-input bg-card pl-10 pr-4 text-sm outline-none shadow-sm transition-[border-color,box-shadow] hover:border-primary/35 focus-visible:border-primary focus-visible:ring-[3px] focus-visible:ring-primary/15"
               />
             </div>
           </form>
@@ -312,7 +312,7 @@ export default function AppPortal() {
                 </Button>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <button className="flex items-center gap-2 rounded-lg border border-border/70 bg-card p-1 pr-3 transition-colors hover:border-primary/30 ievx-press" aria-label="Account menu">
+                    <button className="flex items-center gap-2 rounded-xl border border-border/80 bg-card p-1 pr-3 shadow-sm transition-[border-color,background-color,box-shadow] hover:border-primary/35 hover:bg-secondary/30 hover:shadow-md ievx-press" aria-label="Account menu">
                       <Avatar className="h-8 w-8">
                         <AvatarFallback className="bg-primary/15 text-xs font-bold text-primary">{initials(user.displayName)}</AvatarFallback>
                       </Avatar>
@@ -416,7 +416,7 @@ export default function AppPortal() {
                 onClick={() => navigate(item.path)}
                 aria-current={active ? 'page' : undefined}
                 aria-label={item.label}
-                className={`flex min-h-12 min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-2xl px-1 py-1.5 text-[11px] font-semibold transition-colors ievx-press ${
+                className={`flex min-h-12 min-w-0 flex-1 flex-col items-center justify-center gap-1 ievx-mobile-nav-item rounded-2xl px-1 py-1.5 text-[11px] font-semibold transition-colors ievx-press ${
                   active ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
                 }`}
               >

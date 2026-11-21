@@ -66,6 +66,9 @@ jobs:
       - name: Security policy unit tests (payments, realtime, check-in and private KYC)
         run: bun test src/server/hubtel/security-policy.test.ts mini-services/realtime/room-authorization.test.ts src/portal/lib/checkin-policy.test.ts src/server/kyc-storage.test.ts src/server/kyc-requirements.test.ts
 
+      - name: Enterprise UI foundation (semantic controls, loading, labels and states)
+        run: bun test src/components/ui/ui-foundation.test.tsx
+
       - name: Authenticated group meeting, WebRTC presentation and production TURN safety
         run: bun test src/server/meeting-policy.test.ts src/server/meeting-turn-policy.test.ts src/server/meeting-sfu-policy.test.ts src/server/meeting-sfu-guard-policy.test.ts
 
