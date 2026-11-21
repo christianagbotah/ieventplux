@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { canJoinMeeting, meetingEventUsable, validMeetingCapacity, validMeetingSignal } from './meeting-policy'
+import { canJoinMeeting, meetingEventUsable, meetingEventCallOpen, validMeetingCapacity, validMeetingSignal } from './meeting-policy'
 
 describe('iEventPlux group meeting access', () => {
   const input = { roomStatus: 'LIVE', validEvent: true, signedIn: true, organizer: false, approvedRsvp: false, validTicket: false }
@@ -15,6 +15,9 @@ describe('iEventPlux group meeting access', () => {
   test('does not allow cancelled, draft, deleted or suspended event content', () => {
     const evt = { status: 'PUBLISHED', deletedAt: null, org: { status: 'ACTIVE', deletedAt: null } }
     expect(meetingEventUsable(evt)).toBe(true)
+    expect(meetingEventUsable({ ...evt, status: 'ENDED' })).toBe(true)
+    expect(meetingEventCallOpen(evt)).toBe(true)
+    expect(meetingEventCallOpen({ ...evt, status: 'ENDED' })).toBe(false)
     expect(meetingEventUsable({ ...evt, status: 'CANCELLED' })).toBe(false)
     expect(meetingEventUsable({ ...evt, org: { ...evt.org, status: 'SUSPENDED' } })).toBe(false)
     expect(meetingEventUsable({ ...evt, deletedAt: new Date() })).toBe(false)
