@@ -20,6 +20,13 @@ describe('souvenir scanner accepts only internal collection credentials', () => 
       expect(parseSouvenirScan(bad, origin)).toBeNull()
     }
   })
+  test('rejects invisible Unicode and bidirectional control characters in QR input', () => {
+    for (const hidden of ['\u200b', '\u200e', '\u200f', '\u202e', '\u2060', '\u2066', '\u2069', '\ufeff']) {
+      expect(parseSouvenirScan(token + hidden, origin)).toBeNull()
+      expect(parseSouvenirScan(`${origin}/#/collect/${token}${hidden}`, origin)).toBeNull()
+      expect(parseSouvenirScan(`ORD-ABC${hidden}DEFGH`, origin)).toBeNull()
+    }
+  })
   test('rejects origin confusion, userinfo, ports, paths and query-bearing collection links', () => {
     for (const bad of [
       `https://ieventplux.lightworldtech.com@attacker.example/#/collect/${token}`,

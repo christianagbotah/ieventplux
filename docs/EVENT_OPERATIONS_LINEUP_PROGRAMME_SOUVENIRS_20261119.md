@@ -113,3 +113,7 @@ The authenticated merchandise handover HTTP QA now checks a forged QR token with
 - 2026-11-21: The isolated merchandise QA database guard additionally rejects non-PostgreSQL URL schemes and URL-level host overrides before opening synthetic test fixtures; this is a defence-in-depth check, not provider-backed staging certification.
 
 - 2026-11-21 QA isolation hardening: reject duplicate PostgreSQL `schema` parameters and connection `options` overrides before synthetic fixtures can be created. This is a test guard only, not evidence of payment-provider staging acceptance.
+
+### 21 November — Unicode QR credential hardening
+
+Staff souvenir QR parsing now rejects invisible Unicode format characters and bidirectional controls (including zero-width, BOM and direction override/isolate characters) before URL parsing or printed-reference normalization. This prevents visually deceptive scanned credentials from being silently accepted. A dedicated regression test covers raw tokens, HTTPS collection links and printed references. This is parser hardening only; it does not establish authenticated collection, database replay safety, provider settlement or production activation readiness. Keep merchandise charging and fulfilment disabled.

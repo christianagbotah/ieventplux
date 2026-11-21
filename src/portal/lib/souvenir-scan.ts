@@ -7,7 +7,7 @@ const REFERENCE = /^ORD-[A-Z0-9-]{6,52}$/i
 export function parseSouvenirScan(value: string, allowedOrigin: string): SouvenirScan | null {
   // QR credentials must be a single printable line. Do not let trimming or
   // URL parsing silently normalize control characters in scanned input.
-  if (/[\x00-\x1f\x7f]/.test(value)) return null
+  if (/[\x00-\x1f\x7f\u200b-\u200f\u202a-\u202e\u2060\u2066-\u2069\ufeff]/u.test(value)) return null
   const text = value.trim()
   if (!text || text.length > 900) return null
   if (TOKEN.test(text)) return { type: 'token', token: text }
