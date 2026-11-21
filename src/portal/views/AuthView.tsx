@@ -300,15 +300,9 @@ export default function AuthView({ mode }: { mode: 'signin' | 'register' }) {
               <span>Send me event updates and offers by SMS (transactional messages like tickets are always sent; you can unsubscribe anytime).</span>
             </label>
           )}
-          <button
-            type="submit"
-            className="efx-neon-pulse-button"
-            style={{ width: '100%', ...(busy ? { opacity: 0.6, cursor: 'not-allowed', animation: 'none' } : {}) }}
-            disabled={busy}
-          >
-            {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
-            {mode === 'signin' ? 'Sign in' : 'Create account'}
-          </button>
+          <Button type="submit" size="lg" variant="premium" className="w-full" loading={busy}>
+            {mode === 'signin' ? 'Sign in securely' : 'Create account'}
+          </Button>
         </form>
         <p className="mt-4 text-center text-sm text-muted-foreground">
           {mode === 'signin' ? (
