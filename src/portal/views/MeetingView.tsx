@@ -274,7 +274,19 @@ export default function MeetingView({ id }: { id: string }) {
         setNotice('The organizer has ended the meeting.')
       })
       realtime.on('connect_error', () => setNotice('Meeting signaling is offline. Check your connection and try reconnecting.'))
-      realtime.on('disconnect', () => { if (active.current) setNotice('Connection to the meeting was interrupted. Reconnecting…') })
+      realtime.on('disconnect', () => {
+        if (!active.current) return
+        // A fresh socket ID needs fresh WebRTC peer connections and signaling.
+        // Stale tracks/peer IDs cannot be reused after reconnect.
+        connections.current.forEach(({ pc }) => pc.close())
+        connections.current.clear()
+        remoteStreams.current.clear()
+        names.current.clear()
+        identities.current.clear()
+        setPeers([])
+        setJoined(false)
+        setNotice('Meeting connection interrupted. Reconnecting and negotiating again…')
+      })
     } catch {
       leave()
       setBusy(false)
