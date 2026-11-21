@@ -20,7 +20,7 @@ Scope: existing iEventPlux testing website `https://ieventplux.lightworldtech.co
 - Price and currency integrity retained: checkout supports free tickets and paid Ghana cedi tickets only where backed by configured payment settlement. No unsupported USD/EUR payment promises.
 
 ## Verification
-- Unit tests: the pre-existing quote policy, new mixed free/paid basket policy, datetime validation and enterprise UI foundation.
+- Unit tests: the pre-existing quote policy, new mixed free/paid basket policy, datetime validation and enterprise UI foundation. Includes a regression for the Radix `Button asChild` single-element rule, which previously crashed real event detail pages on the calendar button.
 - TypeScript, targeted ESLint, comprehensive CI web/mobile/production build and isolated Next.js production release.
 - Real browser check at 360px / 390px / 768px / 1440px including document overflow, accessible checkout labels, keyboard focus, and booking modal behavior when public tickets are available. Never create a real order or charge funds as part of a visual QA.
 - Deploy only the verified source revision to the existing public testing hostname, while retaining the prior web drop-in for rollback. Do not restart or redeploy realtime, media, payment providers, or mutate customer data.

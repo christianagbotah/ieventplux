@@ -20,6 +20,16 @@ describe('iEventPlux enterprise UI foundation', () => {
     expect(html).toContain('Host meeting')
   })
 
+  test('asChild forwards precisely one child without triggering React.Children.only', () => {
+    const html = render(React.createElement(Button, { asChild: true, variant: 'outline', size: 'icon', 'aria-label': 'Add to calendar' },
+      React.createElement('a', { href: '/calendar.ics', download: true }, 'Calendar')))
+    expect(html).toContain('<a ')
+    expect(html).toContain('href="/calendar.ics"')
+    expect(html).toContain('data-slot="button"')
+    expect(html).toContain('Calendar</a>')
+    expect(html).not.toContain('<button')
+  })
+
   test('an asynchronous action announces busy state and disables repeated submits', () => {
     const html = render(React.createElement(Button, { loading: true, type: 'submit' }, 'Publish event'))
     expect(html).toContain('aria-busy="true"')
