@@ -29,11 +29,8 @@ bps-capacity=30000000
 max-bps=4000000
 
 # The pilot deliberately disables TLS until the TURN certificate is ready.
-# For production remove these toggles and configure cert/pkey paths.
+# For production replace no-tls with trusted TLS certificate/key configuration.\n# Coturn 4.18 disables management CLI by default; do not set deprecated no-cli.\n# Loopback peers are forbidden by default and explicitly denied below.
 no-tls
-no-dtls
-no-cli
-no-loopback-peers
 no-multicast-peers
 no-tcp-relay
 
