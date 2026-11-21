@@ -29,7 +29,7 @@ type ChatRow = {
   id: string; body: string; status: string; createdAt: string
   user: { id: string; displayName: string; avatarUrl: string | null }
 }
-type Peer = { id: string; userId: string; name: string; stream: MediaStream | null; state: string }
+type Peer = { id: string; userId: string; name: string; stream: MediaStream | null; state: string; sharing: boolean }
 type Signal = { from: string; kind: 'offer' | 'answer' | 'candidate'; sdp?: string; candidate?: RTCIceCandidateInit }
 type PeerConnection = { pc: RTCPeerConnection; pendingCandidates: RTCIceCandidateInit[] }
 const VIDEO_ERRORS = 'Media permissions or browser restrictions prevented camera/microphone access. You can still join for chat or receive other participants.'
@@ -78,6 +78,7 @@ export default function MeetingView({ id }: { id: string }) {
   const screen = useRef<MediaStream | null>(null)
   const names = useRef(new Map<string, string>())
   const identities = useRef(new Map<string, string>())
+  const peerSharing = useRef(new Map<string, boolean>())
   const remoteStreams = useRef(new Map<string, MediaStream>())
   const active = useRef(false)
   const chatEnd = useRef<HTMLDivElement>(null)
@@ -94,6 +95,7 @@ export default function MeetingView({ id }: { id: string }) {
     remoteStreams.current.clear()
     names.current.clear()
     identities.current.clear()
+    peerSharing.current.clear()
     screen.current?.getTracks().forEach((track) => track.stop())
     screen.current = null
     media.current?.getTracks().forEach((track) => track.stop())
@@ -200,10 +202,11 @@ export default function MeetingView({ id }: { id: string }) {
   const syncPeer = (peerId: string, stream: MediaStream | null, state = 'connecting') => {
     const name = names.current.get(peerId) ?? 'Participant'
     const userId = identities.current.get(peerId) ?? ''
+    const sharing = peerSharing.current.get(peerId) ?? false
     setPeers((old) => {
       const current = old.find((row) => row.id === peerId)
-      return current ? old.map((row) => row.id === peerId ? { ...row, name, userId, stream: stream ?? row.stream, state } : row)
-        : [...old, { id: peerId, userId, name, stream, state }]
+      return current ? old.map((row) => row.id === peerId ? { ...row, name, userId, sharing, stream: stream ?? row.stream, state } : row)
+        : [...old, { id: peerId, userId, name, stream, state, sharing }]
     })
   }
 
@@ -218,6 +221,7 @@ export default function MeetingView({ id }: { id: string }) {
     const shared = screen.current
     screen.current = null
     setSharing(false)
+    socket.current?.emit('meeting:screen', { sharing: false })
     const camera = media.current?.getVideoTracks()[0] ?? null
     await replaceTrack('video', camera?.enabled ? camera : null)
     shared?.getTracks().forEach((track) => track.stop())
@@ -311,6 +315,9 @@ export default function MeetingView({ id }: { id: string }) {
         if (msg.room === `meeting:${id}`) {
           admitted = true
           if (joinTimeout.current) { clearTimeout(joinTimeout.current); joinTimeout.current = null }
+          if (screen.current?.getVideoTracks()[0]?.readyState === 'live') {
+            realtime.emit('meeting:screen', { sharing: true })
+          }
           setJoined(true); setBusy(false)
         }
       })
@@ -321,12 +328,13 @@ export default function MeetingView({ id }: { id: string }) {
           : msg.code === 'MEETING_ENDED' ? 'The organizer has ended this meeting.'
             : 'Meeting access was denied. Check your event ticket, RSVP, or organizer permission.')
       })
-      realtime.on('meeting:peers', (payload: { peers: { peerId: string; userId: string; name: string }[] }) => {
+      realtime.on('meeting:peers', (payload: { peers: { peerId: string; userId: string; name: string; sharing?: boolean }[] }) => {
         if (!active.current) return
         void (async () => {
           for (const peer of payload.peers) {
             names.current.set(peer.peerId, peer.name)
             identities.current.set(peer.peerId, peer.userId)
+            peerSharing.current.set(peer.peerId, Boolean(peer.sharing))
             const { pc } = await createPeer(peer.peerId)
             const offer = await pc.createOffer()
             await pc.setLocalDescription(offer)
@@ -334,9 +342,10 @@ export default function MeetingView({ id }: { id: string }) {
           }
         })().catch(() => setNotice('Connection setup failed. Try leaving and rejoining.'))
       })
-      realtime.on('meeting:peer-joined', (peer: { peerId: string; userId: string; name: string }) => {
+      realtime.on('meeting:peer-joined', (peer: { peerId: string; userId: string; name: string; sharing?: boolean }) => {
         names.current.set(peer.peerId, peer.name)
         identities.current.set(peer.peerId, peer.userId)
+        peerSharing.current.set(peer.peerId, Boolean(peer.sharing))
         syncPeer(peer.peerId, null)
       })
       realtime.on('meeting:peer-left', (peer: { peerId: string }) => {
@@ -344,10 +353,17 @@ export default function MeetingView({ id }: { id: string }) {
         connections.current.delete(peer.peerId)
         names.current.delete(peer.peerId)
         identities.current.delete(peer.peerId)
+        peerSharing.current.delete(peer.peerId)
         remoteStreams.current.delete(peer.peerId)
         setPeers((old) => old.filter((row) => row.id !== peer.peerId))
       })
       realtime.on('meeting:signal', (signal: Signal) => { void handleSignal(signal) })
+      realtime.on('meeting:screen', (update: { peerId: string; sharing: boolean }) => {
+        if (typeof update?.peerId !== 'string' || typeof update.sharing !== 'boolean') return
+        peerSharing.current.set(update.peerId, update.sharing)
+        setPeers((prev) => prev.map((peer) => peer.id === update.peerId
+          ? { ...peer, sharing: update.sharing } : peer))
+      })
       realtime.on('meeting:chat', (row: ChatRow) => {
         setMessages((old) => old.some((item) => item.id === row.id) ? old : [...old.slice(-99), row])
       })
@@ -373,6 +389,7 @@ export default function MeetingView({ id }: { id: string }) {
         remoteStreams.current.clear()
         names.current.clear()
         identities.current.clear()
+        peerSharing.current.clear()
         setPeers([])
         setJoined(false)
         setNotice('Meeting connection interrupted. Reconnecting and negotiating again…')
@@ -424,6 +441,7 @@ export default function MeetingView({ id }: { id: string }) {
       if (!track) return
       screen.current = shared
       setSharing(true)
+      socket.current?.emit('meeting:screen', { sharing: true })
       track.onended = () => { void restoreCamera() }
       await replaceTrack('video', track)
     } catch { setNotice('Screen selection was cancelled or not permitted. Nothing is being shared.') }
@@ -548,8 +566,8 @@ export default function MeetingView({ id }: { id: string }) {
           <div className="grid auto-rows-fr gap-3 sm:grid-cols-2">
             {joined ? <>
               <VideoTile name={user?.displayName || 'You'} stream={screen.current || media.current} local sharing={sharing} />
-              {peers.map((peer) => <div key={peer.id} className="space-y-1">
-                <VideoTile name={peer.name} stream={peer.stream} />
+              {peers.map((peer) => <div key={peer.id} className={peer.sharing ? 'col-span-full space-y-1' : 'space-y-1'}>
+                <VideoTile name={peer.name} stream={peer.stream} sharing={peer.sharing} />
                 {data?.access.canManage && peer.userId !== user?.id && <button type="button"
                   className="w-full rounded-lg border border-destructive/30 px-2 py-1.5 text-xs text-destructive hover:bg-destructive/10"
                   onClick={() => void removeParticipant(peer)}>Remove participant</button>}
