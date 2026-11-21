@@ -14,7 +14,12 @@ export function meetingEventUsable(event: {
   status: string; deletedAt: Date | null; org: { status: string; deletedAt: Date | null }
 }): boolean {
   return !event.deletedAt && !event.org.deletedAt && event.org.status === 'ACTIVE'
-    && ['PUBLISHED', 'LIVE'].includes(event.status)
+    && ['PUBLISHED', 'LIVE', 'ENDED'].includes(event.status)
+}
+
+/** Group chat survives an event ending, but new audio/video calls may not. */
+export function meetingEventCallOpen(event: { status: string }): boolean {
+  return event.status === 'PUBLISHED' || event.status === 'LIVE'
 }
 
 export function canJoinMeeting(input: {
