@@ -17,7 +17,7 @@ export interface RoomEvidence {
   meetingChat?: boolean
 }
 export function parseRoomKey(value: unknown): RoomKey | null {
-  if (typeof value !== 'string' || value.length > 90) return null
+  if (typeof value !== 'string' || value.length > 93) return null
   const match = /^(user|broadcast|event|meeting|meeting-chat):([A-Za-z0-9_-]{8,80})$/.exec(value)
   return match ? { kind: match[1] as RoomType, id: match[2] } : null
 }
