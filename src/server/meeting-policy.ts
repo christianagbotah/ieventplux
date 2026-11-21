@@ -58,3 +58,12 @@ export function validMeetingSignal(value: unknown): value is MeetingSignal {
   }
   return false
 }
+
+/** Browser screen-share status is an ephemeral presentation hint, not a media
+ * permission or authorization token. Reject malformed signaling inputs. */
+export function validMeetingScreenUpdate(value: unknown): value is { sharing: boolean } {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const fields = Object.keys(value)
+  return fields.length === 1 && fields[0] === 'sharing' &&
+    typeof (value as { sharing: unknown }).sharing === 'boolean'
+}
