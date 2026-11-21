@@ -106,7 +106,9 @@ export async function POST(req: NextRequest, ctx: Context) {
     }
     if (action === 'chat') {
       await rateLimit(req, 'meeting-chat', 15, 60_000)
-      if (!canJoin || !meeting.chatEnabled) throw errors.conflict('Chat is available to participants only while the room is live.')
+      // The event group chat remains available to approved attendees before
+      // and after a call. Video admission is separately restricted to LIVE.
+      if (!meeting.chatEnabled) throw errors.conflict('The event organizer has disabled group chat.')
       const text = sanitizeText(body.body, MEETING_MAX_MESSAGE)
       if (!text.trim()) throw errors.badRequest('Write a message before sending.')
       const record = await db.meetingMessage.create({
