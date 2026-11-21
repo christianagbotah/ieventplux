@@ -113,7 +113,7 @@ jobs:
         run: |
           (IEVENTPLUX_GROUP_MEETINGS_ENABLED=true bun run dev > dev.log 2>&1 &)
           (cd mini-services/worker && bun install && (bun run dev > worker.log 2>&1 &))
-          (cd mini-services/realtime && bun install && (IEVENTPLUX_GROUP_MEETINGS_ENABLED=true bun run dev > realtime.log 2>&1 &))
+          (cd mini-services/realtime && bun install && (IEVENTPLUX_GROUP_MEETINGS_ENABLED=true IEVENTPLUX_TEST_SHORT_MEETING_RECHECK=true bun run dev > realtime.log 2>&1 &))
           for i in $(seq 1 40); do
             curl -sf http://localhost:3000/api/v1/health > /dev/null && curl -sf http://localhost:3001/health > /dev/null && curl -sf http://localhost:3003/health > /dev/null && break
             sleep 3
