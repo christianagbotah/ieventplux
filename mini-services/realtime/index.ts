@@ -46,6 +46,20 @@ const httpServer = createServer((req, res) => {
       try {
         const parsed = JSON.parse(body) as { room: string; event: string; payload: unknown }
         io.to(parsed.room).emit(parsed.event, parsed.payload)
+        // Host-initiated removal is enforced at the relay itself. The durable
+        // ban prevents the removed participant from reconnecting.
+        if (parsed.event === 'meeting:remove' && parseRoomKey(parsed.room)?.kind === 'meeting') {
+          const removedId = (parsed.payload as { userId?: unknown } | null)?.userId
+          if (typeof removedId === 'string') {
+            for (const peerId of io.sockets.adapter.rooms.get(parsed.room) ?? []) {
+              const peer = io.sockets.sockets.get(peerId)
+              if (peer?.data.meetingUserId === removedId) {
+                peer.emit('meeting:removed', { message: 'The host has removed your meeting access.' })
+                peer.disconnect(true)
+              }
+            }
+          }
+        }
         // Host stop must revoke ongoing signaling and clear attendance. A
         // visitor cannot continue an ended meeting using an old socket.
         if (parsed.event === 'meeting:ended' && parseRoomKey(parsed.room)?.kind === 'meeting') {
@@ -129,7 +143,7 @@ io.on('connection', (socket) => {
         return
       }
       if (joinedRoom === room) return // do not inflate presence on duplicate joins
-      let existingPeers: { peerId: string; name: string }[] = []
+      let existingPeers: { peerId: string; name: string; userId: string }[] = []
       if (room!.startsWith('meeting:')) {
         const meeting = await db.eventMeeting.findUnique({
           where: { id: room!.slice('meeting:'.length) },
@@ -141,7 +155,7 @@ io.on('connection', (socket) => {
         }
         existingPeers = [...(io.sockets.adapter.rooms.get(room!) ?? [])].map((id) => {
           const peer = io.sockets.sockets.get(id)
-          return { peerId: id, name: String(peer?.data.meetingName ?? 'Participant') }
+          return { peerId: id, name: String(peer?.data.meetingName ?? 'Participant'), userId: String(peer?.data.meetingUserId ?? '') }
         })
         if (existingPeers.length >= meeting.maxParticipants) {
           socket.emit('room:denied', { code: 'ROOM_FULL' })
@@ -154,6 +168,18 @@ io.on('connection', (socket) => {
         }
         const member = await db.user.findUnique({ where: { id: identity }, select: { displayName: true } })
         socket.data.meetingName = (member?.displayName || 'Participant').slice(0, 70)
+        socket.data.meetingUserId = identity
+        // Recount at the final synchronous join boundary: simultaneous joins
+        // must never exceed the host's published small-room capacity.
+        const latest = [...(io.sockets.adapter.rooms.get(room!) ?? [])]
+        if (latest.length >= meeting.maxParticipants) {
+          socket.emit('room:denied', { code: 'ROOM_FULL' })
+          return
+        }
+        existingPeers = latest.map((id) => {
+          const peer = io.sockets.sockets.get(id)
+          return { peerId: id, name: String(peer?.data.meetingName ?? 'Participant'), userId: String(peer?.data.meetingUserId ?? '') }
+        })
       }
       if (joinedRoom) {
         notifyMeetingDeparture(joinedRoom)
@@ -169,7 +195,7 @@ io.on('connection', (socket) => {
       if (room!.startsWith('meeting:')) {
         socket.emit('meeting:peers', { peers: existingPeers, selfId: socket.id })
         socket.to(room!).emit('meeting:peer-joined', {
-          peerId: socket.id, name: String(socket.data.meetingName ?? 'Participant'),
+          peerId: socket.id, name: String(socket.data.meetingName ?? 'Participant'), userId: String(socket.data.meetingUserId ?? ''),
         })
       }
     } catch (error) {
