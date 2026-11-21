@@ -93,3 +93,7 @@ The isolated concurrency harness now queries `current_database()` and `current_s
 ### Release B QA hardening — 20 November 2026 (competing pickup outcome)
 
 The isolated PostgreSQL final-unit pickup race now asserts **one committed collection and one rejected competing request**, not merely one successful collection. This prevents an implementation from silently acknowledging a second, distinct staff action while leaving the stock and audit counters unchanged. The existing single collection row, stock count, and ticket/merchandise separation assertions remain mandatory. This is an additional test assertion only; it does not constitute executed scratch-database acceptance, payment-provider reconciliation, mobile camera sign-off, or permission to enable charging/fulfilment.
+
+### Isolated expiry QA fixture correction (21 November 2026)
+
+The synthetic expiry test now backdates both the parent order and its inventory-reservation deadlines. The expiry worker selects expired reservation records, so changing only the order timestamp did not actually exercise the intended release path. This fixture change is **not** evidence that scratch-PostgreSQL concurrency, real payment or refund QA has passed; merchandise charging and collection remain gated.

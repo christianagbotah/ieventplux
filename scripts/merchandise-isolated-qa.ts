@@ -206,7 +206,10 @@ async function main() {
   console.log('PASS: competing simultaneous checkouts cannot sell the last cap twice')
 
   const heldOrder = await db.order.findUniqueOrThrow({ where: { reference: (success[0] as PromiseFulfilledResult<Awaited<ReturnType<typeof createOrder>>>).value.orderReference } })
-  await db.order.update({ where: { id: heldOrder.id }, data: { expiresAt: new Date(Date.now() - 60_000) } })
+  const expiredAt = new Date(Date.now() - 60_000)
+  await db.order.update({ where: { id: heldOrder.id }, data: { expiresAt: expiredAt } })
+  // Expiry sweeps select reservation deadlines, not merely the parent order deadline.
+  await db.inventoryReservation.updateMany({ where: { orderId: heldOrder.id }, data: { expiresAt: expiredAt } })
   const expiry = await releaseExpiredReservations()
   assert.ok(expiry.released >= 1)
   assert.equal((await db.eventSouvenirProduct.findUniqueOrThrow({ where: { id: cap.id } })).stockReserved, 0)
