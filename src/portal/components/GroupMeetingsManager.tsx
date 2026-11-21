@@ -20,7 +20,7 @@ export function GroupMeetingsManager({ orgId }: { orgId: string }) {
       const result = await api.get<{ items: EventOption[] }>(
         `/events?mine=1&orgId=${encodeURIComponent(orgId)}&status=ALL&pageSize=50`,
       )
-      const valid = result.items.filter((evt) => ['PUBLISHED', 'LIVE'].includes(evt.status))
+      const valid = result.items.filter((evt) => ['PUBLISHED', 'LIVE', 'ENDED'].includes(evt.status))
       setEvents(valid)
       setSelected((old) => valid.some((evt) => evt.id === old) ? old : (valid[0]?.id ?? ''))
       setError('')
