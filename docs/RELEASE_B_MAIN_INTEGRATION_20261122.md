@@ -15,3 +15,7 @@ Scope: merge main `3a5d5dd` into the isolated merchandise checkout PR #23 branch
 Focused souvenir, scanner, attendee, admission and ticket-selection tests passed locally; TypeScript must pass before this merge is accepted. GitHub Actions exact-head CI, isolated scratch-DB concurrency, verified pre-migration backup and additive migration rehearsal, authenticated API authorization, real payment-provider reconciliation/refunds, and physical Android/iOS HTTPS QR review/collection remain outstanding. No production database change, live payment, fulfilment toggle or production deployment is authorized by this integration.
 
 Shared VPS storage was 85% used, ~49 GB free; no Next.js build or package installation was performed here. Follow issue #42 for source-light CI artifacts and rollback verification. Keep UX PR #46 isolated and subject to review.
+
+## 22 November: isolated QA destination hardening
+
+The synthetic merchandise reservation QA and physical-return HTTP QA now call the common database isolation guard before their first fixture/query. That guard verifies both a disposable loopback PostgreSQL database name and the actual connected session schema. A new CI regression test checks that missing, remote, production-named, wrong-schema, duplicate-schema and PostgreSQL host/options override URLs are refused before the database client is imported. This does not replace a real scratch-database run or authorize payment/collection flags in production.

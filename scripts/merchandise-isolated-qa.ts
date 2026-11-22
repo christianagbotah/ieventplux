@@ -8,6 +8,7 @@
  */
 import { strict as assert } from 'node:assert'
 import { randomUUID } from 'node:crypto'
+import { requireIsolatedMerchandiseQaDatabase } from './merchandise-qa-db-guard'
 import { db } from '../src/lib/db'
 import { createOrder, releaseExpiredReservations } from '../src/server/services/ordering'
 import { fulfilPaidOrder, fulfilFreeOrder } from '../src/server/services/fulfilment'
@@ -28,6 +29,7 @@ const buyerEmail = `qa-buyer-${tag}@example.invalid`
 const qty = (id: string, amount: number) => [{ productId: id, qty: amount }]
 
 async function main() {
+  await requireIsolatedMerchandiseQaDatabase()
   // Verify the actual PostgreSQL session identity before creating any fixtures.
   // A URL query parameter alone does not prove Prisma selected the intended schema.
   const [identity] = await db.$queryRaw<Array<{ database_name: string; schema_name: string }>>`

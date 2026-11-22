@@ -3,6 +3,7 @@
  * real refund, stock reversal, ticket admission or communication. */
 import { strict as assert } from 'node:assert'
 import { randomUUID } from 'node:crypto'
+import { requireIsolatedMerchandiseQaDatabase } from './merchandise-qa-db-guard'
 import { db } from '../src/lib/db'
 import { createSession, SESSION_COOKIE } from '../src/server/auth'
 
@@ -12,6 +13,7 @@ assert.equal(process.env.IEVENTPLUX_SOUVENIR_COLLECTION_ENABLED, '1')
 assert.equal(process.env.IEVENTPLUX_SOUVENIR_CHECKOUT_ENABLED, '1')
 const base = 'http://127.0.0.1:3179'
 async function main() {
+  await requireIsolatedMerchandiseQaDatabase()
   const item = await db.souvenirOrderItem.findFirst({
     where: { collectedQty: { gte: 2 }, holdStatus: 'CONSUMED', order: { status: 'PAID', event: { slug: { startsWith: 'merch-qa-event-' } } }, returnIntakes: { none: {} } },
     select: { id: true, collectedQty: true, productId: true, order: { select: { id: true, orgId: true, eventId: true, status: true } } },

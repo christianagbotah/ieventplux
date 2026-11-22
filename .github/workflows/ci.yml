@@ -66,6 +66,9 @@ jobs:
       - name: Security policy unit tests (payments, realtime, check-in and private KYC)
         run: bun test src/server/hubtel/security-policy.test.ts mini-services/realtime/room-authorization.test.ts src/portal/lib/checkin-policy.test.ts src/server/kyc-storage.test.ts src/server/kyc-requirements.test.ts
 
+      - name: Isolated merchandise QA database fail-closed destination checks
+        run: bun test scripts/merchandise-qa-db-guard.test.ts
+
       - name: Souvenir QR, inventory, refund and physical return safety policies
         run: bun test src/server/souvenir-policy.test.ts src/server/souvenir-refund-policy.test.ts src/server/souvenir-return-policy.test.ts src/portal/lib/souvenir-scan.test.ts
 

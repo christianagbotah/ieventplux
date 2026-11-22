@@ -1,0 +1,28 @@
+import { describe, expect, test } from 'bun:test'
+import { requireIsolatedMerchandiseQaDatabase } from './merchandise-qa-db-guard'
+
+describe('synthetic merchandise QA refuses unsafe database destinations before connecting', () => {
+  const original = process.env.DATABASE_URL
+  const rejected = [
+    undefined,
+    'file:/tmp/qa.db',
+    'postgresql://user:password@production.example.com/ieventplux_qa?schema=ieventplux_merch_qa_20261119',
+    'postgresql://user:password@127.0.0.1/ieventplux?schema=ieventplux_merch_qa_20261119',
+    'postgresql://user:password@127.0.0.1/ieventplux_qa?schema=public',
+    'postgresql://user:password@127.0.0.1/ieventplux_qa?schema=ieventplux_merch_qa_20261119&host=production.example.com',
+    'postgresql://user:password@127.0.0.1/ieventplux_qa?schema=ieventplux_merch_qa_20261119&options=-c%20search_path%3Dpublic',
+    'postgresql://user:password@127.0.0.1/ieventplux_qa?schema=ieventplux_merch_qa_20261119&schema=public',
+  ]
+  test('rejects missing, live, remote and connection-option bypass URLs', async () => {
+    try {
+      for (const url of rejected) {
+        if (url === undefined) delete process.env.DATABASE_URL
+        else process.env.DATABASE_URL = url
+        await expect(requireIsolatedMerchandiseQaDatabase()).rejects.toThrow()
+      }
+    } finally {
+      if (original === undefined) delete process.env.DATABASE_URL
+      else process.env.DATABASE_URL = original
+    }
+  })
+})
