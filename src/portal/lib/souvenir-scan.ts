@@ -10,6 +10,9 @@ export function parseSouvenirScan(value: string, allowedOrigin: string): Souveni
   // Issued tokens, receipt references and collection URLs use ASCII only.
   // Reject all non-ASCII input rather than maintaining a partial Unicode
   // invisibility denylist that misses soft hyphens and combining marks.
+  // Camera/clipboard integrations are external inputs; malformed payloads
+  // must not crash the staff review screen at runtime.
+  if (typeof value !== 'string' || typeof allowedOrigin !== 'string') return null
   if (/[^\x20-\x7e]/.test(value)) return null
   const text = value.trim()
   if (!text || text.length > 900) return null

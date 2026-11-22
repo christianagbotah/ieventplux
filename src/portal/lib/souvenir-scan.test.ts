@@ -5,6 +5,13 @@ const origin = 'https://ieventplux.lightworldtech.com'
 const token = 'ORD-ABCDEFGH.' + 'a'.repeat(32)
 
 describe('souvenir scanner accepts only internal collection credentials', () => {
+  test('fails closed for malformed camera or configuration payloads', () => {
+    for (const bad of [null, undefined, 123, {}, [], true]) {
+      expect(parseSouvenirScan(bad as unknown as string, origin)).toBeNull()
+    }
+    expect(parseSouvenirScan(token, null as unknown as string)).toBeNull()
+    expect(parseSouvenirScan(token, {} as unknown as string)).toBeNull()
+  })
   test('accepts raw QR token and exact-origin collection URL', () => {
     expect(parseSouvenirScan(token, origin)).toEqual({ type: 'token', token })
     expect(parseSouvenirScan(`${origin}/#/collect/${token}`, origin)).toEqual({ type: 'token', token })
