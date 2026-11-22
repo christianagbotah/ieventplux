@@ -627,17 +627,23 @@ export default function EventDetail({ slug }: { slug: string }) {
 
               {!!event.contributors?.length && (
                 <Card className="rounded-2xl" id="lineup">
-                  <CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-base"><Mic2 className="size-4 text-primary" /> Artists, invited guests & speakers</CardTitle></CardHeader>
+                  <CardHeader className="pb-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <CardTitle className="flex items-center gap-2 text-base"><Mic2 className="size-4 text-primary" /> Artists, invited guests &amp; speakers</CardTitle>
+                      <Badge variant="secondary">{event.contributors.length} listed</Badge>
+                    </div>
+                    <p className="text-xs leading-relaxed text-muted-foreground">Meet the people appearing at this event and explore their roles, topics and scheduled appearances.</p>
+                  </CardHeader>
                   <CardContent className="grid gap-3 sm:grid-cols-2">
                     {event.contributors.map((person) => (
-                      <article key={person.id} className="grid min-w-0 grid-cols-[64px_minmax(0,1fr)] gap-x-3 gap-y-2 rounded-xl border border-border/70 bg-secondary/20 p-3">
+                      <article key={person.id} className="grid min-w-0 grid-cols-[64px_minmax(0,1fr)] gap-x-3 gap-y-2 rounded-2xl border border-border/70 bg-card p-3.5 shadow-[0_2px_10px_rgb(16_35_51_/_0.035)] transition-[border-color,box-shadow] hover:border-primary/25 hover:shadow-sm">
                         <OrganizerEventCover src={person.photoUrl} title={person.name} />
                         <div className="min-w-0 self-center">
                           <h3 className="text-sm font-bold leading-snug [overflow-wrap:break-word]">{person.name}</h3>
                           <p className="mt-1 text-xs font-medium text-primary">{({ HEADLINER: 'Headline artist', ARTIST: 'Performer', MAIN_SPEAKER: 'Main speaker', ASSISTANT_SPEAKER: 'Assistant speaker', GUEST_SPEAKER: 'Invited speaker', SPECIAL_GUEST: 'Special guest', PANELIST: 'Panelist', MC: 'Master of ceremonies', DJ: 'DJ', HOST: 'Host' } as Record<string, string>)[person.role] ?? humanize(person.role)}</p>
                         </div>
                         {person.topic && <p className="col-span-2 text-sm font-semibold">Topic / appearance: {person.topic}</p>}
-                        {person.startsAt && <p className="col-span-2 text-xs text-muted-foreground">Scheduled: {new Date(person.startsAt).toLocaleString()}</p>}
+                        {person.startsAt && <p className="col-span-2 flex items-start gap-1.5 text-xs text-muted-foreground"><CalendarDays className="mt-0.5 size-3.5 shrink-0 text-primary" aria-hidden /> Scheduled: {dateLong(person.startsAt, event.timezone)}</p>}
                         {person.bio && <p className="col-span-2 whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground">{person.bio}</p>}
                       </article>
                     ))}
@@ -647,7 +653,10 @@ export default function EventDetail({ slug }: { slug: string }) {
 
               {!!event.programmes?.length && (
                 <Card className="rounded-2xl" id="event-programmes">
-                  <CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-base"><FileText className="size-4 text-primary" /> Event programme & outlines</CardTitle></CardHeader>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="flex items-center gap-2 text-base"><FileText className="size-4 text-primary" /> Event programme &amp; outlines</CardTitle>
+                    <p className="text-xs leading-relaxed text-muted-foreground">Browse the official programme documents shared by the organizer.</p>
+                  </CardHeader>
                   <CardContent className="space-y-2">
                     {event.programmes.map((document) => (
                       <a key={document.id} className="flex min-w-0 items-center gap-3 rounded-xl border border-border/70 p-3 text-sm font-semibold text-primary transition-colors hover:bg-secondary/50" href={document.downloadUrl} target="_blank" rel="noopener noreferrer">

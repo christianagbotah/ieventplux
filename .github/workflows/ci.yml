@@ -72,6 +72,9 @@ jobs:
       - name: Event creation schedule and paid/free checkout UI regression
         run: bun test src/portal/lib/event-editor-validation.test.ts src/portal/lib/ticket-selection.test.ts
 
+      - name: Event programme, artist appearances, souvenir validation and media files
+        run: bun test src/portal/lib/event-programme-form.test.ts src/server/event-programme-policy.test.ts
+
       - name: Authenticated group meeting, WebRTC presentation and production TURN safety
         run: bun test src/server/meeting-policy.test.ts src/server/meeting-turn-policy.test.ts src/server/meeting-sfu-policy.test.ts src/server/meeting-sfu-guard-policy.test.ts
 
