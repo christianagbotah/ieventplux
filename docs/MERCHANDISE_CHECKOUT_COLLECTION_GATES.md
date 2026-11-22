@@ -153,3 +153,7 @@ The physical-product refund policy now rejects inconsistent aggregate counts (co
 ### Scanner malformed-input resilience — 22 November 2026
 
 Staff camera and clipboard adapters can deliver unexpected non-string payloads at runtime. The pure souvenir QR parser now fails closed rather than throwing on malformed credential or origin types; 9 focused tests / 90 assertions pass. This is not authorization, payment or device-camera acceptance. Production collection remains disabled.
+
+### Canonical product ID validation (22 November 2026)
+
+Checkout selection IDs now require lowercase ASCII CUID syntax rather than case-insensitive matching. This prevents alternate spellings of the same opaque identifier from reaching stock-lock ordering or event-scoped database lookups. Regression tests cover uppercase and Unicode lookalike suffixes. This is a pure validation change only; it does not enable charging, fulfilment, migrations or live provider integrations.
