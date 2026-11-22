@@ -5,6 +5,7 @@ import { activeFeeVersion, computePlatformFee } from '../fees'
 import { getSetting } from '../settings'
 import { checkoutLinePrice, normalizeCheckoutLines } from '../checkout-policy'
 import { normalizeSouvenirLines, souvenirCheckoutEnabled } from '../souvenir-policy'
+import { compareInventoryIds } from '../souvenir-checkout-policy'
 
 /**
  * Order creation with database-enforced inventory reservations.
@@ -106,8 +107,8 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
 
   // Consistent ticket-type lock ordering avoids PostgreSQL deadlocks when
   // multiple buyers select the same tiers in a different visual order.
-  validated.sort((a, b) => a.ticketTypeId.localeCompare(b.ticketTypeId))
-  merchLines.sort((a, b) => a.productId.localeCompare(b.productId))
+  validated.sort((a, b) => compareInventoryIds(a.ticketTypeId, b.ticketTypeId))
+  merchLines.sort((a, b) => compareInventoryIds(a.productId, b.productId))
 
   const order = await db.$transaction(async (tx) => {
     // Lock identity to prevent two checkouts for the same buyer from both

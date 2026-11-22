@@ -1,10 +1,16 @@
 import { describe, expect, test } from 'bun:test'
-import { availableSouvenirStock, normalizeSouvenirSelections, souvenirLinePrice } from './souvenir-checkout-policy'
+import { availableSouvenirStock, compareInventoryIds, normalizeSouvenirSelections, souvenirLinePrice } from './souvenir-checkout-policy'
 
 const blackM = 'cm2nm3op4qr5st6uv7wx8yz9'
 const blueL = 'cm2nm3op4qr5st6uv7wx8yz0'
 
 describe('Souvenir checkout policy (no payments or stock writes)', () => {
+  test('inventory lock ordering is deterministic for both ticket and souvenir keys', () => {
+    const ids = ['cz9', 'ca1', 'cA1', 'ca0', 'ca1']
+    expect([...ids].sort(compareInventoryIds)).toEqual(['cA1', 'ca0', 'ca1', 'ca1', 'cz9'])
+    expect(compareInventoryIds('same', 'same')).toBe(0)
+  })
+
   test('same variant is combined, separate variants remain distinct, stable lock order', () => {
     expect(normalizeSouvenirSelections([{ productId: blackM, qty: 2 }, { productId: blueL, qty: 1 }, { productId: blackM, qty: 3 }])).toEqual([
       { productId: blueL, qty: 1 }, { productId: blackM, qty: 5 },

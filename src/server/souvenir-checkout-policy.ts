@@ -3,6 +3,10 @@ import { errors } from './api'
 /** Pure, side-effect-free validation used before any stock or payment mutation.
  * A product id is an opaque CUID. The caller must still resolve it against the
  * selected event and verify the current SKU price/stock inside a transaction. */
+/** Byte-stable ordering for opaque inventory keys across Node/Bun locales. */
+export function compareInventoryIds(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0
+}
 export interface SouvenirSelection { productId: string; qty: number }
 export function normalizeSouvenirSelections(value: unknown): SouvenirSelection[] {
   if (!Array.isArray(value)) throw errors.badRequest('Souvenir selections must be an array.')
@@ -18,7 +22,7 @@ export function normalizeSouvenirSelections(value: unknown): SouvenirSelection[]
     quantities.set(productId, total)
   }
   // Deterministic code-unit ordering across server locales avoids differing lock acquisition order.
-  return [...quantities.entries()].map(([productId, qty]) => ({ productId, qty })).sort((a, b) => a.productId < b.productId ? -1 : a.productId > b.productId ? 1 : 0)
+  return [...quantities.entries()].map(([productId, qty]) => ({ productId, qty })).sort((a, b) => compareInventoryIds(a.productId, b.productId))
 }
 
 export function souvenirLinePrice(unitPriceMinor: number, qty: number): number {
