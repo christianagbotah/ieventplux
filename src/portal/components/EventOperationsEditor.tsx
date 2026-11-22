@@ -14,6 +14,7 @@ import { useToast } from '@/hooks/use-toast'
 import { CalendarClock, CheckCircle2, ChevronDown, FileText, ImagePlus, Package, Pencil, Plus, RefreshCw, ShieldCheck, Trash2, UsersRound } from 'lucide-react'
 import { api, ApiClientError } from '../api'
 import { OrganizerEventCover } from './OrganizerEventCover'
+import { EventAgendaEditor } from './EventAgendaEditor'
 import { money, dateLong } from '../format'
 import { personFormError, souvenirFormError, souvenirPriceMinor, programmePdfError, eventImageError } from '../lib/event-programme-form'
 
@@ -206,6 +207,7 @@ export function EventOperationsEditor({ eventId }: { eventId: string }) {
           <span className="rounded-lg border border-white/20 bg-white/10 px-3 py-1.5">{products.length} products</span>
         </div>
       </header>
+      <EventAgendaEditor eventId={eventId} />
       {loadError && <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-destructive/20 bg-destructive/5 p-4 text-sm text-destructive">
         <span>{loadError}</span>
         <Button type="button" variant="outline" size="sm" onClick={() => void load().catch(() => setLoadError('Could not load programme information. Try again.'))}>
