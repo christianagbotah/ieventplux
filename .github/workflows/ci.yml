@@ -81,6 +81,11 @@ jobs:
       - name: Canonical legacy SPA links redirect safely to the hash router
         run: bun test src/server/legacy-hash-route.test.ts
 
+      - name: Meeting UI crash recovery and versioned asset retention
+        run: |
+          bun test src/portal/components/MeetingErrorBoundary.test.tsx
+          bash scripts/preserve-client-assets.test.sh
+
       - name: Organizer group meeting catalog (eligible statuses, safe search and paging)
         run: bun test src/server/organizer-meeting-catalog.test.ts
 

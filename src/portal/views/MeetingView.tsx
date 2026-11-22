@@ -13,6 +13,7 @@ import { api, ApiClientError } from '../api'
 import { connectRealtime } from '../realtime'
 import { navigate } from '../router'
 import { usePortal } from '../store'
+import { MeetingErrorBoundary } from '../components/MeetingErrorBoundary'
 
 const MeetingSfuRoom = lazy(() => import('./MeetingSfuRoom'))
 
@@ -615,9 +616,11 @@ export default function MeetingView({ id }: { id: string }) {
 
       <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
         {meeting.status === 'LIVE' && meeting.mediaEngine === 'sfu'
-          ? <Suspense fallback={<div className="rounded-xl border p-6 text-sm">Loading scalable meeting…</div>}>
-              <MeetingSfuRoom meetingId={id} canJoin={Boolean(data?.access.canJoin)} canManage={Boolean(data?.access.canManage)} screenSharingEnabled={meeting.screenShareEnabled} onEnd={() => void changeStatus('end')} />
-            </Suspense>
+          ? <MeetingErrorBoundary key={id} scope="media">
+              <Suspense fallback={<div className="rounded-xl border p-6 text-sm">Loading scalable meeting…</div>}>
+                <MeetingSfuRoom meetingId={id} canJoin={Boolean(data?.access.canJoin)} canManage={Boolean(data?.access.canManage)} screenSharingEnabled={meeting.screenShareEnabled} onEnd={() => void changeStatus('end')} />
+              </Suspense>
+            </MeetingErrorBoundary>
           : meeting.status === 'LIVE' && meeting.mediaEngine === 'unavailable'
           ? <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-5 text-sm">Scalable media is configured but the server connection is not ready. Group chat remains available. Contact the platform administrator.</div>
           : meeting.status === 'LIVE' ? <div className="min-w-0 space-y-3">
