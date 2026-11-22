@@ -95,6 +95,9 @@ jobs:
       - name: Organizer group meeting catalog (eligible statuses, safe search and paging)
         run: bun test src/server/organizer-meeting-catalog.test.ts
 
+      - name: Device permission gesture handling for mobile video meetings
+        run: bun test src/portal/lib/meeting-device-permissions.test.ts
+
       - name: Authenticated group meeting, WebRTC presentation and production TURN safety
         run: bun test src/server/meeting-policy.test.ts src/server/meeting-turn-policy.test.ts src/server/meeting-sfu-policy.test.ts src/server/meeting-sfu-guard-policy.test.ts
 

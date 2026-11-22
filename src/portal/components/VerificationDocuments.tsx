@@ -7,6 +7,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useToast } from '@/hooks/use-toast'
+import { useConfirm } from '@/components/ui/confirm-dialog-provider'
 import { FileText, Camera, ShieldCheck, Loader2, Download, RefreshCw, Trash2, Eye, CheckCircle2, AlertCircle, CreditCard } from 'lucide-react'
 import { api, ApiClientError } from '../api'
 import { IdentityLiveCapture } from './IdentityLiveCapture'
@@ -39,6 +40,7 @@ export function VerificationDocuments({ orgId, reviewerMode = false, onSubmitted
   onSubmitted?: () => void
 }) {
   const { toast } = useToast()
+  const confirm = useConfirm()
   const [documents, setDocuments] = useState<Document[]>([])
   const [orgType, setOrgType] = useState('INDIVIDUAL')
   const [status, setStatus] = useState('')
@@ -128,7 +130,7 @@ export function VerificationDocuments({ orgId, reviewerMode = false, onSubmitted
     } finally { setBusy(false) }
   }
   const remove = async (documentId: string) => {
-    if (busy || !window.confirm('Remove this verification document? You can upload a corrected copy. Encrypted backup copies expire under the retention policy.')) return
+    if (busy || !(await confirm({ title: 'Remove verification document?', description: 'The active encrypted document will be revoked. You can upload a corrected copy. Backup copies expire according to the retention policy.', confirmLabel: 'Remove document', tone: 'danger' }))) return
     setBusy(true)
     try {
       await api.delete('/orgs/' + orgId + '/kyc/' + documentId)

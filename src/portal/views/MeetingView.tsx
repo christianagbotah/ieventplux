@@ -13,6 +13,7 @@ import { api, ApiClientError } from '../api'
 import { connectRealtime } from '../realtime'
 import { navigate } from '../router'
 import { usePortal } from '../store'
+import { useConfirm } from '@/components/ui/confirm-dialog-provider'
 import { MeetingErrorBoundary } from '../components/MeetingErrorBoundary'
 
 const MeetingSfuRoom = lazy(() => import('./MeetingSfuRoom'))
@@ -60,6 +61,7 @@ function VideoTile({ stream, name, local, sharing }: { stream: MediaStream | nul
 
 export default function MeetingView({ id }: { id: string }) {
   const { user } = usePortal()
+  const confirm = useConfirm()
   const [data, setData] = useState<MeetingDetail | null>(null)
   const [busy, setBusy] = useState(false)
   const [joined, setJoined] = useState(false)
@@ -454,7 +456,7 @@ export default function MeetingView({ id }: { id: string }) {
 
   const changeStatus = async (action: 'start' | 'end') => {
     if (!data?.access.canManage) return
-    if (action === 'end' && !window.confirm('End this meeting for all participants?')) return
+    if (action === 'end' && !(await confirm({ title: 'End meeting for everyone?', description: 'This will disconnect all participants and end the live video session. Participants will not be able to rejoin this call.', confirmLabel: 'End meeting', tone: 'danger' }))) return
     setBusy(true)
     try {
       await api.post(`/meetings/${id}/${action}`)
@@ -501,7 +503,7 @@ export default function MeetingView({ id }: { id: string }) {
 
   const removeGroupMember = async (userId: string, displayName: string) => {
     if (!data?.access.canManage || !userId || userId === user?.id) return
-    if (!window.confirm(`Remove ${displayName} from this event group? They will be blocked from chat and calls until restored.`)) return
+    if (!(await confirm({ title: `Remove ${displayName}?`, description: 'They will lose access to this event group, its chat and live calls until you restore them.', confirmLabel: 'Remove member', tone: 'danger' }))) return
     try {
       await api.post(`/meetings/${id}/remove-participant`, { userId })
       await load()
