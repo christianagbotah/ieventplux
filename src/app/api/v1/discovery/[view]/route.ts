@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { handle, jsonOk, jsonList, pagination, errors } from '@/server/api'
 import { db } from '@/lib/db'
 import { PUBLIC_EVENT_WHERE, sponsoredEvents, buildDiscoveryWhere } from '@/server/services/events'
+import { parseCompareIds } from '@/server/public-event-compare'
 
 /**
  * GET /api/v1/discovery/[view] — home | categories | live | reels | search
@@ -13,6 +14,37 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ view: strin
     const { view } = await ctx.params
     const url = new URL(req.url)
     const now = new Date()
+
+    if (view === 'compare') {
+      let ids: string[]
+      try {
+        ids = parseCompareIds(url.searchParams.get('ids'))
+      } catch {
+        throw errors.badRequest('Choose up to three different events to compare.')
+      }
+      // All visibility, soft-deletion and publication gates are enforced BEFORE
+      // querying. Inaccessible/unlisted event IDs never leak event data.
+      const events = await db.event.findMany({
+        where: { ...PUBLIC_EVENT_WHERE, id: { in: ids } },
+        select: {
+          id: true, slug: true, title: true, summary: true,
+          coverImageUrl: true, startsAt: true, endsAt: true,
+          city: true, country: true, mode: true, status: true, categorySlug: true,
+          org: { select: { name: true, slug: true, verifiedAt: true } },
+          ticketTypes: { where: { active: true }, select: {
+            priceMinor: true, currency: true, quota: true, soldCount: true,
+          } },
+          reviews: { where: { status: 'VISIBLE' }, select: { rating: true } },
+        },
+      })
+      const byId = new Map(events.map((event) => [event.id, event]))
+      return jsonOk({
+        items: ids.flatMap((id) => {
+          const event = byId.get(id)
+          return event ? [withRating(event)] : []
+        }),
+      })
+    }
 
     if (view === 'locations') {
       // Only countries with visible, current events appear. Do not claim

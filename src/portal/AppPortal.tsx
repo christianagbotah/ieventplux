@@ -23,6 +23,7 @@ import { MeetingErrorBoundary } from './components/MeetingErrorBoundary'
 
 const Discover = lazy(() => import('./views/Discover'))
 const EventDetail = lazy(() => import('./views/EventDetail'))
+const EventCompareView = lazy(() => import('./views/EventCompareView'))
 const LiveNow = lazy(() => import('./views/LiveNow'))
 const Reels = lazy(() => import('./views/Reels'))
 const FollowingFeed = lazy(() => import('./views/FollowingFeed'))
@@ -172,6 +173,8 @@ export default function AppPortal() {
         return <EffectsStudio />
       case 'event':
         return param ? <EventDetail key={param} slug={param} /> : <Discover route={route} />
+      case 'compare':
+        return <EventCompareView route={route} />
       case 'org':
         return param ? <OrgProfile key={param} slug={param} /> : <Discover route={route} />
       case 'signin':

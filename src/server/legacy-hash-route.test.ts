@@ -11,6 +11,11 @@ test('meeting, event and invitation deep links become existing client-side route
   expect(legacyHashLocation(['invite', 'test'], { meeting: 'm1', source: ['sms', 'email'] })).toBe('/#/invite/test?meeting=m1&source=sms&source=email')
 })
 
+test('shared event comparison clean links preserve validated query text for the client', () => {
+  expect(legacyHashLocation(['compare'], { ids: 'event_001,event_002' }))
+    .toBe('/#/compare?ids=event_001%2Cevent_002')
+})
+
 test('unexpected or sensitive server paths remain 404 rather than leaking into SPA', () => {
   expect(legacyHashLocation(['api', 'v1'], {})).toBeNull()
   expect(legacyHashLocation(['uploads', 'secret.pdf'], {})).toBeNull()
