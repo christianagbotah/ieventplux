@@ -15,6 +15,11 @@ describe('Souvenir checkout policy (no payments or stock writes)', () => {
       expect(() => normalizeSouvenirSelections(value)).toThrow()
     }
   })
+  test('rejects newline-suffixed opaque product identifiers (regex dollar-anchor bypass)', () => {
+    for (const productId of [blackM + '\n', blackM + '\r\n', blackM + ' ', ' ' + blackM]) {
+      expect(() => normalizeSouvenirSelections([{ productId, qty: 1 }])).toThrow()
+    }
+  })
   test('enforces integer pesewa pricing and maximum line value', () => {
     expect(souvenirLinePrice(5000, 3)).toBe(15000)
     for (const price of [0, -1, 1.5, NaN, Infinity, Number.MAX_SAFE_INTEGER]) expect(() => souvenirLinePrice(price, 2)).toThrow()
