@@ -687,16 +687,35 @@ export default function EventDetail({ slug }: { slug: string }) {
               )}
 
               {event.agenda.length > 0 && (
-                <Card className="rounded-2xl">
-                  <CardHeader className="pb-2"><CardTitle className="text-base">Agenda</CardTitle></CardHeader>
+                <Card className="rounded-2xl" id="event-agenda">
+                  <CardHeader className="pb-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <CardTitle className="flex items-center gap-2 text-base">
+                        <CalendarDays className="size-5 text-primary" aria-hidden /> Full event agenda
+                      </CardTitle>
+                      <Badge variant="secondary">{event.agenda.length} {event.agenda.length === 1 ? 'session' : 'sessions'}</Badge>
+                    </div>
+                    <p className="text-xs leading-relaxed text-muted-foreground">
+                      Your event programme, including speakers and performances. All times are shown in the event's timezone ({event.timezone.replaceAll('_', ' ')}).
+                    </p>
+                  </CardHeader>
                   <CardContent>
-                    <ol className="relative space-y-4 border-l border-border pl-5">
-                      {event.agenda.map((item) => (
-                        <li key={item.id} className="relative">
-                          <span className="absolute -left-[25px] top-1 h-2.5 w-2.5 rounded-full bg-primary" />
-                          <p className="font-semibold">{item.title}</p>
-                          <p className="text-xs text-muted-foreground">{timeRange(item.startsAt, item.endsAt ?? item.startsAt)}{item.speaker ? ` · ${item.speaker}` : ''}</p>
-                          {item.description && <p className="mt-1 text-sm text-foreground/80">{item.description}</p>}
+                    <ol className="relative ml-2 space-y-3 border-l-2 border-primary/20 pl-5">
+                      {event.agenda.map((item, index) => (
+                        <li key={item.id} className="relative min-w-0 rounded-2xl border border-border/80 bg-muted/20 p-3.5 sm:p-4">
+                          <span aria-hidden="true" className="absolute -left-[30px] top-4 grid size-4 place-items-center rounded-full border-[3px] border-card bg-primary shadow-[0_0_0_2px_rgb(5_119_100_/_0.15)]" />
+                          <div className="flex min-w-0 flex-wrap items-start gap-3">
+                            <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary/10 text-xs font-extrabold tabular-nums text-primary">{String(index + 1).padStart(2, '0')}</span>
+                            <div className="min-w-0 flex-1">
+                              <h3 className="break-words text-sm font-bold leading-snug sm:text-base">{item.title}</h3>
+                              <p className="mt-1 text-xs font-medium text-muted-foreground">
+                                <time dateTime={item.startsAt}>{dateLong(item.startsAt, event.timezone)}</time>
+                                {item.endsAt && <> – <time dateTime={item.endsAt}>{dateLong(item.endsAt, event.timezone)}</time></>}
+                              </p>
+                              {item.speaker && <p className="mt-2 text-xs font-semibold text-primary">Presenter: {item.speaker}</p>}
+                              {item.description && <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-foreground/80">{item.description}</p>}
+                            </div>
+                          </div>
                         </li>
                       ))}
                     </ol>

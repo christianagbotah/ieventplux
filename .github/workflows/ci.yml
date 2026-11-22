@@ -75,6 +75,9 @@ jobs:
       - name: Event programme, artist appearances, souvenir validation and media files
         run: bun test src/portal/lib/event-programme-form.test.ts src/server/event-programme-policy.test.ts
 
+      - name: Full agenda editor, UTC persistence and DST-safe event timezones
+        run: bun test src/server/event-agenda-policy.test.ts src/portal/lib/agenda-time.test.ts
+
       - name: Authenticated group meeting, WebRTC presentation and production TURN safety
         run: bun test src/server/meeting-policy.test.ts src/server/meeting-turn-policy.test.ts src/server/meeting-sfu-policy.test.ts src/server/meeting-sfu-guard-policy.test.ts
 
