@@ -45,6 +45,14 @@ describe('Souvenir checkout policy (no payments or stock writes)', () => {
       expect(() => normalizeSouvenirSelections([{ productId, qty: 1 }])).toThrow()
     }
   })
+  test('rejects oversized row batches and non-finite numeric inputs before inventory access', () => {
+    expect(() => normalizeSouvenirSelections(Array.from({ length: 31 }, () => ({ productId: blackM, qty: 1 })))).toThrow()
+    for (const qty of [NaN, Infinity, -Infinity, Number.MAX_SAFE_INTEGER + 1, 0.5, '1', null]) {
+      expect(() => normalizeSouvenirSelections([{ productId: blackM, qty }])).toThrow()
+    }
+    expect(normalizeSouvenirSelections([])).toEqual([])
+    expect(normalizeSouvenirSelections(Array.from({ length: 20 }, () => ({ productId: blackM, qty: 1 })))).toEqual([{ productId: blackM, qty: 20 }])
+  })
   test('enforces integer pesewa pricing and maximum line value', () => {
     expect(souvenirLinePrice(5000, 3)).toBe(15000)
     for (const price of [0, -1, 1.5, NaN, Infinity, Number.MAX_SAFE_INTEGER]) expect(() => souvenirLinePrice(price, 2)).toThrow()
