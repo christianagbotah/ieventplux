@@ -34,8 +34,14 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
     }
 
     if (action === 'agenda') {
-      const items = await db.agendaItem.findMany({ where: { eventId: id }, orderBy: [{ sortOrder: 'asc' }, { startsAt: 'asc' }] })
-      return jsonOk({ items })
+      // Agenda may contain invite-only speakers and precise session details.
+      // Preserve the same visibility guard as the event programme documents.
+      const { canViewProgramme } = await import('@/server/event-operations-access')
+      await canViewProgramme(id)
+      const items = await db.agendaItem.findMany({
+        where: { eventId: id }, orderBy: [{ sortOrder: 'asc' }, { startsAt: 'asc' }],
+      })
+      return jsonOk({ items }, { headers: { 'Cache-Control': 'private, no-store' } })
     }
 
     if (action === 'series') {
@@ -524,21 +530,13 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
 
     // ── Agenda items ──────────────────────────────────────────────────────
     if (action === 'agenda') {
+      await rateLimit(req, 'event-operations-author', 40, 60_000)
       const access = await eventOrgAccess(user.id, id, 'event:edit')
+      if (!access.event) throw errors.notFound('Event not found.')
       if (!access.allowed) throw errors.forbidden('You do not have permission to edit this event.')
-      const title = sanitizeText(body.title, 160)
-      if (!title) throw errors.badRequest('Agenda item title is required.')
-      const item = await db.agendaItem.create({
-        data: {
-          eventId: id,
-          title,
-          startsAt: new Date(String(body.startsAt ?? new Date().toISOString())),
-          endsAt: body.endsAt ? new Date(String(body.endsAt)) : null,
-          speaker: sanitizeText(body.speaker, 120) || null,
-          description: sanitizeText(body.description, 500) || null,
-          sortOrder: Number(body.sortOrder ?? 0),
-        },
-      })
+      const { agendaItemPayload } = await import('@/server/event-agenda-policy')
+      const data = agendaItemPayload(body)
+      const item = await db.agendaItem.create({ data: { eventId: id, ...data } })
       return jsonOk({ item })
     }
 

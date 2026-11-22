@@ -1331,3 +1331,154 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .ievx-eventops-card, .ievx-eventops-filter { transition: none !important; }
 }
+
+/* ──────────────────────────────────────────────────────────────────────────
+   iEventPlux UI Foundation · enterprise component consistency / accessibility
+   Layered after the existing design language, never changes scroll ownership
+   or the Effects Studio visual runtime.
+   ────────────────────────────────────────────────────────────────────────── */
+@layer base {
+  html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+  body {
+    text-rendering: optimizeLegibility;
+    font-feature-settings: "kern" 1, "liga" 1;
+    -webkit-tap-highlight-color: transparent;
+  }
+  :is(button, input, textarea, select) { font: inherit; }
+  :where(button:not([data-slot="button"]), a[href], [role="button"]):focus-visible {
+    outline: 3px solid color-mix(in srgb, var(--ievx-teal, #087a6d) 62%, transparent);
+    outline-offset: 3px;
+  }
+  :where(input, textarea, select):focus-visible { outline-offset: 2px; }
+  ::selection { background: color-mix(in srgb, var(--ievx-teal, #087a6d) 22%, transparent); }
+}
+
+@layer components {
+  /* Named, reusable components (not arbitrary overrides of third-party UIs). */
+  .ievx-form-surface {
+    min-width: 0;
+    border: 1px solid var(--ievx-line);
+    border-radius: 1.1rem;
+    background: var(--ievx-panel);
+    box-shadow: 0 6px 24px rgb(16 35 51 / 4%);
+  }
+  .ievx-section-heading {
+    font-size: clamp(1.15rem, 1.1rem + .4vw, 1.45rem);
+    font-weight: 800;
+    line-height: 1.27;
+    letter-spacing: -.032em;
+    color: var(--ievx-ink);
+  }
+  .ievx-section-description {
+    font-size: .9rem;
+    line-height: 1.65;
+    color: var(--ievx-ink-soft);
+  }
+  .ievx-page-gutter {
+    width: min(100% - 2rem, 1280px);
+    margin-inline: auto;
+  }
+}
+
+/* Consistent, theme-aware interactive controls and sensible touch targets. */
+[data-slot="button"] { -webkit-tap-highlight-color: transparent; }
+[data-slot="button"][data-loading="true"] { cursor: progress; }
+[data-slot="input"], [data-slot="textarea"], [data-slot="select-trigger"] {
+  caret-color: var(--ievx-teal);
+}
+[data-slot="field"] [data-slot="field-label"]:has(+ [aria-invalid="true"]) { color: var(--destructive); }
+[data-slot="dropdown-menu-content"], [data-slot="select-content"] {
+  backdrop-filter: saturate(145%) blur(8px);
+}
+[data-slot="dialog-content"] { scrollbar-gutter: stable; }
+[data-slot="card-title"] { overflow-wrap: anywhere; }
+[data-slot="skeleton"] { background-size: 200% 100%; }
+
+/* Existing split-scroll behavior is intentional: sidebar and content are
+   independent on desktop; do not restore document scrolling there. */
+.ievx-application-bar {
+  border-bottom: 1px solid color-mix(in srgb, var(--ievx-line) 88%, transparent);
+  background: color-mix(in srgb, var(--ievx-panel) 92%, transparent);
+  box-shadow: 0 2px 14px rgb(16 35 51 / 5%);
+  backdrop-filter: saturate(155%) blur(17px);
+}
+.ievx-brand-mark {
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 11px;
+  background: linear-gradient(135deg, #119883, #08675e 68%, #064c49);
+  box-shadow: 0 3px 12px rgb(6 105 91 / 19%);
+}
+.ievx-primary-nav-item {
+  min-height: 36px;
+  border-radius: 10px;
+  font-weight: 650;
+  letter-spacing: -.014em;
+}
+.ievx-primary-nav-item[aria-current="page"] {
+  background: var(--ievx-teal-soft);
+  color: var(--ievx-teal);
+}
+.ievx-mobile-nav-item[aria-current="page"] {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ievx-teal) 14%, transparent);
+}
+.ievx-workspace-sidebar {
+  border-radius: 17px;
+  box-shadow: 0 8px 28px rgb(16 35 51 / 5%);
+}
+.ievx-workspace-navigation-title,
+.ievx-workspace-group-label { letter-spacing: .105em; }
+.ievx-workspace-nav-item {
+  min-height: 43px;
+  border-radius: 11px;
+  font-size: 13.5px;
+  font-weight: 580;
+  transition: background-color .16s ease, color .16s ease, border-color .16s ease, box-shadow .16s ease;
+}
+.ievx-workspace-nav-item--active {
+  background: color-mix(in srgb, var(--ievx-teal-soft) 91%, var(--ievx-panel));
+  box-shadow: inset 3px 0 0 var(--ievx-teal);
+}
+.ievx-workspace-toolbar {
+  min-height: 60px;
+  border-radius: 16px;
+  background: linear-gradient(145deg, var(--ievx-panel), color-mix(in srgb, var(--ievx-panel) 97%, var(--ievx-teal)));
+}
+.ievx-workspace [data-slot="card"],
+.ievx-workspace .ievx-surface {
+  border-radius: 17px;
+  box-shadow: 0 3px 18px rgb(16 35 51 / 4%), 0 1px 2px rgb(16 35 51 / 3%);
+}
+.ievx-workspace :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea, [data-slot="select-trigger"]) {
+  border-radius: 11px;
+  transition: border-color .16s ease, box-shadow .16s ease;
+}
+.ievx-workspace :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea, [data-slot="select-trigger"]):focus-visible {
+  border-color: var(--ievx-teal);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ievx-teal) 14%, transparent);
+}
+.ievx-workspace [data-slot="button"]:not([data-variant="link"]) { border-radius: 11px; }
+.ievx-workspace-metric { border-radius: 17px; }
+.ievx-workspace :is(th, thead td) { font-size: 11px; letter-spacing: .075em; }
+.ievx-workspace table tbody tr { transition: background-color .14s ease; }
+.ievx-workspace table td { font-variant-numeric: tabular-nums; }
+
+/* Coarse pointers need room to tap: don't force oversized widgets on desktop. */
+@media (pointer: coarse) {
+  [data-slot="button"][data-size="sm"],
+  [data-slot="button"][data-size="icon-sm"],
+  [data-slot="tabs-trigger"],
+  [data-slot="dropdown-menu-item"],
+  [data-slot="select-item"] { min-height: 44px; }
+  [data-slot="button"][data-size="icon-sm"] { min-width: 44px; }
+}
+@media (max-width: 767px) {
+  .ievx-workspace-toolbar { border-radius: 14px; }
+  .ievx-workspace [data-slot="card"],
+  .ievx-workspace .ievx-surface { border-radius: 15px; }
+  .ievx-page-gutter { width: calc(100% - 1.25rem); }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-slot="button"], [data-slot="input"], [data-slot="textarea"],
+  [data-slot="select-trigger"], [data-slot="dialog-content"],
+  [data-slot="dropdown-menu-content"] { animation: none !important; transition: none !important; transform-style: flat; }
+}

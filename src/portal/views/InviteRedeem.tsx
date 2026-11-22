@@ -12,7 +12,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { CalendarDays, CheckCircle2, Clock, Loader2, MapPin, Ticket, Users, XCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { api, ApiClientError } from '../api'
-import { navigate } from '../router'
+import { navigate, useRoute } from '../router'
 import { usePortal } from '../store'
 import { useToast } from '@/hooks/use-toast'
 import { dateLong, humanize } from '../format'
@@ -49,6 +49,11 @@ type Phase = 'loading' | 'error' | 'form' | 'submitting' | 'pending' | 'approved
 
 export default function InviteRedeem({ code }: { code: string }) {
   const { user } = usePortal()
+  const route = useRoute()
+  const meetingParam = route.query.get('meeting') ?? ''
+  const meetingId = /^[A-Za-z0-9_-]{8,64}$/.test(meetingParam) ? meetingParam : null
+  const inviteReturn = '/invite/' + encodeURIComponent(code) + (meetingId ? '?meeting=' + encodeURIComponent(meetingId) : '')
+  const signInReturn = '?continue=' + encodeURIComponent(inviteReturn)
   const { toast } = useToast()
   const [invitation, setInvitation] = useState<InvitationInfo | null>(null)
   const [rsvp, setRsvp] = useState<RsvpInfo | null>(null)
@@ -90,7 +95,7 @@ export default function InviteRedeem({ code }: { code: string }) {
       toast({
         title: result.approved ? 'RSVP confirmed' : 'RSVP sent for approval',
         description: result.approved
-          ? 'Your place is confirmed — tickets are unlocked.'
+          ? (meetingId ? 'You can now join the group meeting.' : 'Your place is confirmed — tickets are unlocked.')
           : 'The organizer will approve your attendance shortly.',
       })
     } catch (err) {
@@ -107,7 +112,7 @@ export default function InviteRedeem({ code }: { code: string }) {
     }
   }
 
-  if (phase === 'loading' || !invitation) {
+  if (phase === 'loading' || (!invitation && phase !== 'error')) {
     return (
       <div className="mx-auto max-w-md px-4 py-20">
         <div className="efx-glassmorphism-card" style={{ borderRadius: '1.25rem', padding: '1.5rem' }}>
@@ -136,6 +141,8 @@ export default function InviteRedeem({ code }: { code: string }) {
       </div>
     )
   }
+
+  if (!invitation) return null
 
   const eventCard = (
     <div className="overflow-hidden rounded-2xl border border-border/70">
@@ -166,8 +173,8 @@ export default function InviteRedeem({ code }: { code: string }) {
             </div>
             {eventCard}
             <div className="flex flex-wrap justify-center gap-2">
-              <button type="button" className="efx-neon-pulse-button" style={{ fontSize: '0.95rem', padding: '0.7rem 1.6rem' }} onClick={() => navigate('/signin')}>Sign in</button>
-              <Button variant="outline" className="rounded-full" onClick={() => navigate('/register')}>Create account</Button>
+              <button type="button" className="efx-neon-pulse-button" style={{ fontSize: '0.95rem', padding: '0.7rem 1.6rem' }} onClick={() => navigate('/signin' + signInReturn)}>Sign in</button>
+              <Button variant="outline" className="rounded-full" onClick={() => navigate('/register' + signInReturn)}>Create account</Button>
             </div>
           </div>
         </div>
@@ -249,11 +256,11 @@ export default function InviteRedeem({ code }: { code: string }) {
                 <h1 className="text-lg font-bold">You are confirmed</h1>
                 <p className="text-sm text-muted-foreground">
                   {rsvp?.guests ?? guests} {((rsvp?.guests ?? guests) === 1 ? 'place is' : 'places are')} confirmed for {user.displayName}.
-                  The private address is now visible on the event page.
+                  {meetingId ? 'Your invitation also gives access to the group meeting.' : 'The private address is now visible on the event page.'}
                 </p>
               </div>
-              <button type="button" className="efx-neon-pulse-button w-full" onClick={() => navigate(`/event/${invitation.event.slug}`)}>
-                View event &amp; get tickets
+              <button type="button" className="efx-neon-pulse-button w-full" onClick={() => navigate(meetingId ? '/meeting/' + meetingId : '/event/' + invitation.event.slug)}>
+                {meetingId ? 'Join group meeting' : 'View event & get tickets'}
               </button>
             </div>
           ) : (
