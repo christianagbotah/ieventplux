@@ -19,6 +19,7 @@ import { ThemeToggle } from './components/ThemeToggle'
 import { CommandPalette } from './components/CommandPalette'
 import { EffectsRuntime } from './components/EffectsRuntime'
 import { EventCardSkeleton } from './components/EventCard'
+import { MeetingErrorBoundary } from './components/MeetingErrorBoundary'
 
 const Discover = lazy(() => import('./views/Discover'))
 const EventDetail = lazy(() => import('./views/EventDetail'))
@@ -183,7 +184,7 @@ export default function AppPortal() {
       case 'broadcast':
         return param ? <BroadcastView key={param} id={param} /> : <LiveNow />
       case 'meeting':
-        return param ? <MeetingView key={param} id={param} /> : <Discover route={route} />
+        return param ? <MeetingErrorBoundary scope="page" key={param}><MeetingView id={param} /></MeetingErrorBoundary> : <Discover route={route} />
       case 'organizer':
         return <OrganizerWorkspace route={route} />
       case 'admin':
