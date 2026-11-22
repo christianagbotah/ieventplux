@@ -1,6 +1,5 @@
 /** Fail closed before any synthetic merchandise QA fixture or session writes. */
 import { strict as assert } from 'node:assert'
-import { db } from '../src/lib/db'
 
 const schema = 'ieventplux_merch_qa_20261119'
 const qaName = /(?:^|[_-])(qa|test|scratch)(?:[_-]|$)/i
@@ -14,6 +13,8 @@ export async function requireIsolatedMerchandiseQaDatabase() {
   assert.equal(url.searchParams.get('schema'), schema, 'QA requires the isolated schema')
   assert.match(decodeURIComponent(url.pathname).slice(1), qaName, 'QA requires a disposable database name')
   assert.ok(['localhost', '127.0.0.1', '::1', '[::1]'].includes(url.hostname), 'QA requires loopback PostgreSQL')
+  // Do not initialize Prisma until the supplied URL passes all isolation checks.
+  const { db } = await import('../src/lib/db')
   const [identity] = await db.$queryRaw<Array<{ database_name: string; schema_name: string }>>`
     SELECT current_database() AS database_name, current_schema() AS schema_name
   `
