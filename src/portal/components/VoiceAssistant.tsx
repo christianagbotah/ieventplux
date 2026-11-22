@@ -5,6 +5,7 @@ import { Mic, MicOff, Send, Sparkles, Volume2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { api, ApiClientError } from '../api'
 import { usePortal } from '../store'
+import { navigate } from '../router'
 
 interface Turn {
   role: 'user' | 'assistant'
@@ -25,6 +26,17 @@ export function VoiceAssistant() {
   const [error, setError] = useState<string | null>(null)
   const [micDenied, setMicDenied] = useState(false)
   const [textDraft, setTextDraft] = useState('')
+  // Model-backed controls are not presented as usable when the live
+  // deployment has intentionally disabled AI. The genuine catalogue search
+  // remains available from Discover.
+  const [aiAvailable, setAiAvailable] = useState<boolean | null>(null)
+  useEffect(() => {
+    let live = true
+    void api.get<{ available: boolean }>('/ai/status')
+      .then((status) => { if (live) setAiAvailable(status.available) })
+      .catch(() => { if (live) setAiAvailable(false) })
+    return () => { live = false }
+  }, [])
   const conversationIdRef = useRef<string | null>(null)
   const recorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
@@ -167,15 +179,37 @@ export function VoiceAssistant() {
     }
   }, [])
 
+  // Guests discover through the public catalogue and AI search panel; do not
+  // cover their mobile screen with an assistant that requires sign-in.
+  if (!user || aiAvailable === null) return null
+
+  if (!aiAvailable) {
+    // Hide the floating, unavailable voice assistant on all screens. For a
+    // previously opened panel, offer a functional search path and dismissal.
+    if (!assistantOpen) return null
+    return (
+      <div className="fixed inset-x-3 bottom-20 z-40 rounded-2xl border border-border bg-card p-4 shadow-xl md:inset-x-auto md:right-5 md:bottom-6 md:w-[360px]" role="dialog" aria-label="Event guide availability">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-sm font-bold">iEventPlux event guide</p>
+          <Button variant="ghost" size="icon" aria-label="Close event guide" onClick={() => setAssistantOpen(false)}><X className="size-4" /></Button>
+        </div>
+        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">AI voice and chat are currently offline. You can still search real upcoming events by city, date or category.</p>
+        <Button className="mt-3 w-full" onClick={() => { setAssistantOpen(false); navigate('/'); window.setTimeout(() => document.getElementById('ai-search')?.scrollIntoView({ behavior: 'smooth' }), 150) }}>
+          Search real events
+        </Button>
+      </div>
+    )
+  }
+
   if (!assistantOpen) {
     return (
       <button
         aria-label="Open AI voice concierge"
         onClick={() => setAssistantOpen(true)}
-        className={`fixed bottom-20 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/30 transition-[transform,opacity] duration-200 hover:scale-105 ievx-press md:bottom-6 md:opacity-100 ${inputFocused ? 'pointer-events-none scale-75 opacity-0' : 'opacity-100'}`}
+        className={`fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] right-3 z-40 flex h-11 w-11 sm:h-14 sm:w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/30 transition-[transform,opacity] duration-200 hover:scale-105 ievx-press md:bottom-6 md:opacity-100 ${inputFocused ? 'pointer-events-none scale-75 opacity-0' : 'opacity-100'}`}
         tabIndex={inputFocused ? -1 : 0}
       >
-        <Sparkles className="h-6 w-6" aria-hidden />
+        <Sparkles className="size-5 sm:size-6" aria-hidden />
         <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4" aria-hidden>
           <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-75" />
           <span className="relative inline-flex h-4 w-4 rounded-full bg-accent border-2 border-card" />

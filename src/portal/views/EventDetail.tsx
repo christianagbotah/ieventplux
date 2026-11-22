@@ -15,6 +15,8 @@ import { navigate } from '../router'
 import { usePortal } from '../store'
 import { money, dateLong, timeRange, relative, initials, humanize } from '../format'
 import { EmptyState } from '../components/EventCard'
+import { quoteTicketSelection, ticketCheckoutSupported, ticketAvailability } from '../lib/ticket-selection'
+import { countryLabel } from '../lib/global-locations'
 import { OrganizerEventCover } from '../components/OrganizerEventCover'
 import LiveEngagement from '../components/LiveEngagement'
 import ReviewsPanel from '../components/ReviewsPanel'
@@ -78,6 +80,7 @@ interface EventDetailPayload {
   stats: { followers: number; going: number; comments: number; ratingAvg: number; ratingCount: number }
   mine: { saved: boolean; going: boolean; following: boolean; rsvpStatus: string | null; rsvpGuests: number | null }
   canManage: boolean
+  isEventHost?: boolean
 }
 
 interface SeriesInfo {
@@ -128,6 +131,7 @@ export default function EventDetail({ slug }: { slug: string }) {
   const [discountCode, setDiscountCode] = useState('')
   const [buyerPhone, setBuyerPhone] = useState('')
   const [placing, setPlacing] = useState(false)
+  const [followingBusy, setFollowingBusy] = useState(false)
   const [reportOpen, setReportOpen] = useState(false)
   const [reportReason, setReportReason] = useState('SPAM')
   const [reportDetails, setReportDetails] = useState('')
@@ -210,18 +214,19 @@ export default function EventDetail({ slug }: { slug: string }) {
     (sum, product) => sum + (product.onlineOrderingEnabled ? (souvenirQty[product.id] ?? 0) * product.priceMinor : 0), 0,
   ) ?? 0, [event, souvenirQty])
 
-  const selectedTotal = useMemo(() => {
-    if (!event) return 0
-    let subtotal = 0
-    for (const tt of saleable) {
-      const qty = buyQty[tt.id] ?? 0
-      if (qty <= 0) continue
-      let line = tt.priceMinor * qty
-      if (tt.groupMinQty && tt.groupPctOff && qty >= tt.groupMinQty) line -= Math.round((line * tt.groupPctOff) / 100)
-      subtotal += line
-    }
-    return subtotal
-  }, [buyQty, saleable, event])
+  const supportedSaleable = useMemo(() =>
+    saleable.filter((tt) => ticketCheckoutSupported(tt) && ticketAvailability(tt) > 0), [saleable])
+
+  // For now the payment backend settles paid tickets in GHS; selecting free
+  // international tickets is still allowed. Never silently sum EUR/USD as cedis.
+  const selectionQuote = useMemo(() => quoteTicketSelection(supportedSaleable, buyQty), [supportedSaleable, buyQty])
+  const selectedTotal = selectionQuote.subtotalMinor
+
+  const openBooking = () => {
+    setBuyQty({})
+    setDiscountCode('')
+    setBuyOpen(true)
+  }
 
   const toggleInterest = async (kind: 'SAVE' | 'GOING') => {
     if (!user) return navigate('/signin')
@@ -237,13 +242,23 @@ export default function EventDetail({ slug }: { slug: string }) {
 
   const toggleFollow = async () => {
     if (!user) return navigate('/signin')
-    if (!event) return
+    if (!event || followingBusy || data?.canManage || data?.isEventHost) return
+    const wasFollowing = mine.following
+    setFollowingBusy(true)
     try {
-      await api.post('/social/follow', { orgId: event.org.id })
-      setMine((m) => ({ ...m, following: !m.following }))
-      toast({ title: mine.following ? 'Unfollowed' : `Following ${event.org.name}`, description: mine.following ? undefined : 'You will see their events in your feed.' })
+      await api.post(wasFollowing ? '/social/unfollow' : '/social/follow', { orgId: event.org.id })
+      setMine((m) => ({ ...m, following: !wasFollowing }))
+      setData((current) => current
+        ? { ...current, stats: { ...current.stats, followers: Math.max(0, current.stats.followers + (wasFollowing ? -1 : 1)) } }
+        : current)
+      toast({
+        title: wasFollowing ? 'Organizer unfollowed' : 'Following ' + event.org.name,
+        description: wasFollowing ? 'Their updates will no longer appear in your Following feed.' : 'Their public events and announcements can appear in your Following feed.',
+      })
     } catch (err) {
-      toast({ description: err instanceof ApiClientError ? err.message : 'Could not follow.', variant: 'destructive' })
+      toast({ description: err instanceof ApiClientError ? err.message : 'Could not update following.', variant: 'destructive' })
+    } finally {
+      setFollowingBusy(false)
     }
   }
 
@@ -358,7 +373,12 @@ export default function EventDetail({ slug }: { slug: string }) {
   const placeOrder = async () => {
     if (!user) return navigate('/signin')
     if (!event) return
-    const items = Object.entries(buyQty).filter(([, qty]) => qty > 0).map(([ticketTypeId, qty]) => ({ ticketTypeId, qty }))
+    const quote = quoteTicketSelection(supportedSaleable, buyQty)
+    if (quote.invalid || quote.unsupported) {
+      toast({ title: 'Check your ticket selection', description: 'Unsupported ticket currency or quantity. Review your selection.', variant: 'destructive' })
+      return
+    }
+    const items = supportedSaleable.filter((tt) => (buyQty[tt.id] ?? 0) > 0).map((tt) => ({ ticketTypeId: tt.id, qty: buyQty[tt.id] }))
     const souvenirs = Object.entries(souvenirQty).filter(([, qty]) => qty > 0).map(([productId, qty]) => ({ productId, qty }))
     if (!items.length && !souvenirs.length) return
     setPlacing(true)
@@ -423,13 +443,15 @@ export default function EventDetail({ slug }: { slug: string }) {
 
   const statusBadge = event.status === 'LIVE' ? { label: 'Live now', className: 'bg-destructive text-white' } : event.status === 'CANCELLED' ? { label: 'Cancelled', className: 'bg-destructive/15 text-destructive' } : event.status === 'POSTPONED' ? { label: 'Postponed', className: 'bg-accent text-accent-foreground' } : null
 
-  // Short taglines read well on the fixed 24ch typewriter; longer summaries stay plain text.
   const shortSummary = event.summary && event.summary.trim().length > 0 && event.summary.trim().length <= 24 ? event.summary.trim() : null
-  const nothingSelected = Object.values(buyQty).every((q) => q === 0) && Object.values(souvenirQty).every((q) => q === 0)
-  const checkoutDisabled = placing || nothingSelected
+  const nothingSelected = selectionQuote.count === 0 && Object.values(souvenirQty).every((q) => q === 0)
+  const checkoutDisabled = placing || nothingSelected || selectionQuote.invalid || selectionQuote.unsupported
+  const checkoutAvailable = supportedSaleable.length > 0
+  const requiresInvitation = event.visibility === 'INVITE_ONLY' && !data.canManage && mine.rsvpStatus !== 'APPROVED'
+  const canBook = !data.canManage && !data.isEventHost && ['PUBLISHED', 'LIVE'].includes(event.status) && checkoutAvailable && !requiresInvitation
 
   return (
-    <div className="pb-10">
+    <div className="pb-36 md:pb-12">
       <div className="mx-auto max-w-5xl px-4 pt-4">
         <Button variant="ghost" size="sm" className="mb-4 -ml-2 rounded-full text-muted-foreground" onClick={() => navigate('/')}>
           <ChevronLeft className="h-4 w-4" /> All events
@@ -438,9 +460,9 @@ export default function EventDetail({ slug }: { slug: string }) {
 
       <div className="relative">
         <figure className="relative mx-4 overflow-hidden rounded-2xl sm:mx-6 lg:mx-8">
-          <div className="relative h-64 w-full overflow-hidden sm:h-80 md:h-[420px]">
+          <div className="relative h-52 w-full overflow-hidden sm:h-72 md:h-[380px]">
             {event.coverImageUrl ? (
-              <img src={event.coverImageUrl} alt={`${event.title} artwork`} className="iefx-kenburns h-full w-full object-cover" />
+              <img src={event.coverImageUrl} alt={`${event.title} artwork`} className="h-full w-full object-cover" />
             ) : (
               <div className="h-full w-full bg-gradient-to-br from-primary/20 to-accent/20" />
             )}
@@ -460,13 +482,10 @@ export default function EventDetail({ slug }: { slug: string }) {
                 <Badge variant="secondary" className="capitalize">{humanize(event.categorySlug)}</Badge>
                 <Badge variant="outline" className="gap-1 capitalize">{event.mode === 'VIRTUAL' ? <Monitor className="h-3 w-3" /> : <MapPin className="h-3 w-3" />}{humanize(event.mode)}</Badge>
               </div>
-              <h1 className="text-2xl font-extrabold leading-tight sm:text-4xl">{event.title}</h1>
-              {shortSummary && (
-                <div className="efx-typewriter-text" style={{ margin: '0.75rem 0', maxWidth: '100%' }}>
-                  <span className="efx-typewriter-text__line">{shortSummary}</span>
-                </div>
+              <h1 className="max-w-3xl text-[1.7rem] font-extrabold leading-[1.12] tracking-tight sm:text-4xl">{event.title}</h1>
+              {event.summary && (
+                <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base">{event.summary}</p>
               )}
-              {!shortSummary && event.summary && <p className="mt-2 max-w-2xl text-sm text-muted-foreground sm:text-base">{event.summary}</p>}
               <button className="mt-3 flex items-center gap-2 text-sm font-medium text-primary" onClick={() => navigate(`/org/${event.org.slug}`)}>
                 <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10"><Church className="h-4 w-4 text-primary" aria-hidden /></span>
                 <span className="efx-underline-slide-link" style={{ fontSize: '0.95rem', color: 'inherit' }}>{event.org.name}</span>
@@ -513,9 +532,9 @@ export default function EventDetail({ slug }: { slug: string }) {
             </div>
           </div>
 
-          <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[1fr_360px]">
+          <div className="mt-6 grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-7">
             {/* Left column */}
-            <div className="space-y-6">
+            <div className="order-2 min-w-0 space-y-5 lg:order-1">
               {['LIVE', 'PUBLISHED'].includes(event.status) && (
                 <LiveEngagement eventId={event.id} slug={event.slug} live={event.status === 'LIVE'} />
               )}
@@ -533,13 +552,15 @@ export default function EventDetail({ slug }: { slug: string }) {
                     <div>
                       <p className="text-xs uppercase tracking-wide text-muted-foreground">Time ({event.timezone.replace('_', ' ')})</p>
                       <p className="font-semibold">{timeRange(event.startsAt, event.endsAt, event.timezone)}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">Times shown in the organizer's timezone</p>
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
                     <MapPin className="mt-0.5 h-5 w-5 text-primary" aria-hidden />
                     <div>
                       <p className="text-xs uppercase tracking-wide text-muted-foreground">Venue</p>
-                      <p className="font-semibold">{event.venue?.name ?? 'Online broadcast'}</p>
+                      <p className="font-semibold">{event.venue?.name ?? (event.mode === 'VIRTUAL' ? 'Online event' : 'Venue to be announced')}</p>
+                      {!event.venue?.name && event.mode !== 'VIRTUAL' && (event.city || event.country) && <p className="text-sm text-muted-foreground">{[event.city, event.country ? countryLabel(event.country) : null].filter(Boolean).join(', ')}</p>}
                       {event.venue?.address && <p className="text-sm text-muted-foreground">{event.venue.address}{event.venue.city ? `, ${event.venue.city}` : ''}</p>}
                       {event.venue?.accessibilityInfo && <p className="text-sm text-muted-foreground"><span className="font-medium">Accessibility:</span> {event.venue.accessibilityInfo}</p>}
                       {(event.directionsUrl ?? event.venue?.mapsUrl) && (
@@ -780,7 +801,7 @@ export default function EventDetail({ slug }: { slug: string }) {
             </div>
 
             {/* Right column: tickets */}
-            <div className="space-y-4 lg:sticky lg:top-32 lg:self-start">
+            <aside id="tickets" className="order-1 min-w-0 space-y-4 scroll-mt-28 lg:order-2 lg:sticky lg:top-24 lg:self-start" aria-label="Tickets and attendance">
               {event.broadcasts.length > 0 && (
                 <Card className="rounded-2xl border-destructive/25">
                   <CardContent className="p-4">
@@ -803,49 +824,61 @@ export default function EventDetail({ slug }: { slug: string }) {
                 </Card>
               )}
 
-              <div className="efx-glassmorphism-card" style={{ borderRadius: '1.25rem', padding: '1.5rem' }}>
-                <div className="efx-glassmorphism-card__backdrop" aria-hidden="true" />
-                <div className="efx-glassmorphism-card__panel space-y-3">
-                  <h3 className="efx-glassmorphism-card__title flex items-center gap-2" style={{ fontSize: '1.15rem' }}>
-                    <Ticket className="h-4 w-4 text-emerald-300" aria-hidden /> Tickets
-                  </h3>
-                  {['CANCELLED'].includes(event.status) ? (
-                    <p className="rounded-xl bg-white/10 p-3 text-sm text-rose-200">This event was cancelled. Ticket holders are being notified and refunds follow the stated policy.</p>
+              <div className="ievx-booking-panel rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-5">
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <h2 className="flex items-center gap-2 text-lg font-extrabold tracking-tight"><Ticket className="size-5 text-primary" aria-hidden /> Tickets & entry</h2>
+                    <Badge variant="secondary" className="text-[10px]">{event.mode === 'VIRTUAL' ? 'Online event' : event.mode === 'HYBRID' ? 'In person & online' : 'In person'}</Badge>
+                  </div>
+                  {(data.canManage || data.isEventHost) ? (
+                    <div className="space-y-3">
+                      <p className="rounded-xl border border-primary/20 bg-primary/5 p-3 text-sm leading-relaxed text-foreground">
+                        <span className="font-semibold">Organizer view.</span> You can review your public ticket types here.
+                        To manage registration, invitations, check-in or ticket availability, open your organizer workspace.
+                      </p>
+                      <Button className="min-h-11 w-full rounded-xl font-bold" onClick={() => navigate('/organizer?tab=events')}>
+                        <CalendarDays className="mr-2 size-4" aria-hidden /> Manage this event
+                      </Button>
+                    </div>
+                  ) : ['CANCELLED', 'ENDED', 'POSTPONED'].includes(event.status) ? (
+                    <p className="rounded-xl border border-destructive/25 bg-destructive/5 p-3 text-sm text-destructive">
+                      {event.status === 'CANCELLED' ? 'This event has been cancelled. Check the organizer’s refund policy and your ticket status.' : event.status === 'POSTPONED' ? 'This event has been postponed. Ticket checkout is paused until new arrangements are confirmed.' : 'This event has ended. Tickets are no longer available.'}
+                    </p>
                   ) : saleable.length === 0 ? (
                     <div className="space-y-3">
-                      <p className="rounded-xl bg-white/10 p-3 text-sm text-white/80">
+                      <p className="rounded-xl bg-muted p-3 text-sm text-muted-foreground">
                         {event.ticketTypes.length === 0 ? 'Tickets have not been published yet.' : upcomingTicketTypes.length > 0 ? 'Ticket sales are scheduled to open soon.' : soldOutTypes.length > 0 ? 'All currently available tickets are sold out.' : 'Ticket sales are currently closed.'}
                       </p>
-                      {upcomingTicketTypes.length > 0 && <div className="space-y-1 rounded-xl border border-emerald-300/30 bg-emerald-400/5 p-3 text-sm text-white"><p className="font-semibold">Upcoming ticket releases</p>{upcomingTicketTypes.map((type) => <p key={type.id} className="text-xs text-white/80">{type.name} · opens {new Date(type.saleStartsAt!).toLocaleString()}</p>)}</div>}
+                      {upcomingTicketTypes.length > 0 && <div className="space-y-1 rounded-xl border border-primary/20 bg-primary/5 p-3 text-sm"><p className="font-semibold">Upcoming ticket releases</p>{upcomingTicketTypes.map((type) => <p key={type.id} className="text-xs text-muted-foreground">{type.name} · opens {new Date(type.saleStartsAt!).toLocaleString()}</p>)}</div>}
                       {soldOutTypes.length > 0 && !['CANCELLED', 'ENDED', 'POSTPONED'].includes(event.status) && new Date(event.startsAt).getTime() > salesClock && (
-                        <div className="efx-glassmorphism-card__panel rounded-xl border border-white/25 p-4">
-                          <p className="flex items-center gap-2 text-sm font-semibold text-white">
-                            <Hourglass className="h-4 w-4 text-amber-300" aria-hidden /> Waitlist
+                        <div className="rounded-xl border border-border bg-muted/30 p-4">
+                          <p className="flex items-center gap-2 text-sm font-semibold">
+                            <Hourglass className="h-4 w-4 text-amber-600" aria-hidden /> Waitlist
                             {waitlist && waitlist.count > 0 && (
-                              <span className="efx-badge-ping relative ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-400/20 px-1.5 text-[10px] font-bold text-amber-200">
+                              <span className="relative ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500/15 px-1.5 text-[10px] font-bold text-amber-700 dark:text-amber-300">
                                 {waitlist.count}
                               </span>
                             )}
                           </p>
                           {waitlist?.mine ? (
                             <div className="mt-2 space-y-2">
-                              <p className="text-xs text-white/80">
-                                {waitlist.mine.status === 'WAITING' && <>You are <span className="font-bold text-amber-300">#{waitlist.mine.position}</span> in line ({waitlist.mine.partySize} {waitlist.mine.partySize === 1 ? 'seat' : 'seats'}). We will alert you when tickets open up.</>}
-                                {waitlist.mine.status === 'NOTIFIED' && <><span className="font-semibold text-emerald-300">Tickets opened up — check your alerts!</span> First come, first served.</>}
+                              <p className="text-xs text-muted-foreground">
+                                {waitlist.mine.status === 'WAITING' && <>You are <span className="font-bold text-amber-700 dark:text-amber-300">#{waitlist.mine.position}</span> in line ({waitlist.mine.partySize} {waitlist.mine.partySize === 1 ? 'seat' : 'seats'}). We will alert you when tickets open up.</>}
+                                {waitlist.mine.status === 'NOTIFIED' && <><span className="font-semibold text-primary">Tickets opened up — check your alerts!</span> First come, first served.</>}
                                 {waitlist.mine.status === 'LEFT' && 'You left the waitlist. You can re-join below.'}
                               </p>
                               {waitlist.mine.status !== 'LEFT' && (
-                                <button type="button" className="text-xs font-semibold text-white/70 underline underline-offset-4 hover:text-white" onClick={() => void leaveWaitlist()}>
+                                <button type="button" className="text-xs font-semibold text-primary underline underline-offset-4" onClick={() => void leaveWaitlist()}>
                                   Leave the waitlist
                                 </button>
                               )}
                             </div>
                           ) : (
                             <div className="mt-2 space-y-2.5">
-                              <p className="text-xs text-white/70">
+                              <p className="text-xs text-muted-foreground">
                                 {waitlist && waitlist.count > 0 ? `${waitlist.count} ${waitlist.count === 1 ? 'person is' : 'people are'} waiting.` : 'Be first in line when someone cancels or the organizer adds seats.'}
                               </p>
-                              <button type="button" className="efx-neon-pulse-button w-full" onClick={() => openWaitlist()}>
+                              <button type="button" className="min-h-11 w-full rounded-xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:opacity-50" onClick={() => openWaitlist()}>
                                 Join the waitlist
                               </button>
                             </div>
@@ -855,28 +888,29 @@ export default function EventDetail({ slug }: { slug: string }) {
                     </div>
                   ) : (
                     <>
-                      {upcomingTicketTypes.length > 0 && <div className="rounded-xl border border-emerald-300/30 bg-emerald-400/5 p-3 text-xs text-white/85"><p className="mb-1 font-semibold text-white">More tickets opening soon</p>{upcomingTicketTypes.map((type) => <p key={type.id}>{type.name} · {new Date(type.saleStartsAt!).toLocaleString()}</p>)}</div>}
+                      {upcomingTicketTypes.length > 0 && <div className="rounded-xl border border-primary/20 bg-primary/5 p-3 text-xs text-muted-foreground"><p className="mb-1 font-semibold text-foreground">More tickets opening soon</p>{upcomingTicketTypes.map((type) => <p key={type.id}>{type.name} · {new Date(type.saleStartsAt!).toLocaleString()}</p>)}</div>}
                       {saleable.map((tt) => {
                         const remaining = tt.quota > 0 ? tt.quota - tt.soldCount - tt.reservedCount : null
                         return (
-                          <div key={tt.id} className="rounded-xl border border-white/25 p-3.5">
+                          <div key={tt.id} className="ievx-booking-ticket rounded-xl border border-border bg-muted/15 p-3.5">
                             <div className="flex items-start justify-between gap-2">
                               <div className="min-w-0">
-                                <p className="font-semibold text-white">{tt.name}</p>
-                                <p className="text-xs text-white/70">{tt.description}</p>
+                                <p className="font-semibold">{tt.name}</p>
+                                <p className="text-xs text-muted-foreground">{tt.description}</p>
                                 <div className="mt-1.5 flex flex-wrap gap-1.5">
-                                  <Badge variant="outline" className="text-[10px] capitalize" style={{ borderColor: 'rgba(255,255,255,0.35)', backgroundColor: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.9)' }}>{humanize(tt.kind)}</Badge>
+                                  <Badge variant="outline" className="text-[10px] capitalize">{humanize(tt.kind)}</Badge>
                                   {tt.includesVirtualAccess && <Badge variant="secondary" className="text-[10px]">+ online access</Badge>}
                                   {tt.groupMinQty && tt.groupPctOff && <Badge variant="secondary" className="text-[10px]">{tt.groupPctOff}% off groups of {tt.groupMinQty}+</Badge>}
                                   {remaining !== null && remaining <= 20 && <Badge variant="destructive" className="text-[10px]">{remaining === 0 ? 'Sold out' : `${remaining} left`}</Badge>}
+                                  {!ticketCheckoutSupported(tt) && <Badge variant="outline" className="text-[10px]">Checkout unavailable in {tt.currency}</Badge>}
                                   {remaining === 0 && (
-                                    <button type="button" className="efx-underline-slide-link text-[11px] font-semibold text-amber-300" style={{ color: 'inherit' }} onClick={() => openWaitlist(tt.id)}>
+                                    <button type="button" className="text-[11px] font-semibold text-primary underline underline-offset-2" onClick={() => openWaitlist(tt.id)}>
                                       Join waitlist
                                     </button>
                                   )}
                                 </div>
                               </div>
-                              <p className="whitespace-nowrap text-lg font-extrabold text-emerald-300">{tt.priceMinor === 0 ? 'Free' : money(tt.priceMinor)}</p>
+                              <p className="shrink-0 whitespace-nowrap text-lg font-extrabold text-primary">{tt.priceMinor === 0 ? 'Free' : money(tt.priceMinor, tt.currency)}</p>
                             </div>
                           </div>
                         )
@@ -887,31 +921,31 @@ export default function EventDetail({ slug }: { slug: string }) {
                         // real RSVP state (pending/declined), replaces the CTA.
                         <div className="space-y-2.5">
                           {mine.rsvpStatus === 'PENDING' ? (
-                            <div className="rounded-xl border border-amber-300/40 bg-amber-300/10 p-3 text-center">
-                              <p className="text-sm font-semibold text-amber-200">Invitation awaiting approval</p>
-                              <p className="mt-0.5 text-xs text-white/70">The organizer is reviewing your RSVP — you will be notified when they decide.</p>
+                            <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 text-center">
+                              <p className="text-sm font-semibold text-amber-700 dark:text-amber-300">Invitation awaiting approval</p>
+                              <p className="mt-0.5 text-xs text-muted-foreground">The organizer is reviewing your RSVP — you will be notified when they decide.</p>
                             </div>
                           ) : mine.rsvpStatus === 'DECLINED' ? (
-                            <div className="rounded-xl border border-red-400/40 bg-red-400/10 p-3 text-center">
-                              <p className="text-sm font-semibold text-red-200">RSVP declined</p>
-                              <p className="mt-0.5 text-xs text-white/70">The organizer was unable to accommodate this RSVP.</p>
+                            <div className="rounded-xl border border-destructive/25 bg-destructive/5 p-3 text-center">
+                              <p className="text-sm font-semibold text-destructive">RSVP declined</p>
+                              <p className="mt-0.5 text-xs text-muted-foreground">The organizer was unable to accommodate this RSVP.</p>
                             </div>
                           ) : (
                             <>
                               <div className="space-y-1.5">
-                                <label htmlFor="invite-code" className="text-xs font-semibold text-white/80">Invitation code</label>
+                                <label htmlFor="invite-code" className="text-xs font-semibold text-foreground">Invitation code</label>
                                 <input
                                   id="invite-code"
                                   value={inviteCode}
                                   onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
                                   placeholder="e.g. DONOR2026"
                                   autoComplete="off"
-                                  className="h-10 w-full rounded-lg border border-white/30 bg-white/10 px-3 text-sm text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-emerald-300/60"
+                                  className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
                                 />
                               </div>
                               <button
                                 type="button"
-                                className="efx-neon-pulse-button w-full"
+                                className="min-h-11 w-full rounded-xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:opacity-50"
                                 onClick={() => {
                                   const trimmed = inviteCode.trim()
                                   if (!trimmed) {
@@ -923,27 +957,29 @@ export default function EventDetail({ slug }: { slug: string }) {
                               >
                                 Redeem invitation
                               </button>
-                              <p className="text-center text-[11px] text-white/60">Approved invitations unlock the private address and tickets.</p>
+                              <p className="text-center text-xs leading-relaxed text-muted-foreground">Approved invitations unlock the private address and tickets.</p>
                             </>
                           )}
                         </div>
                       ) : (
                         <>
                           {event.visibility === 'INVITE_ONLY' && mine.rsvpStatus === 'APPROVED' && (
-                            <p className="rounded-xl border border-emerald-300/40 bg-emerald-300/10 px-3 py-2 text-center text-xs font-semibold text-emerald-200">
+                            <p className="rounded-xl border border-primary/25 bg-primary/5 px-3 py-2 text-center text-xs font-semibold text-primary">
                               Invitation approved — private address unlocked{mine.rsvpGuests ? ` · ${mine.rsvpGuests} ${mine.rsvpGuests === 1 ? 'place' : 'places'}` : ''}
                             </p>
                           )}
-                          <button type="button" className="efx-neon-pulse-button w-full" onClick={() => { setBuyQty({}); setBuyOpen(true) }}>
-                            {saleable.some((t) => t.priceMinor > 0) ? 'Get tickets' : 'Free RSVP'}
-                          </button>
-                          <p className="text-center text-[11px] text-white/60">Secure checkout · Mobile money / cards via Hubtel</p>
+                          {checkoutAvailable ? <button type="button" className="min-h-11 w-full rounded-xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:opacity-50" disabled={!canBook} onClick={openBooking}>
+                            {supportedSaleable.some((t) => t.priceMinor > 0) ? 'Choose tickets' : 'Register for free'}
+                          </button> : <p className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 text-sm text-foreground">Online payment for these ticket currencies is not available yet. Contact the organizer for alternatives.</p>}
+                          {checkoutAvailable && <p className="text-center text-xs leading-relaxed text-muted-foreground">{supportedSaleable.some((t) => t.priceMinor > 0) ? 'Final payment methods are shown at checkout.' : 'Free registration is confirmed when your tickets are issued.'}</p>}
                         </>
                       )}
                     </>
                   )}
-                  {!mine.following && event.status !== 'CANCELLED' && (
-                    <button type="button" className="w-full rounded-xl border border-white/30 bg-white/10 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-white/20" onClick={() => void toggleFollow()}>Follow {event.org.name}</button>
+                  {!data.canManage && !data.isEventHost && event.status !== 'CANCELLED' && (
+                    <button type="button" className="w-full rounded-xl border border-border bg-background px-4 py-3 text-sm font-semibold text-foreground transition-colors hover:bg-muted disabled:opacity-60" disabled={followingBusy} aria-pressed={mine.following} onClick={() => void toggleFollow()}>
+                      {followingBusy ? 'Updating…' : mine.following ? 'Following · tap to unfollow' : 'Follow ' + event.org.name}
+                    </button>
                   )}
                 </div>
               </div>
@@ -976,10 +1012,30 @@ export default function EventDetail({ slug }: { slug: string }) {
                   </CardContent>
                 </Card>
               )}
-            </div>
+            </aside>
           </div>
         </div>
       </div>
+
+      {canBook && !buyOpen && (
+        <div className="ievx-mobile-booking-bar fixed inset-x-0 z-30 border-t border-border bg-card/95 px-4 py-2.5 shadow-[0_-8px_30px_rgba(5,30,33,0.10)] backdrop-blur-xl lg:hidden"
+          role="region" aria-label="Quick event registration">
+          <div className="mx-auto flex max-w-xl items-center justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[11px] font-semibold text-muted-foreground">Tickets for {event.title}</p>
+              <p className="text-sm font-extrabold text-foreground">
+                {supportedSaleable.some((tt) => tt.priceMinor === 0)
+                  ? 'Free entry available'
+                  : 'From ' + money(Math.min(...supportedSaleable.map((tt) => tt.priceMinor)), 'GHS')}
+              </p>
+            </div>
+            <Button className="h-11 shrink-0 rounded-xl px-5 font-bold" onClick={openBooking}>
+              {supportedSaleable.some((tt) => tt.priceMinor > 0) ? 'Get tickets' : 'Register free'}
+              <ChevronLeft className="ml-1.5 size-4 rotate-180" aria-hidden />
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Buy dialog */}
       <Dialog open={buyOpen} onOpenChange={(open) => { if (!placing) setBuyOpen(open) }}>
@@ -989,14 +1045,14 @@ export default function EventDetail({ slug }: { slug: string }) {
             <p className="text-sm text-muted-foreground">Choose tickets, souvenirs or both. Stock and payment totals are confirmed by the server.</p>
           </DialogHeader>
           <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4 ievx-scrollbar sm:px-5">
-            {saleable.map((tt) => {
+            {supportedSaleable.map((tt) => {
               const qty = buyQty[tt.id] ?? 0
-              const max = Math.min(tt.perBuyerLimit, tt.quota > 0 ? tt.quota - tt.soldCount - tt.reservedCount : tt.perBuyerLimit)
+              const max = ticketAvailability(tt)
               return (
-                <div key={tt.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/70 bg-card p-3 sm:flex-nowrap">
+                <div key={tt.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-muted/20 p-3 sm:flex-nowrap">
                   <div className="min-w-0">
                     <p className="text-sm font-semibold">{tt.name}</p>
-                    <p className="text-xs text-muted-foreground">{tt.priceMinor === 0 ? 'Free' : money(tt.priceMinor)} each{tt.perBuyerLimit ? ` · max ${tt.perBuyerLimit}` : ''}</p>
+                    <p className="text-xs text-muted-foreground">{tt.priceMinor === 0 ? 'Free' : money(tt.priceMinor, tt.currency)} each{tt.perBuyerLimit ? ` · max ${tt.perBuyerLimit}` : ''}</p>
                     {tt.quota > 0 && <p className="mt-1 text-[11px] text-muted-foreground">{Math.max(0, tt.quota - tt.soldCount - tt.reservedCount)} seats remaining</p>}
                     {tt.includesVirtualAccess && <Badge variant="secondary" className="mt-1 text-[10px]">Includes online access</Badge>}
                   </div>
@@ -1050,7 +1106,7 @@ export default function EventDetail({ slug }: { slug: string }) {
             </div>
             <button
               type="button"
-              className="efx-neon-pulse-button w-full"
+              className="min-h-12 w-full rounded-xl bg-primary px-4 py-3 text-sm font-extrabold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed"
               style={checkoutDisabled ? { opacity: 0.55, cursor: 'not-allowed', animation: 'none' } : undefined}
               disabled={checkoutDisabled}
               onClick={() => void placeOrder()}

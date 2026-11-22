@@ -12,7 +12,7 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
     const event = await db.event.findFirst({
       where: { OR: [{ slug: id }, { id }] },
       include: {
-        org: { select: { id: true, name: true, slug: true, tagline: true, logoUrl: true, verifiedAt: true, orgType: true } },
+        org: { select: { id: true, name: true, slug: true, tagline: true, logoUrl: true, verifiedAt: true, orgType: true, ownerId: true } },
         venue: true,
         series: true,
         agenda: { orderBy: [{ sortOrder: 'asc' }, { startsAt: 'asc' }] },
@@ -78,12 +78,18 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
       : null
     // A spread of included Prisma relations accidentally exposes private media
     // metadata. Explicitly replace the relations with public projections.
+    const isEventHost = Boolean(session && (isOrgMember || event.org.ownerId === session.user.id))
     const { media, venue: _venue, broadcasts, ...safeEvent } = event
     void _venue
 
     return jsonOk({
       event: {
         ...safeEvent,
+        org: {
+          id: event.org.id, name: event.org.name, slug: event.org.slug,
+          tagline: event.org.tagline, logoUrl: event.org.logoUrl,
+          verifiedAt: event.org.verifiedAt, orgType: event.org.orgType,
+        },
         tags: parseTags(event.tags),
         venueId: redactVenue ? null : event.venueId,
         directionsUrl: redactVenue ? null : event.directionsUrl,
@@ -101,6 +107,7 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
       stats: { followers: followStats, going: interested, comments, ratingAvg, ratingCount: reviews._count },
       mine,
       canManage: Boolean(isOrgMember),
+      isEventHost,
     })
   })
 }

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { connectRealtime } from '../realtime'
 import {
   LayoutDashboard, CalendarPlus, CalendarClock, Users, Ticket, ShoppingBag, Radio, Megaphone, MessageSquare, Wallet, UserCog, CreditCard, Settings,
-  ChevronLeft, ChevronRight, ChevronDown, Plus, Loader2, Camera, ScanLine, Search, Play, Square, RefreshCw, KeyRound, Pause, PlayCircle, Trash2, FileText, ShieldAlert, TrendingUp, Repeat, Activity, Vote, HandCoins, Sparkles, Download, Upload, CheckCircle2, Eye, EyeOff, Flag, History, Clock, MapPin, Pencil,
+  ChevronLeft, ChevronRight, ChevronDown, Plus, Loader2, Camera, ScanLine, Search, Play, Square, RefreshCw, KeyRound, Pause, PlayCircle, Trash2, FileText, ShieldAlert, TrendingUp, Repeat, Activity, Vote, HandCoins, Sparkles, Download, Upload, CheckCircle2, Eye, EyeOff, Flag, History, Clock, MapPin, Pencil, Share2, X, AlertCircle, FilterX, CalendarRange,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -13,7 +13,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Switch } from '@/components/ui/switch'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { useToast } from '@/hooks/use-toast'
@@ -24,12 +24,15 @@ import { money, dateLong, timeRange, humanize, statusTone, relative, moneyToInpu
 import { PlayerSim } from '../components/PlayerSim'
 import { EmptyState } from '../components/EventCard'
 import { scanMayQueueOffline } from '../lib/checkin-policy'
+import { acknowledgedScanIds, acknowledgePendingScans, isAlreadyPending, loadPendingScans, offlineScanScope, savePendingScan, type PendingScan } from '../lib/checkin-offline-storage'
 import { OrganizationIdentityFields, emptyOrgFields } from '../components/OrganizationIdentityFields'
 import { OrganizerTypeDetails } from '../components/OrganizerTypeDetails'
 import { ORGANIZER_TYPE_CONFIG, organizerType, type OrganizerType, type ProfileDetails } from '@/lib/organization-types'
 import { VerificationDocuments } from '../components/VerificationDocuments'
 import { WorkspaceNavigation } from '../components/WorkspaceNavigation'
 import { WorkspaceMetric } from '../components/WorkspaceMetric'
+import { AdmissionOperationsPanel } from '../components/AdmissionOperationsPanel'
+import { scannerSessionKey } from '../lib/scanner-session-local'
 import { GrowthCommandCenter } from '../components/GrowthCommandCenter'
 import { MerchandiseReconciliationView } from '../components/MerchandiseReconciliationView'
 import { OrganizerEventCover } from '../components/OrganizerEventCover'
@@ -38,6 +41,8 @@ import { EventOperationsEditor } from '../components/EventOperationsEditor'
 import { TicketSalesEditor, TicketSalesFields, salesPayload, type TicketSalesRow, type TicketSalesForm } from '../components/TicketSalesControls'
 import { VenueLocationFields } from '../components/VenueLocationFields'
 import { COUNTRY_NAMES } from '../lib/venue-locations'
+import { filterOrganizerEvents, organizerEventCounts, ORGANIZER_EVENT_FILTERS, eventStatusConfirmation, eventTransitionAllowed, isEventShareable, type OrganizerEventFilter } from '../lib/organizer-event-view'
+import { attendeeEventRoute, selectAttendeeEvent, validScopedEventId } from '../lib/attendee-event-context'
 
 interface OrgEvent {
   id: string
@@ -223,7 +228,7 @@ export default function OrganizerWorkspace({ route }: { route: Route }) {
           {section === 'events' && <EventsManager orgId={activeOrg.orgId} role={activeOrg.role} autoNew={route.query.get('new') === '1'} />}
           {section === 'orders' && <OrdersView orgId={activeOrg.orgId} />}
           {section === 'merchandise' && (canViewMerchandise ? <MerchandiseReconciliationView key={activeOrg.orgId} orgId={activeOrg.orgId} role={activeOrg.role} /> : <RoleRestricted />)}
-          {section === 'attendees' && <AttendeesView orgId={activeOrg.orgId} />}
+          {section === 'attendees' && <AttendeesView orgId={activeOrg.orgId} initialEventId={route.query.get('eventId') ?? ''} />}
           {section === 'studio' && <StudioView orgId={activeOrg.orgId} />}
           {section === 'live' && <LiveRoomView orgId={activeOrg.orgId} />}
           {section === 'promotions' && <PromotionsView orgId={activeOrg.orgId} />}
@@ -495,114 +500,288 @@ interface TicketTypeRow extends TicketSalesRow {
 function EventsManager({ orgId, role, autoNew }: { orgId: string; role: string; autoNew?: boolean }) {
   const { toast } = useToast()
   const [events, setEvents] = useState<OrgEvent[] | null>(null)
+  const [total, setTotal] = useState(0)
+  const [page, setPage] = useState(1)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [query, setQuery] = useState('')
+  const [view, setView] = useState<OrganizerEventFilter>('ALL')
   const [editing, setEditing] = useState<OrgEvent | null>(null)
-  // R28: guest & invitation management for INVITE_ONLY events.
   const [guestsEvent, setGuestsEvent] = useState<OrgEvent | null>(null)
-  // R23: deep-link `/organizer?tab=events&new=1` (checklist + dashboard empty
-  // state) opens the create dialog on mount. `new=1` stays in the URL as a real
-  // deep link — the app view tree is keyed by route.raw (AppPortal), so ANY
-  // query rewrite (including a strip) remounts the view and would reset state;
-  // the sidebar nav always writes `?tab=<key>` without extra params, so the
-  // flag naturally disappears on the next section click.
   const [creating, setCreating] = useState(() => Boolean(autoNew) && ['OWNER', 'ADMIN', 'EVENT_MANAGER'].includes(role))
   const [stats, setStats] = useState<Record<string, { ticketsSold: number; grossMinor: number; checkedIn: number }>>({})
+  const [statusAction, setStatusAction] = useState<{ event: OrgEvent; to: 'PUBLISHED' | 'POSTPONED' | 'CANCELLED' } | null>(null)
+  const [statusReason, setStatusReason] = useState('')
+  const [transitionBusy, setTransitionBusy] = useState(false)
   const canPublish = ['OWNER', 'ADMIN', 'EVENT_MANAGER'].includes(role)
+  const loadedEvents = events ?? []
+  // Counts represent only the loaded page(s), never falsely claim to be a full
+  // platform-wide filter aggregate when there are more events in the backend.
+  const counts = useMemo(() => organizerEventCounts(loadedEvents, Date.now()), [events])
+  const displayed = useMemo(() => filterOrganizerEvents(loadedEvents, { view, query }), [events, view, query])
 
-  const load = useCallback(async () => {
-    const data = await api.get<{ items: OrgEvent[] }>(`/events?mine=1&orgId=${orgId}&pageSize=50`).catch(() => ({ items: [] }))
-    setEvents(data.items)
-    for (const e of data.items.slice(0, 12)) {
-      const stat = await api.get<{ ticketsSold: number; grossMinor: number; checkedIn: number }>(`/events/${e.id}/stats`).catch(() => null)
-      if (stat) setStats((s) => ({ ...s, [e.id]: stat }))
+  const load = useCallback(async (requestedPage = 1, append = false) => {
+    setLoadError(null)
+    if (!append) setRefreshing(true)
+    try {
+      const data = await api.get<{ items: OrgEvent[]; total: number }>(
+        `/events?mine=1&orgId=${encodeURIComponent(orgId)}&page=${requestedPage}&pageSize=24`,
+      )
+      setEvents((previous) => append && previous ? [...previous, ...data.items] : data.items)
+      setPage(requestedPage)
+      setTotal(data.total)
+      const checks = await Promise.allSettled(data.items.slice(0, 10).map((e) =>
+        api.get<{ ticketsSold: number; grossMinor: number; checkedIn: number }>(`/events/${e.id}/stats`)
+          .then((stat) => [e.id, stat] as const)
+      ))
+      const nextStats = Object.fromEntries(
+        checks.filter((entry): entry is PromiseFulfilledResult<readonly [string, { ticketsSold: number; grossMinor: number; checkedIn: number }]> => entry.status === 'fulfilled')
+          .map((entry) => entry.value),
+      )
+      setStats((previous) => append ? { ...previous, ...nextStats } : nextStats)
+    } catch (err) {
+      setLoadError(err instanceof ApiClientError ? err.message : 'Could not load events. Check your connection and try again.')
+    } finally {
+      setRefreshing(false)
+      setLoadingMore(false)
     }
   }, [orgId])
 
   useEffect(() => {
+    setEvents(null)
+    setStats({})
     void load()
   }, [load])
 
-  const openEditor = async (event: OrgEvent | null) => {
-    setEditing(event)
-    setCreating(!event)
-  }
-
-  const transition = async (event: OrgEvent, to: string) => {
+  const shareEvent = async (event: OrgEvent) => {
+    if (!isEventShareable(event)) return
+    const url = new URL('/#/event/' + encodeURIComponent(event.slug), window.location.origin).href
     try {
-      await api.post(`/events/${event.id}/transition`, { to })
-      toast({ title: `Event ${to.toLowerCase()}` })
-      await load()
-    } catch (err) {
-      toast({ title: 'Could not change status', description: err instanceof ApiClientError ? err.message : undefined, variant: 'destructive' })
+      if (navigator.share) await navigator.share({ title: event.title, url })
+      else {
+        await navigator.clipboard.writeText(url)
+        toast({ title: 'Event link copied', description: 'Share it with your audience.' })
+      }
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') return
+      // When native sharing is blocked, attempt the normal copy fallback.
+      try {
+        await navigator.clipboard.writeText(url)
+        toast({ title: 'Event link copied' })
+      } catch {
+        toast({ title: 'Could not share event', description: 'You can open its public page and copy the address.', variant: 'destructive' })
+      }
     }
   }
 
+  const confirmTransition = async () => {
+    if (!statusAction || transitionBusy) return
+    if (statusAction.to !== 'PUBLISHED' && statusReason.trim().length < 8) return
+    setTransitionBusy(true)
+    try {
+      await api.post(`/events/${statusAction.event.id}/transition`, {
+        to: statusAction.to,
+        ...(statusAction.to !== 'PUBLISHED' ? { reason: statusReason.trim() } : {}),
+      })
+      toast({
+        title: 'Event ' + statusAction.to.toLowerCase(),
+        description: statusAction.to === 'PUBLISHED'
+          ? 'Publishing completed. Check the public event page to verify its details.'
+          : 'Status updated. Attendee communication and any refunds require separate review.',
+      })
+      setStatusAction(null)
+      setStatusReason('')
+      await load()
+    } catch (err) {
+      toast({ title: 'Status was not changed', description: err instanceof ApiClientError ? err.message : 'Check your connection and retry.', variant: 'destructive' })
+    } finally {
+      setTransitionBusy(false)
+    }
+  }
+
+  const currentAction = statusAction ? eventStatusConfirmation(statusAction.to) : null
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="efx-animated-gradient-text iefx-page-title font-extrabold">Events</h1>
-          <p className="text-sm text-muted-foreground">{events?.length ?? '…'} events · series occurrences tracked separately</p>
+    <div className="space-y-4">
+      <section className="ievx-eventops-header overflow-hidden rounded-2xl border border-border bg-card p-4 sm:p-5" aria-label="Event management overview">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="max-w-xl">
+            <p className="flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-[.11em] text-primary">
+              <CalendarRange className="size-3.5" aria-hidden /> Event control center
+            </p>
+            <h2 className="mt-1 text-xl font-extrabold tracking-tight sm:text-2xl">Your events, under control.</h2>
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground sm:text-sm">
+              Find events, preview their public pages, manage registrations and confirm important status changes.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button type="button" variant="outline" size="sm" aria-label="Refresh events" disabled={refreshing} className="min-h-10 rounded-xl" onClick={() => void load()}>
+              <RefreshCw className={`size-4 ${refreshing ? 'animate-spin' : ''}`} aria-hidden />
+              <span className="hidden min-[420px]:inline">Refresh</span>
+            </Button>
+            {canPublish && (
+              <Button size="sm" className="min-h-10 rounded-xl" onClick={() => { setEditing(null); setCreating(true) }}>
+                <Plus className="size-4" aria-hidden /> Create
+              </Button>
+            )}
+          </div>
         </div>
+        {events !== null && (
+          <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-border/60 pt-3 text-xs text-muted-foreground">
+            <span><strong className="text-foreground">{total.toLocaleString()}</strong> events total</span>
+            <span><strong className="text-foreground">{counts.ATTENTION}</strong> need attention{total > loadedEvents.length ? ' (loaded)' : ''}</span>
+            <span><strong className="text-foreground">{counts.LIVE}</strong> live now{total > loadedEvents.length ? ' (loaded)' : ''}</span>
+          </div>
+        )}
+      </section>
 
+      <div className="flex min-w-0 flex-wrap items-center gap-2 sm:flex-nowrap">
+        <div className="relative min-w-0 flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+          <Input className="h-11 rounded-xl bg-card pl-9 pr-9" value={query} onChange={(event) => setQuery(event.target.value)}
+            placeholder="Find event by name, city or category" aria-label="Search your events" />
+          {query && <button type="button" className="absolute right-2 top-1/2 grid size-8 -translate-y-1/2 place-items-center rounded-lg hover:bg-muted" aria-label="Clear event search" onClick={() => setQuery('')}><X className="size-4" /></button>}
+        </div>
+        {(query || view !== 'ALL') && (
+          <Button type="button" variant="ghost" className="min-h-10 shrink-0" size="sm" onClick={() => { setQuery(''); setView('ALL') }}>
+            <FilterX className="size-4" aria-hidden /><span className="hidden sm:inline">Clear</span>
+          </Button>
+        )}
       </div>
-
-      {events === null ? (
-        Array.from({ length: 4 }).map((_, i) => <div key={i} className="ievx-skeleton h-24 rounded-2xl" />)
-      ) : events.length === 0 ? (
-        <EmptyState title="No events yet" description="Create your first event — free RSVP works immediately; paid sales unlock after verification." action={<Button className="rounded-full" onClick={() => void openEditor(null)}>Create event</Button>} />
-      ) : (
-        <div className="space-y-3">
-          {events.map((e) => (
-            <Card key={e.id} className="min-w-0 rounded-2xl ievx-card-hover">
-              <CardContent className="p-4 sm:p-5">
-                <div className="grid min-w-0 grid-cols-[64px_minmax(0,1fr)] items-start gap-x-3 gap-y-3 sm:grid-cols-[80px_minmax(0,1fr)] sm:gap-x-4">
+      <nav className="ievx-scrollbar -mx-1 flex min-w-0 items-center gap-2 overflow-x-auto px-1 pb-1" aria-label="Filter organizer events by status">
+        {ORGANIZER_EVENT_FILTERS.map((tab) => (
+          <button key={tab.value} type="button"
+            className={`ievx-eventops-filter min-h-10 shrink-0 rounded-xl border px-3 text-xs font-semibold transition-colors sm:text-sm ${view === tab.value ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-card text-muted-foreground hover:border-primary/60 hover:text-foreground'}`}
+            aria-pressed={view === tab.value}
+            onClick={() => setView(tab.value)}>
+            {tab.label} <span className={`ml-1 rounded-md px-1.5 py-0.5 text-[10px] tabular-nums ${view === tab.value ? 'bg-white/20' : 'bg-muted'}`}>{counts[tab.value]}</span>
+          </button>
+        ))}
+      </nav>
+      {loadError && <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-destructive/25 bg-destructive/5 p-4">
+        <p className="flex items-center gap-2 text-sm text-destructive"><AlertCircle className="size-4 shrink-0" aria-hidden />{loadError}</p>
+        <Button size="sm" variant="outline" onClick={() => void load()}>Retry</Button>
+      </div>}
+      {events === null && !loadError ? (
+        Array.from({ length: 3 }).map((_, i) => <div key={i} className="ievx-skeleton h-36 rounded-2xl" />)
+      ) : events !== null && events.length === 0 ? (
+        <EmptyState title="No events yet" description="Create your first event to start building your audience and managing registration."
+          action={canPublish ? <Button size="sm" className="rounded-xl" onClick={() => setCreating(true)}><Plus className="mr-1 size-4" />Create event</Button> : undefined} />
+      ) : events !== null && displayed.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-border bg-card px-5 py-10 text-center">
+          <Search className="mx-auto size-7 text-muted-foreground/70" aria-hidden />
+          <p className="mt-2 text-sm font-bold">No matching events in the loaded list</p>
+          <p className="mt-1 text-xs text-muted-foreground">{total > loadedEvents.length ? 'Load more events or ' : ''}Try another search or filter.</p>
+          <Button size="sm" variant="outline" className="mt-3 rounded-xl" onClick={() => { setView('ALL'); setQuery('') }}>Clear filters</Button>
+        </div>
+      ) : events !== null ? (
+        <div className="space-y-3" aria-live="polite">
+          <p className="text-xs text-muted-foreground">Showing {displayed.length} matching event{displayed.length === 1 ? '' : 's'} from {loadedEvents.length} loaded</p>
+          {displayed.map((e) => (
+            <Card key={e.id} className="ievx-eventops-card min-w-0 gap-0 rounded-2xl border-border/80 bg-card py-0">
+              <CardContent className="space-y-3 p-3.5 sm:p-4">
+                <div className="flex min-w-0 items-start gap-3 sm:gap-4">
                   <OrganizerEventCover key={e.coverImageUrl ?? 'no-cover'} src={e.coverImageUrl} title={e.title} />
-                  <div className="min-w-0 self-center space-y-2">
-                    <h2 className="min-w-0 text-base font-bold leading-snug [overflow-wrap:break-word]">{e.title}</h2>
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <Badge variant={statusTone(e.status) === 'success' ? 'default' : 'secondary'} className="capitalize text-[11px]">{humanize(e.status)}</Badge>
-                      {e.visibility !== 'PUBLIC' && <Badge variant="outline" className="text-[11px]">{humanize(e.visibility)}</Badge>}
-                      {e.seriesId && <Badge variant="outline" className="gap-1 text-[11px]"><Repeat className="size-3" aria-hidden /> Series</Badge>}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                      <Badge variant={statusTone(e.status) === 'success' ? 'default' : 'secondary'} className="text-[10px]">{humanize(e.status)}</Badge>
+                      {e.visibility !== 'PUBLIC' && <Badge variant="outline" className="text-[10px]">{humanize(e.visibility)}</Badge>}
+                      {e.seriesId && <Badge variant="outline" className="text-[10px]"><Repeat className="mr-1 size-3" aria-hidden />Series</Badge>}
                     </div>
-                  </div>
-                  <div className="col-span-2 min-w-0 space-y-1.5 text-sm leading-relaxed text-muted-foreground">
-                    <p>{dateLong(e.startsAt)} · {humanize(e.categorySlug)} · {e.mode === 'VIRTUAL' ? 'Online' : e.city ?? 'Location to be confirmed'}</p>
-                    {stats[e.id] && <p>{stats[e.id].ticketsSold.toLocaleString()} tickets · gross {money(stats[e.id].grossMinor)} · {stats[e.id].checkedIn.toLocaleString()} checked in</p>}
-                  </div>
-                  <div className="col-span-2 grid grid-cols-2 gap-2 border-t border-border/60 pt-3 sm:flex sm:flex-wrap sm:justify-end">
-                    {canPublish && ['DRAFT', 'SCHEDULED'].includes(e.status) && (
-                      <Button size="sm" className="min-h-10 w-full rounded-lg sm:w-auto" onClick={() => void transition(e, 'PUBLISHED')}>Publish</Button>
-                    )}
-                    {canPublish && e.status === 'PUBLISHED' && (
-                      <Button size="sm" variant="outline" className="min-h-10 w-full rounded-lg sm:w-auto" onClick={() => void transition(e, 'POSTPONED')}>Postpone</Button>
-                    )}
-                    {['OWNER', 'ADMIN'].includes(role) && ['PUBLISHED', 'POSTPONED', 'SCHEDULED'].includes(e.status) && (
-                      <Button size="sm" variant="destructive" className="min-h-10 w-full rounded-lg sm:w-auto" onClick={() => void transition(e, 'CANCELLED')}>Cancel</Button>
-                    )}
-                    <Button size="sm" variant="outline" className="min-h-10 w-full rounded-lg sm:w-auto" onClick={() => void openEditor(e)}>Edit</Button>
-                    {canPublish && e.visibility === 'INVITE_ONLY' && (
-                      <Button size="sm" variant="outline" className="min-h-10 w-full rounded-lg sm:w-auto" onClick={() => setGuestsEvent(e)}><Users className="mr-1 size-4" aria-hidden /> Guests</Button>
+                    <h3 className="mt-1.5 text-sm font-extrabold leading-snug [overflow-wrap:anywhere] sm:text-base">{e.title}</h3>
+                    <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+                      {dateLong(e.startsAt)} · {e.mode === 'VIRTUAL' ? 'Online' : e.city || 'Venue to be announced'}
+                    </p>
+                    {stats[e.id] && (
+                      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+                        <span><strong className="font-bold text-foreground">{stats[e.id].ticketsSold.toLocaleString()}</strong> tickets</span>
+                        <span><strong className="font-bold text-foreground">{stats[e.id].checkedIn.toLocaleString()}</strong> checked in</span>
+                        <span>Gross <strong className="font-bold text-foreground">{money(stats[e.id].grossMinor)}</strong></span>
+                      </div>
                     )}
                   </div>
                 </div>
+                <div className="flex flex-wrap items-center gap-2 border-t border-border/70 pt-3">
+                  <Button type="button" size="sm" variant="outline" className="min-h-10 grow rounded-lg sm:grow-0" onClick={() => navigate(`/event/${e.slug}`)}>
+                    <Eye className="size-4" aria-hidden />{e.status === 'DRAFT' || e.status === 'SCHEDULED' ? 'Preview' : 'View'}
+                  </Button>
+                  {canPublish && <Button type="button" size="sm" variant="outline" className="min-h-10 grow rounded-lg sm:grow-0" onClick={() => { setEditing(e); setCreating(false) }}>
+                    <Pencil className="size-4" aria-hidden />Edit
+                  </Button>}
+                  <Button type="button" size="sm" variant="outline" className="min-h-10 grow rounded-lg sm:grow-0" onClick={() => navigate(attendeeEventRoute(e.id))}>
+                    <Users className="size-4" aria-hidden />Attendees
+                  </Button>
+                  {isEventShareable(e) && <Button type="button" size="sm" variant="outline" className="min-h-10 grow rounded-lg sm:grow-0" onClick={() => void shareEvent(e)}>
+                    <Share2 className="size-4" aria-hidden />Share
+                  </Button>}
+                  {canPublish && e.visibility === 'INVITE_ONLY' && <Button type="button" size="sm" variant="outline" className="min-h-10 grow rounded-lg sm:grow-0" onClick={() => setGuestsEvent(e)}>
+                    <Users className="size-4" aria-hidden />Invitations
+                  </Button>}
+                </div>
+                {(eventTransitionAllowed(role, e.status, 'PUBLISHED') || eventTransitionAllowed(role, e.status, 'POSTPONED') || eventTransitionAllowed(role, e.status, 'CANCELLED')) && (
+                  <div className="flex flex-wrap items-center justify-end gap-2 rounded-xl bg-muted/50 p-2">
+                    <span className="mr-auto pl-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Status actions</span>
+                    {eventTransitionAllowed(role, e.status, 'PUBLISHED') &&
+                      <Button type="button" size="sm" className="min-h-9 rounded-lg" onClick={() => { setStatusReason(''); setStatusAction({ event:e, to:'PUBLISHED' }) }}>Publish</Button>}
+                    {eventTransitionAllowed(role, e.status, 'POSTPONED') &&
+                      <Button type="button" size="sm" variant="outline" className="min-h-9 rounded-lg" onClick={() => { setStatusReason(''); setStatusAction({ event:e, to:'POSTPONED' }) }}>Postpone</Button>}
+                    {eventTransitionAllowed(role, e.status, 'CANCELLED') &&
+                      <Button type="button" size="sm" variant="destructive" className="min-h-9 rounded-lg" onClick={() => { setStatusReason(''); setStatusAction({ event:e, to:'CANCELLED' }) }}>Cancel</Button>}
+                  </div>
+                )}
               </CardContent>
             </Card>
           ))}
+        </div>
+      ) : null}
+      {events !== null && loadedEvents.length < total && (
+        <div className="flex flex-col items-center gap-2 pt-2">
+          <p className="text-xs text-muted-foreground">{loadedEvents.length} of {total} events loaded. Filters above apply to loaded events only.</p>
+          <Button type="button" variant="outline" size="sm" className="min-h-10 rounded-xl px-5" disabled={loadingMore}
+            onClick={() => { setLoadingMore(true); void load(page + 1, true) }}>
+            {loadingMore ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <ChevronDown className="size-4" aria-hidden />}
+            Load more events
+          </Button>
         </div>
       )}
 
       {(editing !== null || creating) && <EventEditor
         key={creating ? 'create-new' : editing?.id ?? 'none'}
-        orgId={orgId}
-        event={creating ? null : editing}
+        orgId={orgId} event={creating ? null : editing}
         onClose={() => { setEditing(null); setCreating(false); void load() }}
       />}
+      {guestsEvent && <GuestsDialog key={guestsEvent.id} event={guestsEvent}
+        onClose={() => { setGuestsEvent(null); void load() }} />}
 
-      {guestsEvent && <GuestsDialog
-        key={guestsEvent.id}
-        event={guestsEvent}
-        onClose={() => { setGuestsEvent(null); void load() }}
-      />}
+      <Dialog open={Boolean(statusAction)} onOpenChange={(open) => { if (!open && !transitionBusy) { setStatusAction(null); setStatusReason('') } }}>
+        <DialogContent className="max-w-[calc(100%-2rem)] rounded-2xl sm:max-w-md">
+          <DialogHeader className="text-left">
+            <DialogTitle>{currentAction?.title}</DialogTitle>
+            <DialogDescription className="text-sm leading-relaxed">{currentAction?.description}</DialogDescription>
+          </DialogHeader>
+          <div className="rounded-xl border border-border bg-muted/50 px-3 py-2.5 text-sm">
+            <span className="block text-[11px] font-semibold text-muted-foreground">Event affected</span>
+            <span className="font-bold">{statusAction?.event.title}</span>
+          </div>
+          {statusAction && statusAction.to !== 'PUBLISHED' && (
+            <div className="space-y-1.5">
+              <Label htmlFor="event-transition-reason">Reason for your records</Label>
+              <Textarea id="event-transition-reason" value={statusReason} onChange={(e) => setStatusReason(e.target.value)}
+                maxLength={500} rows={3} placeholder="Explain the change (at least 8 characters)" aria-describedby="event-transition-hint" />
+              <p id="event-transition-hint" className="text-xs text-muted-foreground">This explanation is recorded with the status change; it does not itself send a message to attendees.</p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" className="min-h-11 rounded-xl" disabled={transitionBusy} onClick={() => { setStatusAction(null); setStatusReason('') }}>Keep event unchanged</Button>
+            <Button variant={statusAction?.to === 'CANCELLED' ? 'destructive' : 'default'}
+              disabled={transitionBusy || (statusAction?.to !== 'PUBLISHED' && statusReason.trim().length < 8)}
+              className="min-h-11 rounded-xl" onClick={() => void confirmTransition()}>
+              {transitionBusy && <Loader2 className="size-4 animate-spin" aria-hidden />}
+              {currentAction?.button}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
@@ -1550,76 +1729,241 @@ function OrdersView({ orgId }: { orgId: string }) {
 
 // ── Attendees + check-in ────────────────────────────────────────────────────
 
-function AttendeesView({ orgId }: { orgId: string }) {
+function AttendeesView({ orgId, initialEventId }: { orgId: string; initialEventId: string }) {
   const { toast } = useToast()
+  const userId = usePortal((state) => state.user?.id)
+  const queueScope = useMemo(() => userId ? offlineScanScope(userId, orgId) : '', [userId, orgId])
   const [events, setEvents] = useState<OrgEvent[]>([])
   const [eventId, setEventId] = useState('')
+  const [eventsLoading, setEventsLoading] = useState(true)
+  const [eventsError, setEventsError] = useState('')
   const [attendees, setAttendees] = useState<unknown[] | null>(null)
-  const [stats, setStats] = useState<{ ticketsIssued: number; admitted: number; remaining: number; anomalies: number } | null>(null)
+  const [attendeesError, setAttendeesError] = useState('')
   const [scanMode, setScanMode] = useState(false)
   const [scanValue, setScanValue] = useState('')
   const [lookupQuery, setLookupQuery] = useState('')
   const [lookupError, setLookupError] = useState('')
   const [lastResult, setLastResult] = useState<{ result: string; detail: string; ticket?: { holderName: string; ticketType: string } } | null>(null)
-  const [offlineQueue, setOfflineQueue] = useState<{ eventId: string; payload: string; clientScanId: string; at: string }[]>([])
+  const [offlineQueue, setOfflineQueue] = useState<PendingScan[]>([])
+  const [queueReady, setQueueReady] = useState(false)
+  const [queueError, setQueueError] = useState('')
+  const [syncBusy, setSyncBusy] = useState(false)
+  const [online, setOnline] = useState(true)
   const [scanBusy, setScanBusy] = useState(false)
+  const [browserSessionId, setBrowserSessionId] = useState('')
+  const [monitorRevision, setMonitorRevision] = useState(0)
   const videoRef = useRef<HTMLVideoElement | null>(null)
-  const scanIdRef = useRef(0)
   const scanBusyRef = useRef(false)
-  const recentScanRef = useRef<{ payload: string; at: number } | null>(null)
+  const pendingRef = useRef<PendingScan[]>([])
+  const selectedEventRef = useRef('')
+  const recentScanRef = useRef<{ payload: string; eventId: string; at: number } | null>(null)
 
   useEffect(() => {
-    void api.get<{ items: OrgEvent[] }>(`/events?mine=1&orgId=${orgId}&status=ALL&pageSize=50`).then((d) => {
-      setEvents(d.items)
-      if (d.items[0]) setEventId(d.items[0].id)
-    })
-  }, [orgId])
+    setBrowserSessionId('')
+    if (!userId || !orgId || !eventId) return
+    try {
+      setBrowserSessionId(localStorage.getItem(scannerSessionKey(userId, orgId, eventId)) ?? '')
+    } catch {
+      // Browser storage can be disabled. Scanning without registration remains
+      // available, with events attributed to staff rather than a device.
+    }
+  }, [eventId, userId, orgId])
 
-  const refresh = useCallback(async () => {
+  const registerBrowserSession = (id: string) => {
+    if (!userId || !eventId || !id) return
+    try {
+      localStorage.setItem(scannerSessionKey(userId, orgId, eventId), id)
+    } catch {
+      toast({ description: 'This browser could not remember the scanner session after reload.', variant: 'destructive' })
+    }
+    setBrowserSessionId(id)
+  }
+
+  useEffect(() => { pendingRef.current = offlineQueue }, [offlineQueue])
+
+  // Recover this user's pending scans after refresh/reopening the browser.
+  // Only the authenticated staff member + active org scope is loaded.
+  useEffect(() => {
+    let disposed = false
+    const load = async () => {
+      setQueueReady(false)
+      setQueueError('')
+      setOfflineQueue([])
+      pendingRef.current = []
+      if (!queueScope) return
+      try {
+        const pending = await loadPendingScans(queueScope)
+        if (!disposed) { pendingRef.current = pending; setOfflineQueue(pending); setQueueReady(true) }
+      } catch (error) {
+        if (!disposed) {
+          setQueueError(error instanceof Error ? error.message : 'Local storage is unavailable.')
+          setQueueReady(true)
+        }
+      }
+    }
+    void load()
+    return () => { disposed = true }
+  }, [queueScope])
+
+  useEffect(() => {
+    const updateNetwork = () => setOnline(navigator.onLine)
+    updateNetwork()
+    window.addEventListener('online', updateNetwork)
+    window.addEventListener('offline', updateNetwork)
+    return () => {
+      window.removeEventListener('online', updateNetwork)
+      window.removeEventListener('offline', updateNetwork)
+    }
+  }, [])
+
+  // An event-specific link can target an event older than the first 50.
+  // The separate lookup is intentionally tenant-scoped and membership-checked
+  // by the events API. No event id is trusted from the URL alone.
+  useEffect(() => {
+    const controller = new AbortController()
+    // Switching organizations must clear any previously selected event before
+    // allowing a new scan; responses from the former org are aborted.
+    selectedEventRef.current = ''
+    setEventId('')
+    setScanMode(false)
+    setEvents([])
+    const loadOptions = async () => {
+      setEventsLoading(true)
+      setEventsError('')
+      try {
+        const url = '/events?mine=1&orgId=' + encodeURIComponent(orgId) + '&status=ALL&pageSize=50'
+        const data = await api.get<{ items: OrgEvent[] }>(url, { signal: controller.signal })
+        let scopedMatch: OrgEvent | null = null
+        if (initialEventId && validScopedEventId(initialEventId) && !data.items.some((item) => item.id === initialEventId)) {
+          const scoped = await api.get<{ items: OrgEvent[] }>(
+            url + '&eventId=' + encodeURIComponent(initialEventId) + '&pageSize=1',
+            { signal: controller.signal },
+          )
+          scopedMatch = scoped.items.find((item) => item.id === initialEventId) ?? null
+        }
+        if (controller.signal.aborted) return
+        const selected = selectAttendeeEvent(data.items, initialEventId, scopedMatch)
+        selectedEventRef.current = selected.selectedId
+        setEvents(selected.events)
+        setEventId(selected.selectedId)
+        if (initialEventId && selected.selectedId !== initialEventId) {
+          setEventsError('That event was not found in this organization. Select an available event to manage its attendees.')
+        }
+      } catch (err) {
+        if (controller.signal.aborted) return
+        setEventsError(err instanceof ApiClientError ? err.message : 'Could not load the events for this organization.')
+        setEvents([])
+        setEventId('')
+      } finally {
+        if (!controller.signal.aborted) setEventsLoading(false)
+      }
+    }
+    void loadOptions()
+    return () => controller.abort()
+  }, [orgId, initialEventId])
+
+  const refresh = useCallback(async (signal?: AbortSignal) => {
     if (!eventId) return
-    const [att, st] = await Promise.all([
-      api.get<{ items: unknown[] }>(`/events/${eventId}/attendees?pageSize=100`).catch(() => ({ items: [] })),
-      api.get<{ ticketsIssued: number; admitted: number; remaining: number; anomalies: number }>(`/checkin/stats?eventId=${eventId}`).catch(() => null),
-    ])
-    setAttendees(att.items)
-    setStats(st)
+    const targetEventId = eventId
+    setAttendeesError('')
+    try {
+      const att = await api.get<{ items: unknown[] }>(
+        '/events/' + encodeURIComponent(targetEventId) + '/attendees?pageSize=100',
+        { signal },
+      )
+      if (signal?.aborted || selectedEventRef.current !== targetEventId) return
+      setAttendees(att.items)
+    } catch (err) {
+      if (signal?.aborted || selectedEventRef.current !== targetEventId) return
+      setAttendeesError(err instanceof ApiClientError ? err.message : 'Could not load the attendee list.')
+      setAttendees([])
+    }
   }, [eventId])
 
   useEffect(() => {
-    void refresh()
-  }, [refresh])
+    selectedEventRef.current = eventId
+    setAttendees(eventId ? null : [])
+    setAttendeesError('')
+    if (!eventId) return
+    const controller = new AbortController()
+    void refresh(controller.signal)
+    return () => controller.abort()
+  }, [eventId, refresh])
+
+  const changeEvent = (nextEventId: string) => {
+    if (scanBusyRef.current || !events.some((item) => item.id === nextEventId)) return
+    selectedEventRef.current = nextEventId
+    setScanMode(false)
+    setLastResult(null)
+    setScanValue('')
+    setLookupQuery('')
+    setLookupError('')
+    setEventId(nextEventId)
+    // Preserve this component and its in-tab offline queue. Dispatching a hash
+    // change here would remount the portal and discard unsubmitted scans.
+    window.history.replaceState(null, '', window.location.pathname + window.location.search + '#' + attendeeEventRoute(nextEventId))
+  }
 
   // Manual + camera scan submission (declared before the camera effect that calls it).
   const submitScan = async (payload: string) => {
     const code = payload.trim()
-    if (!eventId || !code || scanBusyRef.current) return
-    if (recentScanRef.current?.payload === code && Date.now() - recentScanRef.current.at < 5000) return
+    if (!eventId || !code || scanBusyRef.current || !queueReady || !queueScope) return
+    if (isAlreadyPending(pendingRef.current, eventId, code)) {
+      setLastResult({ result: 'QUEUED_OFFLINE', detail: 'This ticket is already pending for this event. Sync it before scanning again. It is not admitted yet.' })
+      setScanValue('')
+      return
+    }
+    if (recentScanRef.current?.payload === code && recentScanRef.current.eventId === eventId && Date.now() - recentScanRef.current.at < 5000) return
     scanBusyRef.current = true
     setScanBusy(true)
-    recentScanRef.current = { payload: code, at: Date.now() }
+    recentScanRef.current = { payload: code, eventId, at: Date.now() }
     const targetEventId = eventId
-    const clientScanId = 'web-' + Date.now() + '-' + scanIdRef.current++
+    const clientScanId = 'web-' + crypto.randomUUID()
     try {
       const result = await api.post<{ result: string; detail: string; ticket?: { holderName: string; ticketType: string } }>('/checkin/scan', {
         eventId: targetEventId,
         payload: code,
         clientScanId,
+        ...(browserSessionId ? { deviceSessionId: browserSessionId } : {}),
       })
-      setLastResult(result)
-      setScanValue('')
-      await refresh()
+      if (selectedEventRef.current === targetEventId) {
+        setLastResult(result)
+        setScanValue('')
+        await refresh()
+        setMonitorRevision((current) => current + 1)
+      }
     } catch (err) {
       // HTTP 400/401/403/409/429 errors are authoritative server decisions,
       // NOT evidence that this device is offline. Never queue rejected codes.
-      const networkFailure = scanMayQueueOffline(err, typeof navigator === 'undefined' ? true : navigator.onLine)
-      if (networkFailure) {
-        setOfflineQueue((queue) => [...queue, { eventId: targetEventId, payload: code, clientScanId, at: new Date().toISOString() }])
-        setLastResult({ result: 'QUEUED_OFFLINE', detail: 'Network unavailable. Scan queued in this browser tab; keep the tab open until you sync.' })
-        setScanValue('')
+      const networkFailure = scanMayQueueOffline(err, online)
+      if (networkFailure && !queueError) {
+        try {
+          const pending: PendingScan = { eventId: targetEventId, payload: code, clientScanId, at: new Date().toISOString() }
+          await savePendingScan(queueScope, pending)
+          pendingRef.current = [...pendingRef.current, pending]
+          setOfflineQueue(pendingRef.current)
+          if (selectedEventRef.current === targetEventId) {
+            setLastResult({
+              result: 'QUEUED_OFFLINE',
+              detail: 'Scan saved on this device for later verification. It is NOT an admission. Sync when connected.',
+            })
+            setScanValue('')
+          }
+        } catch (storageError) {
+          const message = storageError instanceof Error ? storageError.message : 'Local storage is unavailable.'
+          if (selectedEventRef.current === targetEventId) {
+            setLastResult({ result: 'ERROR', detail: 'Could not save offline scan. No admission was recorded. ' + message })
+            toast({ description: 'Offline scan was NOT saved. ' + message, variant: 'destructive' })
+          }
+        }
       } else {
-        const detail = err instanceof ApiClientError ? err.message : 'Could not verify this ticket.'
-        setLastResult({ result: 'ERROR', detail })
-        toast({ description: detail, variant: 'destructive' })
+        const detail = networkFailure && queueError
+          ? 'Offline storage is unavailable. This scan was NOT saved. ' + queueError
+          : err instanceof ApiClientError ? err.message : 'Could not verify this ticket.'
+        if (selectedEventRef.current === targetEventId) {
+          setLastResult({ result: 'ERROR', detail })
+          toast({ description: detail, variant: 'destructive' })
+        }
       }
     } finally {
       scanBusyRef.current = false
@@ -1629,12 +1973,17 @@ function AttendeesView({ orgId }: { orgId: string }) {
 
   // Camera preview + BarcodeDetector scanning where supported.
   useEffect(() => {
-    if (!scanMode) return
+    if (!scanMode || !eventId) return
+    let disposed = false
     let stream: MediaStream | null = null
     let timer: ReturnType<typeof setInterval> | null = null
     void (async () => {
       try {
         stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+        if (disposed) {
+          stream.getTracks().forEach((track) => track.stop())
+          return
+        }
         if (videoRef.current) {
           videoRef.current.srcObject = stream
           await videoRef.current.play()
@@ -1642,16 +1991,19 @@ function AttendeesView({ orgId }: { orgId: string }) {
         const w = window as unknown as { BarcodeDetector?: new (opts: { formats: string[] }) => { detect: (v: HTMLVideoElement) => Promise<{ rawValue: string }[]> } }
         if (w.BarcodeDetector && videoRef.current) {
           const detector = new w.BarcodeDetector({ formats: ['qr_code'] })
+          let detecting = false
           timer = setInterval(async () => {
-            if (!videoRef.current) return
+            if (disposed || detecting || scanBusyRef.current || !videoRef.current) return
+            detecting = true
             try {
               const codes = await detector.detect(videoRef.current)
-              if (codes[0]?.rawValue) {
-                setScanValue(codes[0].rawValue)
+              if (!disposed && selectedEventRef.current === eventId && codes[0]?.rawValue) {
                 void submitScan(codes[0].rawValue)
               }
             } catch {
               /* frame not ready */
+            } finally {
+              detecting = false
             }
           }, 700)
         } else {
@@ -1662,35 +2014,54 @@ function AttendeesView({ orgId }: { orgId: string }) {
       }
     })()
     return () => {
+      disposed = true
       if (timer) clearInterval(timer)
       stream?.getTracks().forEach((t) => t.stop())
     }
-  }, [scanMode])
+  }, [scanMode, eventId])
 
   const activeOfflineQueue = offlineQueue.filter((scan) => scan.eventId === eventId)
   const syncOffline = async () => {
-    if (activeOfflineQueue.length === 0 || !eventId) return
+    if (activeOfflineQueue.length === 0 || !eventId || !queueReady || !queueScope || syncBusy || !online) return
+    const targetEventId = eventId
     const batch = activeOfflineQueue.slice(0, 200)
+    setSyncBusy(true)
     try {
-      const result = await api.post<{ synced: number; results: { result: string; detail: string }[] }>('/checkin/sync', {
-        eventId,
-        scans: batch.map((scan) => ({ payload: scan.payload, clientScanId: scan.clientScanId, capturedOfflineAt: scan.at })),
+      const response = await api.post<{ synced: number; results: { result: string; detail: string }[] }>('/checkin/sync', {
+        eventId: targetEventId,
+        ...(browserSessionId ? { deviceSessionId: browserSessionId } : {}),
+        scans: batch.map((scan) => ({
+          payload: scan.payload, clientScanId: scan.clientScanId, capturedOfflineAt: scan.at,
+        })),
       })
-      const processedIds = new Set(batch.slice(0, result.synced).map((scan) => scan.clientScanId))
-      // Remove ONLY scans that the server says it processed. Preserve the rest
-      // for a later retry, and never sync another event's scans into this event.
-      setOfflineQueue((queue) => queue.filter((scan) => !(scan.eventId === eventId && processedIds.has(scan.clientScanId))))
-      const conflicts = result.results.filter((entry) => ['CONFLICT', 'DUPLICATE', 'INVALID'].includes(entry.result)).length
+      // The API processes scans in order, but may acknowledge only part of the
+      // batch; delete only corresponding IDs after validating its response.
+      const acknowledged = acknowledgedScanIds(batch, response.synced, response.results)
+      await acknowledgePendingScans(queueScope, acknowledged)
+      const remaining = await loadPendingScans(queueScope)
+      pendingRef.current = remaining
+      setOfflineQueue(remaining)
+      const admitted = response.results.filter((entry) => entry.result === 'ADMITTED').length
+      const conflicts = response.results.filter((entry) => ['CONFLICT', 'DUPLICATE', 'INVALID'].includes(entry.result)).length
       toast({
-        title: 'Synced ' + result.synced + ' offline scans',
-        description: conflicts > 0 ? conflicts + ' scans need review (duplicates/conflicts/invalid).' : 'All returned results reconciled.',
+        title: response.synced + ' scan' + (response.synced === 1 ? '' : 's') + ' reconciled',
+        description: admitted + ' admitted, ' + conflicts + ' conflict/duplicate/invalid. ' +
+          (remaining.some((scan) => scan.eventId === targetEventId) ? 'More scans remain pending.' : 'No pending scans for this event.'),
       })
-      await refresh()
+      if (targetEventId === selectedEventRef.current) {
+        await refresh()
+        setMonitorRevision((current) => current + 1)
+      }
     } catch (err) {
       toast({
-        description: err instanceof ApiClientError ? err.message + ' Scans remain queued in this tab.' : 'Still offline — scans remain queued in this tab.',
+        description: (err instanceof ApiClientError ? err.message : err instanceof Error ? err.message : 'Sync failed.') +
+          ' Unacknowledged scans remain on this device; retry safely using their original scan IDs.',
         variant: 'destructive',
       })
+      // If the server accepted some requests but confirmation was interrupted,
+      // replaying the exact same clientScanId safely retrieves its prior result.
+    } finally {
+      setSyncBusy(false)
     }
   }
 
@@ -1721,11 +2092,13 @@ function AttendeesView({ orgId }: { orgId: string }) {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="efx-animated-gradient-text iefx-page-title font-extrabold">Attendees & Check-in</h1>
-          {stats && <p className="text-sm text-muted-foreground">{stats.admitted}/{stats.ticketsIssued} admitted · {stats.anomalies} anomalies</p>}
+          <p className="text-sm text-muted-foreground">Admission monitoring and event check-in operations</p>
         </div>
         <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-          <Select value={eventId} onValueChange={(value) => { setEventId(value); setLookupQuery(''); setLookupError('') }}>
-            <SelectTrigger className="h-11 w-full min-w-0 rounded-xl sm:w-56" aria-label="Select event"><SelectValue /></SelectTrigger>
+          <Select value={eventId} onValueChange={changeEvent} disabled={eventsLoading || scanBusy || events.length === 0}>
+            <SelectTrigger className="h-11 w-full min-w-0 rounded-xl sm:w-56" aria-label="Select event for attendee check-in">
+              <SelectValue placeholder={eventsLoading ? 'Loading events…' : 'Choose an event'} />
+            </SelectTrigger>
             <SelectContent>{events.map((e) => <SelectItem key={e.id} value={e.id}>{e.title}</SelectItem>)}</SelectContent>
           </Select>
           {eventId && (
@@ -1735,17 +2108,79 @@ function AttendeesView({ orgId }: { orgId: string }) {
               </a>
             </Button>
           )}
-          <Button variant={scanMode ? 'default' : 'outline'} className="h-11 rounded-full" onClick={() => setScanMode((s) => !s)}>
+          <Button variant={scanMode ? 'default' : 'outline'} disabled={!eventId || eventsLoading || !queueReady} className="h-11 rounded-full" onClick={() => setScanMode((s) => !s)}>
             <ScanLine className="mr-1.5 h-4 w-4" /> {scanMode ? 'Close scanner' : 'Scan tickets'}
           </Button>
           <Button variant="outline" className="h-11 rounded-full" onClick={() => navigate('/collect')}>
             <ShoppingBag className="mr-1.5 h-4 w-4" /> Scan souvenirs
           </Button>
-          <Button variant="outline" size="icon" className="h-11 w-11 rounded-full" aria-label="Refresh attendee list" disabled={!eventId} onClick={() => void refresh()}>
+          <Button variant="outline" size="icon" className="h-11 w-11 rounded-full" aria-label="Refresh attendee list and admission monitor" disabled={!eventId} onClick={() => { void refresh(); setMonitorRevision((current) => current + 1) }}>
             <RefreshCw className="h-4 w-4" aria-hidden />
           </Button>
         </div>
       </div>
+
+      {eventsError && (
+        <div role="alert" className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
+          <p>{eventsError}</p>
+          <Button type="button" size="sm" variant="outline" className="mt-2 min-h-9 rounded-lg" onClick={() => navigate('/organizer?tab=attendees', { replace: true })}>
+            Reload event selection
+          </Button>
+        </div>
+      )}
+      {eventId && (
+        <div className="flex min-w-0 flex-wrap items-center gap-2 rounded-xl border border-primary/20 bg-primary/5 px-3 py-2 text-xs">
+          <span className="font-semibold text-muted-foreground">Managing admissions for</span>
+          <strong className="min-w-0 break-words text-foreground">{events.find((item) => item.id === eventId)?.title ?? 'Selected event'}</strong>
+          {offlineQueue.length > 0 && <span className="ml-auto font-semibold text-amber-700 dark:text-amber-400">{offlineQueue.length} pending offline scan{offlineQueue.length === 1 ? '' : 's'} across events</span>}
+        </div>
+      )}
+
+      {eventId && (
+        <AdmissionOperationsPanel
+          key={eventId}
+          eventId={eventId}
+          refreshKey={monitorRevision}
+          browserSessionId={browserSessionId}
+          onSessionRegistered={registerBrowserSession}
+        />
+      )}
+
+      <section aria-label="Offline scan recovery" className="rounded-2xl border border-border bg-card p-3.5 sm:p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <p className="flex items-center gap-2 text-sm font-bold">
+              <ShieldAlert className="size-4 text-amber-600" aria-hidden />
+              Offline scan recovery
+              {offlineQueue.length > 0 && <Badge variant="secondary">{offlineQueue.length} pending</Badge>}
+            </p>
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+              {queueReady ? 'Pending scans are kept in this browser between reloads until server reconciliation.' : 'Checking this browser for saved scans…'}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Badge variant={online ? 'secondary' : 'outline'}>{online ? 'Network online' : 'Offline'}</Badge>
+            <Button variant="outline" size="sm" className="min-h-10 rounded-xl"
+              disabled={!eventId || !queueReady || !online || syncBusy || activeOfflineQueue.length === 0}
+              onClick={() => void syncOffline()}>
+              {syncBusy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <RefreshCw className="size-4" aria-hidden />}
+              Sync {activeOfflineQueue.length > 0 ? activeOfflineQueue.length : ''} for event
+            </Button>
+          </div>
+        </div>
+        {queueError && <p role="alert" className="mt-2 rounded-lg border border-destructive/25 bg-destructive/5 p-2.5 text-xs text-destructive">
+          Offline storage is unavailable: {queueError} Scans cannot be saved for later.
+        </p>}
+        {offlineQueue.length > 0 && (
+          <p role="status" className="mt-2 text-xs font-semibold text-amber-700 dark:text-amber-300">
+            These are PENDING, not admitted tickets. {activeOfflineQueue.length} belong to this event; select other events to reconcile the rest.
+          </p>
+        )}
+        <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+          Sync promptly. Browser storage can be cleared or evicted; avoid shared devices. This device holds pending ticket credentials,
+          not an attendee roster. Only the server decides admissions.
+        </p>
+      </section>
 
       {scanMode && (
         <Card className="rounded-2xl border-primary/30">
@@ -1758,7 +2193,7 @@ function AttendeesView({ orgId }: { orgId: string }) {
             </div>
             <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); void submitScan(scanValue) }}>
               <Input value={scanValue} onChange={(e) => setScanValue(e.target.value)} placeholder="…or paste/scan ticket code (TKT-…)" aria-label="Ticket code" />
-              <Button type="submit" className="rounded-full ievx-press" disabled={!scanValue.trim() || scanBusy}>{scanBusy ? 'Checking…' : 'Admit'}</Button>
+              <Button type="submit" className="rounded-full ievx-press" disabled={!scanValue.trim() || scanBusy || !queueReady}>{scanBusy ? 'Checking…' : 'Verify' }</Button>
             </form>
             {lastResult && (
               <div className={`rounded-xl p-3 text-sm ${lastResult.result === 'ADMITTED' ? 'bg-primary/10 text-primary' : lastResult.result === 'DUPLICATE' ? 'bg-amber-500/10 text-amber-800' : lastResult.result === 'CONFLICT' ? 'bg-destructive/10 text-destructive' : 'bg-secondary'}`}>
@@ -1767,13 +2202,10 @@ function AttendeesView({ orgId }: { orgId: string }) {
                 {lastResult.ticket && <p className="mt-0.5 text-xs opacity-80">{lastResult.ticket.holderName} · {lastResult.ticket.ticketType}</p>}
               </div>
             )}
-            {activeOfflineQueue.length > 0 && (
-              <div className="flex items-center justify-between rounded-xl bg-amber-500/10 p-3">
-                <p className="text-sm text-amber-800"><Camera className="mr-1.5 inline h-4 w-4" />{activeOfflineQueue.length} offline scan(s) queued</p>
-                <Button size="sm" variant="outline" className="rounded-full" onClick={() => void syncOffline()}><RefreshCw className="mr-1 h-3.5 w-3.5" /> Sync now</Button>
-              </div>
-            )}
-            <p className="text-[11px] text-muted-foreground">Scans are queued only for network failures, in this browser tab. Keep it open until syncing; closing or reloading the tab loses unsubmitted scans. Server errors never become offline admissions.</p>
+            <p className="text-[11px] text-muted-foreground">
+              Connectivity failures can be saved as pending scans on this device when storage works. Server rejections are never
+              treated as offline admissions. Sync from the recovery panel after reconnecting.
+            </p>
           </CardContent>
         </Card>
       )}
@@ -1799,12 +2231,19 @@ function AttendeesView({ orgId }: { orgId: string }) {
       {lookupError && (
         <div role="alert" className="rounded-xl border border-destructive/25 bg-destructive/5 p-3 text-sm">{lookupError}</div>
       )}
+      {attendeesError && (
+        <div role="alert" className="rounded-xl border border-destructive/25 bg-destructive/5 p-3 text-sm">
+          <p>{attendeesError}</p>
+          <Button type="button" variant="outline" size="sm" className="mt-2 min-h-9 rounded-lg" onClick={() => void refresh()}>Retry attendee list</Button>
+        </div>
+      )}
       {attendees === null ? (
         <div role="status" aria-label="Loading attendee list" className="grid gap-2">
           {Array.from({ length: 4 }).map((_, i) => <div key={i} className="ievx-skeleton h-16 rounded-xl" />)}
         </div>
       ) : attendees.length === 0 ? (
-        <EmptyState title="No matching attendees" description="Try a different ticket code or attendee name, or refresh the selected event." />
+        <EmptyState title={eventId ? 'No matching attendees' : 'Choose an event first'}
+          description={eventId ? 'Try a different ticket code or attendee name, or refresh the selected event.' : 'Select an event above to view its attendees and manage admission.'} />
       ) : (
         <>
           <div className="mb-2 text-xs text-muted-foreground" aria-live="polite">{attendees.length} attendees shown</div>

@@ -1,7 +1,7 @@
 'use client'
 
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react'
-import { Compass, Radio, Film, Search, Ticket, LayoutDashboard, ShieldCheck, LogOut, Bell, Sparkles, UserRound, Command as CommandIcon } from 'lucide-react'
+import { Compass, Radio, Film, UsersRound, Search, Ticket, LayoutDashboard, ShieldCheck, LogOut, Bell, Sparkles, UserRound, Command as CommandIcon } from 'lucide-react'
 import { connectRealtime } from './realtime'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -24,6 +24,7 @@ const Discover = lazy(() => import('./views/Discover'))
 const EventDetail = lazy(() => import('./views/EventDetail'))
 const LiveNow = lazy(() => import('./views/LiveNow'))
 const Reels = lazy(() => import('./views/Reels'))
+const FollowingFeed = lazy(() => import('./views/FollowingFeed'))
 const EffectsStudio = lazy(() => import('./views/EffectsStudio'))
 const OrgProfile = lazy(() => import('./views/OrgProfile'))
 const AuthView = lazy(() => import('./views/AuthView'))
@@ -51,13 +52,14 @@ function ViewFallback() {
 
 const NAV = [
   { path: '/', label: 'Discover', icon: Compass },
+  { path: '/following', label: 'Following', icon: UsersRound },
   { path: '/live', label: 'Live Now', icon: Radio },
   { path: '/reels', label: 'Reels', icon: Film },
 ]
 
 const MOBILE_NAV = [
   { path: '/', label: 'Discover', icon: Compass, tab: '' },
-  { path: '/live', label: 'Live', icon: Radio, tab: '' },
+  { path: '/following', label: 'Feed', icon: UsersRound, tab: '' },
   { path: '/reels', label: 'Reels', icon: Film, tab: '' },
   { path: '/me?tab=tickets', label: 'Tickets', icon: Ticket, tab: 'tickets' },
   { path: '/me?tab=profile', label: 'Account', icon: UserRound, tab: 'profile' },
@@ -164,6 +166,8 @@ export default function AppPortal() {
         return <LiveNow />
       case 'reels':
         return <Reels />
+      case 'following':
+        return <FollowingFeed />
       case 'effects':
         return <EffectsStudio />
       case 'event':
@@ -248,7 +252,7 @@ export default function AppPortal() {
           </nav>
 
           <form
-            className={`ml-auto hidden max-w-xs flex-1 items-center ${workspaceMode ? '' : 'lg:flex'}`}
+            className={`ml-auto hidden max-w-xs flex-1 items-center ${workspaceMode || ['', 'search'].includes(route.segments[0] ?? '') ? '' : 'lg:flex'}`}
             role="search"
             onSubmit={(e) => {
               e.preventDefault()
@@ -291,7 +295,10 @@ export default function AppPortal() {
             >
               <CommandIcon className="h-5 w-5" aria-hidden />
             </Button>
-            <ThemeToggle />
+            <Button variant="ghost" size="icon" className="rounded-full sm:hidden" aria-label="Watch live events" onClick={() => navigate('/live')}>
+              <Radio className="size-5" aria-hidden />
+            </Button>
+            <div className="hidden sm:block"><ThemeToggle /></div>
             {user ? (
               <>
                 <Button variant="ghost" size="icon" className="relative rounded-lg" aria-label={`Notifications${unread ? ` (${unread} unread)` : ''}`} onClick={() => navigate('/me?tab=notifications')}>
@@ -324,6 +331,9 @@ export default function AppPortal() {
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={() => navigate('/me?tab=tickets')}>
                       <Ticket className="h-4 w-4" /> My Tickets
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => navigate('/following')}>
+                      <UsersRound className="h-4 w-4" /> My Following feed
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => navigate('/me?tab=orders')}>
                       <UserRound className="h-4 w-4" /> Orders & Profile
@@ -383,7 +393,7 @@ export default function AppPortal() {
           <p className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <span>Ticketing · Social · Broadcasting</span>
             <span aria-hidden>·</span>
-            <span>Prices in Ghana cedis (₵)</span>
+            <span>View prices in each event’s currency</span>
           </p>
         </div>
       </footer>

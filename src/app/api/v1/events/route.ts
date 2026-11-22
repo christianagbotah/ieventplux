@@ -16,7 +16,7 @@ const eventCardSelect = {
   mode: true, status: true, startsAt: true, endsAt: true, city: true, country: true, timezone: true,
   isFeatured: true, boostedUntil: true, venueId: true,
   org: { select: { id: true, name: true, slug: true, verifiedAt: true } },
-  ticketTypes: { select: { priceMinor: true, quota: true, soldCount: true, active: true }, where: { active: true } },
+  ticketTypes: { select: { priceMinor: true, currency: true, quota: true, soldCount: true, active: true }, where: { active: true } },
 } as const
 
 export async function GET(req: NextRequest) {
@@ -28,6 +28,12 @@ export async function GET(req: NextRequest) {
     if (mine) {
       const user = await requireUser()
       const requestedOrgId = url.searchParams.get('orgId')
+      const requestedEventId = url.searchParams.get('eventId')
+      // Targeted lookups for organizer attendee deep links remain behind the
+      // accepted-membership org guard; never expose unlisted events publicly.
+      if (requestedEventId && (requestedEventId.length > 128 || !/^[a-zA-Z0-9_-]+$/.test(requestedEventId))) {
+        throw errors.badRequest('Invalid organizer event identifier.')
+      }
       // Critical tenant boundary: the caller controls orgId and "mine" is not
       // inherently safe. Filter through ACCEPTED session-user memberships
       // before reading any draft, unlisted or invite-only event.
@@ -43,6 +49,7 @@ export async function GET(req: NextRequest) {
       const where = {
         orgId: requestedOrgId ?? { in: authorizedIds },
         deletedAt: null,
+        ...(requestedEventId ? { id: requestedEventId } : {}),
         ...(url.searchParams.get('status') && url.searchParams.get('status') !== 'ALL'
           ? { status: url.searchParams.get('status')! }
           : {}),
@@ -60,7 +67,9 @@ export async function GET(req: NextRequest) {
 
     const where = buildDiscoveryWhere({
       q: url.searchParams.get('q') ?? undefined,
-      country: url.searchParams.get('country') ?? undefined,
+      country: url.searchParams.get('country')?.toUpperCase() || undefined,
+      timezone: url.searchParams.get('timezone') ?? undefined,
+      onlineOnly: url.searchParams.get('access') === 'ONLINE',
       city: url.searchParams.get('city') ?? undefined,
       category: url.searchParams.get('category') ?? undefined,
       mode: (url.searchParams.get('mode') as 'PHYSICAL' | 'VIRTUAL' | 'HYBRID' | null) ?? undefined,

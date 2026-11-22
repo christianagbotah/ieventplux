@@ -14,12 +14,29 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ view: strin
     const url = new URL(req.url)
     const now = new Date()
 
+    if (view === 'locations') {
+      // Only countries with visible, current events appear. Do not claim
+      // worldwide event inventory or infer a visitor's location from IP.
+      const [countries, categories] = await Promise.all([db.event.groupBy({
+        by: ['country'],
+        where: { ...PUBLIC_EVENT_WHERE, status: { in: ['PUBLISHED', 'LIVE', 'POSTPONED'] }, endsAt: { gte: now } },
+        _count: true,
+      }), db.category.findMany({ where: { active: true }, orderBy: { sortOrder: 'asc' } })])
+      return jsonOk({
+        categories,
+        countries: countries
+          .filter((row) => /^[A-Z]{2}$/.test(row.country))
+          .map((row) => ({ code: row.country, count: row._count }))
+          .sort((a, b) => b.count - a.count || a.code.localeCompare(b.code)),
+      })
+    }
+
     if (view === 'home') {
       const [featured, upcoming, liveNow, categories, sponsored, stats, cityRows] = await Promise.all([
         db.event.findMany({ where: { ...PUBLIC_EVENT_WHERE, isFeatured: true, startsAt: { gte: now } }, orderBy: { startsAt: 'asc' }, take: 6,
-          select: { id: true, slug: true, title: true, summary: true, coverImageUrl: true, startsAt: true, city: true, mode: true, categorySlug: true, ticketTypes: { select: { priceMinor: true, quota: true, soldCount: true }, where: { active: true } }, reviews: { select: { rating: true }, where: { status: 'VISIBLE' } }, org: { select: { name: true, slug: true } } } }),
+          select: { id: true, slug: true, title: true, summary: true, coverImageUrl: true, startsAt: true, city: true, country: true, mode: true, categorySlug: true, ticketTypes: { select: { priceMinor: true, currency: true, quota: true, soldCount: true }, where: { active: true } }, reviews: { select: { rating: true }, where: { status: 'VISIBLE' } }, org: { select: { name: true, slug: true } } } }),
         db.event.findMany({ where: { ...PUBLIC_EVENT_WHERE, startsAt: { gte: now } }, orderBy: { startsAt: 'asc' }, take: 12,
-          select: { id: true, slug: true, title: true, summary: true, coverImageUrl: true, startsAt: true, city: true, mode: true, categorySlug: true, status: true, ticketTypes: { select: { priceMinor: true, quota: true, soldCount: true }, where: { active: true } }, reviews: { select: { rating: true }, where: { status: 'VISIBLE' } }, org: { select: { name: true, slug: true } } } }),
+          select: { id: true, slug: true, title: true, summary: true, coverImageUrl: true, startsAt: true, city: true, country: true, mode: true, categorySlug: true, status: true, ticketTypes: { select: { priceMinor: true, currency: true, quota: true, soldCount: true }, where: { active: true } }, reviews: { select: { rating: true }, where: { status: 'VISIBLE' } }, org: { select: { name: true, slug: true } } } }),
         db.event.findMany({ where: { ...PUBLIC_EVENT_WHERE, status: 'LIVE' }, take: 6,
           select: { id: true, slug: true, title: true, coverImageUrl: true, mode: true, org: { select: { name: true } }, broadcasts: { select: { id: true, status: true, accessPolicy: true } } } }),
         db.category.findMany({ where: { active: true }, orderBy: { sortOrder: 'asc' } }),
@@ -91,8 +108,10 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ view: strin
     if (view === 'search') {
       const { page, pageSize, offset } = pagination(req, 12, 36)
       const where = buildDiscoveryWhere({
+        timezone: url.searchParams.get('timezone') ?? undefined,
+        onlineOnly: url.searchParams.get('access') === 'ONLINE',
         q: url.searchParams.get('q') ?? undefined,
-        country: url.searchParams.get('country') ?? undefined,
+        country: url.searchParams.get('country')?.toUpperCase() || undefined,
         city: url.searchParams.get('city') ?? undefined,
         category: url.searchParams.get('category') ?? undefined,
         mode: (url.searchParams.get('mode') as 'PHYSICAL' | 'VIRTUAL' | 'HYBRID' | null) ?? undefined,
@@ -110,7 +129,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ view: strin
         select: {
           id: true, slug: true, title: true, summary: true, coverImageUrl: true, startsAt: true, endsAt: true, city: true, country: true, mode: true, status: true, categorySlug: true,
           org: { select: { name: true, slug: true, verifiedAt: true } },
-          ticketTypes: { select: { priceMinor: true, quota: true, soldCount: true }, where: { active: true } },
+          ticketTypes: { select: { priceMinor: true, currency: true, quota: true, soldCount: true }, where: { active: true } },
           reviews: { select: { rating: true }, where: { status: 'VISIBLE' } },
         },
       })

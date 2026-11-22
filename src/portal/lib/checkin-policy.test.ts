@@ -7,6 +7,9 @@ describe('web check-in offline safety', () => {
     expect(scanMayQueueOffline(new TypeError('Failed to fetch'), true)).toBe(true)
     expect(scanMayQueueOffline(new TypeError('Network error'), false)).toBe(true)
     expect(scanMayQueueOffline(new Error('Browser offline'), false)).toBe(true)
+    expect(scanMayQueueOffline(new ApiClientError('NETWORK_ERROR', 'Connection lost', 0), true)).toBe(true)
+    expect(scanMayQueueOffline(new ApiClientError('NETWORK_ERROR', 'Connection lost', 0), false)).toBe(true)
+    expect(scanMayQueueOffline(new ApiClientError('REQUEST_CANCELLED', 'Aborted', 0), false)).toBe(false)
   })
   test('server-side rejections must never be queued, even while offline', () => {
     for (const status of [400, 401, 403, 409, 429, 500, 503]) {

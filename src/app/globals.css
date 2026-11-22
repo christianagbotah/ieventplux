@@ -980,3 +980,354 @@ body {
   .ievx-workspace-metric-value { font-size: clamp(19px, 5.5vw, 23px); }
   .ievx-workspace-metric-foot { font-size: 10.5px; }
 }
+
+/* ─── Global public experience refresh, November 2026 ────────────────────
+   Accessible editorial spotlight, concise mobile-first discovery and clear
+   hierarchy. Organizer/admin viewport-scrolling architecture stays intact. */
+.ievx-public .ievx-home-hero {
+  background: radial-gradient(ellipse at 50% 0%, color-mix(in srgb, var(--ievx-teal) 7%, transparent), transparent 70%);
+}
+.ievx-public .ievx-home-hero .ievx-hero-panel {
+  min-height: 0;
+  padding: clamp(20px, 3.3vw, 40px);
+  border-radius: 24px;
+  border-color: #164d4b;
+  background: radial-gradient(circle at 77% 10%, rgb(44 153 141 / 35%), transparent 46%),
+              linear-gradient(119deg, #091d2c 1%, #0d4346 60%, #125e52 100%);
+  box-shadow: 0 20px 54px rgb(5 32 42 / 13%), 0 2px 8px rgb(5 32 42 / 6%);
+}
+.ievx-public .ievx-home-hero .ievx-hero-panel::after {
+  right: -240px;
+  top: -400px;
+  opacity: .65;
+}
+.ievx-hero-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(310px, .95fr);
+  gap: clamp(20px, 4vw, 66px);
+  align-items: stretch;
+  width: 100%;
+}
+.ievx-hero-intro { display: flex; min-width: 0; flex-direction: column; justify-content: center; }
+.ievx-public .ievx-home-hero .ievx-hero-kicker {
+  margin-bottom: 15px;
+  font-size: 10px;
+  letter-spacing: .15em;
+  color: #b2e7d5;
+}
+.ievx-public .ievx-home-hero .ievx-hero-title {
+  max-width: 650px;
+  margin: 0;
+  font-size: clamp(36px, 4.15vw, 60px);
+  line-height: 1.07;
+  letter-spacing: -.055em;
+  font-weight: 810;
+}
+.ievx-public .ievx-home-hero .ievx-hero-copy {
+  max-width: 510px;
+  margin-top: 15px;
+  font-size: clamp(14px, 1.1vw, 16px);
+  line-height: 1.65;
+  color: #d1e2e0;
+}
+.ievx-hero-cta { margin-top: 21px; }
+.ievx-public .ievx-home-hero .ievx-hero-action {
+  min-height: 45px;
+  padding: 10px 19px;
+  font-size: 13px;
+  border-radius: 12px;
+  box-shadow: 0 3px 12px rgb(0 0 0 / 9%);
+  transition: background-color .18s ease, transform .18s ease;
+}
+.ievx-public .ievx-home-hero .ievx-hero-action:active { transform: scale(.985); }
+.ievx-hero-text-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 44px;
+  padding: 8px 6px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #e7faf4;
+}
+.ievx-hero-text-action:hover { color: white; text-decoration: underline; text-underline-offset: 4px; }
+.ievx-public .ievx-home-hero .ievx-hero-quick {
+  display: flex;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+  gap: 8px;
+  margin-top: 22px;
+  padding-top: 16px;
+  padding-bottom: 2px;
+}
+.ievx-public .ievx-home-hero .ievx-hero-quick::-webkit-scrollbar { display: none; }
+.ievx-public .ievx-home-hero .ievx-hero-quick button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  gap: 5px;
+  min-height: 35px;
+  padding: 7px 11px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 650;
+  white-space: nowrap;
+  border-color: rgb(185 245 226 / 24%);
+  color: #e3f6f0;
+}
+.ievx-hero-visual {
+  align-self: stretch;
+  min-height: 320px;
+  max-height: 400px;
+}
+.ievx-hero-spotlight {
+  border: 1px solid rgb(223 255 248 / 20%);
+  box-shadow: 0 16px 34px rgb(0 0 0 / 24%);
+  transform: translateZ(0);
+}
+.ievx-hero-no-feature {
+  justify-content: center;
+  align-items: center;
+  padding: 32px;
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 18px;
+  background: linear-gradient(132deg, rgb(255 255 255 / 9%), rgb(255 255 255 / 2%));
+}
+.ievx-hero-mobile-feature {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 17px;
+  padding: 9px 11px;
+  border: 1px solid rgb(185 245 226 / 22%);
+  border-radius: 13px;
+  background: rgb(255 255 255 / 8%);
+  text-align: left;
+  color: white;
+  transition: background-color .18s ease;
+}
+.ievx-hero-mobile-feature:hover { background: rgb(255 255 255 / 14%); }
+.ievx-real-activity {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 20px;
+  min-height: 42px;
+  padding: 12px 7px 0;
+  color: var(--ievx-ink-soft);
+  font-size: 12px;
+}
+.ievx-real-activity > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.ievx-real-activity strong { color: var(--ievx-ink); font-weight: 800; font-variant-numeric: tabular-nums; }
+.ievx-real-activity > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+  min-height: 32px;
+  color: var(--ievx-teal);
+  font-weight: 700;
+}
+.ievx-real-activity > button:hover { text-decoration: underline; text-underline-offset: 3px; }
+.ievx-public .ievx-discovery-search {
+  box-shadow: 0 5px 18px rgb(12 45 49 / 4%);
+}
+.ievx-public .ievx-event-card {
+  transition: border-color .18s ease, transform .18s ease, box-shadow .18s ease;
+}
+.ievx-public .ievx-event-card:hover {
+  border-color: color-mix(in srgb, var(--ievx-teal) 35%, var(--ievx-line));
+  box-shadow: 0 16px 30px rgb(10 50 51 / 10%);
+}
+.ievx-public .ievx-event-card h3 {
+  font-size: 15px;
+  line-height: 1.42;
+  letter-spacing: -.018em;
+}
+.ievx-active-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  max-width: 100%;
+  padding: 5px 10px;
+  border: 1px solid color-mix(in srgb, var(--ievx-teal) 23%, var(--ievx-line));
+  border-radius: 999px;
+  background: var(--ievx-teal-soft);
+  color: var(--ievx-ink);
+  font-size: 12px;
+  font-weight: 650;
+  transition: background-color .18s ease;
+}
+.ievx-active-filter:hover { background: color-mix(in srgb, var(--ievx-teal-soft) 75%, var(--ievx-panel)); }
+.ievx-public :is(.ievx-hero-spotlight, .ievx-hero-mobile-feature, .ievx-hero-action, .ievx-hero-text-action, .ievx-hero-quick button, .ievx-active-filter):focus-visible {
+  outline: 3px solid #78d6c4;
+  outline-offset: 3px;
+}
+@media (max-width: 1023px) {
+  .ievx-hero-layout { display: block; }
+  .ievx-hero-visual { display: none; }
+}
+@media (max-width: 639px) {
+  .ievx-public .ievx-home-hero .ievx-hero-panel { padding: 20px 18px 17px; border-radius: 18px; }
+  .ievx-public .ievx-home-hero .ievx-hero-kicker { font-size: 9px; margin-bottom: 10px; }
+  .ievx-public .ievx-home-hero .ievx-hero-title { font-size: clamp(27px, 7.55vw, 35px); line-height: 1.11; letter-spacing: -.048em; }
+  .ievx-public .ievx-home-hero .ievx-hero-copy { font-size: 13px; line-height: 1.55; margin-top: 11px; }
+  .ievx-hero-cta { margin-top: 15px; gap: 6px; }
+  .ievx-public .ievx-home-hero .ievx-hero-action { min-height: 42px; padding: 8px 12px; font-size: 12px; flex: 1 1 auto; }
+  .ievx-hero-text-action { min-height: 37px; font-size: 12px; padding: 5px 3px; }
+  .ievx-public .ievx-home-hero .ievx-hero-quick { margin-top: 12px; padding-top: 11px; gap: 6px; margin-right: -18px; padding-right: 18px; }
+  .ievx-public .ievx-home-hero .ievx-hero-quick button { min-height: 33px; font-size: 11px; }
+  .ievx-hero-mobile-feature { margin-top: 11px; padding: 7px 9px; }
+  .ievx-real-activity { gap: 5px 12px; font-size: 11px; padding-top: 8px; }
+  .ievx-real-activity > button { display: none; }
+  .ievx-public .ievx-event-card h3 { font-size: 15px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ievx-public .ievx-event-card,
+  .ievx-hero-spotlight img,
+  .ievx-hero-mobile-feature,
+  .ievx-public .ievx-home-hero .ievx-hero-action { transition: none !important; transform: none !important; }
+}
+
+/* Desktop editorial art owns the right column; the compact mobile teaser must
+   not duplicate it. Keep mobile-only quick actions out of the desktop hero. */
+@media (min-width: 1024px) {
+  .ievx-hero-mobile-feature { display: none !important; }
+  .ievx-public .ievx-home-hero .ievx-hero-quick .ievx-mobile-quick { display: none; }
+}
+
+/* Event attendance: clean booking card and mobile CTA docked above bottom nav.
+   No overlay on payment selection; organizer/admin workspace unaffected. */
+.ievx-booking-panel { box-shadow: 0 12px 35px rgb(8 46 51 / 6%), 0 2px 5px rgb(8 46 51 / 3%); }
+.ievx-booking-ticket:hover { border-color: color-mix(in srgb, var(--ievx-teal) 30%, var(--ievx-line)); }
+.ievx-mobile-booking-bar { bottom: calc(4rem + env(safe-area-inset-bottom, 0px)); }
+.ievx-booking-panel :is(button, input):focus-visible,
+.ievx-mobile-booking-bar button:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--ievx-teal) 70%, white);
+  outline-offset: 3px;
+}
+@media (min-width: 1024px) { .ievx-mobile-booking-bar { display: none !important; } }
+@media (prefers-reduced-motion: reduce) {
+  .ievx-booking-panel button, .ievx-booking-ticket { transition: none !important; }
+}
+
+/* ─── iEventPlux experiential home hero: 3 editorial stories, 1 real event. ──
+   Reduced-motion users never get autoplay, marquee movement or flash. */
+.ievx-public .ievx-hero-panel[data-hero-story="1"] {
+  background: radial-gradient(circle at 80% 9%, rgb(64 164 201 / 32%), transparent 48%),
+              linear-gradient(118deg, #071d35, #0d4d5d 62%, #086c68 100%);
+}
+.ievx-public .ievx-hero-panel[data-hero-story="2"] {
+  background: radial-gradient(circle at 82% 13%, rgb(181 151 90 / 23%), transparent 48%),
+              linear-gradient(118deg, #112133, #174b49 62%, #09614d 100%);
+}
+.ievx-hero-story-enter {
+  animation: ievx-story-enter .58s cubic-bezier(.2,.75,.2,1) both;
+}
+.ievx-hero-visual-enter {
+  animation: ievx-visual-enter .66s cubic-bezier(.2,.75,.2,1) both;
+}
+@keyframes ievx-story-enter {
+  from { opacity: .15; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes ievx-visual-enter {
+  from { opacity: .35; transform: translateX(14px) scale(.985); }
+  to   { opacity: 1; transform: translateX(0) scale(1); }
+}
+.ievx-hero-story-controls {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 10px;
+}
+.ievx-hero-story-controls > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  min-width: 35px;
+  border-radius: 9px;
+  color: #d7f4e7;
+}
+.ievx-hero-story-controls > button:not(.ievx-hero-play-toggle)::after {
+  content: '';
+  height: 4px;
+  width: 17px;
+  border-radius: 999px;
+  background: rgb(228 255 245 / 40%);
+  transition: width .22s ease, background-color .22s ease;
+}
+.ievx-hero-story-controls > button.is-active:not(.ievx-hero-play-toggle)::after {
+  width: 26px;
+  background: #a9f4dd;
+}
+.ievx-hero-story-controls > button:hover { background: rgb(255 255 255 / 10%); }
+.ievx-hero-play-toggle { margin-left: 5px; border: 1px solid rgb(211 255 238 / 22%); }
+.ievx-hero-story-controls > button:focus-visible {
+  outline: 3px solid #a9f4dd;
+  outline-offset: 2px;
+}
+.ievx-hero-ticker {
+  overflow: hidden;
+  white-space: nowrap;
+  width: 100%;
+  margin-top: 10px;
+  color: var(--ievx-teal);
+  opacity: .83;
+  font-size: 10px;
+  letter-spacing: .17em;
+  font-weight: 800;
+}
+.ievx-hero-ticker-track {
+  display: flex;
+  gap: 0;
+  width: max-content;
+  animation: ievx-ticker-scroll 32s linear infinite;
+}
+.ievx-hero-ticker-track > span { display: inline-block; padding-right: 1.5rem; }
+@keyframes ievx-ticker-scroll { to { transform: translateX(-50%); } }
+@media (max-width: 639px) {
+  .ievx-hero-ticker { font-size: 9px; margin-top: 6px; }
+  .ievx-hero-story-controls { margin-top: 5px; }
+  .ievx-hero-story-controls > button { min-height: 30px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ievx-hero-story-enter, .ievx-hero-visual-enter,
+  .ievx-hero-ticker-track { animation: none !important; transform: none !important; }
+  .ievx-hero-story-controls > button::after { transition: none !important; }
+}
+
+/* Organizer event control center: calm, dense operational UI with explicit
+   action bands. Mobile action buttons wrap without overflowing the viewport. */
+.ievx-eventops-header {
+  background:
+    radial-gradient(circle at 90% 5%, color-mix(in srgb, var(--ievx-teal) 11%, transparent), transparent 48%),
+    var(--card);
+  box-shadow: 0 8px 24px rgb(13 40 48 / 4%);
+}
+.ievx-eventops-card {
+  box-shadow: 0 2px 9px rgb(13 40 48 / 3%);
+  transition: border-color .16s ease, box-shadow .16s ease;
+}
+.ievx-eventops-card:hover, .ievx-eventops-card:focus-within {
+  border-color: color-mix(in srgb, var(--ievx-teal) 32%, var(--border));
+  box-shadow: 0 7px 22px rgb(13 40 48 / 6%);
+}
+.ievx-eventops-filter:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--ievx-teal) 45%, transparent);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ievx-eventops-card, .ievx-eventops-filter { transition: none !important; }
+}

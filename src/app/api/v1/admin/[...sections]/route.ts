@@ -3,6 +3,7 @@ import { handle, jsonOk, requireUser, readJson, errors, rateLimit, sanitizeText,
 import { db } from '@/lib/db'
 import { platformCan } from '@/server/permissions'
 import { integrationStatuses, envValidation, env } from '@/server/env'
+import { resolvedProviderValidation } from '@/server/provider-health'
 import { sweepOnce } from '@/server/jobs/handlers'
 import { parseEvidence } from '@/server/kyc-storage'
 import { missingKycRequirements } from '@/server/kyc-requirements'
@@ -151,17 +152,8 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
     }
 
     if (root === 'integrations') {
-      const { resolveSmtpConfig } = await import('@/server/communications-config')
-      const smtp = await resolveSmtpConfig()
       const integrations = await integrationStatuses()
-      const mail = integrations.find((item) => item.key === 'smtp-email')
-      if (mail) {
-        mail.configured = smtp.configured
-        mail.mode = smtp.configured ? 'real' : 'unavailable'
-        mail.detail = smtp.configured ? `SMTP settings saved (${smtp.source}); provider authentication and real delivery remain unverified.` : 'SMTP credentials incomplete — messages will be suppressed until an administrator configures a mail provider.'
-      }
-      const validation = envValidation()
-      if (smtp.configured) validation.warnings = validation.warnings.filter((warning) => !warning.startsWith('SMTP_*'))
+      const validation = resolvedProviderValidation(envValidation(), integrations)
       return jsonOk({ integrations, validation })
     }
 

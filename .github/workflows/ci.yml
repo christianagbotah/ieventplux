@@ -57,11 +57,46 @@ jobs:
       - name: Typecheck
         run: bun run typecheck
 
+      - name: Check-in scan identity and replay authorization
+        run: bun test src/server/services/checkin-idempotency.test.ts
+
+      - name: Durable offline check-in queue and transport safety
+        run: bun test src/portal/lib/checkin-offline-storage.test.ts src/portal/lib/checkin-policy.test.ts
+
       - name: Security policy unit tests (payments, realtime, check-in and private KYC)
         run: bun test src/server/hubtel/security-policy.test.ts mini-services/realtime/room-authorization.test.ts src/portal/lib/checkin-policy.test.ts src/server/kyc-storage.test.ts src/server/kyc-requirements.test.ts
 
       - name: Souvenir QR, inventory, refund and physical return safety policies
         run: bun test src/server/souvenir-policy.test.ts src/server/souvenir-refund-policy.test.ts src/server/souvenir-return-policy.test.ts src/portal/lib/souvenir-scan.test.ts
+      - name: Attendee deep-link selection and event-scoped scanner regressions
+        run: bun test src/portal/lib/attendee-event-context.test.ts
+
+      - name: Scanner management ownership, labels and browser scope
+        run: bun test src/server/checkin-device-policy.test.ts src/portal/lib/scanner-session-local.test.ts
+
+      - name: Admission operations snapshot, outcome metrics and device sync policy
+        run: bun test src/portal/lib/admission-operations.test.ts
+
+      - name: Organizer event control center filters, publication safety and public links
+        run: bun test src/portal/lib/organizer-event-view.test.ts
+
+      - name: Event ticket-selection capacity, pricing and currency safety
+        run: bun test src/portal/lib/ticket-selection.test.ts
+
+      - name: Public editorial spotlight accessibility and truthful ticket currency
+        run: bun test src/portal/components/public-experience.test.tsx
+
+      - name: Honest offline catalogue query filters
+        run: bun test src/server/catalogue-search.test.ts
+
+      - name: Following timeline privacy, multi-source pagination and follow safety
+        run: bun test src/server/following-feed-policy.test.ts
+
+      - name: Global discovery timezone, online and checkout-currency safety
+        run: bun test src/server/discovery-time.test.ts
+
+      - name: Provider health reconciles administrator-saved credentials
+        run: bun test src/server/provider-health.test.ts
 
       - name: Push schema + seed
         run: |
@@ -84,8 +119,20 @@ jobs:
       - name: Realtime access smoke (public event, private notification and broadcast)
         run: bun run scripts/realtime-smoke.ts
 
+      - name: Check-in replay isolation with synthetic admission record
+        run: bun run scripts/checkin-replay-scope-smoke.ts
+
+      - name: Atomic check-in races across scanners and refund
+        run: bun run scripts/checkin-concurrent-admission-smoke.ts
+
       - name: Organizer event tenant privacy regression (seeded users)
         run: bun run scripts/org-event-access-smoke.ts
+
+      - name: Concierge capability status and real-catalogue fallback
+        run: bun run scripts/catalogue-availability-smoke.ts
+
+      - name: Following timeline HTTP privacy and follow/unfollow regression (dev seed only)
+        run: bun run scripts/following-feed-smoke.ts
 
       - name: Smoke suite (golden paths incl. rate-limit proof)
         run: bun run smoke

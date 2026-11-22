@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { db } from '@/lib/db'
 import { envValidation, integrationStatuses } from '@/server/env'
+import { resolvedProviderValidation } from '@/server/provider-health'
 import { handle, jsonOk } from '@/server/api'
 
 export async function GET(req: NextRequest) {
@@ -12,8 +13,8 @@ export async function GET(req: NextRequest) {
     } catch {
       database = 'down'
     }
-    const validation = envValidation()
     const integrations = await integrationStatuses()
+    const validation = resolvedProviderValidation(envValidation(), integrations)
     return jsonOk({
       status: database === 'up' && validation.errors.length === 0 ? 'healthy' : 'degraded',
       service: 'ieventplux-api',

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { api, ApiClientError } from '../api'
+import { useToast } from '@/hooks/use-toast'
 import { navigate } from '../router'
 import { EventCard, EventCardSkeleton, EmptyState, type EventCardData } from '../components/EventCard'
 import { usePortal } from '../store'
@@ -39,14 +40,17 @@ interface OrgProfilePayload {
   events: EventCardData[]
   followers: number
   following: boolean
+  myOrg?: boolean
   clips: { id: string; url: string; caption?: string | null }[]
 }
 
 export default function OrgProfile({ slug }: { slug: string }) {
   const { user } = usePortal()
+  const { toast } = useToast()
   const [data, setData] = useState<OrgProfilePayload | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [following, setFollowing] = useState(false)
+  const [followingBusy, setFollowingBusy] = useState(false)
   const [activeSection, setActiveSection] = useState('org-events')
 
   const load = useCallback(async () => {
@@ -65,12 +69,20 @@ export default function OrgProfile({ slug }: { slug: string }) {
 
   const toggleFollow = async () => {
     if (!user) return navigate('/signin')
+    if (!data?.org.id || followingBusy || data.myOrg) return
+    const wasFollowing = following
+    setFollowingBusy(true)
     try {
-      await api.post('/social/follow', { orgId: data?.org.id })
-      setFollowing((f) => !f)
-      setData((d) => (d ? { ...d, followers: d.followers + (following ? -1 : 1) } : d))
-    } catch {
-      /* ignore */
+      await api.post(wasFollowing ? '/social/unfollow' : '/social/follow', { orgId: data.org.id })
+      setFollowing(!wasFollowing)
+      setData((current) => current ? { ...current, followers: Math.max(0, current.followers + (wasFollowing ? -1 : 1)) } : current)
+      toast({ title: wasFollowing ? 'Unfollowed organizer' : 'Following organizer',
+        description: wasFollowing ? 'Their updates will no longer appear in your Following feed.' : 'Public events and announcements can now appear in your Following feed.' })
+    } catch (err) {
+      toast({ title: 'Unable to update following', variant: 'destructive',
+        description: err instanceof ApiClientError ? err.message : 'Check your connection and try again.' })
+    } finally {
+      setFollowingBusy(false)
     }
   }
 
@@ -129,8 +141,12 @@ export default function OrgProfile({ slug }: { slug: string }) {
               </p>
             </div>
           </div>
-          {following ? (
-            <Button className="rounded-full ievx-press" variant="outline" onClick={() => void toggleFollow()}>
+          {data.myOrg ? (
+            <Button className="min-h-10 rounded-full" onClick={() => navigate('/organizer?tab=events')}>
+              Manage events
+            </Button>
+          ) : following ? (
+            <Button className="rounded-full ievx-press" variant="outline" disabled={followingBusy} onClick={() => void toggleFollow()}>
               <Bookmark className="mr-1.5 h-4 w-4 fill-primary text-primary" aria-hidden />
               Following
             </Button>
@@ -139,6 +155,7 @@ export default function OrgProfile({ slug }: { slug: string }) {
               type="button"
               className="efx-shine-sweep-button"
               style={{ borderRadius: '999px', fontSize: '0.9rem', padding: '0.6rem 1.5rem' }}
+              disabled={followingBusy}
               onClick={() => void toggleFollow()}
             >
               <Bookmark className="h-4 w-4" aria-hidden />

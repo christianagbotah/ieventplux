@@ -80,7 +80,7 @@ function randomHex(len: number): string {
 
 /** RFC-4122-shaped, Math.random-based device id — uniqueness, not crypto, is the goal. */
 function makeDeviceScanId(): string {
-  return `${randomHex(8)}-${randomHex(4)}-4${randomHex(3)}-${randomHex(4)}-${randomHex(12)}}`
+  return `${randomHex(8)}-${randomHex(4)}-4${randomHex(3)}-${randomHex(4)}-${randomHex(12)}`
 }
 
 type Banner =

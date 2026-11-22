@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 
 /**
  * Hash router for the single-route portal (the only user-visible page is /).
- * Routes: #/ #/live #/reels #/effects #/event/{slug} #/org/{slug} #/search
+ * Routes: #/ #/following #/live #/reels #/effects #/event/{slug} #/org/{slug} #/search
  *         #/signin #/register #/me #/checkout/{ref} #/order/{ref} #/claim/{token}
  *         #/organizer #/admin #/broadcast/{id} #/assistant #/create-org
  */
