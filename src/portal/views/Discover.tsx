@@ -222,14 +222,13 @@ export default function Discover({ route }: { route: Route }) {
   }, [compareIds])
 
   const toggleCompare = (id: string) => {
-    setCompareIds((previous) => {
-      if (previous.includes(id)) return previous.filter((item) => item !== id)
-      if (previous.length >= 3) {
-        toast({ title: 'Three events selected', description: 'Remove one before adding another event to your comparison.' })
-        return previous
-      }
-      return [...previous, id]
-    })
+    if (compareIds.includes(id)) {
+      setCompareIds(compareIds.filter((item) => item !== id))
+    } else if (compareIds.length >= 3) {
+      toast({ title: 'Three events selected', description: 'Remove one before adding another event to your comparison.' })
+    } else {
+      setCompareIds([...compareIds, id])
+    }
   }
   const comparison = (event: EventCardData) => ({
     selected: compareIds.includes(event.id),

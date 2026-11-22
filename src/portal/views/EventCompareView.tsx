@@ -22,6 +22,10 @@ function dateLabel(iso: string | undefined): string {
 export default function EventCompareView({ route }: { route: Route }) {
   const { toast } = useToast()
   const raw = route.query.get('ids')
+  const requestedCount = (() => {
+    try { return parseCompareIds(raw).length }
+    catch { return 0 }
+  })()
   const [items, setItems] = useState<EventCardData[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -131,7 +135,7 @@ export default function EventCompareView({ route }: { route: Route }) {
         <p className="mt-2 text-sm text-muted-foreground">Private, cancelled or removed events are not disclosed through comparison links.</p>
         <Button className="mt-4" onClick={() => navigate('/')}>Discover public events</Button>
       </div> : <>
-        {raw && parseCompareIds(raw).length > items.length && <p role="status" className="mb-3 rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-sm">Some selected events are no longer publicly available and have been excluded.</p>}
+        {requestedCount > items.length && <p role="status" className="mb-3 rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-sm">Some selected events are no longer publicly available and have been excluded.</p>}
         <div className="rounded-3xl border border-border/80 bg-card shadow-sm">
           <div role="region" aria-label="Scroll sideways to compare public events" tabIndex={0} className="overflow-x-auto rounded-3xl">
             <table className="w-full border-collapse text-left text-sm">
