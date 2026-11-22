@@ -1,10 +1,11 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
-import { CalendarDays, RefreshCw, ShieldCheck, UsersRound, Video, ArrowRight, Radio, MonitorUp } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { CalendarDays, RefreshCw, ShieldCheck, UsersRound, Video, ArrowRight, Radio, MonitorUp, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Field, FieldHelp, FieldLabel } from '@/components/ui/field'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Input } from '@/components/ui/input'
 import { api, ApiClientError } from '../api'
 import { EventMeetingPanel } from './EventMeetingPanel'
 import { navigate } from '../router'
@@ -16,27 +17,53 @@ export function GroupMeetingsManager({ orgId }: { orgId: string }) {
   const [selected, setSelected] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
+  const [searchInput, setSearchInput] = useState('')
+  const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
+  const [total, setTotal] = useState(0)
+  const [hasMore, setHasMore] = useState(false)
+  const pageSize = 20
+  const requestIdRef = useRef(0)
 
   const load = useCallback(async () => {
+    const requestId = ++requestIdRef.current
     setLoading(true)
     try {
-      const result = await api.get<{ items: EventOption[] }>(
-        `/events?mine=1&orgId=${encodeURIComponent(orgId)}&status=ALL&pageSize=50`,
+      const result = await api.get<{ items: EventOption[]; total: number; hasMore: boolean }>(
+        `/events?mine=1&orgId=${encodeURIComponent(orgId)}&meetingEligible=1&pageSize=${pageSize}&page=${page}&q=${encodeURIComponent(search)}`,
       )
-      const valid = result.items.filter((evt) => ['PUBLISHED', 'LIVE', 'ENDED'].includes(evt.status))
-      setEvents(valid)
-      setSelected((previous) => valid.some((evt) => evt.id === previous) ? previous : (valid[0]?.id ?? ''))
+      if (requestId !== requestIdRef.current) return
+      setEvents(result.items)
+      setTotal(result.total)
+      setHasMore(result.hasMore)
+      setSelected((previous) => result.items.some((evt) => evt.id === previous) ? previous : (result.items[0]?.id ?? ''))
       setError('')
+      if (!result.items.length && page > 1 && result.total > 0) setPage((current) => Math.max(1, current - 1))
     } catch (err) {
+      if (requestId !== requestIdRef.current) return
+      setEvents([])
+      setTotal(0)
+      setHasMore(false)
+      setSelected('')
       setError(err instanceof ApiClientError ? err.message : 'Unable to load organizer events.')
     } finally {
-      setLoading(false)
+      if (requestId === requestIdRef.current) setLoading(false)
     }
-  }, [orgId])
+  }, [orgId, page, search])
 
   useEffect(() => {
     setSelected('')
+    setEvents([])
+    setTotal(0)
+    setHasMore(false)
+    setSearchInput('')
+    setSearch('')
+    setPage(1)
+  }, [orgId])
+
+  useEffect(() => {
     void load()
+    return () => { requestIdRef.current += 1 }
   }, [load])
 
   return <div className="min-w-0 space-y-5 sm:space-y-6">
@@ -76,6 +103,32 @@ export function GroupMeetingsManager({ orgId }: { orgId: string }) {
       <p>{error}</p><Button type="button" size="sm" variant="outline" loading={loading} onClick={() => void load()}>Retry</Button>
     </div>}
 
+    <form
+      role="search"
+      aria-label="Search meeting events"
+      onSubmit={(event) => {
+        event.preventDefault()
+        setPage(1)
+        setSearch(searchInput.trim())
+      }}
+      className="rounded-2xl border border-border/80 bg-card p-4 shadow-sm sm:p-5"
+    >
+      <label htmlFor="ievx-meeting-search" className="mb-2 block text-sm font-semibold">Find an event for your meeting</label>
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <Input
+          id="ievx-meeting-search"
+          value={searchInput}
+          onChange={(event) => setSearchInput(event.target.value)}
+          maxLength={120}
+          placeholder="Search published events by title"
+          className="min-h-11 min-w-0 flex-1"
+        />
+        <Button type="submit" variant="outline" disabled={loading}><Search className="size-4" aria-hidden /> Search</Button>
+        {search && <Button type="button" variant="ghost" disabled={loading} onClick={() => { setSearchInput(''); setSearch(''); setPage(1) }}>Clear</Button>}
+      </div>
+      <p className="mt-2 text-xs text-muted-foreground">Searches published, live and completed events across all pages. Drafts are excluded.</p>
+    </form>
+
     {loading && !events.length ? (
       <div role="status" aria-label="Loading organizer meetings" className="space-y-3 rounded-2xl border bg-card p-5">
         <Skeleton className="h-5 w-44 rounded-lg" />
@@ -86,7 +139,7 @@ export function GroupMeetingsManager({ orgId }: { orgId: string }) {
       <section aria-labelledby="ievx-meeting-event-select" className="rounded-2xl border border-border/80 bg-card px-4 py-4 shadow-sm sm:px-5 sm:py-5">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h3 id="ievx-meeting-event-select" className="flex items-center gap-2 text-base font-bold tracking-tight"><CalendarDays className="size-5 text-primary" aria-hidden /> Select your event</h3>
-          <span className="rounded-full bg-secondary px-3 py-1 text-xs font-semibold text-secondary-foreground">{events.length} event{events.length === 1 ? '' : 's'} available</span>
+          <span className="rounded-full bg-secondary px-3 py-1 text-xs font-semibold text-secondary-foreground">{total} matching event{total === 1 ? '' : 's'}</span>
         </div>
         <Field className="max-w-2xl">
           <FieldLabel htmlFor="ievx-meeting-event">Published or completed event</FieldLabel>
@@ -101,19 +154,28 @@ export function GroupMeetingsManager({ orgId }: { orgId: string }) {
           </select>
           <FieldHelp>Choose the event whose guests you want to invite. Every room retains its event-specific permissions.</FieldHelp>
         </Field>
+        <nav aria-label="Meeting event pages" className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-border/60 pt-3">
+          <span className="text-xs text-muted-foreground">Page {page} of {Math.max(1, Math.ceil(total / pageSize))}</span>
+          <div className="flex gap-2">
+            <Button type="button" size="sm" variant="outline" disabled={loading || page <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))}>Previous</Button>
+            <Button type="button" size="sm" variant="outline" disabled={loading || !hasMore} onClick={() => setPage((current) => current + 1)}>Next</Button>
+          </div>
+        </nav>
       </section>
-      {selected && <EventMeetingPanel key={selected} eventId={selected} showDisabled />}
+      {selected && !loading && <EventMeetingPanel key={selected} eventId={selected} showDisabled />}
       <p className="flex items-start gap-2 px-1 text-xs leading-relaxed text-muted-foreground">
         <ShieldCheck className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />
         Scalable meetings do not have a fixed software participant limit. Real capacity depends on available media-server bandwidth and infrastructure. For one-way broadcasting, use Streaming Studio.
       </p>
     </div> : !loading && !error && <div className="rounded-2xl border border-dashed border-border bg-card px-5 py-12 text-center shadow-sm">
       <span className="mx-auto mb-4 grid size-14 place-items-center rounded-2xl bg-primary/10 text-primary"><Video className="size-7" aria-hidden /></span>
-      <h3 className="text-lg font-bold tracking-tight">Create your first event meeting</h3>
-      <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-muted-foreground">Publish an event first, then invite eligible guests into a secure room for audio, video and chat.</p>
-      <Button variant="premium" className="mt-5" onClick={() => navigate('/organizer?tab=events&new=1')}>
-        Create event <ArrowRight className="size-4" aria-hidden />
-      </Button>
+      <h3 className="text-lg font-bold tracking-tight">{search ? 'No matching meeting events' : 'Create your first event meeting'}</h3>
+      <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-muted-foreground">{search ? 'Try another event title or clear the search to see all eligible events.' : 'Publish an event first, then invite eligible guests into a secure room for audio, video and chat.'}</p>
+      {search
+        ? <Button variant="outline" className="mt-5" onClick={() => { setSearchInput(''); setSearch(''); setPage(1) }}>Clear search</Button>
+        : <Button variant="premium" className="mt-5" onClick={() => navigate('/organizer?tab=events&new=1')}>
+            Create event <ArrowRight className="size-4" aria-hidden />
+          </Button>}
     </div>}
   </div>
 }

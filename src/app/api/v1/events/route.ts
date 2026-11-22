@@ -4,6 +4,7 @@ import { db } from '@/lib/db'
 import { buildDiscoveryWhere } from '@/server/services/events'
 import { orgCan } from '@/server/permissions'
 import { assertCanPublishNewEvent } from '@/server/services/subscriptions'
+import { organizerEventCatalogFilters } from '@/server/organizer-meeting-catalog'
 
 /**
  * Events API:
@@ -50,9 +51,11 @@ export async function GET(req: NextRequest) {
         orgId: requestedOrgId ?? { in: authorizedIds },
         deletedAt: null,
         ...(requestedEventId ? { id: requestedEventId } : {}),
-        ...(url.searchParams.get('status') && url.searchParams.get('status') !== 'ALL'
-          ? { status: url.searchParams.get('status')! }
-          : {}),
+        ...organizerEventCatalogFilters({
+          meetingEligible: url.searchParams.get('meetingEligible') === '1',
+          status: url.searchParams.get('status'),
+          q: url.searchParams.get('q'),
+        }),
       }
       const items = await db.event.findMany({
         where,
