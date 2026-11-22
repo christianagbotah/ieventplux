@@ -27,6 +27,13 @@ describe('souvenir scanner accepts only internal collection credentials', () => 
       expect(parseSouvenirScan(`ORD-ABC${hidden}DEFGH`, origin)).toBeNull()
     }
   })
+  test('rejects additional Unicode confusables and invisible marks in every credential form', () => {
+    for (const mark of ['\u00ad', '\u034f', '\u180e', '\ufe0f', '\u0301', '\u00a0']) {
+      expect(parseSouvenirScan(token + mark, origin)).toBeNull()
+      expect(parseSouvenirScan(`${origin}/#/collect/${token}${mark}`, origin)).toBeNull()
+      expect(parseSouvenirScan(`RCPT-ORD-ABC${mark}DEFGH`, origin)).toBeNull()
+    }
+  })
   test('rejects origin confusion, userinfo, ports, paths and query-bearing collection links', () => {
     for (const bad of [
       `https://ieventplux.lightworldtech.com@attacker.example/#/collect/${token}`,
