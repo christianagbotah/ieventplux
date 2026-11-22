@@ -14,7 +14,13 @@ export function normalizeSouvenirSelections(value: unknown): SouvenirSelection[]
   const quantities = new Map<string, number>()
   for (const item of value) {
     if (!item || typeof item !== 'object' || Array.isArray(item) || !Object.prototype.hasOwnProperty.call(item, 'productId') || !Object.prototype.hasOwnProperty.call(item, 'qty')) throw errors.badRequest('Invalid souvenir selection.')
-    const { productId, qty } = item as Record<string, unknown>
+    // Reject accessor-backed values before reading untrusted checkout fields.
+    // JSON requests contain own data properties, never executable getters.
+    const idField = Object.getOwnPropertyDescriptor(item, 'productId')
+    const qtyField = Object.getOwnPropertyDescriptor(item, 'qty')
+    if (!idField || !qtyField || !('value' in idField) || !('value' in qtyField)) throw errors.badRequest('Invalid souvenir selection.')
+    const productId = idField.value as unknown
+    const qty = qtyField.value as unknown
     if (typeof productId !== 'string' || productId.trim() !== productId || !/^c[a-z0-9]{12,40}$/.test(productId)) throw errors.badRequest('Invalid souvenir product.')
     if (typeof qty !== 'number' || !Number.isSafeInteger(qty) || qty < 1 || qty > 20) throw errors.badRequest('Choose 1–20 units per souvenir variant.')
     const total = (quantities.get(productId) ?? 0) + qty

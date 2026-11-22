@@ -160,3 +160,5 @@ Checkout selection IDs now require lowercase ASCII CUID syntax rather than case-
 
 ### Deterministic reservation lock ordering (2026-11-22)
 Both ticket-type and merchandise-product reservation loops now use the same code-unit comparator (`compareInventoryIds`) rather than locale-dependent `localeCompare`. This reduces cross-runtime lock-order disagreement for mixed ticket/merchandise orders; it is not a substitute for PostgreSQL concurrent checkout tests. Commerce and collection launch flags remain disabled pending reconciliation, refund and device QA.
+
+- Checkout selection validation rejects accessor-backed product IDs/quantities without invoking getters; only own data properties are accepted. This is a pure-input hardening test, not payment or reservation acceptance.

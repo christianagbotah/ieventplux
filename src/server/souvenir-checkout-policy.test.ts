@@ -27,6 +27,13 @@ describe('Souvenir checkout policy (no payments or stock writes)', () => {
       expect(() => normalizeSouvenirSelections([item])).toThrow()
     }
   })
+  test('rejects accessor-backed checkout fields without invoking getters', () => {
+    let reads = 0
+    const accessorId = { get productId() { reads++; return blackM }, qty: 1 }
+    const accessorQty = { productId: blackM, get qty() { reads++; return 1 } }
+    for (const item of [accessorId, accessorQty]) expect(() => normalizeSouvenirSelections([item])).toThrow()
+    expect(reads).toBe(0)
+  })
   test('rejects newline-suffixed opaque product identifiers (regex dollar-anchor bypass)', () => {
     for (const productId of [blackM + '\n', blackM + '\r\n', blackM + ' ', ' ' + blackM]) {
       expect(() => normalizeSouvenirSelections([{ productId, qty: 1 }])).toThrow()
