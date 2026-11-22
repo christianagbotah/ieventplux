@@ -1,14 +1,16 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { LiveKitRoom, GridLayout, ParticipantTile, ControlBar, RoomAudioRenderer, useTracks, usePagination, ConnectionStateToast, useParticipants, useRoomContext } from '@livekit/components-react'
+import { LiveKitRoom, GridLayout, ParticipantTile, ControlBar, RoomAudioRenderer, useTracks, usePagination, ConnectionStateToast, useParticipants, useRoomContext, LayoutContextProvider } from '@livekit/components-react'
 import { Track } from 'livekit-client'
 import '@livekit/components-styles'
 import { Loader2, MonitorUp, ShieldCheck, UsersRound } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { api, ApiClientError } from '../api'
+import { useConfirm } from '@/components/ui/confirm-dialog-provider'
+import { requestMeetingDevicePermissions, type DeviceChoices } from '../lib/meeting-device-permissions'
 
-type SfuCredentials = { token: string; serverUrl: string }
+type SfuCredentials = { token: string; serverUrl: string; devices: DeviceChoices }
 
 function MeetingTracks({ screenSharingEnabled }: { screenSharingEnabled: boolean }) {
   // LiveKit pages large rooms rather than mounting an unbounded number of
@@ -49,6 +51,7 @@ function MeetingTracks({ screenSharingEnabled }: { screenSharingEnabled: boolean
 function SfuHostParticipants({ meetingId }: { meetingId: string }) {
   const participants = useParticipants()
   const room = useRoomContext()
+  const confirm = useConfirm()
   const [search, setSearch] = useState('')
   const [working, setWorking] = useState<string | null>(null)
   const [error, setError] = useState('')
@@ -68,7 +71,7 @@ function SfuHostParticipants({ meetingId }: { meetingId: string }) {
         <span className="min-w-0 truncate">{person.name || 'Participant'}</span>
         <Button size="sm" variant="destructive" disabled={working !== null}
           onClick={async () => {
-            if (!window.confirm('Remove this user from the event meeting and chat until restored?')) return
+            if (!(await confirm({ title: 'Remove participant?', description: 'This person will lose access to the call and event chat until you restore their access.', confirmLabel: 'Remove participant', tone: 'danger' }))) return
             setWorking(person.identity); setError('')
             try {
               await api.post(`/meetings/${meetingId}/remove-participant`, { userId: person.identity })
@@ -94,16 +97,24 @@ export default function MeetingSfuRoom({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [status, setStatus] = useState('')
+  const [microphoneOn, setMicrophoneOn] = useState(true)
+  const [cameraOn, setCameraOn] = useState(true)
 
   const join = async () => {
     if (!canJoin || busy) return
     setBusy(true); setError(''); setStatus('')
     try {
-      const response = await api.post<SfuCredentials>(`/meetings/${meetingId}/sfu-token`, {})
+      // Request native permissions immediately on this user's Join gesture,
+      // before an asynchronous API/token fetch can lose browser activation.
+      await requestMeetingDevicePermissions(
+        { microphone: microphoneOn, camera: cameraOn },
+        navigator.mediaDevices,
+      )
+      const response = await api.post<{ token: string; serverUrl: string }>(`/meetings/${meetingId}/sfu-token`, {})
       if (!/^wss:\/\//.test(response.serverUrl) || !response.token) {
         throw new Error('The media server has returned an invalid connection.')
       }
-      setCredentials(response)
+      setCredentials({ ...response, devices: { microphone: microphoneOn, camera: cameraOn } })
     } catch (err) {
       setError(err instanceof ApiClientError ? err.message : err instanceof Error ? err.message : 'Unable to join the media room.')
     } finally {
@@ -151,23 +162,37 @@ export default function MeetingSfuRoom({
           token={credentials.token}
           serverUrl={credentials.serverUrl}
           connect={true}
-          audio={true}
-          video={true}
+          audio={credentials.devices.microphone}
+          video={credentials.devices.camera}
           options={{ adaptiveStream: true, dynacast: true }}
-          onError={(err) => setError('Media connection failed: ' + err.message)}
+          onError={() => setError('The media connection could not start. Check your network or open this meeting in Chrome or Samsung Internet.')}
           onDisconnected={() => { setCredentials(null); setStatus('You have left the meeting.') }}
         >
-          <MeetingTracks screenSharingEnabled={screenSharingEnabled} />
-          {canManage && <SfuHostParticipants meetingId={meetingId} />}
+          <LayoutContextProvider>
+            <MeetingTracks screenSharingEnabled={screenSharingEnabled} />
+            {canManage && <SfuHostParticipants meetingId={meetingId} />}
+          </LayoutContextProvider>
         </LiveKitRoom>
       : <div className="flex min-h-[240px] min-w-0 flex-col items-center justify-center gap-4 rounded-xl border bg-slate-950 px-4 py-8 text-center text-white">
           <MonitorUp className="size-11 text-white/70" aria-hidden />
-          <p className="max-w-lg text-sm">Join the event's scalable audio and video room. Your browser will request permission before accessing your camera or microphone. Screen sharing is available on supported devices.</p>
-          <Button disabled={!canJoin || busy} onClick={() => void join()}>
+          <p className="max-w-lg text-sm leading-6">Choose your devices, then join. The browser will request permission immediately. You can also join as a listener with both devices switched off.</p>
+          <fieldset className="flex w-full max-w-sm flex-wrap justify-center gap-3 rounded-xl border border-white/15 bg-white/5 p-3">
+            <legend className="sr-only">Devices to use when joining</legend>
+            <label className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-white/20 bg-white/10 px-3 text-sm">
+              <input type="checkbox" className="size-4 accent-emerald-500" checked={microphoneOn} disabled={busy} onChange={(e) => setMicrophoneOn(e.target.checked)} />
+              Microphone
+            </label>
+            <label className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-white/20 bg-white/10 px-3 text-sm">
+              <input type="checkbox" className="size-4 accent-emerald-500" checked={cameraOn} disabled={busy} onChange={(e) => setCameraOn(e.target.checked)} />
+              Camera
+            </label>
+          </fieldset>
+          <Button disabled={!canJoin || busy} className="min-h-12 w-full max-w-xs rounded-xl" onClick={() => void join()}>
             {busy ? <Loader2 className="mr-2 size-4 animate-spin" /> : <UsersRound className="mr-2 size-4" />}
             {busy ? 'Connecting…' : 'Join meeting'}
           </Button>
           {!canJoin && <p className="text-xs text-amber-200">This room requires an approved free-event RSVP or valid paid-event ticket.</p>}
+          <p className="max-w-sm text-xs leading-5 text-white/65">If an in-app browser blocks camera or microphone access, use its menu to open this meeting in Chrome or Samsung Internet.</p>
         </div>}
     {canManage && <div className="flex justify-end">
       <Button variant="destructive" className="min-h-10" onClick={onEnd}>End meeting for everyone</Button>
