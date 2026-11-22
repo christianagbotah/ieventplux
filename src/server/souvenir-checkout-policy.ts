@@ -9,7 +9,7 @@ export function normalizeSouvenirSelections(value: unknown): SouvenirSelection[]
   if (value.length > 30) throw errors.badRequest('Maximum 30 souvenir selection rows.')
   const quantities = new Map<string, number>()
   for (const item of value) {
-    if (!item || typeof item !== 'object') throw errors.badRequest('Invalid souvenir selection.')
+    if (!item || typeof item !== 'object' || Array.isArray(item) || !Object.prototype.hasOwnProperty.call(item, 'productId') || !Object.prototype.hasOwnProperty.call(item, 'qty')) throw errors.badRequest('Invalid souvenir selection.')
     const { productId, qty } = item as Record<string, unknown>
     if (typeof productId !== 'string' || productId.trim() !== productId || !/^c[a-z0-9]{12,40}$/i.test(productId)) throw errors.badRequest('Invalid souvenir product.')
     if (typeof qty !== 'number' || !Number.isSafeInteger(qty) || qty < 1 || qty > 20) throw errors.badRequest('Choose 1–20 units per souvenir variant.')
