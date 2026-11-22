@@ -8,7 +8,7 @@ describe('Souvenir checkout policy (no payments or stock writes)', () => {
   test('same variant is combined, separate variants remain distinct, stable lock order', () => {
     expect(normalizeSouvenirSelections([{ productId: blackM, qty: 2 }, { productId: blueL, qty: 1 }, { productId: blackM, qty: 3 }])).toEqual([
       { productId: blueL, qty: 1 }, { productId: blackM, qty: 5 },
-    ].sort((a, b) => a.productId.localeCompare(b.productId)))
+    ])
   })
   test('rejects malformed, fractional, zero, negative and excess quantities', () => {
     for (const value of [null, {}, [{ productId: blackM, qty: 0 }], [{ productId: blackM, qty: -1 }], [{ productId: blackM, qty: 1.5 }], [{ productId: blackM, qty: 21 }], [{ productId: blackM, qty: 12 }, { productId: blackM, qty: 12 }], [{ productId: '../other-event', qty: 1 }]]) {

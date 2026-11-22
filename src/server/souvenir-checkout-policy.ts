@@ -17,7 +17,8 @@ export function normalizeSouvenirSelections(value: unknown): SouvenirSelection[]
     if (total > 20) throw errors.badRequest('Maximum 20 units per souvenir variant per order.')
     quantities.set(productId, total)
   }
-  return [...quantities.entries()].map(([productId, qty]) => ({ productId, qty })).sort((a, b) => a.productId.localeCompare(b.productId))
+  // Deterministic code-unit ordering across server locales avoids differing lock acquisition order.
+  return [...quantities.entries()].map(([productId, qty]) => ({ productId, qty })).sort((a, b) => a.productId < b.productId ? -1 : a.productId > b.productId ? 1 : 0)
 }
 
 export function souvenirLinePrice(unitPriceMinor: number, qty: number): number {
