@@ -66,6 +66,24 @@ jobs:
       - name: Security policy unit tests (payments, realtime, check-in and private KYC)
         run: bun test src/server/hubtel/security-policy.test.ts mini-services/realtime/room-authorization.test.ts src/portal/lib/checkin-policy.test.ts src/server/kyc-storage.test.ts src/server/kyc-requirements.test.ts
 
+      - name: Enterprise UI foundation (semantic controls, loading, labels and states)
+        run: bun test src/components/ui/ui-foundation.test.tsx
+
+      - name: Event creation schedule and paid/free checkout UI regression
+        run: bun test src/portal/lib/event-editor-validation.test.ts src/portal/lib/ticket-selection.test.ts
+
+      - name: Event programme, artist appearances, souvenir validation and media files
+        run: bun test src/portal/lib/event-programme-form.test.ts src/server/event-programme-policy.test.ts
+
+      - name: Full agenda editor, UTC persistence and DST-safe event timezones
+        run: bun test src/server/event-agenda-policy.test.ts src/portal/lib/agenda-time.test.ts
+
+      - name: Organizer group meeting catalog (eligible statuses, safe search and paging)
+        run: bun test src/server/organizer-meeting-catalog.test.ts
+
+      - name: Authenticated group meeting, WebRTC presentation and production TURN safety
+        run: bun test src/server/meeting-policy.test.ts src/server/meeting-turn-policy.test.ts src/server/meeting-sfu-policy.test.ts src/server/meeting-sfu-guard-policy.test.ts
+
       - name: Attendee deep-link selection and event-scoped scanner regressions
         run: bun test src/portal/lib/attendee-event-context.test.ts
 
@@ -101,11 +119,16 @@ jobs:
           bunx prisma db push --accept-data-loss
           bun run db:seed
 
+      - name: Rehearse additive meeting SQL twice in isolated test schema
+        env:
+          IEVENTPLUX_ISOLATED_DB_TEST: "yes"
+        run: bash scripts/verify-meeting-migration.sh
+
       - name: Start the stack
         run: |
-          (bun run dev > dev.log 2>&1 &)
+          (IEVENTPLUX_GROUP_MEETINGS_ENABLED=true bun run dev > dev.log 2>&1 &)
           (cd mini-services/worker && bun install && (bun run dev > worker.log 2>&1 &))
-          (cd mini-services/realtime && bun install && (bun run dev > realtime.log 2>&1 &))
+          (cd mini-services/realtime && bun install && (IEVENTPLUX_GROUP_MEETINGS_ENABLED=true IEVENTPLUX_TEST_SHORT_MEETING_RECHECK=true bun run dev > realtime.log 2>&1 &))
           for i in $(seq 1 40); do
             curl -sf http://localhost:3000/api/v1/health > /dev/null && curl -sf http://localhost:3001/health > /dev/null && curl -sf http://localhost:3003/health > /dev/null && break
             sleep 3
@@ -116,6 +139,11 @@ jobs:
 
       - name: Realtime access smoke (public event, private notification and broadcast)
         run: bun run scripts/realtime-smoke.ts
+
+      - name: Authenticated meeting lifecycle, group chat and WebRTC signaling smoke
+        env:
+          IEVENTPLUX_ISOLATED_DB_TEST: "yes"
+        run: bun run scripts/meeting-access-smoke.ts
 
       - name: Check-in replay isolation with synthetic admission record
         run: bun run scripts/checkin-replay-scope-smoke.ts

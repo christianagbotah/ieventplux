@@ -4,16 +4,23 @@ import { useState } from 'react'
 import { Church, Ticket, ShieldCheck, Loader2, Eye, EyeOff, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Field, FieldLabel, FieldHelp } from '@/components/ui/field'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useToast } from '@/hooks/use-toast'
 import { api, ApiClientError } from '../api'
-import { navigate } from '../router'
+import { navigate, useRoute } from '../router'
 import { usePortal, isPlatformStaff } from '../store'
 import { humanize } from '../format'
 
 export default function AuthView({ mode }: { mode: 'signin' | 'register' }) {
   const { toast } = useToast()
+  const route = useRoute()
+  const proposedReturn = route.query.get('continue') ?? ''
+  const inviteReturn = /^\/invite\/[A-Za-z0-9_-]{6,32}(?:\?meeting=[A-Za-z0-9_-]{8,64})?$/.test(proposedReturn)
+    ? proposedReturn : null
+  const authDestination = (view: 'signin' | 'register') =>
+    '/' + view + (inviteReturn ? '?continue=' + encodeURIComponent(inviteReturn) : '')
   const { setUser, setMemberships } = usePortal()
   const [busy, setBusy] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
@@ -65,6 +72,11 @@ export default function AuthView({ mode }: { mode: 'signin' | 'register' }) {
     if (!me.user) throw new Error('Your credentials were accepted, but the sign-in session could not be verified. Please try signing in again.')
     setUser(me.user)
     setMemberships(me.memberships ?? [])
+    if (inviteReturn) {
+      toast({ title: 'Signed in — continue to your invitation' })
+      navigate(inviteReturn)
+      return
+    }
     // R20: platform staff (SUPPORT / MODERATOR / FINANCE_ADMIN / SUPER_ADMIN) sign in through
     // this same form — the session backend hands back their staff role, so we route them
     // straight into the admin console instead of the consumer landing page.
@@ -201,7 +213,7 @@ export default function AuthView({ mode }: { mode: 'signin' | 'register' }) {
         <p className="mt-1 text-sm text-muted-foreground">
           {mode === 'signin' ? 'Use your email and password.' : 'It takes less than a minute.'}
         </p>
-        <form onSubmit={submit} className="mt-6" aria-describedby={formError ? 'auth-form-error' : undefined}>
+        <form onSubmit={submit} className="mt-6 space-y-4" aria-describedby={formError ? 'auth-form-error' : undefined}>
           {formError && (
             <div id="auth-form-error" role="alert" className="mb-4 flex items-start gap-2.5 rounded-xl border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
@@ -209,78 +221,51 @@ export default function AuthView({ mode }: { mode: 'signin' | 'register' }) {
             </div>
           )}
           {mode === 'register' && (
-            <div className="efx-floating-label-input" style={{ maxWidth: '100%', margin: '0 0 0.9rem' }}>
-              <input
-                id="displayName"
-                name="displayName"
-                className="efx-floating-label-input__field"
-                placeholder=" "
-                required
-                value={form.displayName}
-                onChange={(e) => setForm((f) => ({ ...f, displayName: e.target.value }))}
-                autoComplete="name"
-              />
-              <label htmlFor="displayName" className="efx-floating-label-input__label">Full name</label>
-            </div>
+            <Field>
+              <FieldLabel htmlFor="displayName">Full name</FieldLabel>
+              <Input id="displayName" name="displayName" autoComplete="name" placeholder="Your full name"
+                required value={form.displayName}
+                onChange={(e) => setForm((f) => ({ ...f, displayName: e.target.value }))} />
+            </Field>
           )}
-          <div className="efx-floating-label-input" style={{ maxWidth: '100%', margin: '0 0 0.9rem' }}>
-            <input
-              id="email"
-              name="email"
-              type="email"
-              className="efx-floating-label-input__field"
-              placeholder=" "
-              required
-              value={form.email}
-              onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-              autoComplete="email"
-            />
-            <label htmlFor="email" className="efx-floating-label-input__label">Email</label>
-          </div>
+          <Field>
+            <FieldLabel htmlFor="email">Email address</FieldLabel>
+            <Input id="email" name="email" type="email" autoComplete="email" placeholder="you@example.com"
+              required value={form.email}
+              onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} />
+          </Field>
           {mode === 'register' && (
-            <div className="efx-floating-label-input" style={{ maxWidth: '100%', margin: '0 0 0.9rem' }}>
-              <input
-                id="phone"
-                name="phone"
-                className="efx-floating-label-input__field"
-                placeholder=" "
-                value={form.phone}
-                onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
-                inputMode="tel"
-                autoComplete="tel"
-              />
-              <label htmlFor="phone" className="efx-floating-label-input__label">Phone (optional — for ticket SMS)</label>
-            </div>
+            <Field>
+              <FieldLabel htmlFor="phone">Phone number <span className="font-normal text-muted-foreground">(optional)</span></FieldLabel>
+              <Input id="phone" name="phone" type="tel" autoComplete="tel" inputMode="tel"
+                placeholder="e.g. 024 000 0000" value={form.phone}
+                onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} />
+              <FieldHelp>Used for ticket-related SMS when messaging is available.</FieldHelp>
+            </Field>
           )}
-          <div className="efx-floating-label-input relative" style={{ maxWidth: '100%', margin: '0 0 0.35rem' }}>
-            <input
-              id="password"
-              name="password"
-              type={showPassword ? 'text' : 'password'}
-              className="efx-floating-label-input__field"
-              style={{ paddingRight: '3.5rem' }}
-              placeholder=" "
-              required
-              minLength={8}
-              value={form.password}
-              onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
-              autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
-            />
-            <label htmlFor="password" className="efx-floating-label-input__label">Password</label>
-            <button
-              type="button"
-              className="absolute right-2 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-xl text-muted-foreground hover:bg-secondary hover:text-foreground"
-              onClick={() => setShowPassword((value) => !value)}
-              aria-label={showPassword ? 'Hide password' : 'Show password'}
-              aria-pressed={showPassword}
-              title={showPassword ? 'Hide password' : 'Show password'}
-            >
-              {showPassword ? <EyeOff className="h-4.5 w-4.5" aria-hidden /> : <Eye className="h-4.5 w-4.5" aria-hidden />}
-            </button>
-          </div>
+          <Field>
+            <FieldLabel htmlFor="password">Password</FieldLabel>
+            <div className="relative">
+              <Input id="password" name="password" type={showPassword ? 'text' : 'password'}
+                className="pr-12" autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
+                placeholder={mode === 'signin' ? 'Enter your password' : 'Create a strong password'}
+                aria-describedby={mode === 'register' ? 'auth-password-hint' : undefined}
+                required minLength={8} value={form.password}
+                onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))} />
+              <button type="button"
+                className="absolute right-1.5 top-1/2 z-10 grid size-10 -translate-y-1/2 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-primary/25"
+                onClick={() => setShowPassword((value) => !value)}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                aria-pressed={showPassword}
+                title={showPassword ? 'Hide password' : 'Show password'}>
+                {showPassword ? <EyeOff className="size-4" aria-hidden /> : <Eye className="size-4" aria-hidden />}
+              </button>
+            </div>
+            {mode === 'register' && <FieldHelp id="auth-password-hint">Use at least 8 characters.</FieldHelp>}
+          </Field>
           {mode === 'signin' && (
             <div className="mb-3 flex justify-end">
-              <button type="button" className="text-xs font-medium text-primary hover:underline" onClick={() => setResetOpen(true)}>Forgot password?</button>
+              <button type="button" className="inline-flex min-h-9 items-center rounded-md px-1 text-xs font-semibold text-primary underline-offset-4 hover:underline" onClick={() => setResetOpen(true)}>Forgot password?</button>
             </div>
           )}
           {mode === 'register' && (
@@ -289,21 +274,15 @@ export default function AuthView({ mode }: { mode: 'signin' | 'register' }) {
               <span>Send me event updates and offers by SMS (transactional messages like tickets are always sent; you can unsubscribe anytime).</span>
             </label>
           )}
-          <button
-            type="submit"
-            className="efx-neon-pulse-button"
-            style={{ width: '100%', ...(busy ? { opacity: 0.6, cursor: 'not-allowed', animation: 'none' } : {}) }}
-            disabled={busy}
-          >
-            {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
-            {mode === 'signin' ? 'Sign in' : 'Create account'}
-          </button>
+          <Button type="submit" size="lg" variant="premium" className="w-full" loading={busy}>
+            {mode === 'signin' ? 'Sign in securely' : 'Create account'}
+          </Button>
         </form>
         <p className="mt-4 text-center text-sm text-muted-foreground">
           {mode === 'signin' ? (
-            <>New to iEventPlux? <button type="button" className="efx-underline-slide-link" style={{ fontSize: 'inherit', color: 'inherit', fontWeight: 600, paddingBottom: '2px' }} onClick={() => navigate('/register')}>Create an account</button></>
+            <>New to iEventPlux? <button type="button" className="efx-underline-slide-link" style={{ fontSize: 'inherit', color: 'inherit', fontWeight: 600, paddingBottom: '2px' }} onClick={() => navigate(authDestination('register'))}>Create an account</button></>
           ) : (
-            <>Already have an account? <button type="button" className="efx-underline-slide-link" style={{ fontSize: 'inherit', color: 'inherit', fontWeight: 600, paddingBottom: '2px' }} onClick={() => navigate('/signin')}>Sign in</button></>
+            <>Already have an account? <button type="button" className="efx-underline-slide-link" style={{ fontSize: 'inherit', color: 'inherit', fontWeight: 600, paddingBottom: '2px' }} onClick={() => navigate(authDestination('signin'))}>Sign in</button></>
           )}
         </p>
         {mode === 'signin' && (

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { quoteTicketSelection, ticketCheckoutSupported, ticketAvailability, type TicketQuote } from './ticket-selection'
+import { quoteTicketSelection, ticketCheckoutSupported, ticketAvailability, hasPaidAdmissionSelection, type TicketQuote } from './ticket-selection'
 
 const gh: TicketQuote = {
   id: 'ga', priceMinor: 3000, currency: 'GHS',
@@ -49,5 +49,17 @@ describe('event ticket selection safety and trust', () => {
     expect(ticketCheckoutSupported({ priceMinor: -1, currency: 'GHS' })).toBe(false)
     expect(ticketCheckoutSupported({ priceMinor: 12.5, currency: 'GHS' })).toBe(false)
     expect(ticketCheckoutSupported({ priceMinor: 300, currency: 'USD' })).toBe(false)
+  })
+})
+
+
+describe('paid versus free basket UX admission rules', () => {
+  const types = [{ id: 'free', priceMinor: 0 }, { id: 'paid', priceMinor: 1200 }]
+  test('a free RSVP does not become a paid checkout when the event also offers paid tickets', () => {
+    expect(hasPaidAdmissionSelection(types, { free: 2, paid: 0 })).toBe(false)
+    expect(hasPaidAdmissionSelection(types, { free: 0, paid: 0 })).toBe(false)
+  })
+  test('a basket with at least one priced ticket is a paid checkout', () => {
+    expect(hasPaidAdmissionSelection(types, { free: 1, paid: 1 })).toBe(true)
   })
 })
