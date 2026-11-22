@@ -12,6 +12,11 @@ describe('synthetic merchandise QA refuses unsafe database destinations before c
     'postgresql://user:password@127.0.0.1/ieventplux_qa?schema=ieventplux_merch_qa_20261119&host=production.example.com',
     'postgresql://user:password@127.0.0.1/ieventplux_qa?schema=ieventplux_merch_qa_20261119&options=-c%20search_path%3Dpublic',
     'postgresql://user:password@127.0.0.1/ieventplux_qa?schema=ieventplux_merch_qa_20261119&schema=public',
+    'postgresql://user:password@127.0.0.1/ieventplux_qa?schema=ieventplux_merch_qa_20261119&sslmode=disable',
+    'postgresql://user:password@127.0.0.1/ieventplux_qa?schema=ieventplux_merch_qa_20261119&application_name=qa',
+    'postgresql://user:password@127.0.0.1/ieventplux_qa?schema=ieventplux_merch_qa_20261119&pgbouncer=true',
+    'postgresql://user:password@127.0.0.1/ieventplux_qa?schema=ieventplux_merch_qa_20261119#ignored',
+
   ]
   test('rejects missing, live, remote and connection-option bypass URLs', async () => {
     try {

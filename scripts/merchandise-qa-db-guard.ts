@@ -7,7 +7,13 @@ const qaName = /(?:^|[_-])(qa|test|scratch)(?:[_-]|$)/i
 export async function requireIsolatedMerchandiseQaDatabase() {
   const url = new URL(process.env.DATABASE_URL ?? 'http://invalid.invalid')
   assert.ok(['postgresql:', 'postgres:'].includes(url.protocol), 'QA requires a PostgreSQL URL')
-  assert.ok(!url.searchParams.has('host'), 'QA must not override the loopback database host')
+  // Prisma/PostgreSQL URLs accept additional parameters that can redirect the
+  // effective connection or alter its search path. Fail closed on *all* unknown
+  // parameters rather than maintaining an incomplete blacklist.
+  assert.ok([...url.searchParams.keys()].every((key) => key === 'schema'),
+    'QA permits only the explicit isolated schema connection parameter')
+  assert.ok(!url.hash, 'QA URL must not include a fragment')
+
   assert.equal(url.searchParams.getAll('schema').length, 1, 'QA requires exactly one schema parameter')
   assert.ok(!url.searchParams.has('options'), 'QA must not override PostgreSQL connection options')
   assert.equal(url.searchParams.get('schema'), schema, 'QA requires the isolated schema')

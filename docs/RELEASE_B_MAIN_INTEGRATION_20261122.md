@@ -19,3 +19,14 @@ Shared VPS storage was 85% used, ~49 GB free; no Next.js build or package instal
 ## 22 November: isolated QA destination hardening
 
 The synthetic merchandise reservation QA and physical-return HTTP QA now call the common database isolation guard before their first fixture/query. That guard verifies both a disposable loopback PostgreSQL database name and the actual connected session schema. A new CI regression test checks that missing, remote, production-named, wrong-schema, duplicate-schema and PostgreSQL host/options override URLs are refused before the database client is imported. This does not replace a real scratch-database run or authorize payment/collection flags in production.
+
+## QA database URL hardening — 22 November, later run
+
+The synthetic merchandise guard now accepts only the `schema` query parameter
+and rejects fragments. This blocks unexpected Prisma/PostgreSQL connection
+parameters (including `sslmode`, `pgbouncer` and `application_name`) rather
+than trying to enumerate every possible override. Existing checks for loopback,
+explicit disposable database name, exact schema and actual PostgreSQL session
+identity remain mandatory. The guard test now checks twelve rejected URLs.
+This is a *safety preflight*, not a successful database-backed concurrency,
+provider payment or refund acceptance run.
