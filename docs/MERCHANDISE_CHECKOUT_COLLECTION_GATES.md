@@ -162,3 +162,7 @@ Checkout selection IDs now require lowercase ASCII CUID syntax rather than case-
 Both ticket-type and merchandise-product reservation loops now use the same code-unit comparator (`compareInventoryIds`) rather than locale-dependent `localeCompare`. This reduces cross-runtime lock-order disagreement for mixed ticket/merchandise orders; it is not a substitute for PostgreSQL concurrent checkout tests. Commerce and collection launch flags remain disabled pending reconciliation, refund and device QA.
 
 - Checkout selection validation rejects accessor-backed product IDs/quantities without invoking getters; only own data properties are accepted. This is a pure-input hardening test, not payment or reservation acceptance.
+
+### Inventory lock-order permutation regression — 22 November 2026
+
+The pure checkout-policy suite now exercises 128 deterministic permutations of a multi-variant cart with repeated SKU selections. Every permutation must aggregate the same quantities and acquire stock locks in the same byte-stable product-ID order. This is a policy regression only; it does not replace PostgreSQL concurrent transaction tests or permit merchandise activation.

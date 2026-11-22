@@ -53,6 +53,25 @@ describe('Souvenir checkout policy (no payments or stock writes)', () => {
     expect(normalizeSouvenirSelections([])).toEqual([])
     expect(normalizeSouvenirSelections(Array.from({ length: 20 }, () => ({ productId: blackM, qty: 1 })))).toEqual([{ productId: blackM, qty: 20 }])
   })
+  test('permuted concurrent carts normalize to identical stock-lock order and quantities', () => {
+    const variants = [blackM, blueL, 'ca123456789012', 'cz123456789012']
+    const cart = variants.flatMap((productId) => [
+      { productId, qty: 1 }, { productId, qty: 2 }, { productId, qty: 3 },
+    ])
+    const expected = normalizeSouvenirSelections(cart)
+    expect(expected).toHaveLength(variants.length)
+    for (let seed = 1; seed <= 128; seed++) {
+      const shuffled = [...cart]
+      // Deterministic Fisher-Yates permutations, without locale-dependent ordering.
+      let state = seed
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        state = (Math.imul(state, 1664525) + 1013904223) >>> 0
+        const j = state % (i + 1)
+        ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+      }
+      expect(normalizeSouvenirSelections(shuffled)).toEqual(expected)
+    }
+  })
   test('enforces integer pesewa pricing and maximum line value', () => {
     expect(souvenirLinePrice(5000, 3)).toBe(15000)
     for (const price of [0, -1, 1.5, NaN, Infinity, Number.MAX_SAFE_INTEGER]) expect(() => souvenirLinePrice(price, 2)).toThrow()
