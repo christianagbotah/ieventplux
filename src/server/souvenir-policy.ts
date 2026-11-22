@@ -1,26 +1,15 @@
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import { errors } from './api'
 import { env } from './env'
+import { normalizeSouvenirSelections } from './souvenir-checkout-policy'
 // Single fail-closed stock-counter policy shared by checkout and collection code.
 export { availableSouvenirStock } from './souvenir-checkout-policy'
 
 export type SouvenirSelection = { productId: string; qty: number }
-export function normalizeSouvenirLines(value: unknown): SouvenirSelection[] {
-  if (!Array.isArray(value)) throw errors.badRequest('Souvenir lines must be a list.')
-  if (value.length > 30) throw errors.badRequest('Maximum 30 souvenir lines per order.')
-  const grouped = new Map<string, number>()
-  for (const row of value) {
-    if (!row || typeof row !== 'object') throw errors.badRequest('Invalid souvenir line.')
-    const productId = typeof row.productId === 'string' ? row.productId.trim() : ''
-    const qty = row.qty
-    if (!/^c[a-z0-9]{12,40}$/i.test(productId)) throw errors.badRequest('Invalid souvenir product.')
-    if (!Number.isSafeInteger(qty) || qty < 1 || qty > 20) throw errors.badRequest('Select 1–20 of any souvenir.')
-    const total = (grouped.get(productId) ?? 0) + qty
-    if (total > 20) throw errors.badRequest('Maximum 20 of one souvenir per order.')
-    grouped.set(productId, total)
-  }
-  return [...grouped.entries()].map(([productId, qty]) => ({ productId, qty })).sort((a,b) => a.productId.localeCompare(b.productId))
-}
+/** One canonical validation and lock ordering path for all checkout callers.
+ * Never trim an opaque product ID: a changed identifier must be rejected,
+ * not silently redirected to a different inventory record. */
+export const normalizeSouvenirLines = normalizeSouvenirSelections
 
 export function souvenirCollectionToken(reference: string): string {
   const signature = createHmac('sha256', `${env.appSecret}:souvenir-collection:v1`).update(reference).digest('hex').slice(0, 32)

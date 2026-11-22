@@ -11,6 +11,10 @@ describe('souvenir inventory and collection policy', () => {
   test('rejects empty, fractional, oversized, unsafe selections', () => {
     for (const rows of [null,{},[{productId:a,qty:0}],[{productId:a,qty:1.5}],[{productId:a,qty:21}],[{productId:'../../secret',qty:1}],[{productId:a,qty:11},{productId:a,qty:11}]]) expect(()=>normalizeSouvenirLines(rows)).toThrow()
   })
+  test('rejects padded opaque IDs and matches the canonical checkout policy', () => {
+    expect(() => normalizeSouvenirLines([{ productId: ' ' + a, qty: 1 }])).toThrow()
+    expect(() => normalizeSouvenirLines([{ productId: a + ' ', qty: 1 }])).toThrow()
+  })
   test('signed lookup URL contains no identity and rejects tampering', () => {
     const ref='ORD-ABCDEFGH'
     const token=souvenirCollectionToken(ref)
