@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { CalendarDays, MapPin, Monitor, Users, Radio, Ticket, Star } from 'lucide-react'
+import { CalendarDays, MapPin, Monitor, Users, Radio, Ticket, Star, ListChecks, Check } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { navigate } from '../router'
@@ -61,7 +61,12 @@ export function priceLabel(event: EventCardData): string {
   return `From ${money(min, currency)}`
 }
 
-export function EventCard({ event, index = 0, footer }: { event: EventCardData; index?: number; footer?: React.ReactNode }) {
+export function EventCard({ event, index = 0, footer, compare }: {
+  event: EventCardData
+  index?: number
+  footer?: React.ReactNode
+  compare?: { selected: boolean; onToggle: () => void }
+}) {
   const [imgFailed, setImgFailed] = useState(false)
   const isLive = event.status === 'LIVE'
   const inventory = inventoryState(event)
@@ -124,6 +129,14 @@ export function EventCard({ event, index = 0, footer }: { event: EventCardData; 
             <span className="rounded-full bg-foreground/80 px-2.5 py-1 text-[11px] font-semibold text-background shadow">Sold out</span>
           )}
         </div>
+        {compare && <button type="button"
+          className={'absolute right-3 top-3 z-10 inline-flex min-h-10 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold shadow-md backdrop-blur-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ' + (compare.selected ? 'border-emerald-500 bg-emerald-600 text-white' : 'border-white/40 bg-black/70 text-white hover:bg-black/90')}
+          aria-label={(compare.selected ? 'Remove ' : 'Add ') + event.title + (compare.selected ? ' from comparison' : ' to comparison')}
+          aria-pressed={compare.selected}
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); compare.onToggle() }}>
+          {compare.selected ? <Check className="size-4" aria-hidden /> : <ListChecks className="size-4" aria-hidden />}
+          {compare.selected ? 'Selected' : 'Compare'}
+        </button>}
         <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 via-black/25 to-transparent p-3 pt-8">
           <div className="flex items-center gap-2 text-[11.5px] font-medium text-white/95">
             <CalendarDays className="h-3.5 w-3.5" aria-hidden />

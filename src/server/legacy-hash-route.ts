@@ -4,7 +4,7 @@
  */
 const pages = new Set([
   'following', 'live', 'reels', 'effects', 'signin', 'register',
-  'me', 'organizer', 'admin', 'create-org', 'ai-studio', 'search',
+  'me', 'organizer', 'admin', 'create-org', 'ai-studio', 'search', 'compare',
 ])
 const details = new Set(['event', 'org', 'order', 'broadcast', 'meeting', 'claim', 'invite'])
 

@@ -5,7 +5,7 @@ import {
   Search, SlidersHorizontal, Radio, MapPin, TrendingUp, X, ArrowRight, Wand2,
   Church, Music, Presentation, Wrench, Code2, Heart, Users, Sparkles as SparklesIcon,
   PartyPopper, Activity, Smartphone, QrCode, CalendarCheck, Building2,
-  CalendarDays, ChevronRight, Monitor, Globe2, Film, UsersRound, ArrowUpRight, Pause, Play,
+  CalendarDays, ChevronRight, Monitor, Globe2, Film, UsersRound, ArrowUpRight, Pause, Play, ListChecks, Check,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -22,6 +22,8 @@ import { PlannerPanel } from '../components/PlannerPanel'
 import { usePortal } from '../store'
 import { countryLabel } from '../lib/global-locations'
 import { HeroSpotlight } from '../components/HeroSpotlight'
+import { useToast } from '@/hooks/use-toast'
+import { comparePath, parseCompareIds } from '@/server/public-event-compare'
 
 interface Category {
   slug: string
@@ -201,6 +203,38 @@ function SponsoredCard({ event, index }: { event: EventCardData; index: number }
 
 export default function Discover({ route }: { route: Route }) {
   const { user } = usePortal()
+  const { toast } = useToast()
+  const [compareIds, setCompareIds] = useState<string[]>([])
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem('ievx-event-compare-v1')
+      if (!stored) return
+      const value: unknown = JSON.parse(stored)
+      if (Array.isArray(value) && value.every((v) => typeof v === 'string')) {
+        const ids = parseCompareIds(value.join(','))
+        setCompareIds(ids)
+      }
+    } catch { /* Comparison still works if storage is unavailable. */ }
+  }, [])
+  useEffect(() => {
+    try { window.localStorage.setItem('ievx-event-compare-v1', JSON.stringify(compareIds)) }
+    catch { /* Store only public event IDs, and allow private browsing. */ }
+  }, [compareIds])
+
+  const toggleCompare = (id: string) => {
+    setCompareIds((previous) => {
+      if (previous.includes(id)) return previous.filter((item) => item !== id)
+      if (previous.length >= 3) {
+        toast({ title: 'Three events selected', description: 'Remove one before adding another event to your comparison.' })
+        return previous
+      }
+      return [...previous, id]
+    })
+  }
+  const comparison = (event: EventCardData) => ({
+    selected: compareIds.includes(event.id),
+    onToggle: () => toggleCompare(event.id),
+  })
   const [home, setHome] = useState<HomePayload | null>(null)
   const [items, setItems] = useState<EventCardData[] | null>(null)
   const [total, setTotal] = useState(0)
@@ -725,7 +759,7 @@ export default function Discover({ route }: { route: Route }) {
             ) : items && items.length > 0 ? (
               <>
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                  {items.map((event, i) => <EventCard key={event.id} event={event} index={i} />)}
+                  {items.map((event, i) => <EventCard key={event.id} event={event} index={i} compare={comparison(event)} />)}
                 </div>
                 {items.length < total && (
                   <div className="mt-7 text-center">
@@ -779,7 +813,7 @@ export default function Discover({ route }: { route: Route }) {
                   </button>
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  {otherFeatured.map((event, i) => <EventCard key={event.id} event={event} index={i} />)}
+                  {otherFeatured.map((event, i) => <EventCard key={event.id} event={event} index={i} compare={comparison(event)} />)}
                 </div>
               </section>
             )}
@@ -810,7 +844,7 @@ export default function Discover({ route }: { route: Route }) {
                 </div>
               ) : home.upcoming.length > 0 ? (
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                  {home.upcoming.map((event, i) => <EventCard key={event.id} event={event} index={i} />)}
+                  {home.upcoming.map((event, i) => <EventCard key={event.id} event={event} index={i} compare={comparison(event)} />)}
                 </div>
               ) : (
                 <EmptyState title="No upcoming events yet" description="Check back soon — organizers are preparing their next gatherings." />
@@ -886,6 +920,26 @@ export default function Discover({ route }: { route: Route }) {
           </>
         )}
       </div>
+
+      {compareIds.length > 0 && <aside aria-label="Your event comparison shortlist" aria-live="polite"
+        className="fixed inset-x-3 bottom-[calc(5.25rem+env(safe-area-inset-bottom))] z-40 mx-auto max-w-[530px] rounded-2xl border border-primary/30 bg-card/95 p-3 shadow-[0_16px_50px_rgba(0,0,0,0.2)] backdrop-blur-xl md:bottom-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><ListChecks className="size-5" aria-hidden /></span>
+            <span className="min-w-0">
+              <strong className="block text-sm">{compareIds.length} of 3 selected</strong>
+              <span className="text-xs text-muted-foreground">Compare dates, prices and formats</span>
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button type="button" className="min-h-10 rounded-lg px-2 text-xs font-semibold text-muted-foreground hover:text-destructive" onClick={() => setCompareIds([])}>Clear</button>
+            <Button size="sm" className="min-h-10 rounded-xl" disabled={compareIds.length < 2}
+              onClick={() => navigate(comparePath(compareIds))}>
+              <Check className="size-4" aria-hidden /> Compare now
+            </Button>
+          </div>
+        </div>
+      </aside>}
 
       {/* AI weekend planner — day-by-day itinerary from the live catalogue */}
       <PlannerPanel
