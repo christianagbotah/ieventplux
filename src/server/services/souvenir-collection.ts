@@ -11,6 +11,18 @@ export interface CollectSouvenirInput {
   note?: string | null
 }
 
+/** Idempotent collection retries must retain the original staff identity.
+ * Order-item IDs are unique to their order; never accept a cross-staff replay. */
+export function sameSouvenirCollectionAction(
+  old: { collectorId: string; orderItemId: string; qty: number; eventId: string },
+  input: Pick<CollectSouvenirInput, 'collectorId' | 'orderItemId' | 'qty' | 'eventId'>,
+): boolean {
+  return old.collectorId === input.collectorId &&
+    old.orderItemId === input.orderItemId &&
+    old.qty === input.qty &&
+    old.eventId === input.eventId
+}
+
 /**
  * Durable physical souvenir handover. The caller must independently verify
  * accepted event-staff membership BEFORE invoking this service. A signed QR is
@@ -31,7 +43,10 @@ export async function collectSouvenirItem(input: CollectSouvenirInput) {
     await tx.$queryRaw`SELECT 1 AS acquired FROM pg_advisory_xact_lock(hashtext(${input.clientActionId}), hashtext('souvenir-collection'))`
     const old = await tx.souvenirCollection.findUnique({ where: { clientActionId: input.clientActionId } })
     if (old) {
-      if (old.orderItemId !== input.orderItemId || old.qty !== input.qty || old.eventId !== input.eventId) {
+      // A retry is idempotent only for the SAME authenticated collector and
+      // original order. Reusing a successful action ID from another staff
+      // account must not report that person's handover as this caller's own.
+      if (!sameSouvenirCollectionAction(old, input)) {
         throw errors.conflict('Collection request ID was previously used for a different handover.')
       }
       return { id: old.id, status: 'ALREADY_RECORDED' as const, qty: old.qty }
