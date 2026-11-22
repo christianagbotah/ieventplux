@@ -26,6 +26,9 @@ export function parseSouvenirScan(value: string, allowedOrigin: string): Souveni
   try {
     const url = new URL(text, allowedOrigin)
     const trusted = new URL(allowedOrigin)
+    // A configured origin must itself be an origin, never a URL containing
+    // credentials, query, fragment or path. Fail closed on configuration drift.
+    if (trusted.href !== `${trusted.origin}/` || trusted.username || trusted.password) return null
     // Collection links must not downgrade staff review credentials to HTTP.
     if (trusted.protocol !== 'https:' || url.protocol !== 'https:') return null
     if (url.origin !== trusted.origin || url.pathname !== '/' || url.search || url.username || url.password) return null

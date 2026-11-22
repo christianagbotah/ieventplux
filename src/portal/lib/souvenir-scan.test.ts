@@ -17,6 +17,15 @@ describe('souvenir scanner accepts only internal collection credentials', () => 
     expect(parseSouvenirScan(`${origin}/#/collect/${token}`, origin)).toEqual({ type: 'token', token })
     expect(parseSouvenirScan(`/#/collect/${token}`, origin)).toEqual({ type: 'token', token })
   })
+  test('refuses malformed trusted origin configuration even for otherwise valid links', () => {
+    for (const configured of [
+      `${origin}/other`, `${origin}/?debug=1`, `${origin}/#fragment`,
+      `https://operator:password@ieventplux.lightworldtech.com`,
+      'https://ieventplux.lightworldtech.com:444',
+    ]) {
+      expect(parseSouvenirScan(`${origin}/#/collect/${token}`, configured)).toBeNull()
+    }
+  })
   test('never accepts insecure HTTP collection links, even from a configured HTTP origin', () => {
     expect(parseSouvenirScan(`http://ieventplux.lightworldtech.com/#/collect/${token}`, origin)).toBeNull()
     expect(parseSouvenirScan(`http://ieventplux.lightworldtech.com/#/collect/${token}`, 'http://ieventplux.lightworldtech.com')).toBeNull()
