@@ -72,3 +72,16 @@ and native command logs in the separate ieventplux-android-prefab-logs
 artifact (7-day retention).
 When diagnostics_only=true, no APK is produced or uploaded.
 A full assembleDebug run must subsequently pass on the fixed revision.
+
+## Fixing unexpected Java VM stderr during Prefab resolution
+
+The diagnostic-only run 45251428136 found Prefab returned exit code 0; its
+stderr contained only the Java banner caused by the workflow-level
+JAVA_TOOL_OPTIONS setting. The Android Gradle Plugin may misclassify that
+unexpected stderr as CXX1210 No compatible library found.
+
+The job-level JAVA_TOOL_OPTIONS was removed and the Gradle task unsets
+JAVA_TOOL_OPTIONS, JDK_JAVA_OPTIONS and _JAVA_OPTIONS. Gradle heap remains
+bounded via GRADLE_OPTS. This requires a focused test and a full Gradle APK
+build before a binary can be considered available. The experimental new
+architecture trial did not pass and is not being merged.

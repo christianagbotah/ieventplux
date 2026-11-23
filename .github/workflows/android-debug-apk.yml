@@ -25,7 +25,6 @@ jobs:
     env:
       CI: "true"
       EXPO_NO_TELEMETRY: "1"
-      JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=75"
     steps:
       - name: Check out tested source
         uses: actions/checkout@v4
@@ -88,6 +87,9 @@ jobs:
           GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx3072m"
         run: |
           set +e
+          # Do not pollute Prefab stderr with JVM tool-option banners.
+          # AGP 8.6 can misclassify them as CXX1210 native-library failures.
+          unset JAVA_TOOL_OPTIONS JDK_JAVA_OPTIONS _JAVA_OPTIONS
           chmod +x ./gradlew
           if [ "${{ inputs.diagnostics_only }}" = "true" ]; then
             TASK=":expo-modules-core:configureCMakeDebug[arm64-v8a]"
