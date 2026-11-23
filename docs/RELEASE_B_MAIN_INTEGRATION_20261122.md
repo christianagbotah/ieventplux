@@ -30,3 +30,7 @@ explicit disposable database name, exact schema and actual PostgreSQL session
 identity remain mandatory. The guard test now checks twelve rejected URLs.
 This is a *safety preflight*, not a successful database-backed concurrency,
 provider payment or refund acceptance run.
+
+### 23 November — isolated QA import-order hardening
+
+The scratch-PostgreSQL merchandise harness now imports Prisma and database-backed ordering, fulfilment and collection services **only after** the QA connection guard verifies the loopback scratch database and exact schema. Previously, static service imports could initialize Prisma before the guard ran. The harness also disconnects its client in a finally block on assertion failures. This is an execution-order safeguard, not proof of gateway-backed payments or a staging release. Charging and fulfilment remain disabled pending the original acceptance gates.

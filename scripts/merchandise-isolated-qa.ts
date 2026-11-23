@@ -9,10 +9,6 @@
 import { strict as assert } from 'node:assert'
 import { randomUUID } from 'node:crypto'
 import { requireIsolatedMerchandiseQaDatabase } from './merchandise-qa-db-guard'
-import { db } from '../src/lib/db'
-import { createOrder, releaseExpiredReservations } from '../src/server/services/ordering'
-import { fulfilPaidOrder, fulfilFreeOrder } from '../src/server/services/fulfilment'
-import { collectSouvenirItem } from '../src/server/services/souvenir-collection'
 
 const url = new URL(process.env.DATABASE_URL ?? '')
 assert.equal(url.searchParams.get('schema'), 'ieventplux_merch_qa_20261119', 'Refusing to run outside isolated QA schema.')
@@ -30,6 +26,13 @@ const qty = (id: string, amount: number) => [{ productId: id, qty: amount }]
 
 async function main() {
   await requireIsolatedMerchandiseQaDatabase()
+  // Import database-backed services only after the isolated connection is
+  // verified. Static imports can initialize Prisma before this safety gate.
+  const { db } = await import('../src/lib/db')
+  const { createOrder, releaseExpiredReservations } = await import('../src/server/services/ordering')
+  const { fulfilPaidOrder, fulfilFreeOrder } = await import('../src/server/services/fulfilment')
+  const { collectSouvenirItem } = await import('../src/server/services/souvenir-collection')
+  try {
   // Verify the actual PostgreSQL session identity before creating any fixtures.
   // A URL query parameter alone does not prove Prisma selected the intended schema.
   const [identity] = await db.$queryRaw<Array<{ database_name: string; schema_name: string }>>`
@@ -256,6 +259,8 @@ async function main() {
   console.log('PASS: late paid order with exhausted SKU enters refund review without stranding a re-reserved admission seat')
 
   console.log('MERCHANDISE ISOLATED QA: ALL ASSERTIONS PASSED — NO REAL MONEY OR CUSTOMER DATA')
+  } finally {
+    await db.$disconnect()
+  }
 }
 main().catch((error) => { console.error('MERCHANDISE ISOLATED QA FAILED', error instanceof Error ? error.message : 'Unknown'); process.exitCode=1 })
-  .finally(async () => { await db.$disconnect() })
