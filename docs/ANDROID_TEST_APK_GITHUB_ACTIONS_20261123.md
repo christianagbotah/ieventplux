@@ -85,3 +85,22 @@ JAVA_TOOL_OPTIONS, JDK_JAVA_OPTIONS and _JAVA_OPTIONS. Gradle heap remains
 bounded via GRADLE_OPTS. This requires a focused test and a full Gradle APK
 build before a binary can be considered available. The experimental new
 architecture trial did not pass and is not being merged.
+
+## Self-contained Android QA installation
+
+The optional standalone_qa mode is now enabled by default for manual
+builds. It uses Gradle assembleRelease to embed the JavaScript and assets
+into a self-contained APK, checks the installed SDK apksigner signature and
+ensures the bundled index.android.bundle is packaged. The Expo SDK 52
+generated release configuration uses an ephemeral Android debug key; this
+is an internal QA build only, not a Play Store or otherwise production
+signed release.
+
+The artifact ieventplux-android-standalone-qa-apk can be installed on
+authorized Android phones without a Metro development server. New runs
+may have different signatures; uninstall the previous internal QA app
+before installing a later test APK if Android reports a signing conflict.
+
+Set standalone_qa=false to build the old Metro-dependent app-debug.apk
+for developer troubleshooting. Setting diagnostics_only=true skips APK
+creation regardless of the standalone_qa setting.

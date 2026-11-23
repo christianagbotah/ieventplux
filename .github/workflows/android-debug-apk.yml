@@ -9,6 +9,11 @@ on:
         required: false
         type: boolean
         default: false
+      standalone_qa:
+        description: "Standalone internal test APK with embedded JavaScript"
+        required: false
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -93,6 +98,10 @@ jobs:
           chmod +x ./gradlew
           if [ "${{ inputs.diagnostics_only }}" = "true" ]; then
             TASK=":expo-modules-core:configureCMakeDebug[arm64-v8a]"
+          elif [ "${{ inputs.standalone_qa }}" = "true" ]; then
+            # Release build embeds JavaScript. Test signing only, NOT Play Store.
+            grep -q 'signingConfig signingConfigs.debug' app/build.gradle || exit 17
+            TASK=":app:assembleRelease"
           else
             TASK=":app:assembleDebug"
           fi
@@ -163,16 +172,34 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
-      - name: Verify APK output
+      - name: Verify signed APK and offline bundle for standalone QA
         if: ${{ !inputs.diagnostics_only }}
+        shell: bash
         run: |
-          set -e
-          test -s mobile/android/app/build/outputs/apk/debug/app-debug.apk
-          sha256sum mobile/android/app/build/outputs/apk/debug/app-debug.apk
-          ls -lh mobile/android/app/build/outputs/apk/debug/app-debug.apk
+          set -euo pipefail
+          if [ "${{ inputs.standalone_qa }}" = "true" ]; then
+            APK="mobile/android/app/build/outputs/apk/release/app-release.apk"
+            test -s "$APK"
+            unzip -Z1 "$APK" | grep -F 'assets/index.android.bundle' > /dev/null
+          else
+            APK="mobile/android/app/build/outputs/apk/debug/app-debug.apk"
+            test -s "$APK"
+          fi
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify "$APK"
+          sha256sum "$APK"
+          ls -lh "$APK"
 
-      - name: Upload Android debug APK for authorized QA
-        if: ${{ !inputs.diagnostics_only }}
+      - name: Upload standalone Android internal QA APK
+        if: ${{ !inputs.diagnostics_only && inputs.standalone_qa }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ieventplux-android-standalone-qa-apk
+          path: mobile/android/app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload Android debug APK for developers
+        if: ${{ !inputs.diagnostics_only && !inputs.standalone_qa }}
         uses: actions/upload-artifact@v4
         with:
           name: ieventplux-android-debug-apk
