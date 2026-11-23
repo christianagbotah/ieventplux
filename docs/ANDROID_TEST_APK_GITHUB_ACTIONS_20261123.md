@@ -1,0 +1,37 @@
+# Manual Android debug test APK build
+
+GitHub Actions builds an Android debug APK on an isolated hosted runner so
+Lightworld does not install the Android SDK/Gradle on the busy production VPS.
+
+## To run
+In the ieventplux GitHub repository open Actions → Android Installable Test
+APK → Run workflow → main.
+
+After a successful run, download the short-lived
+ieventplux-android-debug-apk build artifact (retained for 7 days). Unzip
+the artifact to get the app-debug.apk file.
+
+## Safety and release limitations
+- A debug-signed APK uses a disposable Android testing key generated on the
+  isolated runner. It is not a production Play Store release; independently
+  generated builds may not upgrade each other because signatures differ.
+- Only install on authorized test phones/accounts.
+- The build is manual-only, not hourly: Gradle consumes CI runner time.
+- No iOS IPA is built. Apple signing and Apple-compatible infrastructure
+  are separately required.
+- No server secrets, live VPS env files or app store passwords are used.
+- Passing Android compilation does not prove device camera/microphone or
+  LiveKit calls. Real two-phone acceptance testing is mandatory.
+- If GitHub-hosted Android build fails, inspect workflow logs and repair
+  source/Gradle compatibility. Do not install SDK packages on production VPS
+  without a separate capacity-reviewed build environment.
+
+## Device tests
+1. Install on an authorized Android device and sign in.
+2. Test native camera/microphone OS permission prompts, camera preview.
+3. Have two distinct entitled users join the same LIVE meeting and verify
+   video, audio-only, listener-only, mute/unmute and leave/rejoin.
+4. Test native community replies and attendee networking consent/follow,
+   block, report, leave and private-profile behavior.
+5. Record model, Android version, network type, and results before signing
+   off native production readiness.
