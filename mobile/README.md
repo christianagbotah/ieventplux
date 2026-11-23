@@ -161,3 +161,35 @@ mobile/
 
 (`src/store/session.tsx` is TSX rather than TS because the provider renders JSX —
 the brief's `session.ts` filename, adjusted for extension.)
+
+
+## Android internal QA APK downloads and automatic update notices
+
+The official Android QA release downloads are at:
+https://github.com/christianagbotah/ieventplux/releases
+
+Initial marketplace/awards APK: android-qa-614f3b2, app-release.apk.
+The GitHub pre-release provides a persistent asset, unlike temporary
+7-day GitHub Actions artifacts.
+
+After a successful main branch CI run involving native mobile source,
+the Android QA Auto Build After CI workflow dispatches the standalone
+Android APK build. Once it passes signature and JS-bundle checks, a
+main-only publish job adds a tagged prerelease. A GitHub source-code
+push without a published APK is NOT an app update.
+
+The new native update checker queries the official release index on
+launch and foreground resumes, compares the embedded source revision
+and build time against published releases, and offers Download update
+or Not now. When offline it does not interrupt the user. Only
+official GitHub release APK links are accepted.
+
+Important limitations: these are debug-signed internal QA APKs, not
+Google Play releases. Android requires explicit user installation.
+Early builds used ephemeral signing keys: Android can require a
+one-time uninstall/reinstall when the signing identity changes.
+Configure a consistent non-production QA signing key through approved
+GitHub secret management for smooth upgrades. Never use QA keys for
+production Play signing. Older APKs built BEFORE this checker cannot
+show update notifications: install the next QA APK once to enable it.
+iOS distribution is separate and requires TestFlight or Apple store.
