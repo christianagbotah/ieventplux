@@ -2,7 +2,7 @@
 import { strict as assert } from 'node:assert'
 
 const schema = 'ieventplux_merch_qa_20261119'
-const qaName = /(?:^|[_-])(qa|test|scratch)(?:[_-]|$)/i
+const qaDatabaseName = 'ieventplux_merch_qa'
 
 export function validateIsolatedMerchandiseQaUrl() {
   const url = new URL(process.env.DATABASE_URL ?? 'http://invalid.invalid')
@@ -17,7 +17,7 @@ export function validateIsolatedMerchandiseQaUrl() {
   assert.equal(url.searchParams.getAll('schema').length, 1, 'QA requires exactly one schema parameter')
   assert.ok(!url.searchParams.has('options'), 'QA must not override PostgreSQL connection options')
   assert.equal(url.searchParams.get('schema'), schema, 'QA requires the isolated schema')
-  assert.match(decodeURIComponent(url.pathname).slice(1), qaName, 'QA requires a disposable database name')
+  assert.equal(decodeURIComponent(url.pathname).slice(1), qaDatabaseName, 'QA requires the exact disposable database name')
   assert.ok(['localhost', '127.0.0.1', '::1', '[::1]'].includes(url.hostname), 'QA requires loopback PostgreSQL')
 }
 
@@ -29,6 +29,6 @@ export async function requireIsolatedMerchandiseQaDatabase() {
     SELECT current_database() AS database_name, current_schema() AS schema_name
   `
   assert.ok(identity, 'PostgreSQL identity unavailable')
-  assert.match(identity.database_name, qaName, 'Connected database is not disposable QA')
+  assert.equal(identity.database_name, qaDatabaseName, 'Connected database is not the expected disposable QA database')
   assert.equal(identity.schema_name, schema, 'Connected PostgreSQL schema is not QA')
 }

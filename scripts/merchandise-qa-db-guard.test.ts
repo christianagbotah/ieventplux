@@ -8,6 +8,8 @@ describe('synthetic merchandise QA refuses unsafe database destinations before c
     'file:/tmp/qa.db',
     'postgresql://user:password@production.example.com/ieventplux_qa?schema=ieventplux_merch_qa_20261119',
     'postgresql://user:password@127.0.0.1/ieventplux?schema=ieventplux_merch_qa_20261119',
+    'postgresql://user:password@127.0.0.1/production_qa?schema=ieventplux_merch_qa_20261119',
+    'postgresql://user:password@127.0.0.1/ieventplux_merch_qa_copy?schema=ieventplux_merch_qa_20261119',
     'postgresql://user:password@127.0.0.1/ieventplux_qa?schema=public',
     'postgresql://user:password@127.0.0.1/ieventplux_qa?schema=ieventplux_merch_qa_20261119&host=production.example.com',
     'postgresql://user:password@127.0.0.1/ieventplux_qa?schema=ieventplux_merch_qa_20261119&options=-c%20search_path%3Dpublic',
