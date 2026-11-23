@@ -250,7 +250,7 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
       const session = await getSession()
       if (!session) throw errors.unauthorized()
       const items = await db.eventInterest.findMany({
-        where: { userId: session.user.id },
+        where: { userId: session.user.id, kind: { in: ['SAVE', 'INTEREST', 'GOING'] } },
         include: { event: { select: { id: true, slug: true, title: true, coverImageUrl: true, startsAt: true, city: true, mode: true, status: true, org: { select: { name: true } } } } },
         orderBy: { createdAt: 'desc' },
         take: 60,
