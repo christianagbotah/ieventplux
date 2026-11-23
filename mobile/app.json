@@ -46,6 +46,7 @@
     ],
     "extra": {
       "apiBaseUrl": "https://ieventplux.lightworldtech.com"
-    }
+    },
+    "newArchEnabled": true
   }
 }
