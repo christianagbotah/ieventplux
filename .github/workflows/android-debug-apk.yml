@@ -77,11 +77,35 @@ jobs:
 
       - name: Compile and debug-sign installable APK
         working-directory: mobile/android
+        shell: bash
         env:
           GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx3072m"
         run: |
+          set +e
           chmod +x ./gradlew
-          ./gradlew --no-daemon --max-workers=2 --stacktrace :app:assembleDebug
+          ./gradlew --no-daemon --max-workers=2 --info --stacktrace :app:assembleDebug \
+            > "$GITHUB_WORKSPACE/android-gradle-build.log" 2>&1
+          result=$?
+          tail -n 130 "$GITHUB_WORKSPACE/android-gradle-build.log"
+          if [ "$result" -ne 0 ]; then
+            echo "=== Native CMake and Prefab root-cause context ==="
+            grep -in -C 10 -E 'CXX1210|No compatible library|NoMatchingLibraryException|Prefab|CMake Error|Build failed|Could not resolve' \
+              "$GITHUB_WORKSPACE/android-gradle-build.log" | tail -n 200 || true
+            echo "=== Versions of generated SDK/ABI configuration ==="
+            grep -E '^(newArchEnabled|reactNativeArchitectures|hermesEnabled)=' gradle.properties || true
+            find "$GITHUB_WORKSPACE/mobile/node_modules/expo-modules-core/android/.cxx" \
+              -name '*log*' -type f -maxdepth 9 -print | head -n 12 || true
+          fi
+          exit "$result"
+
+      - name: Upload Gradle diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ieventplux-android-gradle-diagnostics
+          path: android-gradle-build.log
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Verify APK output
         run: |
