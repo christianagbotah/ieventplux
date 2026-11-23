@@ -17,7 +17,7 @@
 
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native'
 import Constants, { ExecutionEnvironment } from 'expo-constants'
-import type { ComponentType } from 'react'
+import { lazy, Suspense } from 'react'
 import { NavigationContainer, type LinkingOptions } from '@react-navigation/native'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
 import { SessionProvider, useSession } from './src/store/session'
@@ -43,9 +43,13 @@ function NativeMeetingLoader(props: NativeMeetingScreenProps) {
       Meeting access to use the browser meeting instead.
     </Text></View>
   }
-  const NativeMeeting = require('./src/screens/NativeMeetingRoom').default as ComponentType<NativeMeetingScreenProps>
-  return <NativeMeeting {...props} />
+  return <Suspense fallback={<View style={styles.splash}>
+    <ActivityIndicator color={theme.colors.primary} />
+    <Text style={styles.splashError}>Loading secure native meeting…</Text>
+  </View>}><NativeMeeting {...props} /></Suspense>
 }
+
+const NativeMeeting = lazy(() => import('./src/screens/NativeMeetingRoom'))
 
 const Stack = createNativeStackNavigator<RootStackParamList>()
 

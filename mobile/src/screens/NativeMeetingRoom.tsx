@@ -9,11 +9,11 @@ import {
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import {
-  AudioSession, LiveKitRoom, VideoTrack, isTrackReference,
+  AudioSession, LiveKitRoom, VideoTrack, isTrackReference, useLocalParticipant,
   registerGlobals, useParticipants, useRoomContext, useTracks,
   type TrackReferenceOrPlaceholder,
 } from '@livekit/react-native'
-import { ConnectionState, Track } from 'livekit-client'
+import { Track } from 'livekit-client'
 import { api, ApiClientError } from '../api/client'
 import type { NativeMeetingScreenProps } from '../navigation'
 import { theme } from '../theme'
@@ -25,10 +25,9 @@ const VISIBLE_TILES = 8
 
 function RoomControls({ onLeave }: { onLeave: () => void }) {
   const room = useRoomContext()
+  const { isCameraEnabled, isMicrophoneEnabled } = useLocalParticipant()
   const [working, setWorking] = useState<DeviceKind | null>(null)
   const [error, setError] = useState('')
-  const [cameraEnabled, setCameraEnabled] = useState(room.localParticipant.isCameraEnabled)
-  const [micEnabled, setMicEnabled] = useState(room.localParticipant.isMicrophoneEnabled)
 
   const toggle = async (kind: DeviceKind) => {
     if (working) return
@@ -37,10 +36,8 @@ function RoomControls({ onLeave }: { onLeave: () => void }) {
     try {
       if (kind === 'microphone') {
         await room.localParticipant.setMicrophoneEnabled(!room.localParticipant.isMicrophoneEnabled)
-        setMicEnabled(room.localParticipant.isMicrophoneEnabled)
       } else {
         await room.localParticipant.setCameraEnabled(!room.localParticipant.isCameraEnabled)
-        setCameraEnabled(room.localParticipant.isCameraEnabled)
       }
     } catch {
       setError(kind === 'camera'
@@ -53,17 +50,17 @@ function RoomControls({ onLeave }: { onLeave: () => void }) {
   return <View style={styles.controls}>
     {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
     <View style={styles.buttonRow}>
-      <Pressable accessibilityRole="button" accessibilityLabel={micEnabled ? 'Mute microphone' : 'Turn on microphone'}
+      <Pressable accessibilityRole="button" accessibilityLabel={isMicrophoneEnabled ? 'Mute microphone' : 'Turn on microphone'}
         disabled={working !== null} onPress={() => void toggle('microphone')}
-        style={[styles.controlButton, !micEnabled && styles.controlOff]}>
+        style={[styles.controlButton, !isMicrophoneEnabled && styles.controlOff]}>
         {working === 'microphone' ? <ActivityIndicator color={theme.colors.primary} />
-          : <Text style={styles.controlText}>{micEnabled ? 'Mute mic' : 'Unmute mic'}</Text>}
+          : <Text style={styles.controlText}>{isMicrophoneEnabled ? 'Mute mic' : 'Unmute mic'}</Text>}
       </Pressable>
-      <Pressable accessibilityRole="button" accessibilityLabel={cameraEnabled ? 'Turn off camera' : 'Turn on camera'}
+      <Pressable accessibilityRole="button" accessibilityLabel={isCameraEnabled ? 'Turn off camera' : 'Turn on camera'}
         disabled={working !== null} onPress={() => void toggle('camera')}
-        style={[styles.controlButton, !cameraEnabled && styles.controlOff]}>
+        style={[styles.controlButton, !isCameraEnabled && styles.controlOff]}>
         {working === 'camera' ? <ActivityIndicator color={theme.colors.primary} />
-          : <Text style={styles.controlText}>{cameraEnabled ? 'Camera off' : 'Camera on'}</Text>}
+          : <Text style={styles.controlText}>{isCameraEnabled ? 'Camera off' : 'Camera on'}</Text>}
       </Pressable>
       <Pressable accessibilityRole="button" accessibilityLabel="Leave the meeting"
         onPress={onLeave} style={[styles.controlButton, styles.leave]}>
