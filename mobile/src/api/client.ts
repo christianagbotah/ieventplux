@@ -142,6 +142,45 @@ export interface EventCompetitionView {
   categories: CompetitionCategoryView[]
 }
 
+export interface NativeMarketplaceStore {
+  id: string
+  slug: string
+  name: string
+  tagline: string | null
+  category: string
+  logoUrl: string | null
+  coverUrl: string | null
+  country: string
+  city: string | null
+  verificationState: string
+  productCount: number
+}
+export interface NativeMarketplaceVariant {
+  id: string
+  sku: string
+  title: string
+  priceMinor: number
+  currency: string
+  available: number
+}
+export interface NativeMarketplaceProduct {
+  id: string
+  name: string
+  description: string
+  shortDesc: string | null
+  brand: string | null
+  category: string
+  images: string[]
+  specifications: Record<string,string>
+  variants: NativeMarketplaceVariant[]
+}
+export interface NativeStoreDetail {
+  store: NativeMarketplaceStore & { description: string | null; status: string }
+  products: NativeMarketplaceProduct[]
+  canManage: boolean
+  checkoutEnabled: boolean
+}
+
 export interface CommunityComment {
   id: string
   eventId: string
@@ -576,6 +615,14 @@ export const api = {
     /** `idOrSlug` — the server accepts the event slug or the internal id. */
     get: (idOrSlug: string) =>
       request<EventDetailResponse>('GET', `/events/${encodeURIComponent(idOrSlug)}`),
+  },
+  marketplace: {
+    stores: (q = '') => request<{ stores: NativeMarketplaceStore[]; checkoutEnabled: false }>(
+      'GET', '/marketplace/stores' + (q ? '?q=' + encodeURIComponent(q) : ''),
+    ),
+    store: (slug: string) => request<NativeStoreDetail>(
+      'GET', '/marketplace/stores/' + encodeURIComponent(slug),
+    ),
   },
   competitions: {
     list: (eventId: string) => request<{ competitions: EventCompetitionView[]; canManage: boolean; paidVotingEnabled: false }>(

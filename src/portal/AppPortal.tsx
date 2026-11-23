@@ -1,7 +1,7 @@
 'use client'
 
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react'
-import { Compass, Radio, Film, UsersRound, Search, Ticket, LayoutDashboard, ShieldCheck, LogOut, Bell, Sparkles, UserRound, Command as CommandIcon } from 'lucide-react'
+import { Compass, Radio, Film, UsersRound, ShoppingBag, Search, Ticket, LayoutDashboard, ShieldCheck, LogOut, Bell, Sparkles, UserRound, Command as CommandIcon } from 'lucide-react'
 import { connectRealtime } from './realtime'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -27,6 +27,9 @@ const EventCompareView = lazy(() => import('./views/EventCompareView'))
 const LiveNow = lazy(() => import('./views/LiveNow'))
 const Reels = lazy(() => import('./views/Reels'))
 const FollowingFeed = lazy(() => import('./views/FollowingFeed'))
+const MarketplaceExplore = lazy(() => import('./views/MarketplaceExplore'))
+const MarketplaceStorefront = lazy(() => import('./views/MarketplaceStorefront'))
+const MarketplaceSellerStudio = lazy(() => import('./views/MarketplaceSellerStudio'))
 const EffectsStudio = lazy(() => import('./views/EffectsStudio'))
 const OrgProfile = lazy(() => import('./views/OrgProfile'))
 const AuthView = lazy(() => import('./views/AuthView'))
@@ -56,12 +59,14 @@ const NAV = [
   { path: '/following', label: 'Following', icon: UsersRound },
   { path: '/live', label: 'Live Now', icon: Radio },
   { path: '/reels', label: 'Reels', icon: Film },
+  { path: '/shop', label: 'Shop', icon: ShoppingBag },
 ]
 
 const MOBILE_NAV = [
   { path: '/', label: 'Discover', icon: Compass, tab: '' },
   { path: '/following', label: 'Feed', icon: UsersRound, tab: '' },
   { path: '/reels', label: 'Reels', icon: Film, tab: '' },
+  { path: '/shop', label: 'Shop', icon: ShoppingBag, tab: '' },
   { path: '/me?tab=tickets', label: 'Tickets', icon: Ticket, tab: 'tickets' },
   { path: '/me?tab=profile', label: 'Account', icon: UserRound, tab: 'profile' },
 ]
@@ -169,6 +174,10 @@ export default function AppPortal() {
         return <Reels />
       case 'following':
         return <FollowingFeed />
+      case 'shop':
+        return param ? <MarketplaceStorefront key={param} slug={param} /> : <MarketplaceExplore />
+      case 'seller':
+        return <MarketplaceSellerStudio />
       case 'effects':
         return <EffectsStudio />
       case 'event':
@@ -399,7 +408,7 @@ export default function AppPortal() {
         <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-6 pr-20 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
           <p>© {new Date().getFullYear()} iEventPlux · Lightworld Technologies Ltd. · Accra, Ghana</p>
           <p className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <span>Ticketing · Social · Broadcasting</span>
+            <span>Ticketing · Social · Broadcasting · Marketplace</span>
             <span aria-hidden>·</span>
             <span>View prices in each event’s currency</span>
           </p>

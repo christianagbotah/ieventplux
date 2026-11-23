@@ -174,6 +174,10 @@ export default function DiscoverScreen({ navigation }: DiscoverScreenProps) {
             <Text style={styles.heroTitle}>Make room for moments that matter.</Text>
             <Text style={styles.heroBody}>Discover gatherings across Ghana, reserve your place and keep every ticket close.</Text>
             <Text style={styles.heroStats}>{state.home.stats.upcomingEvents} upcoming · {state.home.stats.organizers} organizers · {state.home.stats.liveNow} live</Text>
+            <Pressable accessibilityRole="button" accessibilityLabel="Explore creator stores and products"
+              style={styles.shopHeroButton} onPress={() => navigation.navigate('Marketplace')}>
+              <Text style={styles.shopHeroText}>Explore shops & creators  ›</Text>
+            </Pressable>
           </View>
 
           <View style={styles.searchField}>
@@ -387,6 +391,8 @@ const styles = StyleSheet.create({
   heroTitle: { color: '#ffffff', fontSize: 29, fontWeight: '800', letterSpacing: -0.5, lineHeight: 34 },
   heroBody: { color: '#cfe9e0', fontSize: 13, lineHeight: 20, marginTop: 12 },
   heroStats: { color: '#d2f5e8', fontSize: 11, fontWeight: '700', marginTop: 16 },
+  shopHeroButton: { marginTop: 17, minHeight: 46, borderRadius: 12, backgroundColor: '#f1fff6', justifyContent: 'center', alignItems: 'center' },
+  shopHeroText: { fontSize: 13, fontWeight: '800', color: '#075c3d' },
   searchField: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.colors.card, borderRadius: 16, borderWidth: 1, borderColor: theme.colors.border, minHeight: 52, marginBottom: 12, paddingHorizontal: 14 },
   searchIcon: { fontSize: 26, color: theme.colors.primary, marginRight: 8 },
   searchInput: { flex: 1, fontSize: 15, color: theme.colors.text, paddingVertical: 12 },

@@ -29,6 +29,8 @@ export type RootStackParamList = {
   /** Private-by-default and consented native event attendee networking. */
   EventNetwork: { eventId: string; eventTitle: string }
   EventCompetitions: { eventId: string; eventTitle: string }
+  Marketplace: undefined
+  MarketplaceStore: { slug: string }
   /** Native LiveKit client in a custom development build only; token stays in RAM. */
   NativeMeeting: {
     meetingId: string
@@ -53,3 +55,6 @@ export type EventCommunityScreenProps = NativeStackScreenProps<RootStackParamLis
 export type EventNetworkScreenProps = NativeStackScreenProps<RootStackParamList, 'EventNetwork'>
 
 export type EventCompetitionsScreenProps = NativeStackScreenProps<RootStackParamList, 'EventCompetitions'>
+
+export type MarketplaceScreenProps = NativeStackScreenProps<RootStackParamList, 'Marketplace'>
+export type MarketplaceStoreScreenProps = NativeStackScreenProps<RootStackParamList, 'MarketplaceStore'>
