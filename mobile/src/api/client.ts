@@ -113,6 +113,35 @@ export interface TicketType {
 }
 
 /** Event community returns only author display identities, not attendee rosters. */
+export interface CompetitionNomineeView {
+  id: string
+  name: string
+  bio: string | null
+  photoUrl: string | null
+  votes: number | null
+}
+export interface CompetitionCategoryView {
+  id: string
+  title: string
+  myNomineeId: string | null
+  totalVotes: number | null
+  nominees: CompetitionNomineeView[]
+}
+export interface EventCompetitionView {
+  id: string
+  eventId: string
+  title: string
+  description: string | null
+  status: 'DRAFT' | 'OPEN' | 'CLOSED'
+  votingMethod: 'FREE'
+  votingStartsAt: string
+  votingEndsAt: string
+  canVote: boolean
+  countsVisible: boolean
+  totalVotes: number | null
+  categories: CompetitionCategoryView[]
+}
+
 export interface CommunityComment {
   id: string
   eventId: string
@@ -547,6 +576,16 @@ export const api = {
     /** `idOrSlug` — the server accepts the event slug or the internal id. */
     get: (idOrSlug: string) =>
       request<EventDetailResponse>('GET', `/events/${encodeURIComponent(idOrSlug)}`),
+  },
+  competitions: {
+    list: (eventId: string) => request<{ competitions: EventCompetitionView[]; canManage: boolean; paidVotingEnabled: false }>(
+      'GET', '/events/' + encodeURIComponent(eventId) + '/competitions',
+    ),
+    vote: (competitionId: string, categoryId: string, nomineeId: string) =>
+      request<{ accepted: true; categoryId: string; nomineeId: string }>(
+        'POST', '/competitions/' + encodeURIComponent(competitionId) + '/vote',
+        { categoryId, nomineeId },
+      ),
   },
   community: {
     list: (eventId: string, page = 1) => request<CommunityThreadPage>(

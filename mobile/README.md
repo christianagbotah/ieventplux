@@ -1,5 +1,13 @@
 # iEventPlux Mobile (Expo / React Native)
 
+> **Awards mobile parity (2026-11-23):** Event Detail includes native
+> Awards & supporter voting. Participants can inspect nominees, see their
+> own recorded vote, and cast one FREE vote per award category from the
+> installed app. The same PostgreSQL voting ledger and privacy rules serve
+> both web and native platforms. Organizer nomination management remains
+> in the web portal for this increment. The updated mobile APK must still
+> be rebuilt and tested on real devices before release.
+
 
 > Native social parity (2026-11-23): the Event Detail screen now opens native
 > Community conversations and Meet fellow attendees pages. These call the same
