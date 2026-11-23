@@ -15,14 +15,26 @@
       "supportsTablet": true
     },
     "android": {
-      "package": "com.lightworld.ieventplux"
+      "package": "com.lightworld.ieventplux",
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "plugins": [
-      "expo-camera",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow iEventPlux to access your camera for QR scanning and meeting camera checks.",
+          "microphonePermission": "Allow iEventPlux to access your microphone for voice and meeting device checks.",
+          "recordAudioAndroid": true,
+          "barcodeScannerEnabled": true
+        }
+      ],
       "expo-secure-store"
     ],
     "extra": {
-      "apiBaseUrl": "Set via app config / environment — point to the iEventPlux web deployment"
+      "apiBaseUrl": "https://ieventplux.lightworldtech.com"
     }
   }
 }

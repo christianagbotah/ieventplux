@@ -26,6 +26,7 @@ import EventDetailScreen from './src/screens/EventDetailScreen'
 import MyTicketsScreen from './src/screens/MyTicketsScreen'
 import CheckinScreen from './src/screens/CheckinScreen'
 import BroadcastScreen from './src/screens/BroadcastScreen'
+import MeetingAccessScreen from './src/screens/MeetingAccessScreen'
 
 const Stack = createNativeStackNavigator<RootStackParamList>()
 
@@ -82,6 +83,7 @@ function AppRoutes() {
       <Stack.Screen name="MyTickets" component={MyTicketsScreen} options={{ title: 'My tickets' }} />
       <Stack.Screen name="Checkin" component={CheckinScreen} options={{ title: 'Check-in scanner' }} />
       <Stack.Screen name="Broadcast" component={BroadcastScreen} options={{ title: 'Live broadcast' }} />
+      <Stack.Screen name="MeetingAccess" component={MeetingAccessScreen} options={{ title: 'Meeting & device access' }} />
     </Stack.Navigator>
   )
 }

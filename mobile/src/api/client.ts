@@ -514,6 +514,19 @@ export const api = {
     get: (idOrSlug: string) =>
       request<EventDetailResponse>('GET', `/events/${encodeURIComponent(idOrSlug)}`),
   },
+  meetings: {
+    forEvent: (eventId: string) => request<{
+      enabled: boolean
+      canManage: boolean
+      meeting: null | {
+        id: string
+        title: string
+        status: string
+        mediaEngine: string
+        screenShareEnabled: boolean
+      }
+    }>('GET', `/events/${encodeURIComponent(eventId)}/meeting`),
+  },
   orders: {
     create: (payload: CreateOrderPayload) => request<CreateOrderResponse>('POST', '/orders', payload),
     list: () => request<{ items: OrderSummary[] }>('GET', '/orders'),

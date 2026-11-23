@@ -180,6 +180,15 @@ export default function EventDetailScreen({ navigation, route }: EventDetailScre
       {event.summary ? <Text style={styles.summary}>{event.summary}</Text> : null}
       <Text style={styles.description}>{event.description}</Text>
 
+      <Pressable
+        style={[styles.staffButton, { marginTop: theme.spacing.lg }]}
+        accessibilityRole="button"
+        accessibilityLabel="Open this event's group meeting and device permissions"
+        onPress={() => navigation.navigate('MeetingAccess', { eventId: event.id })}
+      >
+        <Text style={styles.staffButtonText}>Meeting & camera/microphone access</Text>
+      </Pressable>
+
       <Text style={styles.sectionTitle}>Tickets</Text>
       {event.ticketTypes.length === 0 ? (
         <Text style={styles.muted}>No ticket types are on sale for this event yet.</Text>
