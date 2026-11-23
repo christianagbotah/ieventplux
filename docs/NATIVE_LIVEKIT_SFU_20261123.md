@@ -24,3 +24,13 @@ and native phone screen-share publishing are NOT certified.
 EAS profile configuration does not link an EAS project, install signing
 credentials or submit a cloud build. No paid provider, schema change
 or staging server switch is needed for this mobile-only branch.
+
+## Production reverse-proxy SFU URL compatibility fix
+
+The real configured public WebSocket endpoint uses an HTTPS reverse-proxy
+path at /livekit. The original native credential validator only allowed
+path / and would reject this valid server response before a call could start.
+Now the native validator permits TLS WebSocket URLs with safe proxy path
+segments while continuing to reject cleartext ws, embedded credentials,
+query parameters and unsafe encoded paths. A regression test checks /livekit.
+No LiveKit token value or secret was printed or embedded.
