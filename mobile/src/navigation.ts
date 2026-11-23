@@ -24,6 +24,14 @@ export type RootStackParamList = {
   Broadcast: { broadcastId: string }
   /** Meeting access + native device permissions; video presently opens system browser. */
   MeetingAccess: { eventId: string }
+  /** Native LiveKit client in a custom development build only; token stays in RAM. */
+  NativeMeeting: {
+    meetingId: string
+    serverUrl: string
+    token: string
+    microphone: boolean
+    camera: boolean
+  }
 }
 
 export type LoginScreenProps = NativeStackScreenProps<RootStackParamList, 'Login'>
@@ -34,3 +42,4 @@ export type CheckinScreenProps = NativeStackScreenProps<RootStackParamList, 'Che
 export type BroadcastScreenProps = NativeStackScreenProps<RootStackParamList, 'Broadcast'>
 
 export type MeetingAccessScreenProps = NativeStackScreenProps<RootStackParamList, 'MeetingAccess'>
+export type NativeMeetingScreenProps = NativeStackScreenProps<RootStackParamList, 'NativeMeeting'>

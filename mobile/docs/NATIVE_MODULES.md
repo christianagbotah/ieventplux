@@ -5,6 +5,10 @@ build** (a custom `expo run:android` / `expo run:ios` binary, not Expo Go).
 
 ## Capability matrix
 
+> Native LiveKit group-calling is implemented in source for custom Expo
+> development builds. It is distinct from RTMP livestream publishing, which
+> is still unimplemented. No signed binaries or two-phone acceptance tests yet.
+
 | Capability | Library | Expo Go? | Dev build? | Status in this scaffold |
 | --- | --- | --- | --- | --- |
 | Event discovery, login, orders, hosted checkout, tickets, notifications | fetch (JS) | ✅ works | ✅ works | Implemented (`src/api/client.ts`) |
@@ -13,6 +17,7 @@ build** (a custom `expo run:android` / `expo run:ios` binary, not Expo Go).
 | Offline scan queue | `@react-native-async-storage/async-storage` | ✅ works | ✅ works | **Complete** (`CheckinScreen` + `src/lib/checkin-offline.ts`: roster pre-download, advisory offline verdicts, capped FIFO queue with dedup, NetInfo/AppState auto-sync, CONFLICT review panel) |
 | Network reachability | `@react-native-community/netinfo` | ✅ works | ✅ works | Implemented (check-in auto-sync trigger) |
 | **Broadcast viewing (viewer side)** | fetch + Animated (SYNTHETIC surface) | ✅ works | ✅ works | Implemented (`BroadcastScreen`: entitlement/capacity gates, playback token + 60 s heartbeat, polling chat). Real HLS needs `expo-video` once Cloudflare Stream credentials exist — RTMP **publishing** (organizer side) is the part that needs a custom native module. |
+| **Native SFU group meetings** | LiveKit React Native SDK, WebRTC, Expo plugins | No | Custom build required | Source has protected tokens, mic/camera/listen-only, video tiles, audio session, Leave and access rechecks. Device testing outstanding. |
 | **Camera barcode scanning (check-in)** | `expo-camera` `CameraView` + `barcodeScannerSettings` | ✅ **barcode scanning DOES work in Expo Go** | ✅ works | Implemented (`CheckinScreen`) |
 | **RTMP live broadcasting / live publishing** | — | ❌ **does NOT work in Expo Go** | ❌ needs a **custom native module**, not just a dev build | **NOT IMPLEMENTED.** `expo-camera` dropped RTMP publishing; streaming requires a bespoke native module (e.g. an RTMP/WHIP client written in Kotlin/Swift) wired through an Expo config plugin. Budget this as a separate workstream before promising live-from-the-door features. |
 | In-app purchase (store billing) | `react-native-iap` or expo-community wrappers | ❌ | ✅ required | **Disabled / not present.** See store-billing section. |
@@ -63,6 +68,17 @@ expo-camera and never existed in Expo Go. Scanning ✅ in Expo Go; broadcasting
 - Universal/App Links (https:// scheme, associated domains) are **not**
   configured — would need `apple-app-site-association` / assetlinks.json on the
   web deployment. Not part of this scaffold.
+
+## Native LiveKit and Expo Go
+
+NativeMeeting loads only when joining with a custom Expo development build.
+Expo Go has no native WebRTC module, so MeetingAccess retains the browser
+fallback. Native and web obtain tokens from the same authorized server gate.
+No signing secret is embedded in the mobile application.
+
+Native call source is not the same as signed Android/iOS releases. Hardware
+tests, connectivity changes, speaker routing, mobile screenshare publishing,
+push notifications and full web feature parity remain outstanding.
 
 ## Development builds — exact commands
 

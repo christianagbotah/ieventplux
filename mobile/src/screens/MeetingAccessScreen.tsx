@@ -7,6 +7,7 @@
  */
 import { useCallback, useEffect, useState } from 'react'
 import { CameraView, useCameraPermissions, useMicrophonePermissions } from 'expo-camera'
+import Constants, { ExecutionEnvironment } from 'expo-constants'
 import {
   ActivityIndicator, Alert, Linking, Platform, Pressable,
   ScrollView, StyleSheet, Text, View,
@@ -15,16 +16,19 @@ import { api, ApiClientError, absoluteUrl } from '../api/client'
 import type { MeetingAccessScreenProps } from '../navigation'
 import { theme } from '../theme'
 import { nativePermissionStatus, secureMeetingUrl } from '../lib/meeting-device-access'
+import { mayEnterNativeRoom, validNativeMeetingCredentials } from '../lib/native-meeting-policy'
 
 type MeetingData = Awaited<ReturnType<typeof api.meetings.forEvent>>
 type LoadState = { status: 'loading' } | { status: 'error'; reason: string } | { status: 'ready'; data: MeetingData }
 
-export default function MeetingAccessScreen({ route }: MeetingAccessScreenProps) {
+export default function MeetingAccessScreen({ route, navigation }: MeetingAccessScreenProps) {
   const { eventId } = route.params
   const [camera, askCamera] = useCameraPermissions()
   const [microphone, askMicrophone] = useMicrophonePermissions()
   const [room, setRoom] = useState<LoadState>({ status: 'loading' })
-  const [busy, setBusy] = useState<'camera' | 'microphone' | 'opening' | null>(null)
+  const [busy, setBusy] = useState<'camera' | 'microphone' | 'opening' | 'joining' | null>(null)
+  const [joinMic, setJoinMic] = useState(true)
+  const [joinCamera, setJoinCamera] = useState(true)
   const [preview, setPreview] = useState(false)
   const [notice, setNotice] = useState('')
 
@@ -68,6 +72,48 @@ export default function MeetingAccessScreen({ route }: MeetingAccessScreenProps)
     try { await Linking.openSettings() }
     catch {
       Alert.alert('Device settings', 'Open your phone settings, find iEventPlux, and allow camera and microphone access.')
+    }
+  }
+
+  const joinNativeMeeting = async () => {
+    if (room.status !== 'ready' || !room.data.meeting || busy) return
+    const meeting = room.data.meeting
+    if (!mayEnterNativeRoom({
+      meetingStatus: meeting.status,
+      engine: meeting.mediaEngine,
+      nativeCapable: Constants.executionEnvironment !== ExecutionEnvironment.StoreClient,
+    })) {
+      setNotice('Native video calling needs a custom iEventPlux build and an active LiveKit meeting.')
+      return
+    }
+    setBusy('joining')
+    setNotice('')
+    try {
+      // Native OS permission prompts are directly tied to this Join button.
+      // Both devices can be disabled to join as a listener without prompts.
+      if (joinMic && !microphone?.granted) {
+        const granted = await askMicrophone()
+        if (!granted.granted) throw new Error('Microphone access is required for joining with microphone on. Switch it off to listen only, or allow access in phone settings.')
+      }
+      if (joinCamera && !camera?.granted) {
+        const granted = await askCamera()
+        if (!granted.granted) throw new Error('Camera access is required for joining with camera on. Switch it off to join without video, or allow access in phone settings.')
+      }
+      setPreview(false)
+      // The same server-side ticket, RSVP and removal gates protect web and native.
+      const credentials = await api.meetings.joinCredentials(meeting.id)
+      if (!validNativeMeetingCredentials(credentials)) {
+        throw new Error('The media server returned invalid secure meeting credentials.')
+      }
+      navigation.navigate('NativeMeeting', {
+        meetingId: meeting.id, serverUrl: credentials.serverUrl, token: credentials.token,
+        microphone: joinMic, camera: joinCamera,
+      })
+    } catch (error) {
+      setNotice(error instanceof ApiClientError ? error.message :
+        error instanceof Error ? error.message : 'Unable to join the live meeting.')
+    } finally {
+      setBusy(null)
     }
   }
 
@@ -150,17 +196,40 @@ export default function MeetingAccessScreen({ route }: MeetingAccessScreenProps)
         : <>
           <Text style={styles.meetingTitle}>{room.data.meeting.title}</Text>
           <Text style={styles.cardDescription}>Meeting status: {room.data.meeting.status}</Text>
-          <Pressable style={[styles.primaryButton, (room.data.meeting.status !== 'LIVE' || busy !== null) && styles.disabled]}
+          {room.data.meeting.mediaEngine === 'sfu' &&
+            Constants.executionEnvironment !== ExecutionEnvironment.StoreClient && <>
+            <View style={styles.nativeOptions}>
+              <Text style={styles.meetingTitle}>Native call preferences</Text>
+              <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: joinMic }}
+                style={styles.optionRow} onPress={() => setJoinMic((value) => !value)}>
+                <Text style={styles.optionText}>{joinMic ? '☑' : '☐'}  Join with microphone</Text>
+              </Pressable>
+              <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: joinCamera }}
+                style={styles.optionRow} onPress={() => setJoinCamera((value) => !value)}>
+                <Text style={styles.optionText}>{joinCamera ? '☑' : '☐'}  Join with camera</Text>
+              </Pressable>
+              <Text style={styles.cardDescription}>Turn both off to join as a listener. All participants share the existing LiveKit event room.</Text>
+            </View>
+            <Pressable style={[styles.primaryButton, (room.data.meeting.status !== 'LIVE' || busy !== null) && styles.disabled]}
+              disabled={room.data.meeting.status !== 'LIVE' || busy !== null}
+              accessibilityRole="button" accessibilityLabel="Join group video meeting in iEventPlux"
+              onPress={() => void joinNativeMeeting()}>
+              {busy === 'joining' ? <ActivityIndicator color="#ffffff" /> :
+                <Text style={styles.primaryText}>Join in iEventPlux</Text>}
+            </Pressable>
+          </>}
+          <Pressable style={[styles.secondaryButton, (room.data.meeting.status !== 'LIVE' || busy !== null) && styles.disabled]}
             disabled={room.data.meeting.status !== 'LIVE' || busy !== null}
             accessibilityRole="button" accessibilityLabel="Open live meeting in system browser"
             onPress={() => void openWebMeeting()}>
-            {busy === 'opening' ? <ActivityIndicator color="#ffffff" /> : <Text style={styles.primaryText}>Open live meeting securely</Text>}
+            {busy === 'opening' ? <ActivityIndicator color={theme.colors.primary} /> : <Text style={styles.secondaryText}>Open in system browser instead</Text>}
           </Pressable>
         </>}
       <Text style={styles.handoff}>
-        Video calls currently run through the secure iEventPlux web meeting in your system browser.
-        {' '}This native app can request device permissions, but does not yet contain the native LiveKit video engine.
-        {' '}Browser sign-in may be required separately.
+        Native LiveKit group calls require an installed iEventPlux development/release
+        build; they do not run in Expo Go. Browser meeting is retained as a
+        fallback and may require browser sign-in separately.
+        {' '}Phone screen sharing is not yet implemented in the native room.
       </Text>
     </View>
     <Text style={styles.footer}>Platform: {Platform.OS}. Screen sharing and microphone capture during calls depend on the browser and operating system.</Text>
@@ -193,6 +262,9 @@ const styles = StyleSheet.create({
   meetingTitle: { color: theme.colors.text, fontSize: 15, fontWeight: '700' },
   primaryButton: { marginTop: 4, backgroundColor: theme.colors.primary, minHeight: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   primaryText: { color: '#fff', fontSize: 15, fontWeight: '800' },
+  nativeOptions: { marginTop:12, borderTopWidth:1, borderColor:theme.colors.border, paddingTop:10, gap:6 },
+  optionRow: { paddingVertical:8, minHeight:44, justifyContent:'center' },
+  optionText: { fontSize:14, fontWeight:'600', color:theme.colors.text },
   disabled: { opacity: 0.5 },
   handoff: { paddingTop: 10, borderTopWidth: 1, borderColor: theme.colors.border, color: theme.colors.textMuted, fontSize: 12, lineHeight: 19 },
   indicator: { marginVertical: 15 },
