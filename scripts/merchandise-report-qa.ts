@@ -38,8 +38,17 @@ async function main() {
   assert.ok(!csvOps.includes('Paid merchandise sales'))
   assert.ok(csvFinance.includes('Paid merchandise sales'))
   console.log('PASS: role-sensitive CSV columns and sanitized event/SKU names')
-  const other = await db.organization.findFirst({ where: { id: { not: event.orgId } }, select: { id: true } })
-  assert.ok(other)
+  // A fresh disposable CI database contains only the fixture organization.
+  // Create a second synthetic tenant explicitly rather than relying on seed
+  // data that may differ across environments.
+  const outsider = await db.user.create({ data: {
+    email: `qa-other-tenant-${Date.now()}@example.invalid`,
+    passwordHash: 'UNUSABLE-QA-PASSWORD', displayName: 'Synthetic Other Tenant Owner',
+  } })
+  const other = await db.organization.create({ data: {
+    name: 'Synthetic Isolated Other Tenant', slug: `merch-qa-other-${Date.now()}`,
+    ownerId: outsider.id, status: 'ACTIVE',
+  } })
   await assert.rejects(() => merchandiseReconciliation(other.id, event.id, true), /Event not found/)
   console.log('PASS: event ID from a different organization is rejected')
   console.log('ISOLATED MERCHANDISE RECONCILIATION QA — ALL ASSERTIONS PASSED')

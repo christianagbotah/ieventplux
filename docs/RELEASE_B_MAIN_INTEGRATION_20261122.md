@@ -47,3 +47,7 @@ the import ordering of all six scripts to prevent regressions.
 This does not mean the HTTP acceptance tests or actual merchant settlement have
 passed. Those require an isolated local staging stack and disposable PostgreSQL
 fixtures, and remain mandatory before enabling checkout or collection.
+
+## 23 November: dedicated scratch PostgreSQL CI gate
+
+Added a separate `merchandise-scratch-acceptance` GitHub Actions job that provisions a disposable PostgreSQL database and explicit QA schema on loopback, applies Prisma schema only there, and executes the six guarded merchandise acceptance scripts sequentially. It does not deploy, use merchant credentials, or enable merchandise flags in the production environment. This job must pass on the exact PR head; its synthetic payment tests do **not** substitute for real provider reconciliation, refund certification or physical smartphone acceptance.

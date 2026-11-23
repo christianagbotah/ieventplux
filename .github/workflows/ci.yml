@@ -1,6 +1,6 @@
 # iEventPlux — CI (Round 32)
 #
-# Two jobs:
+# Jobs:
 #   web    — lint + typecheck + the golden-path smoke suite against a REAL stack
 #            (Next dev server + embedded worker/realtime services + a PostgreSQL
 #            service container), exactly the commands that run in the dev sandbox.
@@ -298,3 +298,66 @@ jobs:
           path: production.log
           if-no-files-found: ignore
           retention-days: 7
+
+  # Financial acceptance is isolated from the web smoke and production build
+  # jobs. It uses a fresh disposable database, not the live or smoke database.
+  merchandise-scratch-acceptance:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/ieventplux_merch_qa?schema=ieventplux_merch_qa_20261119
+      IEVENTPLUX_SOUVENIR_CHECKOUT_ENABLED: "1"
+      IEVENTPLUX_SOUVENIR_COLLECTION_ENABLED: "1"
+      APP_SECRET: ci-only-merch-acceptance-not-a-real-secret-0123456789
+      APP_URL: http://127.0.0.1:3000
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Install dependencies in ephemeral CI runner
+        run: bun install --frozen-lockfile
+      - name: Create disposable database and dedicated schema
+        run: |
+          PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -c 'CREATE DATABASE ieventplux_merch_qa'
+          PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d ieventplux_merch_qa -v ON_ERROR_STOP=1 -c 'CREATE SCHEMA ieventplux_merch_qa_20261119'
+      - name: Apply schema only to disposable QA database
+        run: bunx prisma db push
+      - name: Verify database identity and financial acceptance (simulated payments only)
+        run: |
+          bun scripts/merchandise-isolated-qa.ts
+          # HTTP acceptance needs a localhost-only Next server on the same
+          # disposable DB; no external staging or production host is contacted.
+          bunx next dev -p 3179 -H 127.0.0.1 > merchandise-qa-server.log 2>&1 &
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:3179/api/v1/health >/dev/null; then break; fi
+            if [ "$i" -eq 60 ]; then tail -80 merchandise-qa-server.log; exit 1; fi
+            sleep 2
+          done
+          bun scripts/merchandise-route-qa.ts
+          bun scripts/merchandise-scanner-route-qa.ts
+          bun scripts/merchandise-report-qa.ts
+          bun scripts/merchandise-report-route-qa.ts
+          bun scripts/souvenir-return-isolated-qa.ts
+      - name: Upload isolated acceptance server log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: merchandise-scratch-qa-log
+          path: merchandise-qa-server.log
+          if-no-files-found: ignore
+          retention-days: 5
