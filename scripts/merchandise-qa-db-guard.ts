@@ -19,6 +19,8 @@ export function validateIsolatedMerchandiseQaUrl() {
   assert.equal(url.searchParams.get('schema'), schema, 'QA requires the isolated schema')
   assert.equal(decodeURIComponent(url.pathname).slice(1), qaDatabaseName, 'QA requires the exact disposable database name')
   assert.ok(['localhost', '127.0.0.1', '::1', '[::1]'].includes(url.hostname), 'QA requires loopback PostgreSQL')
+  // An alternate local port may point at a forwarded production instance.
+  assert.equal(url.port, '5432', 'QA requires the dedicated local PostgreSQL port 5432')
 }
 
 export async function requireIsolatedMerchandiseQaDatabase() {
