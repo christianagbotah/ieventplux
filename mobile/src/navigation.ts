@@ -22,6 +22,8 @@ export type RootStackParamList = {
   /** Broadcast viewer (live + replay). `broadcastId` comes from the Discover
    *  Live-now section; the event detail screen can also route here. */
   Broadcast: { broadcastId: string }
+  /** Meeting access + native device permissions; video presently opens system browser. */
+  MeetingAccess: { eventId: string }
 }
 
 export type LoginScreenProps = NativeStackScreenProps<RootStackParamList, 'Login'>
@@ -30,3 +32,5 @@ export type EventDetailScreenProps = NativeStackScreenProps<RootStackParamList, 
 export type MyTicketsScreenProps = NativeStackScreenProps<RootStackParamList, 'MyTickets'>
 export type CheckinScreenProps = NativeStackScreenProps<RootStackParamList, 'Checkin'>
 export type BroadcastScreenProps = NativeStackScreenProps<RootStackParamList, 'Broadcast'>
+
+export type MeetingAccessScreenProps = NativeStackScreenProps<RootStackParamList, 'MeetingAccess'>

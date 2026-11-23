@@ -98,6 +98,9 @@ jobs:
       - name: Organizer group meeting catalog (eligible statuses, safe search and paging)
         run: bun test src/server/organizer-meeting-catalog.test.ts
 
+      - name: Browser camera and microphone access diagnostics
+        run: bun test src/portal/lib/device-access-diagnostics.test.ts
+
       - name: Device permission gesture handling for mobile video meetings
         run: bun test src/portal/lib/meeting-device-permissions.test.ts
 
@@ -222,6 +225,14 @@ jobs:
       - name: Typecheck
         working-directory: mobile
         run: bunx tsc --noEmit
+
+      - name: Verify Android JavaScript bundle
+        working-directory: mobile
+        run: bunx expo export --platform android --output-dir dist-mobile/android
+
+      - name: Verify iOS JavaScript bundle
+        working-directory: mobile
+        run: bunx expo export --platform ios --output-dir dist-mobile/ios
 
   # Isolated from the dev-server smoke job: Next dev and next build must not
   # write to the same .next directory concurrently.

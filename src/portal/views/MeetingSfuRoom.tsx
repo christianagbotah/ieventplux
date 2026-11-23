@@ -4,11 +4,12 @@ import { useEffect, useState } from 'react'
 import { LiveKitRoom, GridLayout, ParticipantTile, ControlBar, RoomAudioRenderer, useTracks, usePagination, ConnectionStateToast, useParticipants, useRoomContext, LayoutContextProvider } from '@livekit/components-react'
 import { Track } from 'livekit-client'
 import '@livekit/components-styles'
-import { Loader2, MonitorUp, ShieldCheck, UsersRound } from 'lucide-react'
+import { Loader2, MonitorUp, ShieldCheck, UsersRound, Camera, Mic, Copy } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { api, ApiClientError } from '../api'
 import { useConfirm } from '@/components/ui/confirm-dialog-provider'
 import { requestMeetingDevicePermissions, type DeviceChoices } from '../lib/meeting-device-permissions'
+import { embeddedBrowserHint, testCaptureDevice, type MediaDeviceKind } from '../lib/device-access-diagnostics'
 
 type SfuCredentials = { token: string; serverUrl: string; devices: DeviceChoices }
 
@@ -99,6 +100,40 @@ export default function MeetingSfuRoom({
   const [status, setStatus] = useState('')
   const [microphoneOn, setMicrophoneOn] = useState(true)
   const [cameraOn, setCameraOn] = useState(true)
+  const [browserHint, setBrowserHint] = useState<string | null>(null)
+  const [secureBrowser, setSecureBrowser] = useState(true)
+  const [deviceTest, setDeviceTest] = useState<Record<MediaDeviceKind, string>>({ camera: '', microphone: '' })
+  const [testingDevice, setTestingDevice] = useState<MediaDeviceKind | null>(null)
+  const [shareLink, setShareLink] = useState('')
+  const [copyResult, setCopyResult] = useState('')
+
+  useEffect(() => {
+    setBrowserHint(embeddedBrowserHint(navigator.userAgent))
+    setSecureBrowser(window.isSecureContext)
+    setShareLink(window.location.href)
+  }, [])
+
+  const testDevice = async (kind: MediaDeviceKind) => {
+    if (testingDevice) return
+    setTestingDevice(kind)
+    setDeviceTest((previous) => ({ ...previous, [kind]: '' }))
+    try {
+      await testCaptureDevice(kind, navigator.mediaDevices)
+      setDeviceTest((previous) => ({ ...previous, [kind]: kind === 'camera' ? 'Camera test succeeded. Access is available.' : 'Microphone test succeeded. Access is available.' }))
+    } catch (error) {
+      setDeviceTest((previous) => ({ ...previous, [kind]: error instanceof Error ? error.message : 'Device check failed.' }))
+    } finally { setTestingDevice(null) }
+  }
+
+  const copyMeetingLink = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href)
+      setCopyResult('Meeting link copied. Paste it into Chrome or Samsung Internet.')
+    } catch {
+      setCopyResult('Select and copy the URL below, then open it in Chrome or Samsung Internet.')
+    }
+  }
+
 
   const join = async () => {
     if (!canJoin || busy) return
@@ -187,12 +222,37 @@ export default function MeetingSfuRoom({
               Camera
             </label>
           </fieldset>
+          {(browserHint || !secureBrowser) && <div role="status"
+            className="w-full max-w-lg rounded-xl border border-amber-300/40 bg-amber-400/10 p-3 text-left text-xs leading-5 text-amber-100">
+            <strong>{browserHint ? `${browserHint} in-app browser detected` : 'Secure device access unavailable'}</strong>
+            <p className="mt-1">This browser may block camera and microphone prompts. Use its menu (⋮) to choose “Open in browser”, preferably Chrome or Samsung Internet. The website cannot override the host app's device restrictions.</p>
+          </div>}
+          <div className="w-full max-w-lg space-y-2 rounded-xl border border-white/15 bg-white/5 p-3 text-left">
+            <p className="text-xs font-semibold">Check permissions before joining</p>
+            <div className="grid grid-cols-2 gap-2">
+              <Button type="button" size="sm" variant="outline" className="min-h-11 rounded-lg bg-white/10 text-white hover:bg-white/20"
+                disabled={testingDevice !== null} onClick={() => void testDevice('camera')}>
+                {testingDevice === 'camera' ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Camera className="size-4" aria-hidden />} Test camera
+              </Button>
+              <Button type="button" size="sm" variant="outline" className="min-h-11 rounded-lg bg-white/10 text-white hover:bg-white/20"
+                disabled={testingDevice !== null} onClick={() => void testDevice('microphone')}>
+                {testingDevice === 'microphone' ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Mic className="size-4" aria-hidden />} Test microphone
+              </Button>
+            </div>
+            {deviceTest.camera && <p role="status" className="text-xs leading-5">{deviceTest.camera}</p>}
+            {deviceTest.microphone && <p role="status" className="text-xs leading-5">{deviceTest.microphone}</p>}
+            <Button type="button" size="sm" variant="ghost" className="min-h-10 text-white underline underline-offset-2"
+              onClick={() => void copyMeetingLink()}><Copy className="size-4" aria-hidden /> Copy meeting link for another browser</Button>
+            {copyResult && <p role="status" className="break-words text-xs">{copyResult}</p>}
+            {copyResult && <input aria-label="Meeting link to copy" readOnly value={shareLink}
+              onFocus={(event) => event.target.select()} className="w-full rounded-lg border border-white/20 bg-black/30 p-2 text-xs text-white" />}
+          </div>
           <Button disabled={!canJoin || busy} className="min-h-12 w-full max-w-xs rounded-xl" onClick={() => void join()}>
             {busy ? <Loader2 className="mr-2 size-4 animate-spin" /> : <UsersRound className="mr-2 size-4" />}
             {busy ? 'Connecting…' : 'Join meeting'}
           </Button>
           {!canJoin && <p className="text-xs text-amber-200">This room requires an approved free-event RSVP or valid paid-event ticket.</p>}
-          <p className="max-w-sm text-xs leading-5 text-white/65">If an in-app browser blocks camera or microphone access, use its menu to open this meeting in Chrome or Samsung Internet.</p>
+          <p className="max-w-sm text-xs leading-5 text-white/65">If an in-app browser blocks camera or microphone access, use its menu to open this meeting in Chrome or Samsung Internet. Screen sharing also requires a supported browser and OS.</p>
         </div>}
     {canManage && <div className="flex justify-end">
       <Button variant="destructive" className="min-h-10" onClick={onEnd}>End meeting for everyone</Button>
