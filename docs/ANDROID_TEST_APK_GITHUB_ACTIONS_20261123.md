@@ -35,3 +35,11 @@ the artifact to get the app-debug.apk file.
    block, report, leave and private-profile behavior.
 5. Record model, Android version, network type, and results before signing
    off native production readiness.
+
+## Hosted SDK bootstrap correction
+
+The initial test run (GitHub run 45235924168) failed before Gradle because
+android-actions/setup-android@v3 invoked sdkmanager tools, an obsolete package
+no longer available. The workflow now uses the SDK manager preinstalled on
+GitHub Ubuntu runners, selecting the highest installed cmdline-tools version
+and installing SDK 35/build-tools/NDK explicitly.
