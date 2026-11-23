@@ -43,3 +43,15 @@ android-actions/setup-android@v3 invoked sdkmanager tools, an obsolete package
 no longer available. The workflow now uses the SDK manager preinstalled on
 GitHub Ubuntu runners, selecting the highest installed cmdline-tools version
 and installing SDK 35/build-tools/NDK explicitly.
+
+## Native CMake/Prefab diagnosis (23 November 2026)
+
+The corrected SDK bootstrap build (run 45236385808) reached native
+Android compilation, but Gradle failed with CXX1210 while configuring
+expo-modules-core CMake for arm64-v8a, reporting no compatible library.
+Hundreds of earlier Java/Kotlin/DEX tasks completed. No APK was uploaded.
+The manual workflow now stores verbose Gradle diagnostics as a short-lived
+GitHub Actions artifact when compilation fails, including Prefab resolver
+context and generated ABI/architecture flags. The cause has NOT been
+isolated; do not work around it by disabling security protections or by
+installing a large Android toolchain on the production VPS.
