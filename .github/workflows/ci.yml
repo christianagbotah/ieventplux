@@ -301,7 +301,7 @@ jobs:
           if test -d public; then cp -a public .next/standalone/public; fi
           mkdir -p release-candidate
           tar -C .next/standalone -czf release-candidate/ieventplux-standalone.tar.gz .
-          sha256sum release-candidate/ieventplux-standalone.tar.gz > release-candidate/SHA256SUMS
+          (cd release-candidate && sha256sum ieventplux-standalone.tar.gz > SHA256SUMS)
           printf '%s\n' "$GITHUB_SHA" > release-candidate/SOURCE_SHA
           test "$(cat release-candidate/SOURCE_SHA)" = "$GITHUB_SHA"
           (cd release-candidate && sha256sum -c SHA256SUMS)
