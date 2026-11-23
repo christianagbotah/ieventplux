@@ -3,6 +3,8 @@ import { handle, jsonOk, requireUser, readJson, errors, sanitizeText, jsonList, 
 import { db } from '@/lib/db'
 import { eventOrgAccess } from '@/server/permissions'
 import { boundedInt, ticketSalesSettings } from '@/server/ticket-sales-policy'
+import { requireCommunityAccess } from '@/server/community-access'
+import { validReplyTarget } from '@/server/community-policy'
 
 type RouteContext = { params: Promise<{ id: string; action: string }> }
 
@@ -157,19 +159,36 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
     }
 
     if (action === 'comments') {
-      const { page, pageSize, offset } = pagination(req, 20, 50)
+      const { userId } = await requireCommunityAccess(id)
+      const { page, pageSize, offset } = pagination(req, 12, 30)
+      // Respect two-way profile blocking; an attendee who blocks another user
+      // should not see that account's messages or replies in their community.
+      const blocked = userId ? await db.userBlock.findMany({
+        where: { OR: [{ blockerId: userId }, { blockedId: userId }] },
+        select: { blockerId: true, blockedId: true },
+      }) : []
+      const excluded = blocked.map((row) => row.blockerId === userId ? row.blockedId : row.blockerId)
+      const where = { eventId: id, status: 'VISIBLE', parentId: null, userId: { notIn: excluded } }
       const items = await db.comment.findMany({
-        where: { eventId: id, status: 'VISIBLE', parentId: null },
+        where,
         include: {
           user: { select: { id: true, displayName: true, avatarUrl: true } },
-          children: { where: { status: 'VISIBLE' }, include: { user: { select: { id: true, displayName: true, avatarUrl: true } } }, orderBy: { createdAt: 'asc' } },
+          children: {
+            where: { status: 'VISIBLE', userId: { notIn: excluded } },
+            include: { user: { select: { id: true, displayName: true, avatarUrl: true } } },
+            orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+            take: 40,
+          },
+          _count: { select: { children: { where: { status: 'VISIBLE', userId: { notIn: excluded } } } } },
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         skip: offset,
         take: pageSize,
       })
-      const total = await db.comment.count({ where: { eventId: id, status: 'VISIBLE', parentId: null } })
-      return jsonList(items, total, page, pageSize)
+      const total = await db.comment.count({ where })
+      return jsonOk({ items, total, page, pageSize, hasMore: page * pageSize < total }, {
+        headers: { 'Cache-Control': 'private, no-store' },
+      })
     }
 
     if (action === 'updates') {
@@ -557,12 +576,28 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     // ── Comments (discussion/Q&A) ─────────────────────────────────────────
     if (action === 'comments') {
       await rateLimit(req, 'comment', 10, 60_000)
-      const event = await db.event.findUnique({ where: { id } })
-      if (!event) throw errors.notFound('Event not found.')
+      await requireCommunityAccess(id, true)
       const text = sanitizeText(body.body, 1000)
-      if (text.length < 2) throw errors.badRequest('Comment is empty.')
+      if (text.trim().length < 2) throw errors.badRequest('Comment must contain at least two characters.')
+      const parentId = body.parentId === undefined || body.parentId === null ? null : String(body.parentId)
+      if (parentId) {
+        const parent = await db.comment.findUnique({
+          where: { id: parentId },
+          select: { eventId: true, status: true, parentId: true, userId: true },
+        })
+        if (!validReplyTarget(parent, id)) throw errors.badRequest('Reply to a visible conversation in this event.')
+        // Blocking works in both directions, including direct forged API posts.
+        const blocked = await db.userBlock.findFirst({
+          where: { OR: [
+            { blockerId: user.id, blockedId: parent!.userId },
+            { blockerId: parent!.userId, blockedId: user.id },
+          ] },
+          select: { blockerId: true },
+        })
+        if (blocked) throw errors.forbidden('You cannot reply to this conversation.')
+      }
       const comment = await db.comment.create({
-        data: { eventId: id, userId: user.id, parentId: body.parentId ? String(body.parentId) : null, body: text },
+        data: { eventId: id, userId: user.id, parentId, body: text },
       })
       return jsonOk({ comment })
     }
