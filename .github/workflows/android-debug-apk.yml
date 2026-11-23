@@ -3,6 +3,12 @@ name: Android Installable Test APK
 # Manual only: native Gradle builds consume compute and are not needed for web changes.
 on:
   workflow_dispatch:
+    inputs:
+      diagnostics_only:
+        description: "Only reproduce Expo native CMake/Prefab configuration (no APK)"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -83,7 +89,13 @@ jobs:
         run: |
           set +e
           chmod +x ./gradlew
-          ./gradlew --no-daemon --max-workers=2 --info --stacktrace :app:assembleDebug \
+          if [ "${{ inputs.diagnostics_only }}" = "true" ]; then
+            TASK=":expo-modules-core:configureCMakeDebug[arm64-v8a]"
+          else
+            TASK=":app:assembleDebug"
+          fi
+          echo "Gradle target: $TASK"
+          ./gradlew --no-daemon --max-workers=2 --info --stacktrace "$TASK" \
             > "$GITHUB_WORKSPACE/android-gradle-build.log" 2>&1
           result=$?
           tail -n 130 "$GITHUB_WORKSPACE/android-gradle-build.log"
@@ -98,6 +110,48 @@ jobs:
           fi
           exit "$result"
 
+      - name: Preserve native Prefab command logs for root-cause diagnosis
+        if: failure()
+        shell: bash
+        run: |
+          set -euo pipefail
+          CORE="$GITHUB_WORKSPACE/mobile/node_modules/expo-modules-core/android"
+          OUT="$GITHUB_WORKSPACE/android-native-prefab-diagnostics"
+          mkdir -p "$OUT"
+          {
+            echo "==== Native build log files ===="
+            find "$CORE/build/intermediates/cxx" "$CORE/.cxx" -type f \
+              \( -name 'prefab_command*' -o -name '*stderr*' -o -name '*stdout*' \
+                 -o -name '*command*.txt' -o -name 'CMakeCache.txt' -o -name '*.log' \) \
+              2>/dev/null | head -n 80
+            echo "==== Module ABI/Gradle flags ===="
+            grep -E '^(newArchEnabled|reactNativeArchitectures|hermesEnabled)=' \
+              "$GITHUB_WORKSPACE/mobile/android/gradle.properties" || true
+          } > "$OUT/manifest.txt"
+          if [ -d "$CORE/build/intermediates/cxx" ]; then
+            (
+              cd "$CORE"
+              find build/intermediates/cxx .cxx -type f \
+                \( -name 'prefab_command*' -o -name '*stderr*' -o -name '*stdout*' \
+                   -o -name 'CMakeCache.txt' -o -name '*.log' \) -print0 2>/dev/null |
+                tar --null -czf "$OUT/expo-cxx-logs.tar.gz" -T - 2>/dev/null
+            ) || true
+          fi
+          echo "==== Prefab stderr content (if generated) ===="
+          find "$CORE/build/intermediates/cxx" -type f \
+            \( -name 'prefab_command.stderr' -o -name '*stderr.txt' \) \
+            -exec sh -c 'echo "### $1"; tail -n 120 "$1"' _ {} \; \
+            2>/dev/null | tail -n 240 || true
+
+      - name: Upload native Prefab diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ieventplux-android-prefab-logs
+          path: android-native-prefab-diagnostics/
+          if-no-files-found: warn
+          retention-days: 7
+
       - name: Upload Gradle diagnostics on failure
         if: failure()
         uses: actions/upload-artifact@v4
@@ -108,6 +162,7 @@ jobs:
           retention-days: 7
 
       - name: Verify APK output
+        if: ${{ !inputs.diagnostics_only }}
         run: |
           set -e
           test -s mobile/android/app/build/outputs/apk/debug/app-debug.apk
@@ -115,6 +170,7 @@ jobs:
           ls -lh mobile/android/app/build/outputs/apk/debug/app-debug.apk
 
       - name: Upload Android debug APK for authorized QA
+        if: ${{ !inputs.diagnostics_only }}
         uses: actions/upload-artifact@v4
         with:
           name: ieventplux-android-debug-apk
