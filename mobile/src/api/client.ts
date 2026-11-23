@@ -112,6 +112,40 @@ export interface TicketType {
   sortOrder: number
 }
 
+/** Event community returns only author display identities, not attendee rosters. */
+export interface CommunityComment {
+  id: string
+  eventId: string
+  userId: string
+  parentId: string | null
+  body: string
+  createdAt: string
+  user: { id: string; displayName: string; avatarUrl?: string | null }
+  children?: CommunityComment[]
+  _count?: { children: number }
+}
+export interface CommunityThreadPage {
+  items: CommunityComment[]
+  total: number
+  page: number
+  pageSize: number
+  hasMore: boolean
+}
+export interface NetworkMember {
+  id: string
+  displayName: string
+  avatarUrl?: string | null
+  following: boolean
+  isMe: boolean
+}
+export interface EventNetworkResponse {
+  eligible: boolean
+  optedIn: boolean
+  items: NetworkMember[]
+  hasMore: boolean
+  nextCursor: string | null
+}
+
 export interface Venue {
   id: string
   name: string
@@ -513,6 +547,39 @@ export const api = {
     /** `idOrSlug` — the server accepts the event slug or the internal id. */
     get: (idOrSlug: string) =>
       request<EventDetailResponse>('GET', `/events/${encodeURIComponent(idOrSlug)}`),
+  },
+  community: {
+    list: (eventId: string, page = 1) => request<CommunityThreadPage>(
+      'GET', '/events/' + encodeURIComponent(eventId) + '/comments?pageSize=12&page=' + page,
+    ),
+    post: (eventId: string, body: string, parentId?: string) => request<{ comment: CommunityComment }>(
+      'POST', '/events/' + encodeURIComponent(eventId) + '/comments',
+      { body, ...(parentId ? { parentId } : {}) },
+    ),
+    remove: (commentId: string) => request<{ removed: boolean }>(
+      'POST', '/comments/' + encodeURIComponent(commentId), {},
+    ),
+    report: (commentId: string) => request<{ report: { id: string } }>(
+      'POST', '/social/report', { targetType: 'COMMENT', targetId: commentId, reason: 'OTHER' },
+    ),
+  },
+  networking: {
+    list: (eventId: string, cursor?: string) => request<EventNetworkResponse>(
+      'GET', '/events/' + encodeURIComponent(eventId) + '/network' +
+        (cursor ? '?cursor=' + encodeURIComponent(cursor) : ''),
+    ),
+    consent: (eventId: string, action: 'join' | 'leave') => request<{ optedIn: boolean }>(
+      'POST', '/events/' + encodeURIComponent(eventId) + '/network', { action },
+    ),
+    follow: (userId: string, action: 'follow' | 'unfollow') => request<{ following: boolean }>(
+      'POST', '/social/' + action, { userId },
+    ),
+    report: (userId: string) => request<{ report: { id: string } }>(
+      'POST', '/social/report', { targetType: 'USER', targetId: userId, reason: 'OTHER' },
+    ),
+    block: (userId: string) => request<{ ok: boolean }>(
+      'POST', '/social/block', { userId },
+    ),
   },
   meetings: {
     detail: (id: string) => request<{

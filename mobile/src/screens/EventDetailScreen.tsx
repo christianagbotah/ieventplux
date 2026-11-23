@@ -189,6 +189,21 @@ export default function EventDetailScreen({ navigation, route }: EventDetailScre
         <Text style={styles.staffButtonText}>Meeting & camera/microphone access</Text>
       </Pressable>
 
+      <View style={styles.socialButtons}>
+        <Pressable style={styles.staffButton} accessibilityRole="button"
+          accessibilityLabel="Open event community discussions and replies"
+          onPress={() => navigation.navigate('EventCommunity', {
+            eventId: event.id, eventTitle: event.title, status: event.status, canManage,
+          })}>
+          <Text style={styles.staffButtonText}>Community conversations</Text>
+        </Pressable>
+        <Pressable style={styles.staffButton} accessibilityRole="button"
+          accessibilityLabel="See private opt-in attendee network for this event"
+          onPress={() => navigation.navigate('EventNetwork', { eventId: event.id, eventTitle: event.title })}>
+          <Text style={styles.staffButtonText}>Meet fellow attendees</Text>
+        </Pressable>
+      </View>
+
       <Text style={styles.sectionTitle}>Tickets</Text>
       {event.ticketTypes.length === 0 ? (
         <Text style={styles.muted}>No ticket types are on sale for this event yet.</Text>
@@ -291,6 +306,7 @@ function TicketTypeRow({
 }
 
 const styles = StyleSheet.create({
+  socialButtons: { marginTop: 12, gap: 10 },
   screen: { backgroundColor: theme.colors.bg, flex: 1 },
   content: { padding: theme.spacing.lg, paddingBottom: theme.spacing.xxl },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: theme.spacing.xl, backgroundColor: theme.colors.bg },
