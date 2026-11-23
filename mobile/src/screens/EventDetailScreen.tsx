@@ -202,6 +202,13 @@ export default function EventDetailScreen({ navigation, route }: EventDetailScre
           onPress={() => navigation.navigate('EventNetwork', { eventId: event.id, eventTitle: event.title })}>
           <Text style={styles.staffButtonText}>Meet fellow attendees</Text>
         </Pressable>
+        <Pressable style={styles.staffButton} accessibilityRole="button"
+          accessibilityLabel="View award nominees and cast a free supporter vote"
+          onPress={() => navigation.navigate('EventCompetitions', {
+            eventId: event.id, eventTitle: event.title,
+          })}>
+          <Text style={styles.staffButtonText}>Awards & supporter voting</Text>
+        </Pressable>
       </View>
 
       <Text style={styles.sectionTitle}>Tickets</Text>

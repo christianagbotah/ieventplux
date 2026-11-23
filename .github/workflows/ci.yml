@@ -84,6 +84,9 @@ jobs:
       - name: Event community privacy, moderation and reply authorization
         run: bun test src/server/community-policy.test.ts
 
+      - name: Awards, pageants and supporter-voting policy regression
+        run: bun test src/server/competition-policy.test.ts
+
       - name: Global public event comparison link and safety rules
         run: bun test src/server/public-event-compare.test.ts
 
@@ -167,6 +170,11 @@ jobs:
         env:
           IEVENTPLUX_ISOLATED_DB_TEST: "yes"
         run: bun run scripts/meeting-access-smoke.ts
+
+      - name: Awards lifecycle, private ballots, concurrency and final result smoke
+        env:
+          IEVENTPLUX_ISOLATED_DB_TEST: "yes"
+        run: bun run scripts/competition-awards-smoke.ts
 
       - name: Check-in replay isolation with synthetic admission record
         run: bun run scripts/checkin-replay-scope-smoke.ts
