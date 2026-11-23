@@ -78,6 +78,9 @@ jobs:
       - name: Full agenda editor, UTC persistence and DST-safe event timezones
         run: bun test src/server/event-agenda-policy.test.ts src/portal/lib/agenda-time.test.ts
 
+      - name: Opt-in event networking and paid attendee privacy
+        run: bun test src/server/event-network-policy.test.ts
+
       - name: Event community privacy, moderation and reply authorization
         run: bun test src/server/community-policy.test.ts
 

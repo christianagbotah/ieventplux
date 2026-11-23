@@ -22,6 +22,7 @@ import { OrganizerEventCover } from '../components/OrganizerEventCover'
 import LiveEngagement from '../components/LiveEngagement'
 import { EventMeetingPanel } from '../components/EventMeetingPanel'
 import { EventCommunityPanel } from '../components/EventCommunityPanel'
+import { EventNetworkingPanel } from '../components/EventNetworkingPanel'
 import ReviewsPanel from '../components/ReviewsPanel'
 import UpdatesPanel from '../components/UpdatesPanel'
 
@@ -711,6 +712,10 @@ export default function EventDetail({ slug }: { slug: string }) {
               {['PUBLISHED', 'SCHEDULED', 'LIVE', 'POSTPONED'].includes(event.status) && (
                 <UpdatesPanel eventId={event.id} canManage={data.canManage} orgName={event.org.name} initial={event.updates} />
               )}
+
+              {/* Attendees join voluntarily. A purchase or RSVP never reveals a
+                  profile here; the API rechecks entitlement and blocks. */}
+              <EventNetworkingPanel key={event.id} eventId={event.id} />
 
               {/* Discussion */}
               <Card className="rounded-2xl" id="discussion">
