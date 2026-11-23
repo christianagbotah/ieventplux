@@ -9,8 +9,14 @@ export function validNativeMeetingCredentials(value: unknown): value is { token:
   if (typeof data.serverUrl !== 'string') return false
   try {
     const url = new URL(data.serverUrl)
+    // The production LiveKit signalling endpoint is reverse-proxied at
+    // /livekit, not at the origin root. React Native must preserve that
+    // path. Allow safe path segments only; never embed credentials/query
+    // parameters or downgrade WebSocket TLS.
+    const safeProxyPath = url.pathname === '/' ||
+      /^\/[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)*\/?$/.test(url.pathname)
     return url.protocol === 'wss:' && Boolean(url.hostname) && !url.username && !url.password &&
-      !url.hash && !url.search && url.pathname === '/'
+      !url.hash && !url.search && safeProxyPath
   } catch { return false }
 }
 
