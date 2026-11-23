@@ -87,6 +87,9 @@ jobs:
       - name: Awards, pageants and supporter-voting policy regression
         run: bun test src/server/competition-policy.test.ts
 
+      - name: Marketplace seller/product/stock validation and security tests
+        run: bun test src/server/marketplace-policy.test.ts
+
       - name: Global public event comparison link and safety rules
         run: bun test src/server/public-event-compare.test.ts
 
@@ -175,6 +178,11 @@ jobs:
         env:
           IEVENTPLUX_ISOLATED_DB_TEST: "yes"
         run: bun run scripts/competition-awards-smoke.ts
+
+      - name: Marketplace seller, catalogue and stock ledger integration smoke
+        env:
+          IEVENTPLUX_ISOLATED_DB_TEST: "yes"
+        run: bun run scripts/marketplace-foundation-smoke.ts
 
       - name: Check-in replay isolation with synthetic admission record
         run: bun run scripts/checkin-replay-scope-smoke.ts

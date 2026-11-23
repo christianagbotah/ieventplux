@@ -77,6 +77,8 @@ model User {
   identityProviderJobs KycProviderJob[]
   livePollVotes       LivePollVote[]
   competitionVotes    CompetitionVote[]
+  marketplaceStores MarketplaceStore[] @relation("MarketplaceStoreOwner")
+  marketplaceStockChanges MarketplaceStockMovement[] @relation("MarketplaceStockActor")
   questionsAsked      AudienceQuestion[]      @relation("QuestionAuthor")
   answersGiven        AudienceQuestion[]      @relation("QuestionAnswerer")
   questionUpvotes     AudienceQuestionUpvote[]
@@ -153,6 +155,7 @@ model Organization {
   venues         Venue[]
   series         EventSeries[]
   events         Event[]
+  marketplaceStores MarketplaceStore[]
   media          MediaAsset[]
   ticketTypes    TicketType[]          @relation("OrgTicketTypes")
   orders         Order[]
@@ -1586,4 +1589,104 @@ model BackupRun {
   error      String?
 
   @@index([startedAt])
+}
+
+// Independent, always-on seller catalogue. Products do not require an event.
+// Payment and fulfilment workflows are separate future rollout gates.
+model MarketplaceStore {
+  id                String   @id @default(cuid())
+  slug              String   @unique
+  ownerId           String
+  orgId             String?
+  name              String
+  tagline           String?
+  description       String?
+  category          String
+  logoUrl           String?
+  coverUrl          String?
+  website           String?
+  country           String   @default("GH")
+  city              String?
+  pickupAddress     String?
+  currency          String   @default("GHS")
+  status            String   @default("DRAFT") // DRAFT | ACTIVE | SUSPENDED
+  verificationState String   @default("UNVERIFIED") // UNVERIFIED | PENDING | VERIFIED | REJECTED
+  deletedAt         DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  owner             User           @relation("MarketplaceStoreOwner", fields: [ownerId], references: [id])
+  organization      Organization?  @relation(fields: [orgId], references: [id])
+  products          MarketplaceProduct[]
+  variants          MarketplaceVariant[]
+
+  @@index([ownerId, status])
+  @@index([status, category])
+  @@index([country, city])
+}
+
+model MarketplaceProduct {
+  id             String @id @default(cuid())
+  storeId        String
+  slug           String
+  name           String
+  shortDesc      String?
+  description    String
+  brand          String?
+  category       String
+  productKind    String @default("GOODS") // GOODS | DIGITAL | SERVICE
+  specifications String @default("{}") // validated bounded key/value JSON
+  images         String @default("[]") // HTTPS hosted images
+  status         String @default("DRAFT") // DRAFT | ACTIVE | ARCHIVED
+  deletedAt      DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  store          MarketplaceStore @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  variants       MarketplaceVariant[]
+
+  @@unique([storeId, slug])
+  @@index([storeId, status])
+  @@index([category, status])
+}
+
+model MarketplaceVariant {
+  id             String @id @default(cuid())
+  storeId        String
+  productId      String
+  sku            String
+  title          String
+  optionValues   String @default("{}") // size/color/material
+  priceMinor     Int
+  currency       String @default("GHS")
+  stockOnHand    Int @default(0)
+  stockReserved  Int @default(0)
+  stockSold      Int @default(0)
+  active         Boolean @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  store          MarketplaceStore @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  product        MarketplaceProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+  movements      MarketplaceStockMovement[]
+
+  @@unique([storeId, sku])
+  @@index([productId, active])
+}
+
+model MarketplaceStockMovement {
+  id           String   @id @default(cuid())
+  variantId    String
+  actorId      String
+  requestKey   String
+  reason       String
+  qtyDelta     Int
+  balanceAfter Int
+  createdAt    DateTime @default(now())
+
+  variant      MarketplaceVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  actor        User @relation("MarketplaceStockActor", fields: [actorId], references: [id])
+
+  @@unique([variantId, requestKey])
+  @@index([variantId, createdAt])
 }
