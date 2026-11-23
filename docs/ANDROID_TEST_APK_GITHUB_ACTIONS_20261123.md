@@ -55,3 +55,20 @@ GitHub Actions artifact when compilation fails, including Prefab resolver
 context and generated ABI/architecture flags. The cause has NOT been
 isolated; do not work around it by disabling security protections or by
 installing a large Android toolchain on the production VPS.
+
+
+## Prefab native-library mismatch diagnostics
+
+The second attempt (GitHub run 45238683331) captured a 5 MB verbose Gradle
+log but still returned only No compatible library found during
+expo-modules-core:configureCMakeDebug[arm64-v8a]. Gradle maps a Prefab CLI
+exception to generic CXX1210 and strips the exact incompatible library
+from the final task error. A native-library mismatch cannot be repaired
+safely from that generic error alone.
+
+A new manual checkbox diagnostics_only runs just the failing CMake
+configuration task and captures generated Prefab stderr files, CMakeCache
+and native command logs in the separate ieventplux-android-prefab-logs
+artifact (7-day retention).
+When diagnostics_only=true, no APK is produced or uploaded.
+A full assembleDebug run must subsequently pass on the fixed revision.
