@@ -30,7 +30,7 @@ export async function networkAccess(eventId: string) {
       where: { eventId, userId, status: 'APPROVED' },
       select: { id: true },
     }),
-    db.ticketType.findFirst({ where: { eventId, active: true, priceMinor: { gt: 0 } }, select: { id: true } }),
+    db.ticketType.findFirst({ where: { eventId, priceMinor: { gt: 0 } }, select: { id: true } }),
     db.eventInterest.findUnique({
       where: { userId_eventId_kind: { eventId, userId, kind: NETWORK_INTEREST_KIND } },
       select: { privacy: true },

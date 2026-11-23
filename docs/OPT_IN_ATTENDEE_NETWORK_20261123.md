@@ -32,3 +32,5 @@ the event is cancelled or a ticket was refunded.
 
 Future phases: mutually accepted connection requests, age-specific protections
 and carefully consented DMs.
+
+Paid-event attendance gating applies even if a paid ticket type was later deactivated.

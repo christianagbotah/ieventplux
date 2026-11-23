@@ -36,7 +36,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
     const event = await db.event.findUnique({
       where: { id },
       select: { orgId: true, org: { select: { ownerId: true } }, ticketTypes: {
-        where: { active: true, priceMinor: { gt: 0 } }, select: { id: true }, take: 1,
+        where: { priceMinor: { gt: 0 } }, select: { id: true }, take: 1,
       } },
     })
     if (!event) throw errors.notFound('Event network unavailable.')
