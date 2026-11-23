@@ -290,6 +290,30 @@ jobs:
       - name: Read-only production smoke (no demo accounts or payment mutation)
         run: bun run prod:smoke
 
+      # Build once on the GitHub runner. This is a candidate artifact only:
+      # production deployment requires a separate reviewed, reconciled rollout.
+      - name: Package source-light standalone candidate with SHA256
+        run: |
+          set -euo pipefail
+          test -f .next/standalone/server.js
+          mkdir -p .next/standalone/.next
+          cp -a .next/static .next/standalone/.next/static
+          if test -d public; then cp -a public .next/standalone/public; fi
+          mkdir -p release-candidate
+          tar -C .next/standalone -czf release-candidate/ieventplux-standalone.tar.gz .
+          sha256sum release-candidate/ieventplux-standalone.tar.gz > release-candidate/SHA256SUMS
+          printf '%s\n' "$GITHUB_SHA" > release-candidate/SOURCE_SHA
+          test "$(cat release-candidate/SOURCE_SHA)" = "$GITHUB_SHA"
+          (cd release-candidate && sha256sum -c SHA256SUMS)
+
+      - name: Retain checksum-verified CI candidate (not auto-deployed)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ieventplux-standalone-${{ github.sha }}
+          path: release-candidate/
+          if-no-files-found: error
+          retention-days: 2
+
       - name: Upload production boot logs on failure
         if: failure()
         uses: actions/upload-artifact@v4
