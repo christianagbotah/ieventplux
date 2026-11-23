@@ -10,18 +10,18 @@ import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Field, FieldLabel, FieldHelp } from '@/components/ui/field'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { useToast } from '@/hooks/use-toast'
 import { api, ApiClientError, qs } from '../api'
 import { navigate } from '../router'
 import { usePortal } from '../store'
-import { money, dateLong, timeRange, relative, initials, humanize } from '../format'
+import { money, dateLong, timeRange, humanize } from '../format'
 import { EmptyState } from '../components/EventCard'
 import { quoteTicketSelection, ticketCheckoutSupported, ticketAvailability, hasPaidAdmissionSelection } from '../lib/ticket-selection'
 import { countryLabel } from '../lib/global-locations'
 import { OrganizerEventCover } from '../components/OrganizerEventCover'
 import LiveEngagement from '../components/LiveEngagement'
 import { EventMeetingPanel } from '../components/EventMeetingPanel'
+import { EventCommunityPanel } from '../components/EventCommunityPanel'
 import ReviewsPanel from '../components/ReviewsPanel'
 import UpdatesPanel from '../components/UpdatesPanel'
 
@@ -111,21 +111,11 @@ interface TriageResult {
   note?: string
 }
 
-interface CommentNode {
-  id: string
-  body: string
-  createdAt: string
-  user: { id: string; displayName: string; avatarUrl?: string | null }
-  children?: CommentNode[]
-}
-
 export default function EventDetail({ slug }: { slug: string }) {
   const { user } = usePortal()
   const { toast } = useToast()
   const [data, setData] = useState<EventDetailPayload | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [comments, setComments] = useState<CommentNode[]>([])
-  const [commentDraft, setCommentDraft] = useState('')
   const [mine, setMine] = useState({ saved: false, going: false, following: false, rsvpStatus: null as string | null, rsvpGuests: null as number | null })
   const [inviteCode, setInviteCode] = useState('')
   const [buyOpen, setBuyOpen] = useState(false)
@@ -153,8 +143,6 @@ export default function EventDetail({ slug }: { slug: string }) {
       const payload = await api.get<EventDetailPayload>(`/events/${slug}`)
       setData(payload)
       setMine(payload.mine)
-      const commentsPayload = await api.get<{ items: CommentNode[] }>(`/events/${payload.event.id}/comments?pageSize=20`).catch(() => ({ items: [] }))
-      setComments(commentsPayload.items)
       const wl = await api.get<WaitlistStatus>(`/events/${payload.event.id}/waitlist`).catch(() => null)
       setWaitlist(wl)
       const rem = await api.get<ReminderState>(`/events/${payload.event.id}/reminder`).catch(() => null)
@@ -352,20 +340,6 @@ export default function EventDetail({ slug }: { slug: string }) {
       toast({ description: err instanceof ApiClientError ? err.message : 'Could not run the AI triage.', variant: 'destructive' })
     } finally {
       setTriageBusy(false)
-    }
-  }
-
-  const postComment = async () => {
-    if (!user) return navigate('/signin')
-    if (!event || commentDraft.trim().length < 2) return
-    try {
-      await api.post(`/events/${event.id}/comments`, { body: commentDraft })
-      setCommentDraft('')
-      const payload = await api.get<{ items: CommentNode[] }>(`/events/${event.id}/comments?pageSize=20`)
-      setComments(payload.items)
-      toast({ description: 'Comment posted.' })
-    } catch (err) {
-      toast({ description: err instanceof ApiClientError ? err.message : 'Could not post the comment.', variant: 'destructive' })
     }
   }
 
@@ -742,7 +716,7 @@ export default function EventDetail({ slug }: { slug: string }) {
               <Card className="rounded-2xl" id="discussion">
                 <CardHeader className="pb-2">
                   <CardTitle className="flex flex-wrap items-center gap-2 text-base">
-                    Discussion ({data.stats.comments})
+                    Community discussions
                     {data.canManage && (
                       <Button
                         variant="outline"
@@ -784,40 +758,13 @@ export default function EventDetail({ slug }: { slug: string }) {
                       )}
                     </div>
                   )}
-                  {user ? (
-                    <div className="flex gap-3">
-                      <Avatar><AvatarFallback className="bg-primary/15 text-xs font-bold text-primary">{initials(user.displayName)}</AvatarFallback></Avatar>
-                      <div className="flex-1 space-y-2">
-                        <Textarea
-                          value={commentDraft}
-                          onChange={(e) => setCommentDraft(e.target.value)}
-                          placeholder="Ask a question or share excitement…"
-                          aria-label="Write a comment"
-                          className="min-h-20"
-                        />
-                        <Button size="sm" className="rounded-full ievx-press" disabled={commentDraft.trim().length < 2} onClick={() => void postComment()}>Post</Button>
-                      </div>
-                    </div>
-                  ) : (
-                    <p className="rounded-xl bg-secondary/50 p-4 text-sm text-muted-foreground">
-                      <Button variant="link" className="h-auto p-0 text-primary" onClick={() => navigate('/signin')}>Sign in</Button> to join the discussion.
-                    </p>
-                  )}
-                  {comments.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No comments yet — be the first!</p>
-                  ) : (
-                    <div className="space-y-4">
-                      {comments.map((c) => (
-                        <div key={c.id} className="flex gap-3">
-                          <Avatar><AvatarFallback className="bg-secondary text-xs font-bold">{initials(c.user.displayName)}</AvatarFallback></Avatar>
-                          <div className="min-w-0 flex-1">
-                            <p className="text-sm"><span className="font-semibold">{c.user.displayName}</span> <span className="text-xs text-muted-foreground">· {relative(c.createdAt)}</span></p>
-                            <p className="text-sm text-foreground/85">{c.body}</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                  <EventCommunityPanel
+                    key={event.id}
+                    eventId={event.id}
+                    canManage={data.canManage}
+                    visibility={event.visibility}
+                    status={event.status}
+                  />
                 </CardContent>
               </Card>
 
