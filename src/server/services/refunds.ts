@@ -2,6 +2,7 @@ import { db } from '../../lib/db'
 import { errors } from '../api'
 import { postJournal, ensureOrgAccounts, ensurePlatformAccounts } from '../ledger'
 import { notifyUser } from './notify'
+import { physicalRefundReview } from '../souvenir-refund-policy'
 
 /**
  * Refunds & payouts.
@@ -60,6 +61,31 @@ export async function processRefund(refundCaseId: string, actorId: string) {
   // executing any of those would be fake or double money movement.
   if (!['REQUESTED', 'APPROVED'].includes(rc.status)) {
     throw errors.conflict(`This refund case is ${rc.status} — it can no longer be processed.`)
+  }
+
+  // Physical merchandise is NOT a refundable digital ticket. A refund after
+  // partial pickup can involve a real-world return, inspection and restock;
+  // refunding an uncollected SKU also requires entitlement revocation and stock
+  // restoration. Until those money/physical-fulfilment steps are implemented
+  // and provider-verified, route ALL souvenir-order refunds to a truthful
+  // manual finance case. This prevents the payment simulator (or a future
+  // provider adapter) from reversing funds while leaving paid stock/collection
+  // entitlements active. Ticket-only refunds retain the existing path.
+  const merchandise = await db.souvenirOrderItem.aggregate({
+    where: { orderId: rc.orderId }, _count: { _all: true }, _sum: { qty: true, collectedQty: true },
+  })
+  const reviewNote = physicalRefundReview({
+    lines: merchandise._count._all,
+    ordered: merchandise._sum.qty ?? 0,
+    collected: merchandise._sum.collectedQty ?? 0,
+  })
+  if (reviewNote) {
+    const moved = await db.refundCase.updateMany({
+      where: { id: rc.id, status: { in: ['REQUESTED', 'APPROVED'] } },
+      data: { status: 'MANUAL_TRACKED', resolutionNote: reviewNote },
+    })
+    if (!moved.count) throw errors.conflict('This refund case has already been handled.')
+    return { status: 'MANUAL_TRACKED' as const }
   }
 
   // Provider submission for full-order refunds (Hubtel mobile-money refunds).

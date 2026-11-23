@@ -1,6 +1,6 @@
 # iEventPlux — CI (Round 32)
 #
-# Two jobs:
+# Jobs:
 #   web    — lint + typecheck + the golden-path smoke suite against a REAL stack
 #            (Next dev server + embedded worker/realtime services + a PostgreSQL
 #            service container), exactly the commands that run in the dev sandbox.
@@ -65,6 +65,15 @@ jobs:
 
       - name: Security policy unit tests (payments, realtime, check-in and private KYC)
         run: bun test src/server/hubtel/security-policy.test.ts mini-services/realtime/room-authorization.test.ts src/portal/lib/checkin-policy.test.ts src/server/kyc-storage.test.ts src/server/kyc-requirements.test.ts
+
+      - name: Isolated merchandise QA database fail-closed destination checks
+        run: bun test scripts/merchandise-qa-db-guard.test.ts scripts/merchandise-qa-import-order.test.ts
+
+      - name: Souvenir QR, inventory, refund and physical return safety policies
+        run: bun test src/server/souvenir-policy.test.ts src/server/souvenir-refund-policy.test.ts src/server/souvenir-return-policy.test.ts src/portal/lib/souvenir-scan.test.ts
+
+      - name: Souvenir collection replay must preserve staff identity
+        run: bun test src/server/services/souvenir-collection.test.ts
 
       - name: Enterprise UI foundation (semantic controls, loading, labels and states)
         run: bun test src/components/ui/ui-foundation.test.tsx
@@ -320,6 +329,30 @@ jobs:
       - name: Read-only production smoke (no demo accounts or payment mutation)
         run: bun run prod:smoke
 
+      # Build once on the GitHub runner. This is a candidate artifact only:
+      # production deployment requires a separate reviewed, reconciled rollout.
+      - name: Package source-light standalone candidate with SHA256
+        run: |
+          set -euo pipefail
+          test -f .next/standalone/server.js
+          mkdir -p .next/standalone/.next
+          cp -a .next/static .next/standalone/.next/static
+          if test -d public; then cp -a public .next/standalone/public; fi
+          mkdir -p release-candidate
+          tar -C .next/standalone -czf release-candidate/ieventplux-standalone.tar.gz .
+          (cd release-candidate && sha256sum ieventplux-standalone.tar.gz > SHA256SUMS)
+          printf '%s\n' "$GITHUB_SHA" > release-candidate/SOURCE_SHA
+          test "$(cat release-candidate/SOURCE_SHA)" = "$GITHUB_SHA"
+          (cd release-candidate && sha256sum -c SHA256SUMS)
+
+      - name: Retain checksum-verified CI candidate (not auto-deployed)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ieventplux-standalone-${{ github.sha }}
+          path: release-candidate/
+          if-no-files-found: error
+          retention-days: 2
+
       - name: Upload production boot logs on failure
         if: failure()
         uses: actions/upload-artifact@v4
@@ -328,3 +361,68 @@ jobs:
           path: production.log
           if-no-files-found: ignore
           retention-days: 7
+
+  # Financial acceptance is isolated from the web smoke and production build
+  # jobs. It uses a fresh disposable database, not the live or smoke database.
+  merchandise-scratch-acceptance:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/ieventplux_merch_qa?schema=ieventplux_merch_qa_20261119
+      IEVENTPLUX_SOUVENIR_CHECKOUT_ENABLED: "1"
+      IEVENTPLUX_SOUVENIR_COLLECTION_ENABLED: "1"
+      APP_SECRET: ci-only-merch-acceptance-not-a-real-secret-0123456789
+      APP_URL: http://127.0.0.1:3000
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Install dependencies in ephemeral CI runner
+        run: bun install --frozen-lockfile
+      - name: Fail closed on database URL before any Prisma schema operation
+        run: bun -e "import { validateIsolatedMerchandiseQaUrl } from './scripts/merchandise-qa-db-guard'; validateIsolatedMerchandiseQaUrl()"
+      - name: Create disposable database and dedicated schema
+        run: |
+          PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -c 'CREATE DATABASE ieventplux_merch_qa'
+          PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d ieventplux_merch_qa -v ON_ERROR_STOP=1 -c 'CREATE SCHEMA ieventplux_merch_qa_20261119'
+      - name: Apply schema only to disposable QA database
+        run: bunx prisma db push
+      - name: Verify database identity and financial acceptance (simulated payments only)
+        run: |
+          bun scripts/merchandise-isolated-qa.ts
+          # HTTP acceptance needs a localhost-only Next server on the same
+          # disposable DB; no external staging or production host is contacted.
+          bunx next dev -p 3179 -H 127.0.0.1 > merchandise-qa-server.log 2>&1 &
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:3179/api/v1/health >/dev/null; then break; fi
+            if [ "$i" -eq 60 ]; then tail -80 merchandise-qa-server.log; exit 1; fi
+            sleep 2
+          done
+          bun scripts/merchandise-route-qa.ts
+          bun scripts/merchandise-scanner-route-qa.ts
+          bun scripts/merchandise-report-qa.ts
+          bun scripts/merchandise-report-route-qa.ts
+          bun scripts/souvenir-return-isolated-qa.ts
+      - name: Upload isolated acceptance server log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: merchandise-scratch-qa-log
+          path: merchandise-qa-server.log
+          if-no-files-found: ignore
+          retention-days: 5

@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { CheckCircle2, Clock, XCircle, AlertTriangle, Ticket, ChevronLeft, RefreshCw, CalendarPlus, RotateCw, HandCoins, Copy, Check } from 'lucide-react'
+import { CheckCircle2, Clock, XCircle, AlertTriangle, Ticket, ChevronLeft, RefreshCw, CalendarPlus, RotateCw, HandCoins, Copy, Check, ShoppingBag, QrCode } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -36,6 +36,7 @@ interface RefundCaseRow {
 }
 
 interface OrderPayload {
+  collectionQr?: { url: string; dataUrl: string } | null
   order: {
     reference: string
     status: string
@@ -53,6 +54,7 @@ interface OrderPayload {
     expiresAt?: string | null
     event: { id: string; title: string; slug: string; startsAt: string; endsAt: string; timezone: string; coverImageUrl?: string | null; venue?: { name: string; city?: string | null } | null; org: { name: string } }
     items: { id: string; qty: number; unitPriceMinor: number; lineTotalMinor: number; ticketType: { name: string; kind: string } }[]
+    souvenirItems: { id: string; qty: number; collectedQty: number; unitPriceMinor: number; lineTotalMinor: number; holdStatus: string; product: { name: string; variantLabel?: string | null; sku: string } }[]
     tickets: { id: string; code: string; status: string; ticketTypeId: string }[]
     payments: { id: string; status: string; provider: string; attemptNo: number; reference: string }[]
     refundCases: RefundCaseRow[]
@@ -278,6 +280,7 @@ export default function OrderView({ reference }: { reference: string }) {
           <div>
             <p className="mb-2 text-xs font-bold uppercase tracking-wide text-muted-foreground">Items</p>
             <div className="space-y-2">
+              {order.souvenirItems?.map((line) => <div key={line.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 rounded-xl bg-secondary/50 px-4 py-3 text-sm"><div className="min-w-0"><p className="font-medium"><ShoppingBag className="mr-1 inline size-4 text-primary" />{line.product.name}{line.product.variantLabel ? ` · ${line.product.variantLabel}` : ''} × {line.qty}</p><p className="text-xs text-muted-foreground">SKU {line.product.sku} · {line.collectedQty} collected, {Math.max(0,line.qty-line.collectedQty)} to collect</p></div><p className="font-semibold">{money(line.lineTotalMinor)}</p></div>)}
               {order.items.map((item) => (
                 <div key={item.id} className="flex items-center justify-between rounded-xl bg-secondary/50 px-4 py-3 text-sm">
                   <div>
@@ -310,6 +313,10 @@ export default function OrderView({ reference }: { reference: string }) {
                 <RefreshCw className="mr-1.5 h-4 w-4" /> Complete payment
               </Button>
             </div>
+          )}
+
+          {order.souvenirItems?.length > 0 && (
+            <Card className="rounded-2xl"><CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-base"><ShoppingBag className="size-4 text-primary" /> Souvenir collection receipt</CardTitle></CardHeader><CardContent className="space-y-3 text-sm"><p className="text-xs text-muted-foreground">Separate from your admission ticket. Present the QR below to authorized staff at the merchandise collection desk. Only confirmed paid purchases can be handed over.</p>{isPaid && data.collectionQr ? <div className="flex flex-col items-center gap-3 rounded-xl border p-4 text-center"><img src={data.collectionQr.dataUrl} className="size-56 max-w-full rounded-lg bg-white p-2" alt="Collection QR: open the paid souvenir receipt in the staff verification portal" /><p className="font-mono text-xs">RCPT-{order.reference}</p><a href={data.collectionQr.url} className="text-xs font-semibold text-primary underline">Open collection receipt</a><p className="text-[11px] text-muted-foreground">The QR opens a receipt lookup. Staff must sign in and confirm handover. It cannot authorize venue entry.</p></div> : <p role="status" className="rounded-lg bg-amber-500/10 p-3 text-xs">Collection QR is issued only after the payment provider confirms your payment and souvenir stock is secured.</p>}</CardContent></Card>
           )}
 
           {isPaid && ticketCount > 0 && (

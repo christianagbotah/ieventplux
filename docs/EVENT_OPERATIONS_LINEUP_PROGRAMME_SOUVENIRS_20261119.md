@@ -53,3 +53,67 @@ Design and implement as a separate end-to-end financial release, with tests befo
 - Programme document permission tests, signed-out access checks, absent file handling and upload type/size tests.
 - Mobile review of the new organizer editor and public lineup/catalogue at narrow widths remains a manual sign-off gate.
 - Real payment, merchandise QR collection and final enterprise feature completeness **remain outstanding** until Release B and subsequent roadmap phases pass their gates.
+
+### Release B expiry-sweep accounting note (20 November 2026)
+
+The expiry worker must increment its returned `released` count and queue an order for expiry only **after** the corresponding PostgreSQL transaction commits. A transaction callback can return successfully while COMMIT still fails (e.g. a serialization conflict). Counters maintained inside the callback would incorrectly report released inventory and could trigger a follow-up order transition after rollback. Both ticket and merchandise hold paths now record success only after `$transaction` resolves. This is defensive accounting, **not** a substitute for isolated PostgreSQL concurrency and late-payment tests; keep charging and collection disabled.
+
+### Release B expiry consistency guard (20 November 2026)
+
+The bounded expiry worker must not transition an order to `EXPIRED` while any ticket reservation or souvenir hold remains `ACTIVE`. The final order transition now conditionally requires both sets of active holds to be empty, alongside the existing payment-success and order-status checks. This avoids marking partially released mixed orders expired when the 500-line sweep limit is reached. PostgreSQL concurrency, late-provider-payment, and end-to-end refund testing remain required before activating merchandise checkout or pickup.
+
+### 20 November: duplicate successful payment review idempotency
+
+The fulfilment exception branch now serializes duplicate-success handling per order with a PostgreSQL transaction advisory lock and checks for an existing system refund case keyed by the excess payment attempt. A replay must not create another manual refund case or resend a review notification. This does **not** initiate a provider refund, and it does not establish production readiness. Acceptance still requires two simultaneous callbacks for the same attempt, two distinct successful attempts, a refunded-order race, and provider reconciliation on an isolated staging database. Charging and physical collection remain disabled.
+
+### Release B expiry recovery (20 November 2026)
+
+The bounded reservation sweep now also scans up to 500 overdue, unpaid orders with no active ticket or souvenir holds. This recovers stale orders whose last stock hold was released in a previous sweep but whose order-status transition was interrupted. Final `EXPIRED` updates still recheck payment success, status and absence of active holds atomically. This is not a substitute for isolated PostgreSQL concurrency, late-payment and refund reconciliation acceptance tests; merchandise checkout and pickup remain disabled.
+
+### 20 November 2026 — Isolated concurrency QA extension
+
+The isolated `scripts/merchandise-isolated-qa.ts` harness now includes two concurrent checkout attempts for the final unit of a synthetic SKU. It asserts exactly one accepted reservation, one rejected attempt, one active hold, and unchanged sold stock. The harness refuses to run unless `DATABASE_URL` selects `schema=ieventplux_merch_qa_20261119` and the isolated checkout flag is enabled. This is **not** a substitute for provider-backed payment/refund QA or a production activation gate. Run against a freshly migrated scratch schema and record the result before claiming database concurrency acceptance.
+
+### 20 November 2026 — concurrent payment replay QA coverage
+
+The isolated merchandise QA harness now issues two simultaneous fulfilment replays after the synthetic order has been paid, asserting both return `ALREADY_PAID`, exactly one paid invoice and one consumed merchandise line, and no ticket entitlement. This test must still be executed against a migrated isolated PostgreSQL schema; it does not validate real provider webhooks, signatures, reconciliation, or refunds. Live merchandise charging and handover remain disabled.
+
+### 20 November 2026 — competing final-unit collection QA
+
+The isolated merchandise QA harness now races two distinct collection action IDs against a paid synthetic one-unit SKU. It requires exactly one successful pickup, one collection audit record, one fulfilled stock unit, and no admission ticket. This is a **test scenario added, not a passing database test** until executed on the migrated scratch PostgreSQL schema. It does not replace real-device camera, staff authorization, provider reconciliation or refund QA. Live merchandise charging and collection stay disabled.
+
+### 20 November — isolated QA target hardening
+
+The merchandise concurrency harness now requires **all three**: the dedicated `ieventplux_merch_qa_20261119` schema, a database name explicitly containing `qa`, `test`, or `scratch` as a separate segment, and a loopback PostgreSQL host. This protects against accidentally running synthetic financial writes in the production database merely because someone created a QA-named schema there. Prepare a separate disposable local database, apply additive migrations only there, and run the concurrency suite before claiming it passed. No live money or fulfilment activation is authorized by this guard.
+
+### 20 November — runtime PostgreSQL identity verification
+
+The isolated concurrency harness now queries `current_database()` and `current_schema()` **before inserting fixtures**, asserting that the actual connected session uses a QA/test/scratch-named database and exactly `ieventplux_merch_qa_20261119`. This supplements the URL host/name/schema checks and catches connection-routing or Prisma schema-selection mismatches. It is not a proof that the database is disposable or that the concurrency suite has passed; operators must independently provision a clean scratch database, verify its identity, apply migrations only there and record test results. Merchandise charging and collection remain disabled.
+
+### Release B QA hardening — 20 November 2026 (competing pickup outcome)
+
+The isolated PostgreSQL final-unit pickup race now asserts **one committed collection and one rejected competing request**, not merely one successful collection. This prevents an implementation from silently acknowledging a second, distinct staff action while leaving the stock and audit counters unchanged. The existing single collection row, stock count, and ticket/merchandise separation assertions remain mandatory. This is an additional test assertion only; it does not constitute executed scratch-database acceptance, payment-provider reconciliation, mobile camera sign-off, or permission to enable charging/fulfilment.
+
+### Isolated expiry QA fixture correction (21 November 2026)
+
+The synthetic expiry test now backdates both the parent order and its inventory-reservation deadlines. The expiry worker selects expired reservation records, so changing only the order timestamp did not actually exercise the intended release path. This fixture change is **not** evidence that scratch-PostgreSQL concurrency, real payment or refund QA has passed; merchandise charging and collection remain gated.
+
+### 21 November 2026 — disposable PostgreSQL concurrency acceptance execution
+
+Executed `scripts/merchandise-isolated-qa.ts` against a newly initialized, loopback-only PostgreSQL 18 cluster on port 55589, with database `ieventplux_merch_qa_scratch` and schema `ieventplux_merch_qa_20261119`. Prisma schema was applied **only to this disposable scratch database**. All harness assertions passed (exit 0), covering final-SKU competing holds, concurrent payment callback replay, partial and competing final-unit pickup, combined ticket/merchandise entitlement separation, free RSVP, reservation expiry and late-payment refund-review routing. The simulated `SIMULATOR` payment is **not** real gateway verification. No production migration or charge was made. Remaining gates: authenticated staging HTTP checkout, real provider settlement/refund reconciliation, device-camera QR and role/security acceptance, isolated optimized build and production backup verification before any rollout. Merchandise charging and fulfilment remain disabled.
+
+### 21 November 2026 — authenticated QA database identity gate
+
+The four HTTP/reporting merchandise QA scripts now invoke `requireIsolatedMerchandiseQaDatabase()` before creating synthetic users or sessions. This checks the configured schema, a QA/test/scratch database name, loopback host, and the **actual** PostgreSQL `current_database()` and `current_schema()`. The checks fail closed before fixture writes; they do not substitute for authenticated checkout, provider reconciliation, refund and smartphone-camera acceptance. Live merchandise charging and collection remain disabled.
+
+### 21 November 2026 — equal-length QR forgery regression
+
+The authenticated merchandise handover HTTP QA now checks a forged QR token with a **valid token length and format but a changed HMAC character**, in addition to the existing malformed/extended-token test. The staff endpoint must return 404 without revealing a receipt. This assertion has been added to the test harness; it is **not** evidence that authenticated staging or physical smartphone-camera acceptance has passed. Keep charging and collection disabled until the full payment, refund and QR release gates pass.
+
+- 2026-11-21: The isolated merchandise QA database guard additionally rejects non-PostgreSQL URL schemes and URL-level host overrides before opening synthetic test fixtures; this is a defence-in-depth check, not provider-backed staging certification.
+
+- 2026-11-21 QA isolation hardening: reject duplicate PostgreSQL `schema` parameters and connection `options` overrides before synthetic fixtures can be created. This is a test guard only, not evidence of payment-provider staging acceptance.
+
+### 21 November — Unicode QR credential hardening
+
+Staff souvenir QR parsing now rejects invisible Unicode format characters and bidirectional controls (including zero-width, BOM and direction override/isolate characters) before URL parsing or printed-reference normalization. This prevents visually deceptive scanned credentials from being silently accepted. A dedicated regression test covers raw tokens, HTTPS collection links and printed references. This is parser hardening only; it does not establish authenticated collection, database replay safety, provider settlement or production activation readiness. Keep merchandise charging and fulfilment disabled.

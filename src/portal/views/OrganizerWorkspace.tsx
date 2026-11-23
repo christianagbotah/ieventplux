@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { connectRealtime } from '../realtime'
 import {
-  LayoutDashboard, CalendarPlus, CalendarClock, Users, Ticket, Radio, Megaphone, MessageSquare, Wallet, UserCog, CreditCard, Settings,
+  LayoutDashboard, CalendarPlus, CalendarClock, Users, Ticket, ShoppingBag, Radio, Megaphone, MessageSquare, Wallet, UserCog, CreditCard, Settings,
   ChevronLeft, ChevronRight, ChevronDown, Plus, Loader2, Camera, ScanLine, Search, Play, Square, RefreshCw, KeyRound, Pause, PlayCircle, Trash2, FileText, ShieldAlert, TrendingUp, Repeat, Activity, Vote, HandCoins, Sparkles, Download, Upload, CheckCircle2, Eye, EyeOff, Flag, History, Clock, MapPin, Pencil, Share2, X, AlertCircle, FilterX, CalendarRange,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -34,6 +34,7 @@ import { WorkspaceMetric } from '../components/WorkspaceMetric'
 import { AdmissionOperationsPanel } from '../components/AdmissionOperationsPanel'
 import { scannerSessionKey } from '../lib/scanner-session-local'
 import { GrowthCommandCenter } from '../components/GrowthCommandCenter'
+import { MerchandiseReconciliationView } from '../components/MerchandiseReconciliationView'
 import { GroupMeetingsManager } from '../components/GroupMeetingsManager'
 import { FieldError, FieldHelp } from '@/components/ui/field'
 import { eventDraftIsReady, validateEventDraftTiming } from '../lib/event-editor-validation'
@@ -69,6 +70,7 @@ const NAV = [
   { key: 'growth', group: 'Overview', label: 'Growth & AI', icon: Sparkles },
   { key: 'events', group: 'Events & tickets', label: 'Events', icon: CalendarPlus },
   { key: 'orders', group: 'Events & tickets', label: 'Orders', icon: Ticket },
+  { key: 'merchandise', group: 'Events & tickets', label: 'Merchandise & Pickups', icon: ShoppingBag },
   { key: 'attendees', group: 'Events & tickets', label: 'Attendees & Check-in', icon: Users },
   { key: 'studio', group: 'Production', label: 'Streaming Studio', icon: Radio },
   { key: 'meetings', group: 'Production', label: 'Group Meetings', icon: Users },
@@ -122,10 +124,12 @@ export default function OrganizerWorkspace({ route }: { route: Route }) {
   const activeOrg = memberships.find((m) => m.orgId === activeOrgId) ?? memberships[0]
   const canManageEvents = ['OWNER', 'ADMIN', 'EVENT_MANAGER'].includes(activeOrg.role)
   const canViewReports = ['OWNER', 'ADMIN', 'FINANCE', 'ANALYST'].includes(activeOrg.role)
+  const canViewMerchandise = ['OWNER', 'ADMIN', 'EVENT_MANAGER', 'FINANCE', 'ANALYST'].includes(activeOrg.role)
   const canViewGrowth = [...['OWNER', 'ADMIN', 'FINANCE', 'ANALYST'], 'EVENT_MANAGER'].includes(activeOrg.role)
   const visibleNav = NAV.filter((item) => {
     if (['insights', 'finance'].includes(item.key) && !canViewReports) return false
     if (item.key === 'growth' && !canViewGrowth) return false
+    if (item.key === 'merchandise' && !canViewMerchandise) return false
     if (item.key === 'meetings' && !canManageEvents) return false
     return true
   })
@@ -241,6 +245,7 @@ export default function OrganizerWorkspace({ route }: { route: Route }) {
           {section === 'growth' && (canViewGrowth ? <div className="space-y-5"><GrowthCommandCenter orgId={activeOrg.orgId} canCreate={canManageEvents} />{canViewReports && <AiAdvisorCard orgId={activeOrg.orgId} />}</div> : <RoleRestricted />)}
           {section === 'events' && <EventsManager orgId={activeOrg.orgId} role={activeOrg.role} autoNew={route.query.get('new') === '1'} />}
           {section === 'orders' && <OrdersView orgId={activeOrg.orgId} />}
+          {section === 'merchandise' && (canViewMerchandise ? <MerchandiseReconciliationView key={activeOrg.orgId} orgId={activeOrg.orgId} role={activeOrg.role} /> : <RoleRestricted />)}
           {section === 'attendees' && <AttendeesView orgId={activeOrg.orgId} initialEventId={route.query.get('eventId') ?? ''} />}
           {section === 'studio' && <StudioView orgId={activeOrg.orgId} />}
           {section === 'meetings' && (canManageEvents ? <GroupMeetingsManager orgId={activeOrg.orgId} /> : <RoleRestricted />)}
@@ -2202,6 +2207,9 @@ function AttendeesView({ orgId, initialEventId }: { orgId: string; initialEventI
           <Button variant={scanMode ? 'default' : 'outline'} disabled={!eventId || eventsLoading || !queueReady} className="h-11 rounded-full" onClick={() => setScanMode((s) => !s)}>
             <ScanLine className="mr-1.5 h-4 w-4" /> {scanMode ? 'Close scanner' : 'Scan tickets'}
           </Button>
+          <Button variant="outline" className="h-11 rounded-full" onClick={() => navigate('/collect')}>
+            <ShoppingBag className="mr-1.5 h-4 w-4" /> Scan souvenirs
+          </Button>
           <Button variant="outline" size="icon" className="h-11 w-11 rounded-full" aria-label="Refresh attendee list and admission monitor" disabled={!eventId} onClick={() => { void refresh(); setMonitorRevision((current) => current + 1) }}>
             <RefreshCw className="h-4 w-4" aria-hidden />
           </Button>
@@ -2937,7 +2945,7 @@ function FinanceView({ orgId, role }: { orgId: string; role: string }) {
   const [data, setData] = useState<{
     summary: { grossSalesMinor: number; platformFeesMinor: number; netSalesMinor: number; pendingSettlementMinor: number; settlementHoldsMinor: number; availablePayoutMinor: number; payoutsInFlightMinor: number; payoutsCompletedMinor: number }
     journals: { id: string; memo: string; refType: string; createdAt: string; entries: { direction: string; amountMinor: number; account: { code: string; type: string; orgId?: string | null } }[] }[]
-    refundCases: { id: string; type: string; status: string; amountMinor: number; reason: string; resolutionNote?: string | null; createdAt: string; requesterIsStaff: boolean; order: { reference: string; status: string; event: { title: string } }; requester: { id: string; displayName: string; email: string } }[]
+    refundCases: { id: string; type: string; status: string; amountMinor: number; reason: string; resolutionNote?: string | null; createdAt: string; createdByKind: 'USER' | 'SYSTEM'; requesterIsStaff: boolean; order: { reference: string; status: string; event: { title: string } }; requester: { id: string; displayName: string; email: string } | null }[]
   } | null>(null)
   const [payouts, setPayouts] = useState<{ id: string; amountMinor: number; status: string; createdAt: string; failureReason?: string | null }[] | null>(null)
   const [payoutForm, setPayoutForm] = useState({ amount: '', momo: '', name: '' })
@@ -3104,7 +3112,7 @@ function FinanceView({ orgId, role }: { orgId: string; role: string }) {
                     <span className="font-mono">{rc.order.reference}</span> · {money(rc.amountMinor)} · {relative(rc.createdAt)}
                   </p>
                   <p className="mt-1">
-                    <span className="font-medium">{rc.requesterIsStaff ? 'Opened by staff' : 'Buyer request'}</span> · {rc.requester.displayName} — “{rc.reason}”
+                    <span className="font-medium">{rc.createdByKind === 'SYSTEM' ? 'Automatic finance review' : rc.requesterIsStaff ? 'Opened by staff' : 'Buyer request'}</span> · {rc.requester?.displayName ?? 'iEventPlux system'} — “{rc.reason}”
                   </p>
                   {rc.status === 'APPROVED' && <p className="mt-1 text-primary">Approved — the platform finance desk executes the money reversal.</p>}
                   {rc.status === 'REJECTED' && rc.resolutionNote && <p className="mt-1 text-amber-700 dark:text-amber-400">Declined: “{rc.resolutionNote}”</p>}

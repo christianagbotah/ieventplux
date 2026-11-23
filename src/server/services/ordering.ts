@@ -4,6 +4,8 @@ import { orderReference } from '../ids'
 import { activeFeeVersion, computePlatformFee } from '../fees'
 import { getSetting } from '../settings'
 import { checkoutLinePrice, normalizeCheckoutLines } from '../checkout-policy'
+import { normalizeSouvenirLines, souvenirCheckoutEnabled } from '../souvenir-policy'
+import { compareInventoryIds } from '../souvenir-checkout-policy'
 import { supportedTicketCheckoutCurrency } from '../paid-currency-policy'
 
 /**
@@ -23,6 +25,7 @@ export interface CreateOrderInput {
   buyerPhone?: string | null
   discountCode?: string | null
   items: { ticketTypeId: string; qty: number }[]
+  souvenirs?: { productId: string; qty: number }[]
 }
 
 export interface CreateOrderResult {
@@ -34,9 +37,12 @@ export interface CreateOrderResult {
 }
 
 export async function createOrder(input: CreateOrderInput): Promise<CreateOrderResult> {
-  const lines = normalizeCheckoutLines(input.items)
+  const souvenirSelections = normalizeSouvenirLines(input.souvenirs ?? [])
+  if (souvenirSelections.length && !souvenirCheckoutEnabled()) throw errors.unavailable('SOUVENIR_CHECKOUT_DISABLED', 'Online souvenir ordering is not yet open for this event.')
+  const lines = input.items.length ? normalizeCheckoutLines(input.items) : []
+  if (!lines.length && !souvenirSelections.length) throw errors.badRequest('Choose at least one ticket or souvenir.')
 
-  const event = await db.event.findUnique({ where: { id: input.eventId }, include: { ticketTypes: { where: { active: true } } } })
+  const event = await db.event.findUnique({ where: { id: input.eventId }, include: { ticketTypes: { where: { active: true } }, souvenirs: { where: { active: true } }, org: { select: { status: true, deletedAt: true } } } })
   if (!event) throw errors.notFound('Event not found.')
   if (!['PUBLISHED', 'LIVE', 'POSTPONED'].includes(event.status)) throw errors.conflict('This event is not open for bookings.')
   if (event.deletedAt) throw errors.notFound('Event not found.')
@@ -65,14 +71,30 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
     validated.push({ ticketTypeId: tt.id, qty, unitPriceMinor: unit, lineTotalMinor, discountMinor, groupMinQty: tt.groupMinQty, groupPctOff: tt.groupPctOff })
   }
 
+  const ticketSubtotal = subtotal
+  const merchLines: { productId: string; qty: number; unitPriceMinor: number; lineTotalMinor: number }[] = []
+  if (souvenirSelections.length && (event.org.deletedAt || event.org.status !== 'ACTIVE')) {
+    throw errors.forbidden('Souvenir sales require an approved, active organizer.')
+  }
+  for (const selection of souvenirSelections) {
+    const product = event.souvenirs.find((row) => row.id === selection.productId)
+    if (!product || product.currency !== 'GHS') throw errors.badRequest('This souvenir is unavailable for checkout.')
+    if (product.priceMinor <= 0) throw errors.conflict('This souvenir is not configured for paid sales.')
+    const lineTotalMinor = product.priceMinor * selection.qty
+    if (!Number.isSafeInteger(lineTotalMinor) || subtotal + lineTotalMinor > 2_000_000_000) throw errors.badRequest('Order total exceeds the maximum.')
+    subtotal += lineTotalMinor
+    merchLines.push({ productId: product.id, qty: selection.qty, unitPriceMinor: product.priceMinor, lineTotalMinor })
+  }
+
+  // Promotional codes are defined for ticket sales and must not discount physical stock.
   // Discount code (single code per order)
   let orderDiscount = 0
   let appliedCode: string | null = null
   if (input.discountCode) {
     const dc = await db.discountCode.findUnique({ where: { eventId_code: { eventId: event.id, code: input.discountCode.toUpperCase() } } })
-    if (dc && dc.active && (!dc.expiresAt || dc.expiresAt > now) && dc.usedCount < dc.maxUses && subtotal > 0) {
-      if (dc.pctOff) orderDiscount = Math.round((subtotal * dc.pctOff) / 100)
-      else if (dc.amountOffMinor) orderDiscount = Math.min(dc.amountOffMinor, subtotal)
+    if (dc && dc.active && (!dc.expiresAt || dc.expiresAt > now) && dc.usedCount < dc.maxUses && ticketSubtotal > 0) {
+      if (dc.pctOff) orderDiscount = Math.round((ticketSubtotal * dc.pctOff) / 100)
+      else if (dc.amountOffMinor) orderDiscount = Math.min(dc.amountOffMinor, ticketSubtotal)
       appliedCode = dc.code
     } else {
       throw errors.badRequest('This discount code is not valid.')
@@ -87,17 +109,30 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
 
   // Consistent ticket-type lock ordering avoids PostgreSQL deadlocks when
   // multiple buyers select the same tiers in a different visual order.
-  validated.sort((a, b) => a.ticketTypeId.localeCompare(b.ticketTypeId))
+  validated.sort((a, b) => compareInventoryIds(a.ticketTypeId, b.ticketTypeId))
+  merchLines.sort((a, b) => compareInventoryIds(a.productId, b.productId))
 
   const order = await db.$transaction(async (tx) => {
     // Lock identity to prevent two checkouts for the same buyer from both
     // reading the old per-buyer total and reserving past the configured cap.
     if (input.userId) {
+      // Return a numeric value; Prisma cannot deserialize PostgreSQL void.
       await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtext(${event.id}), hashtext(${input.userId}))`
     }
     const currentEvent = await tx.event.findUnique({ where: { id: event.id }, select: { status: true, deletedAt: true } })
     if (!currentEvent || currentEvent.deletedAt || !['PUBLISHED', 'LIVE', 'POSTPONED'].includes(currentEvent.status)) {
       throw errors.conflict('This event is no longer accepting bookings.')
+    }
+    // The organizer may have been suspended after the initial catalogue read.
+    // Revalidate its approval inside the reservation transaction before
+    // claiming any physical stock; the outer read is only a preview.
+    if (merchLines.length) {
+      const organizer = await tx.organization.findUnique({
+        where: { id: event.orgId }, select: { status: true, deletedAt: true },
+      })
+      if (!organizer || organizer.deletedAt || organizer.status !== 'ACTIVE') {
+        throw errors.forbidden('Souvenir sales require an approved, active organizer.')
+      }
     }
     const claimAt = new Date()
     for (const item of validated) {
@@ -141,6 +176,15 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
       `
       if (claimed !== 1) throw errors.conflict(`Ticket availability or pricing changed for ${tt.name}. Refresh the page and try again.`)
     }
+    for (const merch of merchLines) {
+      const reserved = await tx.$executeRaw`
+        UPDATE "EventSouvenirProduct" SET "stockReserved" = "stockReserved" + ${merch.qty}
+        WHERE "id" = ${merch.productId} AND "eventId" = ${event.id}
+          AND "active" = TRUE AND "priceMinor" = ${merch.unitPriceMinor}
+          AND "stockTotal" >= "stockSold" + "stockReserved" + ${merch.qty}
+      `
+      if (reserved !== 1) throw errors.conflict('Souvenir availability or pricing has changed. Refresh before ordering.')
+    }
     const created = await tx.order.create({
       data: {
         reference,
@@ -163,6 +207,10 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
         expiresAt,
       },
     })
+    for (const merch of merchLines) {
+      await tx.souvenirOrderItem.create({ data: { orderId: created.id, productId: merch.productId,
+        qty: merch.qty, unitPriceMinor: merch.unitPriceMinor, lineTotalMinor: merch.lineTotalMinor, holdStatus: 'ACTIVE' } })
+    }
     for (const item of validated) {
       await tx.orderItem.create({
         data: {
@@ -187,19 +235,79 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
 /** Release expired reservations and expire stale orders (worker sweep). */
 export async function releaseExpiredReservations(): Promise<{ released: number; ordersExpired: number }> {
   const now = new Date()
-  const expired = await db.inventoryReservation.findMany({ where: { status: 'ACTIVE', expiresAt: { lt: now } }, include: { order: true } })
+  const expired = await db.inventoryReservation.findMany({
+    where: { status: 'ACTIVE', expiresAt: { lt: now } },
+    include: { order: true },
+    orderBy: [{ expiresAt: 'asc' }, { id: 'asc' }],
+    take: 500,
+  })
   let released = 0
   const orderIds = new Set<string>()
   for (const res of expired) {
-    await db.$transaction(async (tx) => {
-      const fresh = await tx.inventoryReservation.findUnique({ where: { id: res.id } })
+    const didRelease = await db.$transaction(async (tx) => {
+      const fresh = await tx.inventoryReservation.findUnique({ where: { id: res.id },
+        include: { order: { select: { status: true, payments: { select: { status: true } } } } },
+      })
       if (!fresh || fresh.status !== 'ACTIVE' || fresh.expiresAt > new Date()) return
-      await tx.inventoryReservation.update({ where: { id: res.id }, data: { status: 'EXPIRED', releasedAt: now } })
-      await tx.ticketType.update({ where: { id: res.ticketTypeId }, data: { reservedCount: { decrement: fresh.qty } } })
-      orderIds.add(res.orderId)
-      released += 1
+      if (!['DRAFT', 'PENDING_PAYMENT', 'EXPIRED', 'CANCELLED'].includes(fresh.order.status) ||
+          fresh.order.payments.some((attempt) => attempt.status === 'SUCCESS')) return
+      const changed = await tx.inventoryReservation.updateMany({
+        where: { id: res.id, status: 'ACTIVE', expiresAt: { lt: new Date() } },
+        data: { status: 'EXPIRED', releasedAt: now },
+      })
+      if (!changed.count) return
+      // Keep ticket reservations consistent with merchandise holds: never
+      // release a reservation if its counter has already drifted below zero.
+      // A failed conditional update rolls back the reservation status change.
+      const ticketStock = await tx.ticketType.updateMany({
+        where: { id: res.ticketTypeId, reservedCount: { gte: fresh.qty } },
+        data: { reservedCount: { decrement: fresh.qty } },
+      })
+      if (ticketStock.count !== 1) throw errors.conflict('Ticket reserved stock needs reconciliation before expiry release.')
+      return true
     })
+    // Only count committed transactions; callback success precedes COMMIT.
+    if (didRelease) { orderIds.add(res.orderId); released += 1 }
   }
+  // A merchandise-only checkout has no ticket InventoryReservation. Release
+  // overdue stock via line-level holds; never expire a confirmed or disputed
+  // payment. Conditional row updates keep expiry and fulfilment idempotent.
+  const expiredSouvenirs = await db.souvenirOrderItem.findMany({
+    where: { holdStatus: 'ACTIVE', order: { expiresAt: { lt: now }, status: { in: ['DRAFT', 'PENDING_PAYMENT', 'EXPIRED', 'CANCELLED'] } } },
+    select: { id: true, orderId: true }, orderBy: [{ order: { expiresAt: 'asc' } }, { id: 'asc' }], take: 500,
+  })
+  for (const line of expiredSouvenirs) {
+    const didRelease = await db.$transaction(async (tx) => {
+      const order = await tx.order.findUnique({ where: { id: line.orderId }, include: { payments: { select: { status: true } } } })
+      if (!order || !order.expiresAt || order.expiresAt > new Date() || !['DRAFT', 'PENDING_PAYMENT', 'EXPIRED', 'CANCELLED'].includes(order.status) || order.payments.some((payment) => payment.status === 'SUCCESS')) return
+      const updated = await tx.souvenirOrderItem.updateMany({ where: { id: line.id, holdStatus: 'ACTIVE' }, data: { holdStatus: 'RELEASED' } })
+      if (!updated.count) return
+      const item = await tx.souvenirOrderItem.findUniqueOrThrow({ where: { id: line.id } })
+      // A corrupt or concurrently reconciled counter must never become negative.
+      // Throwing also rolls back the hold release in this same transaction so
+      // operations can investigate without losing the reservation evidence.
+      const stock = await tx.eventSouvenirProduct.updateMany({
+        where: { id: item.productId, stockReserved: { gte: item.qty } },
+        data: { stockReserved: { decrement: item.qty } },
+      })
+      if (stock.count !== 1) throw errors.conflict('Souvenir reserved stock needs reconciliation before expiry release.')
+      return true
+    })
+    if (didRelease) { orderIds.add(line.orderId); released += 1 }
+  }
+  // Recover orders whose holds were released by an earlier sweep (or whose
+  // final status transition was interrupted). A sweep that finds zero ACTIVE
+  // lines must still eventually expire the stale order. Keep the scan bounded.
+  const strandedOrders = await db.order.findMany({
+    where: {
+      status: { in: ['DRAFT', 'PENDING_PAYMENT'] }, expiresAt: { lt: now },
+      payments: { none: { status: 'SUCCESS' } },
+      reservations: { none: { status: 'ACTIVE' } },
+      souvenirItems: { none: { holdStatus: 'ACTIVE' } },
+    },
+    select: { id: true }, orderBy: [{ expiresAt: 'asc' }, { id: 'asc' }], take: 500,
+  })
+  for (const order of strandedOrders) orderIds.add(order.id)
   let ordersExpired = 0
   for (const orderId of orderIds) {
     const order = await db.order.findUnique({ where: { id: orderId }, include: { reservations: true, payments: true } })
@@ -207,8 +315,20 @@ export async function releaseExpiredReservations(): Promise<{ released: number; 
     if (['DRAFT', 'PENDING_PAYMENT'].includes(order.status) && order.expiresAt && order.expiresAt < now) {
       const hasSuccess = order.payments.some((p) => p.status === 'SUCCESS')
       if (!hasSuccess) {
-        await db.order.update({ where: { id: order.id }, data: { status: 'EXPIRED' } })
-        ordersExpired += 1
+        // Never overwrite a concurrent successful payment/fulfilment. The
+        // sweep's earlier read can be stale after a provider callback.
+        const transition = await db.order.updateMany({
+          where: { id: order.id, status: { in: ['DRAFT', 'PENDING_PAYMENT'] }, expiresAt: { lt: new Date() },
+            payments: { none: { status: 'SUCCESS' } },
+            // An order may have more than 500 reservation lines. Do not mark
+            // it EXPIRED while any ticket or souvenir stock is still held;
+            // later bounded sweeps must release the remaining lines first.
+            reservations: { none: { status: 'ACTIVE' } },
+            souvenirItems: { none: { holdStatus: 'ACTIVE' } },
+          },
+          data: { status: 'EXPIRED' },
+        })
+        ordersExpired += transition.count
       }
     }
   }
