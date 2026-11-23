@@ -1,5 +1,13 @@
 # iEventPlux Mobile (Expo / React Native)
 
+
+> Native social parity (2026-11-23): the Event Detail screen now opens native
+> Community conversations and Meet fellow attendees pages. These call the same
+> server APIs used on web, with thread posting/replies, opt-in network profiles,
+> follows, reports and blocks. No private attendee directory is stored offline.
+> Source/JS bundle validation does NOT mean signed Android/iOS binaries have
+> been installed or tested on real devices.
+
 > Native meeting milestone (2026-11-23): A LiveKit/WebRTC group-call client
 > now exists in source for custom Expo development builds, not Expo Go. It
 > uses the existing meeting admission token endpoint and supports camera/mic,

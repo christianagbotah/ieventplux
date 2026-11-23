@@ -30,6 +30,8 @@ import MyTicketsScreen from './src/screens/MyTicketsScreen'
 import CheckinScreen from './src/screens/CheckinScreen'
 import BroadcastScreen from './src/screens/BroadcastScreen'
 import MeetingAccessScreen from './src/screens/MeetingAccessScreen'
+import EventCommunityScreen from './src/screens/EventCommunityScreen'
+import EventNetworkScreen from './src/screens/EventNetworkScreen'
 
 /**
  * Keep the native WebRTC module out of Expo Go startup. Expo Go has no LiveKit
@@ -107,6 +109,8 @@ function AppRoutes() {
       <Stack.Screen name="Checkin" component={CheckinScreen} options={{ title: 'Check-in scanner' }} />
       <Stack.Screen name="Broadcast" component={BroadcastScreen} options={{ title: 'Live broadcast' }} />
       <Stack.Screen name="MeetingAccess" component={MeetingAccessScreen} options={{ title: 'Meeting & device access' }} />
+      <Stack.Screen name="EventCommunity" component={EventCommunityScreen} options={{ title: 'Event conversations' }} />
+      <Stack.Screen name="EventNetwork" component={EventNetworkScreen} options={{ title: 'Meet attendees' }} />
       <Stack.Screen name="NativeMeeting" component={NativeMeetingLoader} options={{ headerShown: false, gestureEnabled: false }} />
     </Stack.Navigator>
   )
