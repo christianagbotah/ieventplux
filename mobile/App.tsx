@@ -9,17 +9,20 @@
  *    This is the documented hosted-checkout return path; payment state itself
  *    is only ever confirmed server-side via provider callbacks.
  *
- * This is a SOURCE SCAFFOLD — it has not been compiled or device-tested in the
+ * Native LiveKit is implemented in source for custom development builds.
+ * This work has not passed physical-device certification; previously,
  * environment that produced it (no node_modules / lockfile are committed).
  * See mobile/README.md and mobile/docs/NATIVE_MODULES.md.
  */
 
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native'
+import Constants, { ExecutionEnvironment } from 'expo-constants'
+import { lazy, Suspense } from 'react'
 import { NavigationContainer, type LinkingOptions } from '@react-navigation/native'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
 import { SessionProvider, useSession } from './src/store/session'
 import { theme } from './src/theme'
-import type { RootStackParamList } from './src/navigation'
+import type { RootStackParamList, NativeMeetingScreenProps } from './src/navigation'
 import LoginScreen from './src/screens/LoginScreen'
 import DiscoverScreen from './src/screens/DiscoverScreen'
 import EventDetailScreen from './src/screens/EventDetailScreen'
@@ -27,6 +30,26 @@ import MyTicketsScreen from './src/screens/MyTicketsScreen'
 import CheckinScreen from './src/screens/CheckinScreen'
 import BroadcastScreen from './src/screens/BroadcastScreen'
 import MeetingAccessScreen from './src/screens/MeetingAccessScreen'
+
+/**
+ * Keep the native WebRTC module out of Expo Go startup. Expo Go has no LiveKit
+ * native bindings and can still use QR scanning and the system-browser fallback.
+ * The real room is loaded only after a user opts to join in a custom build.
+ */
+function NativeMeetingLoader(props: NativeMeetingScreenProps) {
+  if (Constants.executionEnvironment === ExecutionEnvironment.StoreClient) {
+    return <View style={styles.splash}><Text style={styles.splashError}>
+      Native video meetings require an iEventPlux development build. Return to
+      Meeting access to use the browser meeting instead.
+    </Text></View>
+  }
+  return <Suspense fallback={<View style={styles.splash}>
+    <ActivityIndicator color={theme.colors.primary} />
+    <Text style={styles.splashError}>Loading secure native meeting…</Text>
+  </View>}><NativeMeeting {...props} /></Suspense>
+}
+
+const NativeMeeting = lazy(() => import('./src/screens/NativeMeetingRoom'))
 
 const Stack = createNativeStackNavigator<RootStackParamList>()
 
@@ -84,6 +107,7 @@ function AppRoutes() {
       <Stack.Screen name="Checkin" component={CheckinScreen} options={{ title: 'Check-in scanner' }} />
       <Stack.Screen name="Broadcast" component={BroadcastScreen} options={{ title: 'Live broadcast' }} />
       <Stack.Screen name="MeetingAccess" component={MeetingAccessScreen} options={{ title: 'Meeting & device access' }} />
+      <Stack.Screen name="NativeMeeting" component={NativeMeetingLoader} options={{ headerShown: false, gestureEnabled: false }} />
     </Stack.Navigator>
   )
 }

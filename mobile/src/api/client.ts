@@ -515,6 +515,13 @@ export const api = {
       request<EventDetailResponse>('GET', `/events/${encodeURIComponent(idOrSlug)}`),
   },
   meetings: {
+    detail: (id: string) => request<{
+      meeting: { id: string; title: string; status: string; mediaEngine: string }
+      access: { canJoin: boolean; canManage: boolean }
+    }>('GET', '/meetings/' + encodeURIComponent(id) + '/detail'),
+    joinCredentials: (id: string) => request<{ token: string; serverUrl: string }>(
+      'POST', '/meetings/' + encodeURIComponent(id) + '/sfu-token', {},
+    ),
     forEvent: (eventId: string) => request<{
       enabled: boolean
       canManage: boolean

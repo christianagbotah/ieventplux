@@ -5,12 +5,16 @@
   "main": "index.ts",
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
     "web": "expo start --web",
     "test": "bun test"
   },
   "dependencies": {
+    "@config-plugins/react-native-webrtc": "10.0.0",
+    "@livekit/react-native": "3.2.0",
+    "@livekit/react-native-expo-plugin": "1.2.0",
+    "@livekit/react-native-webrtc": "150.2.0",
     "@react-native-async-storage/async-storage": "1.23.1",
     "@react-native-community/netinfo": "11.4.1",
     "@react-navigation/native": "^7.0.0",
@@ -18,7 +22,9 @@
     "expo": "~52.0.0",
     "expo-camera": "~16.0.18",
     "expo-constants": "~17.0.8",
+    "expo-dev-client": "5.0.20",
     "expo-secure-store": "~14.0.1",
+    "livekit-client": "2.25.0",
     "react": "18.3.1",
     "react-native": "0.76.9",
     "react-native-qrcode-svg": "^6.3.54",

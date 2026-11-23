@@ -1,6 +1,12 @@
 # iEventPlux Mobile (Expo / React Native)
 
-Source scaffold for the iEventPlux attendee + check-in app. Talks to the same
+> Native meeting milestone (2026-11-23): A LiveKit/WebRTC group-call client
+> now exists in source for custom Expo development builds, not Expo Go. It
+> uses the existing meeting admission token endpoint and supports camera/mic,
+> listen-only, paginated video tiles and periodic admission validation.
+> Signed APK/IPA binaries and physical-device UAT are still outstanding.
+
+Source for the iEventPlux attendee, check-in and meeting app. Talks to the same
 v1 REST API as the web app (`/api/v1` on the iEventPlux Next.js deployment).
 
 > **Honest status — updated 2026-11-14 (round 30)**
@@ -101,7 +107,7 @@ No in-app-purchase code exists in this scaffold; nothing attempts to sell
 digital-only goods inside the app. When store accounts exist, add
 `react-native-iap` (development build) and gate the flows above.
 
-## What remains (honest)
+## Remaining device and release gates
 
 - Not device-tested here; first `expo start` on real hardware may surface runtime-only issues.
 - Broadcast viewing renders the labelled SYNTHETIC stream (the platform has no
