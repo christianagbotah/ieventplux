@@ -34,3 +34,16 @@ provider payment or refund acceptance run.
 ### 23 November — isolated QA import-order hardening
 
 The scratch-PostgreSQL merchandise harness now imports Prisma and database-backed ordering, fulfilment and collection services **only after** the QA connection guard verifies the loopback scratch database and exact schema. Previously, static service imports could initialize Prisma before the guard ran. The harness also disconnects its client in a finally block on assertion failures. This is an execution-order safeguard, not proof of gateway-backed payments or a staging release. Charging and fulfilment remain disabled pending the original acceptance gates.
+
+### 23 November: scratch QA import-order hardening
+
+Five additional isolated financial acceptance scripts (authenticated QR collection,
+manual scanner lookup, route-level reporting, reconciliation and physical returns)
+now defer Prisma and session-service imports until the scratch PostgreSQL URL,
+actual database and schema have been verified. All five disconnect on failure.
+The isolated integration harness already followed this ordering. CI now tests
+the import ordering of all six scripts to prevent regressions.
+
+This does not mean the HTTP acceptance tests or actual merchant settlement have
+passed. Those require an isolated local staging stack and disposable PostgreSQL
+fixtures, and remain mandatory before enabling checkout or collection.

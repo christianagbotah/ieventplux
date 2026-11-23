@@ -2,9 +2,10 @@
  * against live data. Never invokes payment, message delivery, stock mutations
  * or a physical handover. */
 import { strict as assert } from 'node:assert'
-import { db } from '../src/lib/db'
 import { requireIsolatedMerchandiseQaDatabase } from './merchandise-qa-db-guard'
-import { createSession, SESSION_COOKIE } from '../src/server/auth'
+
+// Do not initialize Prisma or session services until the scratch DB is verified.
+let db!: (typeof import('../src/lib/db'))['db']
 import { verifySouvenirCollectionToken } from '../src/server/souvenir-policy'
 
 assert.equal(new URL(process.env.DATABASE_URL ?? 'http://invalid.invalid').searchParams.get('schema'), 'ieventplux_merch_qa_20261119', 'Refusing anything but isolated QA database')
@@ -12,6 +13,8 @@ assert.equal(process.env.IEVENTPLUX_SOUVENIR_CHECKOUT_ENABLED, '1', 'QA must exp
 const url = 'http://127.0.0.1:3179/api/v1/souvenir-collection/lookup'
 async function main() {
   await requireIsolatedMerchandiseQaDatabase()
+  db = (await import('../src/lib/db')).db
+  const { createSession, SESSION_COOKIE } = await import('../src/server/auth')
   const order = await db.order.findFirst({ where: { status: 'PAID', event: { slug: { startsWith: 'merch-qa-event-' } }, souvenirItems: { some: { holdStatus: 'CONSUMED' } } }, orderBy: { createdAt: 'desc' }, select: { reference: true, orgId: true } })
   assert.ok(order, 'Run merchandise-isolated-qa.ts in the isolated schema first')
   const tag = Date.now().toString(36)
@@ -55,4 +58,4 @@ async function main() {
   console.log('PASS: signed reference opens the separate staff-authorized paid collection receipt')
   console.log('SOUVENIR CAMERA/REFERENCE LOOKUP HTTP QA: ALL ASSERTIONS PASSED — synthetic data only')
 }
-main().catch((error) => { console.error('SOUVENIR LOOKUP QA FAILED:', error instanceof Error ? error.message : String(error)); process.exitCode = 1 }).finally(async () => { await db.$disconnect() })
+main().catch((error) => { console.error('SOUVENIR LOOKUP QA FAILED:', error instanceof Error ? error.message : String(error)); process.exitCode = 1 }).finally(async () => { await db?.$disconnect() })

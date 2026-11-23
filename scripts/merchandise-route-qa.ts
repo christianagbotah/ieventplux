@@ -6,9 +6,10 @@
  */
 import { strict as assert } from 'node:assert'
 import { randomUUID } from 'node:crypto'
-import { db } from '../src/lib/db'
 import { requireIsolatedMerchandiseQaDatabase } from './merchandise-qa-db-guard'
-import { createSession, SESSION_COOKIE } from '../src/server/auth'
+
+// Do not initialize Prisma or session services until the scratch DB is verified.
+let db!: (typeof import('../src/lib/db'))['db']
 import { souvenirCollectionToken } from '../src/server/souvenir-policy'
 
 const dbUrl = new URL(process.env.DATABASE_URL ?? 'http://missing.invalid')
@@ -19,6 +20,8 @@ const base = 'http://127.0.0.1:3179'
 
 async function main() {
   await requireIsolatedMerchandiseQaDatabase()
+  db = (await import('../src/lib/db')).db
+  const { createSession, SESSION_COOKIE } = await import('../src/server/auth')
   const response = await fetch(`${base}/api/v1/health`, { signal: AbortSignal.timeout(15_000) })
   assert.equal(response.status, 200, 'Staging API must be available on local-only port')
   const order = await db.order.findFirst({
@@ -91,4 +94,4 @@ async function main() {
   console.log('AUTHENTICATED QR COLLECTION HTTP QA — ALL ASSERTIONS PASSED (ISOLATED SYNTHETIC DATA)')
 }
 main().catch((e) => { console.error('QA FAILED',e instanceof Error ? e.message : 'unknown'); process.exitCode = 1 })
-  .finally(async () => { await db.$disconnect() })
+  .finally(async () => { await db?.$disconnect() })

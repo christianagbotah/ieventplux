@@ -4,8 +4,9 @@
 import { strict as assert } from 'node:assert'
 import { randomUUID } from 'node:crypto'
 import { requireIsolatedMerchandiseQaDatabase } from './merchandise-qa-db-guard'
-import { db } from '../src/lib/db'
-import { createSession, SESSION_COOKIE } from '../src/server/auth'
+
+// Do not initialize Prisma or session services until the scratch DB is verified.
+let db!: (typeof import('../src/lib/db'))['db']
 
 const url = new URL(process.env.DATABASE_URL ?? 'http://invalid.invalid')
 assert.equal(url.searchParams.get('schema'), 'ieventplux_merch_qa_20261119', 'REFUSING NON-QA DATABASE')
@@ -14,6 +15,8 @@ assert.equal(process.env.IEVENTPLUX_SOUVENIR_CHECKOUT_ENABLED, '1')
 const base = 'http://127.0.0.1:3179'
 async function main() {
   await requireIsolatedMerchandiseQaDatabase()
+  db = (await import('../src/lib/db')).db
+  const { createSession, SESSION_COOKIE } = await import('../src/server/auth')
   const item = await db.souvenirOrderItem.findFirst({
     where: { collectedQty: { gte: 2 }, holdStatus: 'CONSUMED', order: { status: 'PAID', event: { slug: { startsWith: 'merch-qa-event-' } } }, returnIntakes: { none: {} } },
     select: { id: true, collectedQty: true, productId: true, order: { select: { id: true, orgId: true, eventId: true, status: true } } },
@@ -91,4 +94,4 @@ async function main() {
   console.log('PASS: return intake/review changed NO stock, entitlement, ledger, refund case or order payment status')
   console.log('PHYSICAL SOUVENIR RETURN INTAKE / FINANCE REVIEW HTTP QA — ALL ASSERTIONS PASSED, ISOLATED SYNTHETIC DATA')
 }
-main().catch((error) => { console.error('RETURN INTAKE QA FAILED:',error instanceof Error ? error.message : String(error));process.exitCode=1 }).finally(async()=>{await db.$disconnect()})
+main().catch((error) => { console.error('RETURN INTAKE QA FAILED:',error instanceof Error ? error.message : String(error));process.exitCode=1 }).finally(async()=>{await db?.$disconnect()})

@@ -1,12 +1,15 @@
 /** Synthetic merchandise reporting QA; refuses anything except isolated DB. */
 import { strict as assert } from 'node:assert'
-import { db } from '../src/lib/db'
 import { requireIsolatedMerchandiseQaDatabase } from './merchandise-qa-db-guard'
-import { merchandiseReconciliation, merchandiseReportCsv } from '../src/server/services/merchandise-reconciliation'
+
+// Do not initialize Prisma or session services until the scratch DB is verified.
+let db!: (typeof import('../src/lib/db'))['db']
 
 assert.equal(new URL(process.env.DATABASE_URL ?? 'http://invalid.invalid').searchParams.get('schema'), 'ieventplux_merch_qa_20261119')
 async function main() {
   await requireIsolatedMerchandiseQaDatabase()
+  db = (await import('../src/lib/db')).db
+  const { merchandiseReconciliation, merchandiseReportCsv } = await import('../src/server/services/merchandise-reconciliation')
   const event = await db.event.findFirst({
     where: { slug: { startsWith: 'merch-qa-event-' }, orders: { some: { status: 'PAID', souvenirItems: { some: {} } } } },
     orderBy: { createdAt: 'desc' }, select: { id: true, orgId: true },
@@ -42,4 +45,4 @@ async function main() {
   console.log('ISOLATED MERCHANDISE RECONCILIATION QA — ALL ASSERTIONS PASSED')
 }
 main().catch((e) => { console.error('RECONCILIATION QA FAILED:', e instanceof Error ? e.message : 'unknown'); process.exitCode = 1 })
-  .finally(async () => { await db.$disconnect() })
+  .finally(async () => { await db?.$disconnect() })

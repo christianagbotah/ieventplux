@@ -1,14 +1,17 @@
 /** Authenticated event operations reporting UAT. Strictly isolated PostgreSQL
  * schema and localhost-only endpoint. Synthetic users and historical QA orders. */
 import { strict as assert } from 'node:assert'
-import { db } from '../src/lib/db'
 import { requireIsolatedMerchandiseQaDatabase } from './merchandise-qa-db-guard'
-import { createSession, SESSION_COOKIE } from '../src/server/auth'
+
+// Do not initialize Prisma or session services until the scratch DB is verified.
+let db!: (typeof import('../src/lib/db'))['db']
 
 assert.equal(new URL(process.env.DATABASE_URL ?? 'http://invalid.invalid').searchParams.get('schema'), 'ieventplux_merch_qa_20261119', 'Refusing any non-QA database!')
 const base = 'http://127.0.0.1:3179'
 async function main() {
   await requireIsolatedMerchandiseQaDatabase()
+  db = (await import('../src/lib/db')).db
+  const { createSession, SESSION_COOKIE } = await import('../src/server/auth')
   const event = await db.event.findFirst({
     where: { slug: { startsWith: 'merch-qa-event-' }, orders: { some: { status: 'PAID', souvenirItems: { some: {} } } } },
     orderBy: { createdAt: 'desc' }, select: { id: true, orgId: true },
@@ -61,4 +64,4 @@ async function main() {
   console.log('AUTHENTICATED MERCHANDISE REPORT ROUTE QA — ALL ASSERTIONS PASSED (ISOLATED DATA)')
 }
 main().catch((e) => { console.error('REPORT ROUTE QA FAILED:',e instanceof Error ? e.message : 'unknown');process.exitCode=1 })
-  .finally(async()=>{await db.$disconnect()})
+  .finally(async()=>{await db?.$disconnect()})
