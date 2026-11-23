@@ -77,6 +77,24 @@ jobs:
           bun test
           bunx tsc --noEmit
 
+      - name: Stamp native QA build revision and time
+        if: ${{ !inputs.diagnostics_only && inputs.standalone_qa }}
+        working-directory: mobile
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const fs = require('node:fs')
+          const cp = require('node:child_process')
+          const config = JSON.parse(fs.readFileSync('app.json', 'utf8'))
+          config.expo.extra = {
+            ...config.expo.extra,
+            androidBuildRevision: cp.execFileSync('git', ['rev-parse', 'HEAD'], {encoding:'utf8'}).trim(),
+            androidBuiltAt: new Date().toISOString(),
+          }
+          fs.writeFileSync('app.json', JSON.stringify(config, null, 2))
+          NODE
+          node -e "const c=require('./app.json').expo.extra; if(!/^[0-9a-f]{40}$/.test(c.androidBuildRevision)) process.exit(1); console.log('Android build revision:',c.androidBuildRevision.slice(0,10))"
+
       - name: Generate Android project from Expo
         working-directory: mobile
         run: |
@@ -206,3 +224,43 @@ jobs:
           path: mobile/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 7
+
+
+  publish-qa-release:
+    name: Publish verified Android QA APK prerelease
+    needs: debug-apk
+    # Only approved main builds receive write permission. Feature branch
+    # workflow_dispatch builds can never publish a release.
+    if: ${{ github.ref == 'refs/heads/main' && !inputs.diagnostics_only && inputs.standalone_qa && needs.debug-apk.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - name: Download verified APK from completed build job
+        uses: actions/download-artifact@v4
+        with:
+          name: ieventplux-android-standalone-qa-apk
+          path: qa-apk
+
+      - name: Verify packaged JavaScript and publish immutable QA prerelease
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          SHA="$GITHUB_SHA"
+          TAG="android-qa-${SHA:0:7}"
+          APK="qa-apk/app-release.apk"
+          test -s "$APK"
+          unzip -Z1 "$APK" | grep -F 'assets/index.android.bundle' > /dev/null
+          sha256sum "$APK"
+          if gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Immutable QA release $TAG already exists; not replacing prior APK"
+          else
+            gh release create "$TAG" "$APK" -R "$GITHUB_REPOSITORY" --prerelease               --title "iEventPlux Android QA $TAG"               --notes "Test-signed Android QA build for commit $SHA. Not Google Play certified. Changing QA signing keys may require uninstall/reinstall. Camera, mic and native meetings still require physical-device testing."
+          fi
+          gh release view "$TAG" -R "$GITHUB_REPOSITORY" --json assets             --jq '.assets[]|select(.name=="app-release.apk")|.url' |
+            grep -F "https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/app-release.apk"
+          echo "Android QA APK: https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/app-release.apk"

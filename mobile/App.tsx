@@ -35,6 +35,7 @@ import EventNetworkScreen from './src/screens/EventNetworkScreen'
 import EventCompetitionsScreen from './src/screens/EventCompetitionsScreen'
 import MarketplaceScreen from './src/screens/MarketplaceScreen'
 import MarketplaceStoreScreen from './src/screens/MarketplaceStoreScreen'
+import { AndroidUpdateNotice } from './src/components/AndroidUpdateNotice'
 
 /**
  * Keep the native WebRTC module out of Expo Go startup. Expo Go has no LiveKit
@@ -127,6 +128,7 @@ export default function App() {
     <SessionProvider>
       <NavigationContainer linking={linking}>
         <AppRoutes />
+        <AndroidUpdateNotice />
       </NavigationContainer>
     </SessionProvider>
   )

@@ -90,6 +90,9 @@ jobs:
       - name: Marketplace seller/product/stock validation and security tests
         run: bun test src/server/marketplace-policy.test.ts
 
+      - name: Official Android QA release URL safety regression
+        run: bun test src/server/android-qa-release-policy.test.ts
+
       - name: Global public event comparison link and safety rules
         run: bun test src/server/public-event-compare.test.ts
 
