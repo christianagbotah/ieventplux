@@ -51,3 +51,14 @@ fixtures, and remain mandatory before enabling checkout or collection.
 ## 23 November: dedicated scratch PostgreSQL CI gate
 
 Added a separate `merchandise-scratch-acceptance` GitHub Actions job that provisions a disposable PostgreSQL database and explicit QA schema on loopback, applies Prisma schema only there, and executes the six guarded merchandise acceptance scripts sequentially. It does not deploy, use merchant credentials, or enable merchandise flags in the production environment. This job must pass on the exact PR head; its synthetic payment tests do **not** substitute for real provider reconciliation, refund certification or physical smartphone acceptance.
+## 23 November: first verified disposable PostgreSQL acceptance CI (exact SHA)
+
+GitHub Actions run [45101077226](https://github.com/christianagbotah/ieventplux/actions/runs/45101077226), for PR #23 head `847cdfd1933cb0548cdf95f034e987e77d128984`, completed successfully. All four jobs (`web`, `mobile`, `production-build`, `merchandise-scratch-acceptance`) reported SUCCESS. This is an **isolated synthetic QA milestone**, not merchant certification.
+
+The scratch PostgreSQL job logs explicitly confirm:
+- Atomic last-SKU reservation under concurrent checkout, last-ticket-cap concurrency, and unpaid reservation expiry.
+- Simulated verified payment and concurrent callback replay: a single receipt, no duplicate entitlement, and distinct ticket-admission vs merchandise-collection states for combined orders.
+- Authenticated HTTP QR collection: anonymous/nonstaff/unauthorized-role rejection, tampered-signature rejection, explicit physical handover confirmation, idempotent replay, and overcollection conflict.
+- Authorized printed-receipt lookup without buyer-contact disclosure, operational/finance reporting permission and money redaction, cross-organization denial, and physical return intake with separate finance approval and no premature refund/stock mutation.
+
+**Remaining release blockers:** no real Hubtel/provider payment initiation-to-callback-to-settlement reconciliation or provider-backed partial/full refund certification has been demonstrated; no physical Android/iOS HTTPS camera/QR field acceptance; no verified pre-migration production backup, additive migration rehearsal against production-shaped scratch data, checksum-verified artifact rollout/rollback and production auth/security smoke sign-off. Do not enable `IEVENTPLUX_SOUVENIR_CHECKOUT_ENABLED` or `IEVENTPLUX_SOUVENIR_COLLECTION_ENABLED` until those gates are complete. No production transaction or deployment was performed by this CI run.
