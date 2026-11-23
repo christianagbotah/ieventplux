@@ -331,6 +331,8 @@ jobs:
           bun-version: latest
       - name: Install dependencies in ephemeral CI runner
         run: bun install --frozen-lockfile
+      - name: Fail closed on database URL before any Prisma schema operation
+        run: bun -e "import { validateIsolatedMerchandiseQaUrl } from './scripts/merchandise-qa-db-guard'; validateIsolatedMerchandiseQaUrl()"
       - name: Create disposable database and dedicated schema
         run: |
           PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -c 'CREATE DATABASE ieventplux_merch_qa'

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { requireIsolatedMerchandiseQaDatabase } from './merchandise-qa-db-guard'
+import { requireIsolatedMerchandiseQaDatabase, validateIsolatedMerchandiseQaUrl } from './merchandise-qa-db-guard'
 
 describe('synthetic merchandise QA refuses unsafe database destinations before connecting', () => {
   const original = process.env.DATABASE_URL
@@ -23,6 +23,7 @@ describe('synthetic merchandise QA refuses unsafe database destinations before c
       for (const url of rejected) {
         if (url === undefined) delete process.env.DATABASE_URL
         else process.env.DATABASE_URL = url
+        expect(validateIsolatedMerchandiseQaUrl).toThrow()
         await expect(requireIsolatedMerchandiseQaDatabase()).rejects.toThrow()
       }
     } finally {

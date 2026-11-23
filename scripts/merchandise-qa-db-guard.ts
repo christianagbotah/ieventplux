@@ -4,7 +4,7 @@ import { strict as assert } from 'node:assert'
 const schema = 'ieventplux_merch_qa_20261119'
 const qaName = /(?:^|[_-])(qa|test|scratch)(?:[_-]|$)/i
 
-export async function requireIsolatedMerchandiseQaDatabase() {
+export function validateIsolatedMerchandiseQaUrl() {
   const url = new URL(process.env.DATABASE_URL ?? 'http://invalid.invalid')
   assert.ok(['postgresql:', 'postgres:'].includes(url.protocol), 'QA requires a PostgreSQL URL')
   // Prisma/PostgreSQL URLs accept additional parameters that can redirect the
@@ -19,6 +19,10 @@ export async function requireIsolatedMerchandiseQaDatabase() {
   assert.equal(url.searchParams.get('schema'), schema, 'QA requires the isolated schema')
   assert.match(decodeURIComponent(url.pathname).slice(1), qaName, 'QA requires a disposable database name')
   assert.ok(['localhost', '127.0.0.1', '::1', '[::1]'].includes(url.hostname), 'QA requires loopback PostgreSQL')
+}
+
+export async function requireIsolatedMerchandiseQaDatabase() {
+  validateIsolatedMerchandiseQaUrl()
   // Do not initialize Prisma until the supplied URL passes all isolation checks.
   const { db } = await import('../src/lib/db')
   const [identity] = await db.$queryRaw<Array<{ database_name: string; schema_name: string }>>`

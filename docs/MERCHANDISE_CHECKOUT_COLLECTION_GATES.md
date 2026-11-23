@@ -166,3 +166,7 @@ Both ticket-type and merchandise-product reservation loops now use the same code
 ### Inventory lock-order permutation regression — 22 November 2026
 
 The pure checkout-policy suite now exercises 128 deterministic permutations of a multi-variant cart with repeated SKU selections. Every permutation must aggregate the same quantities and acquire stock locks in the same byte-stable product-ID order. This is a policy regression only; it does not replace PostgreSQL concurrent transaction tests or permit merchandise activation.
+
+### CI database preflight (23 November 2026)
+
+The disposable PostgreSQL financial-acceptance job validates its exact loopback QA database URL and dedicated schema **before creating the scratch database or invoking Prisma schema push**. The same pure URL guard is reused by the connected database identity guard; malformed/remote/production-like destinations fail closed. This is a CI-only safeguard, not authorization for a production migration. Real provider reconciliation, refunds and physical smartphone QR sign-off remain required before charging or collection can be enabled.
