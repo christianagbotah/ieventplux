@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server'
 import { db } from '@/lib/db'
 import { handle, jsonOk, requireUser, rateLimit, readJson, errors } from '@/server/api'
 import { eventOrgAccess } from '@/server/permissions'
-import { souvenirCollectionToken, souvenirCheckoutEnabled } from '@/server/souvenir-policy'
+import { souvenirCollectionToken, souvenirCollectionEnabled } from '@/server/souvenir-policy'
 
 /** Enter a printed receipt reference without asking the customer for a QR.
  * A reference is not an access credential: only an authenticated, accepted
@@ -11,7 +11,7 @@ import { souvenirCollectionToken, souvenirCheckoutEnabled } from '@/server/souve
 export async function POST(req: NextRequest) {
   return handle(async () => {
     const user = await requireUser()
-    if (!souvenirCheckoutEnabled()) throw errors.unavailable('SOUVENIR_COLLECTION_DISABLED', 'Souvenir collection is not yet available.')
+    if (!souvenirCollectionEnabled()) throw errors.unavailable('SOUVENIR_COLLECTION_DISABLED', 'Souvenir collection is not yet available.')
     await rateLimit(req, 'souvenir-reference-lookup', 30, 60_000)
     const input = await readJson<{ reference?: unknown }>(req)
     const entered = typeof input.reference === 'string' ? input.reference.trim().toUpperCase() : ''

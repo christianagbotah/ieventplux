@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { availableSouvenirStock, normalizeSouvenirLines, souvenirCollectionToken, verifySouvenirCollectionToken, souvenirCollectionEnabled } from './souvenir-policy'
+import { availableSouvenirStock, normalizeSouvenirLines, souvenirCollectionToken, verifySouvenirCollectionToken, souvenirCollectionEnabled, souvenirCheckoutEnabled } from './souvenir-policy'
 
 describe('souvenir inventory and collection policy', () => {
   const a = 'cm2nm3op4qr5st6uv7wx8yz9'
@@ -29,6 +29,7 @@ describe('souvenir inventory and collection policy', () => {
       for (const [a,b,allowed] of [['0','0',false],['1','0',false],['0','1',false],['1','1',true]] as const) {
         process.env.IEVENTPLUX_SOUVENIR_CHECKOUT_ENABLED = a
         process.env.IEVENTPLUX_SOUVENIR_COLLECTION_ENABLED = b
+        expect(souvenirCheckoutEnabled()).toBe(a === '1')
         expect(souvenirCollectionEnabled()).toBe(allowed)
       }
     } finally {
