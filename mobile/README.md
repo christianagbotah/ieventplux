@@ -220,3 +220,7 @@ From the authenticated Account screen, tap **Organizer studio** to view accepted
 ### Android QA update resilience
 
 `src/components/AndroidUpdateNotice.tsx` now checks the official GitHub public QA-release list alongside the deployed website's release index, because web artifact deployment can lag a newly published native build. The pure parser in `src/lib/android-updates.ts` rejects draft releases, non-QA tags, unapproved asset names, unexpected download origins and implausibly small APKs. Rechecks are throttled to at most one every two minutes while the app is open, with no background installation or automatic download. The first APK containing this improvement must itself be installed from a verified GitHub release; already-installed older APK code cannot receive this behavior retroactively.
+
+### Native creator journey
+
+The Discover creator calls to action now use the native Organizer Studio and Create Organizer screens, not web links. Registration uses the existing `/orgs` API and mirrors all six organizer types with role-specific public profile fields. New organizations are pending verification, not approved for paid sales. Document upload, payout configuration and advanced editor tooling remain under the secure web workflows until corresponding native capability is certified. 

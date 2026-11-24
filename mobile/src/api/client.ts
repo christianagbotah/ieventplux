@@ -712,6 +712,9 @@ export const api = {
   },
   organizer: {
     memberships: () => request<{ items: Membership[] }>('GET','/orgs'),
+    createOrganization: (payload: unknown) => request<{org:{id:string;name:string;status:string};note:string}>(
+      'POST','/orgs',payload,
+    ),
     events: (orgId: string, page=1) => request<OrganizerEventPage>(
       'GET', '/events?mine=1&orgId='+encodeURIComponent(orgId)+'&page='+page+'&pageSize=20',
     ),
