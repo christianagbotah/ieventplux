@@ -7,7 +7,9 @@ import { Badge } from '@/components/ui/badge'
 import { api } from '../api'
 import { navigate } from '../router'
 import { usePortal } from '../store'
-import { money, relative } from '../format'
+import { relative } from '../format'
+import { publishedReelVideoSrc } from '../lib/reel-media'
+import { ReelPlayableMedia } from '../components/ReelPlayableMedia'
 
 interface Clip {
   id: string
@@ -21,10 +23,8 @@ interface Clip {
   views: number
 }
 
-/**
- * Short-video event feed. Development media is synthetic (poster-based animated
- * clips — see docs/PROVIDER_CAPABILITIES.md); the feed, reactions and
- * previous-event → next-occurrence linking are real.
+/** Published MP4 files play as native browser video; poster-only previews stay static.
+ * All data comes from the server's public READY-only Reels feed, never mock clips.
  */
 export default function Reels() {
   const { user } = usePortal()
@@ -32,6 +32,8 @@ export default function Reels() {
   const [active, setActive] = useState(0)
   const [reacted, setReacted] = useState<Record<string, boolean>>({})
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [pageVisible,setPageVisible] = useState(true)
+  const [reactionError,setReactionError] = useState('')
   const containerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -41,11 +43,40 @@ export default function Reels() {
       .catch(() => setClips([]))
   }, [])
 
+  // A visible card only plays while the Reels tab has browser focus. The
+  // intersection root is this feed, not the global page or another screen.
+  useEffect(() => {
+    const onVisibility = () => setPageVisible(document.visibilityState === 'visible')
+    onVisibility()
+    document.addEventListener('visibilitychange',onVisibility)
+    return () => document.removeEventListener('visibilitychange',onVisibility)
+  },[])
+
+  useEffect(() => {
+    const root=containerRef.current
+    if (!root || !clips?.length || typeof IntersectionObserver==='undefined') return
+    const ratios=new Map<number,number>()
+    const observer=new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        const index=Number((entry.target as HTMLElement).dataset.reelIndex)
+        if (Number.isSafeInteger(index) && index>=0)
+          ratios.set(index,entry.isIntersecting ? entry.intersectionRatio : 0)
+      }
+      // A small sliver at the edge of the feed must not start playback.
+      const best=[...ratios.entries()].sort((a,b)=>b[1]-a[1])[0]
+      setActive(best && best[1]>=0.65 ? best[0] : -1)
+    }, {root,threshold:[0.3,0.65,0.9]})
+    root.querySelectorAll<HTMLElement>('[data-reel-index]').forEach((node)=>observer.observe(node))
+    return ()=>observer.disconnect()
+  },[clips])
+
   const react = async (clip: Clip) => {
     if (!user) return navigate('/signin')
     if (reacted[clip.id]) return
+    setReactionError('')
     setReacted((r) => ({ ...r, [clip.id]: true }))
-    await api.post('/social/reaction', { targetType: 'MEDIA', targetId: clip.id, kind: 'HEART' }).catch(() => {})
+    try { await api.post('/social/reaction', { targetType: 'MEDIA', targetId: clip.id, kind: 'HEART' }) }
+    catch {setReacted((r) => ({ ...r, [clip.id]: false }));setReactionError('Could not save your reaction. Please try again.') }
   }
 
   const share = async (clip: Clip) => {
@@ -84,11 +115,11 @@ export default function Reels() {
   return (
     <div ref={containerRef} className="ievx-reel-snap ievx-scrollbar mx-auto h-[calc(100vh-4rem-4rem)] max-w-md snap-y overflow-y-auto md:h-[calc(100vh-4rem)]" role="feed" aria-label="Event clips feed">
       {clips.map((c, i) => (
-        <article key={c.id} className="relative mb-3 h-[calc(100vh-9rem)] snap-start overflow-hidden rounded-3xl bg-black md:h-[calc(100vh-6.5rem)]">
-          {/* Synthetic animated clip: ken-burns poster + overlay */}
+        <article key={c.id} data-reel-index={i} className="relative mb-3 h-[calc(100vh-9rem)] snap-start overflow-hidden rounded-3xl bg-black md:h-[calc(100vh-6.5rem)]">
           <div className="absolute inset-0 overflow-hidden">
-            <img src={c.posterUrl} alt="" className="iefx-kenburns h-full w-full object-cover opacity-90" />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-transparent to-black/30" />
+            <ReelPlayableMedia src={c.url} posterUrl={c.posterUrl} title={c.event.title}
+              active={i===active} pageVisible={pageVisible} />
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-black/30" />
           </div>
 
           {/* Clips without a verified playable stream show an event preview.
@@ -107,9 +138,9 @@ export default function Reels() {
               <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">{c.org.name.slice(0, 2).toUpperCase()}</span>
               <div className="min-w-0">
                 <p className="truncate text-sm font-bold text-white" style={{ textShadow: '0 1px 4px rgba(0, 0, 0, 0.55)' }}>{c.org.name}</p>
-                <p className="text-[11px] text-white/70">Event preview · {relative(c.event.startsAt)}</p>
+                <p className="text-[11px] text-white/70">{publishedReelVideoSrc(c.url) ? 'Video moment' : 'Event preview'} · {relative(c.event.startsAt)}</p>
               </div>
-              <Badge className="ml-auto border-white/25 bg-white/10 text-white backdrop-blur">Preview</Badge>
+              <Badge className="ml-auto border-white/25 bg-white/10 text-white backdrop-blur">{publishedReelVideoSrc(c.url)?'Video':'Preview'}</Badge>
             </div>
             {c.caption && <p className="text-sm font-medium text-white/95">{c.caption}</p>}
             <p className="text-xs text-white/80">From “{c.event.title}”</p>
@@ -201,6 +232,8 @@ export default function Reels() {
         </article>
       ))}
 
+      {reactionError && <p role="alert" className="mb-2 rounded-xl bg-destructive/10 px-3 py-2 text-center text-xs text-destructive">{reactionError}</p>}
+
       {/* Nav dots */}
       <div className="sticky bottom-3 flex justify-center gap-1.5 pb-3">
         {clips.map((_, i) => (
@@ -208,7 +241,6 @@ export default function Reels() {
             key={i}
             aria-label={`Go to clip ${i + 1}`}
             onClick={() => {
-              setActive(i)
               containerRef.current?.scrollTo({ top: i * (containerRef.current.scrollHeight / clips.length), behavior: 'smooth' })
             }}
             className={`h-1.5 rounded-full transition-all ${i === active ? 'w-6 bg-primary' : 'w-1.5 bg-border'}`}
@@ -216,7 +248,7 @@ export default function Reels() {
         ))}
       </div>
       <p className="pb-3 text-center text-[10px] text-muted-foreground">
-        Event previews currently use sample artwork, not verified playable videos. Open an event for its actual available ticket and live-access options.
+        Verified published MP4 clips can play here. Other event cards remain artwork previews until a real approved video is available. Open an event for tickets and live access.
       </p>
     </div>
   )

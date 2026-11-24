@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { connectRealtime } from '../realtime'
 import {
-  LayoutDashboard, CalendarPlus, CalendarClock, Users, Ticket, Radio, Megaphone, MessageSquare, Wallet, UserCog, CreditCard, Settings,
+  LayoutDashboard, CalendarPlus, CalendarClock, Users, Ticket, Radio, Clapperboard, Megaphone, MessageSquare, Wallet, UserCog, CreditCard, Settings,
   ChevronLeft, ChevronRight, ChevronDown, Plus, Loader2, Camera, ScanLine, Search, Play, Square, RefreshCw, KeyRound, Pause, PlayCircle, Trash2, FileText, ShieldAlert, TrendingUp, Repeat, Activity, Vote, HandCoins, Sparkles, Download, Upload, CheckCircle2, Eye, EyeOff, Flag, History, Clock, MapPin, Pencil, Share2, X, AlertCircle, FilterX, CalendarRange,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -35,6 +35,7 @@ import { AdmissionOperationsPanel } from '../components/AdmissionOperationsPanel
 import { scannerSessionKey } from '../lib/scanner-session-local'
 import { GrowthCommandCenter } from '../components/GrowthCommandCenter'
 import { GroupMeetingsManager } from '../components/GroupMeetingsManager'
+import { CreatorClipsStudio } from '../components/CreatorClipsStudio'
 import { FieldError, FieldHelp } from '@/components/ui/field'
 import { eventDraftIsReady, validateEventDraftTiming } from '../lib/event-editor-validation'
 import { OrganizerEventCover } from '../components/OrganizerEventCover'
@@ -71,6 +72,7 @@ const NAV = [
   { key: 'orders', group: 'Events & tickets', label: 'Orders', icon: Ticket },
   { key: 'attendees', group: 'Events & tickets', label: 'Attendees & Check-in', icon: Users },
   { key: 'studio', group: 'Production', label: 'Streaming Studio', icon: Radio },
+  { key: 'creator-media', group: 'Production', label: 'Creator Media', icon: Clapperboard },
   { key: 'meetings', group: 'Production', label: 'Group Meetings', icon: Users },
   { key: 'live', group: 'Production', label: 'Live Room', icon: Activity },
   { key: 'promotions', group: 'Engagement', label: 'Promotions', icon: Megaphone },
@@ -126,7 +128,7 @@ export default function OrganizerWorkspace({ route }: { route: Route }) {
   const visibleNav = NAV.filter((item) => {
     if (['insights', 'finance'].includes(item.key) && !canViewReports) return false
     if (item.key === 'growth' && !canViewGrowth) return false
-    if (item.key === 'meetings' && !canManageEvents) return false
+    if (['meetings', 'creator-media'].includes(item.key) && !canManageEvents) return false
     return true
   })
 
@@ -243,6 +245,7 @@ export default function OrganizerWorkspace({ route }: { route: Route }) {
           {section === 'orders' && <OrdersView orgId={activeOrg.orgId} />}
           {section === 'attendees' && <AttendeesView orgId={activeOrg.orgId} initialEventId={route.query.get('eventId') ?? ''} />}
           {section === 'studio' && <StudioView orgId={activeOrg.orgId} />}
+          {section === 'creator-media' && (canManageEvents ? <CreatorClipsStudio orgId={activeOrg.orgId} /> : <RoleRestricted />)}
           {section === 'meetings' && (canManageEvents ? <GroupMeetingsManager orgId={activeOrg.orgId} /> : <RoleRestricted />)}
           {section === 'live' && <LiveRoomView orgId={activeOrg.orgId} />}
           {section === 'promotions' && <PromotionsView orgId={activeOrg.orgId} />}
