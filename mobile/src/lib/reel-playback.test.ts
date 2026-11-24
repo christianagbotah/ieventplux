@@ -1,4 +1,5 @@
 import {expect,test} from 'bun:test'
+import {readFileSync} from 'node:fs'
 import {trustedReelVideoUrl,visibleReelMayPlay} from './reel-playback'
 const video='/uploads/123e4567-e89b-42d3-a456-426614174000.mp4'
 
@@ -31,7 +32,6 @@ test('autoplay only with approved source, visible reel, foreground app, active t
 })
 
 test('the UI never creates an off-screen video player or redirects to web for native playback',()=>{
-  const {readFileSync}=require('node:fs') as typeof import('node:fs')
   const media=readFileSync(new URL('../components/VerifiedReelMedia.tsx',import.meta.url),'utf8')
   const reels=readFileSync(new URL('../screens/ReelsScreen.tsx',import.meta.url),'utf8')
   expect(media).toContain('if(!source||!active)')

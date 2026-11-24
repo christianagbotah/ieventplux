@@ -4,10 +4,13 @@
  */
 import {useEffect,useState} from 'react'
 import {Image,Pressable,StyleSheet,Text,View} from 'react-native'
-import {useVideoPlayer,VideoView} from 'expo-video'
+import {useVideoPlayer,VideoView,type VideoPlayer} from 'expo-video'
 import {absoluteUrl,type NativeEventClip} from '../api/client'
 import {PremiumBackdrop,mobileDesign} from '../ui/PremiumUI'
 import {trustedReelVideoUrl,visibleReelMayPlay} from '../lib/reel-playback'
+
+// Expo's player is an external imperative native resource, not React state.
+function syncVideoMute(player:VideoPlayer,muted:boolean){player.muted=muted}
 
 const imagePoster=(value:string|null|undefined):string|null =>
   value && /\.(?:jpg|jpeg|png|webp)(?:[?#]|$)/i.test(value) ? absoluteUrl(value):null
@@ -17,7 +20,7 @@ export function VerifiedReelMedia({clip,active}:{clip:NativeEventClip;active:boo
   const poster=imagePoster(clip.posterUrl)
   // Do not instantiate players or download media for off-screen cards.
   if(!source||!active)return <View style={StyleSheet.absoluteFillObject}>
-    {poster?<Image source={{uri:poster}} style={styles.cover} resizeMode="cover" accessibilityLabel={clip.event.title+' event poster'}/>:
+    {poster?<Image source={{uri:poster}} style={styles.cover} resizeMode="cover" alt={clip.event.title+' event poster'} accessibilityLabel={clip.event.title+' event poster'}/>:
       <PremiumBackdrop mode="midnight"/>}
   </View>
   return <PublishedReelVideo key={clip.id} source={source} poster={poster} title={clip.event.title} active={active}/>
@@ -37,7 +40,7 @@ function PublishedReelVideo({source,poster,title,active}:{source:string;poster:s
     const sub=player.addListener('statusChange',event=>setStatus(event.status))
     return()=>sub.remove()
   },[player])
-  useEffect(()=>{player.muted=muted},[player,muted])
+  useEffect(()=>{syncVideoMute(player,muted)},[player,muted])
   const shouldPlay=visibleReelMayPlay({videoUrl:source,clipId:'video',visibleClipId:active?'video':null,
     screenFocused:active,appActive:active,userPaused})
   useEffect(()=>{
@@ -48,7 +51,7 @@ function PublishedReelVideo({source,poster,title,active}:{source:string;poster:s
   const displayPoster=(!active||status!=='readyToPlay')&&Boolean(poster)
   return <View style={StyleSheet.absoluteFillObject}>
     <VideoView player={player} style={styles.cover} contentFit="cover" nativeControls={false} allowsFullscreen={false}/>
-    {displayPoster&&poster?<Image source={{uri:poster}} style={styles.cover} resizeMode="cover" accessibilityLabel={title+' video poster'}/>:null}
+    {displayPoster&&poster?<Image source={{uri:poster}} style={styles.cover} resizeMode="cover" alt={title+' video poster'} accessibilityLabel={title+' video poster'}/>:null}
     {status==='error'?<View style={styles.errorShade}><Text style={styles.errorTitle}>Video temporarily unavailable</Text><Text style={styles.errorBody}>Open the event to view available photos and details.</Text></View>:null}
     <View style={styles.controlColumn}>
       <Pressable accessibilityRole="button" accessibilityLabel={muted?'Turn on reel sound':'Mute reel sound'}
