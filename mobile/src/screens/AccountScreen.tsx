@@ -1,16 +1,20 @@
-/** Honest native account hub — route existing features, do not present web-only tools as native. */
+/** Premium, native account hub with clear web-only advanced handoffs. */
 import { useState } from 'react'
 import { ActivityIndicator, Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { absoluteUrl } from '../api/client'
 import { clearTicketWallet } from '../lib/ticket-wallet'
 import { useSession } from '../store/session'
 import { theme } from '../theme'
+import { LabelPill, PremiumBackdrop, SectionHeading, TileGlyph, mobileDesign } from '../ui/PremiumUI'
 import type { AccountScreenProps } from '../navigation'
 
+type Glyph = 'ticket'|'event'|'organizer'|'store'|'scanner'|'settings'|'spark'
 export default function AccountScreen({ navigation }: AccountScreenProps) {
   const { user, memberships, signOut } = useSession()
   const [busy, setBusy] = useState(false)
   const [linkError, setLinkError] = useState('')
   const initials = (user?.displayName || user?.email || 'U').trim().split(/\s+/).slice(0, 2).map(s => s[0]?.toUpperCase()).join('')
+  const avatarUrl = user?.avatarUrl ? absoluteUrl(user.avatarUrl) : null
   const openPortal = async (path: string) => {
     try { setLinkError(''); await Linking.openURL('https://ieventplux.lightworldtech.com/#' + path) }
     catch { setLinkError('Unable to open the web portal on this device.') }
@@ -24,63 +28,103 @@ export default function AccountScreen({ navigation }: AccountScreenProps) {
       navigation.reset({ index: 0, routes: [{ name: 'Discover' }] })
     } finally { setBusy(false) }
   }
-  return <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+  return <ScrollView style={styles.screen} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
     <View style={styles.profile}>
-      <View style={styles.avatar}>{user?.avatarUrl ? <Image source={{ uri: user.avatarUrl }} style={styles.avatarImage} /> : <Text style={styles.initials}>{initials}</Text>}</View>
-      <Text style={styles.name}>{user?.displayName || 'iEventPlux member'}</Text>
-      <Text style={styles.email}>{user?.email || 'Signed-in member'}</Text>
-      <View style={styles.role}><Text style={styles.roleText}>{memberships.length} organization{memberships.length === 1 ? '' : 's'} connected</Text></View>
+      <PremiumBackdrop mode="midnight" />
+      <View style={styles.profileTop}>
+        <Text style={styles.kicker}>YOUR iEVENTPLUX SPACE</Text>
+        <Text style={styles.profileSpark}>✦  MEMBER</Text>
+      </View>
+      <View style={styles.identity}>
+        <View style={styles.avatar}>
+          {avatarUrl ? <Image source={{uri:avatarUrl}} style={styles.avatarImage} accessibilityLabel="Profile photo"/> : <Text style={styles.initials}>{initials}</Text>}
+        </View>
+        <View style={styles.identityCopy}>
+          <Text style={styles.greeting}>WELCOME BACK</Text>
+          <Text style={styles.name} numberOfLines={2}>{user?.displayName || 'iEventPlux member'}</Text>
+          <Text style={styles.email} numberOfLines={1}>{user?.email || 'Signed-in member'}</Text>
+        </View>
+      </View>
+      <View style={styles.profileDivider}/>
+      <View style={styles.profileBottom}>
+        <View><Text style={styles.metricValue}>{memberships.length.toLocaleString('en-US')}</Text><Text style={styles.metricCaption}>organizations</Text></View>
+        <View style={styles.metricDivider}/>
+        <View style={styles.brandPromise}><Text style={styles.metricValue}>∞</Text><Text style={styles.metricCaption}>experiences to discover</Text></View>
+        <View style={styles.profileArrow}><Text style={styles.profileArrowText}>✦</Text></View>
+      </View>
     </View>
-    <Text style={styles.sectionLabel}>YOUR EXPERIENCE</Text>
-    <View style={styles.group}>
-      <Row title="My tickets & orders" detail="Your passes, purchases and offline QR codes" icon="▣" onPress={() => navigation.navigate('MyTickets')} />
-      <Row title="Explore events" detail="Find gatherings and communities" icon="✦" onPress={() => navigation.navigate('Discover')} />
-      <Row title="Event check-in" detail="Scan QR tickets at the venue" icon="▦" onPress={() => navigation.navigate('Checkin')} last />
+
+    <SectionHeading eyebrow="YOUR EXPERIENCE" title="What would you like to do?" subtitle="Everything important, one tap away."/>
+    <View style={styles.quickGrid}>
+      <QuickTile kind="ticket" title="My tickets" detail="Passes & QR codes" onPress={()=>navigation.navigate('MyTickets')}/>
+      <QuickTile kind="event" title="Discover" detail="Find experiences" onPress={()=>navigation.navigate('Discover')}/>
+      <QuickTile kind="organizer" title="Organizer Studio" detail="Create & manage" onPress={()=>navigation.navigate('OrganizerStudio')}/>
+      <QuickTile kind="scanner" title="Check-in" detail="Scan event passes" onPress={()=>navigation.navigate('Checkin')}/>
     </View>
-    <Text style={styles.sectionLabel}>ORGANIZER & ACCOUNT TOOLS</Text>
-    <View style={styles.group}>
-      <Row title="Organizer studio" detail="Your organizations, drafts and event management" icon="◎" onPress={() => navigation.navigate('OrganizerStudio')} />
-      <Row title="Advanced organizer tools" detail="Lineup editing, ticket tiers and business settings on web" icon="▤" onPress={() => void openPortal('/organizer')} />
-      <Row title="Profile & settings" detail="Manage your account in the web portal" icon="⚙" onPress={() => void openPortal('/')} last />
+
+    <View style={styles.toolsSection}>
+      <SectionHeading eyebrow="ACCOUNT & BUSINESS" title="Settings and tools" subtitle="Manage the details behind your experience."/>
+      <View style={styles.menu}>
+        <MenuRow kind="store" title="Advanced organizer tools" detail="Tickets, lineup, team & financial settings" web onPress={()=>void openPortal('/organizer')}/>
+        <View style={styles.menuDivider}/>
+        <MenuRow kind="settings" title="Profile & preferences" detail="Additional account settings on web" web onPress={()=>void openPortal('/')}/>
+      </View>
     </View>
+
     {linkError ? <Text accessibilityRole="alert" style={styles.error}>{linkError}</Text> : null}
-    <Pressable style={styles.signOut} disabled={busy} accessibilityRole="button" accessibilityLabel="Sign out of iEventPlux" onPress={() => void logout()}>
-      {busy ? <ActivityIndicator color={theme.colors.danger} /> : <Text style={styles.signOutText}>Sign out</Text>}
+    <Pressable style={({pressed})=>[styles.signOut,pressed&&{opacity:.7}]} disabled={busy} accessibilityRole="button" accessibilityLabel="Sign out of iEventPlux" onPress={()=>void logout()}>
+      {busy ? <ActivityIndicator color={theme.colors.danger}/> : <Text style={styles.signOutText}>Sign out of your account</Text>}
     </Pressable>
-    <Text style={styles.footer}>iEventPlux • Powered by Lightworld Technologies</Text>
+    <Text style={styles.footer}>iEventPlux  ·  Connect. Experience. Belong.</Text>
   </ScrollView>
 }
 
-function Row({ title, detail, icon, last, onPress }: { title: string; detail: string; icon: string; last?: boolean; onPress: () => void }) {
-  return <Pressable accessibilityRole="button" accessibilityLabel={title} onPress={onPress} style={({ pressed }) => [styles.row, !last && styles.rowBorder, pressed && { opacity: .7 }]}>
-    <View style={styles.rowIcon}><Text style={styles.rowIconText}>{icon}</Text></View>
-    <View style={styles.rowText}><Text style={styles.rowTitle}>{title}</Text><Text style={styles.rowDetail}>{detail}</Text></View>
-    <Text style={styles.chevron}>›</Text>
+function QuickTile({kind,title,detail,onPress}:{kind:Glyph;title:string;detail:string;onPress:()=>void}){
+  return <Pressable style={({pressed})=>[styles.quickTile,pressed&&{opacity:.8,transform:[{scale:.985}]}]}
+    accessibilityRole="button" accessibilityLabel={title} onPress={onPress}>
+    <View style={styles.tileTop}><TileGlyph kind={kind} size={50}/><Text style={styles.quickArrow}>↗</Text></View>
+    <Text style={styles.quickTitle} numberOfLines={2}>{title}</Text>
+    <Text style={styles.quickDetail} numberOfLines={1}>{detail}</Text>
   </Pressable>
 }
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: theme.colors.bg },
-  content: { padding: 16, paddingBottom: 35 },
-  profile: { backgroundColor: '#0d4d3d', borderRadius: 23, padding: 25, alignItems: 'center', marginBottom: 26 },
-  avatar: { width: 74, height: 74, backgroundColor: '#dcf7e8', borderRadius: 26, alignItems: 'center', justifyContent: 'center', marginBottom: 12, overflow: 'hidden' },
-  avatarImage: { width: '100%', height: '100%' },
-  initials: { color: theme.colors.primaryDark, fontSize: 25, fontWeight: '800' },
-  name: { color: '#fff', fontSize: 23, fontWeight: '800', textAlign: 'center' },
-  email: { color: '#c8e7d7', fontSize: 13, marginTop: 5, textAlign: 'center' },
-  role: { backgroundColor: '#ffffff24', borderRadius: 20, paddingVertical: 7, paddingHorizontal: 12, marginTop: 15 },
-  roleText: { color: '#e2f4eb', fontSize: 11, fontWeight: '700' },
-  sectionLabel: { fontSize: 10, fontWeight: '800', color: theme.colors.textMuted, letterSpacing: 1.2, marginBottom: 11, marginLeft: 5 },
-  group: { backgroundColor: '#fff', borderRadius: 18, overflow: 'hidden', borderWidth: 1, borderColor: theme.colors.border, marginBottom: 25 },
-  row: { flexDirection: 'row', alignItems: 'center', padding: 13, gap: 12, minHeight: 72 },
-  rowBorder: { borderBottomWidth: 1, borderBottomColor: '#eff4f1' },
-  rowIcon: { backgroundColor: '#e9f6ef', width: 40, height: 40, borderRadius: 13, justifyContent: 'center', alignItems: 'center' },
-  rowIconText: { color: theme.colors.primaryDark, fontSize: 19, fontWeight: '700' },
-  rowText: { flex: 1 },
-  rowTitle: { color: theme.colors.text, fontWeight: '800', fontSize: 14 },
-  rowDetail: { color: theme.colors.textMuted, fontSize: 11, marginTop: 4, lineHeight: 16 },
-  chevron: { color: theme.colors.textMuted, fontSize: 26 },
-  signOut: { minHeight: 50, borderWidth: 1, borderColor: '#f0cccc', borderRadius: 15, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center' },
-  signOutText: { fontWeight: '800', color: theme.colors.danger, fontSize: 14 },
-  error: { color: theme.colors.danger, fontSize: 12, marginBottom: 12 },
-  footer: { textAlign: 'center', color: theme.colors.textMuted, fontSize: 11, marginTop: 23 },
+function MenuRow({kind,title,detail,onPress,web=false}:{kind:Glyph;title:string;detail:string;onPress:()=>void;web?:boolean}){
+  return <Pressable accessibilityRole="button" accessibilityLabel={title} style={({pressed})=>[styles.row,pressed&&{opacity:.7}]} onPress={onPress}>
+    <TileGlyph kind={kind} size={46}/>
+    <View style={styles.rowCopy}><Text style={styles.rowTitle}>{title}</Text><Text style={styles.rowDetail}>{detail}</Text></View>
+    {web?<LabelPill label="WEB" tone="light"/>:null}
+    <Text style={styles.rowChevron}>›</Text>
+  </Pressable>
+}
+
+const styles=StyleSheet.create({
+  screen:{flex:1,backgroundColor:mobileDesign.canvas},content:{paddingHorizontal:18,paddingTop:16,paddingBottom:40},
+  profile:{borderRadius:30,overflow:'hidden',padding:22,marginBottom:28,backgroundColor:mobileDesign.forestDeep,
+    shadowColor:mobileDesign.forestDeep,shadowOpacity:.25,shadowRadius:20,shadowOffset:{width:0,height:12},elevation:6},
+  profileTop:{flexDirection:'row',justifyContent:'space-between',alignItems:'center'},
+  kicker:{fontSize:10,letterSpacing:1.25,fontWeight:'900',color:'#c4f2e0'},
+  profileSpark:{color:'#f3dab1',fontWeight:'900',fontSize:10,letterSpacing:.5},
+  identity:{flexDirection:'row',alignItems:'center',gap:15,marginTop:24},identityCopy:{flex:1},
+  avatar:{width:78,height:78,borderRadius:25,backgroundColor:'#d6f9e9',borderWidth:3,borderColor:'#ffffff99',alignItems:'center',justifyContent:'center',overflow:'hidden'},
+  avatarImage:{width:'100%',height:'100%'},initials:{fontSize:26,fontWeight:'900',color:mobileDesign.emerald},
+  greeting:{fontSize:10,fontWeight:'900',letterSpacing:1,color:'#b7e4da'},name:{color:'#fff',fontSize:24,fontWeight:'900',letterSpacing:-.9,marginTop:4},
+  email:{color:'#dfedea',fontSize:12,marginTop:5},
+  profileDivider:{height:1,backgroundColor:'#ffffff35',marginVertical:20},
+  profileBottom:{flexDirection:'row',alignItems:'center',gap:17},metricValue:{fontSize:23,fontWeight:'900',color:'#fff'},
+  metricCaption:{fontSize:10,marginTop:2,fontWeight:'700',color:'#c7e3dc'},metricDivider:{height:34,width:1,backgroundColor:'#ffffff36'},
+  brandPromise:{flex:1},profileArrow:{backgroundColor:'#ffffff1b',width:36,height:36,borderRadius:13,alignItems:'center',justifyContent:'center'},
+  profileArrowText:{fontSize:19,color:'#e1f8ec'},
+  quickGrid:{flexDirection:'row',flexWrap:'wrap',justifyContent:'space-between',gap:12,marginBottom:29},
+  quickTile:{width:'48%',backgroundColor:'#fff',borderWidth:1,borderColor:mobileDesign.border,borderRadius:23,padding:16,minHeight:168,
+    shadowColor:mobileDesign.shadow,shadowOpacity:.06,shadowRadius:14,shadowOffset:{width:0,height:7},elevation:2},
+  tileTop:{flexDirection:'row',alignItems:'flex-start',justifyContent:'space-between',marginBottom:19},
+  quickArrow:{fontSize:19,color:mobileDesign.emerald,fontWeight:'800'},
+  quickTitle:{fontSize:16,lineHeight:21,fontWeight:'900',color:mobileDesign.ink,letterSpacing:-.35},
+  quickDetail:{fontSize:11,marginTop:6,color:mobileDesign.inkMuted},
+  toolsSection:{marginBottom:17},menu:{backgroundColor:'#fff',borderWidth:1,borderColor:mobileDesign.border,borderRadius:22,overflow:'hidden'},
+  row:{flexDirection:'row',alignItems:'center',gap:12,padding:14,minHeight:77},rowCopy:{flex:1},
+  rowTitle:{fontSize:13,fontWeight:'900',color:mobileDesign.ink},rowDetail:{fontSize:11,lineHeight:17,color:mobileDesign.inkMuted,marginTop:4},
+  rowChevron:{fontSize:23,fontWeight:'700',color:mobileDesign.inkSoft},menuDivider:{marginHorizontal:15,height:1,backgroundColor:mobileDesign.border},
+  signOut:{marginTop:9,minHeight:53,borderWidth:1,borderColor:'#f1d1d1',backgroundColor:'#fff',borderRadius:17,alignItems:'center',justifyContent:'center'},
+  signOutText:{fontSize:13,fontWeight:'800',color:'#b74643'},error:{color:theme.colors.danger,fontSize:12,marginBottom:10},
+  footer:{fontSize:11,fontWeight:'600',textAlign:'center',color:mobileDesign.inkSoft,marginTop:25},
 })

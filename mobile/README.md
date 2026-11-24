@@ -224,3 +224,7 @@ From the authenticated Account screen, tap **Organizer studio** to view accepted
 ### Native creator journey
 
 The Discover creator calls to action now use the native Organizer Studio and Create Organizer screens, not web links. Registration uses the existing `/orgs` API and mirrors all six organizer types with role-specific public profile fields. New organizations are pending verification, not approved for paid sales. Document upload, payout configuration and advanced editor tooling remain under the secure web workflows until corresponding native capability is certified.
+
+### Premium native visual system
+
+`src/ui/PremiumUI.tsx` is the shared visual design foundation. It provides branded SVG hero backgrounds and reusable section headings, elevated cards, buttons, pill badges and event/commerce glyphs. The first migration covers Discover, the navigation dock, Account, Marketplace, Wallet, Login and organizer screens. See `../docs/NATIVE_PREMIUM_VISUAL_SYSTEM_20261124.md`. This is true React Native layout, not a web portal redirect. Source and CI validation must be followed by real Android/iOS visual/device QA before claiming production polish.

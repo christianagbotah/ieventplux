@@ -29,6 +29,7 @@ import {
   type DiscoveryHome,
 } from '../api/client'
 import { theme } from '../theme'
+import { PremiumBackdrop, SectionHeading, LabelPill, mobileDesign } from '../ui/PremiumUI'
 import { useSession } from '../store/session'
 import { HOME_STORIES } from '../lib/home-stories'
 import { DiscoverFilterSheet } from '../components/DiscoverFilterSheet'
@@ -239,6 +240,7 @@ export default function DiscoverScreen({ navigation }: DiscoverScreenProps) {
             </Pressable>
           </View>
           <View style={styles.hero} accessibilityLabel="Discover events worldwide">
+            <PremiumBackdrop mode="emerald" />
             <View style={styles.heroEyebrowRow}><View style={styles.heroDot} /><Text style={styles.heroKicker}>{story.kicker}</Text></View>
             <Text style={styles.heroTitle}>{story.line}</Text>
             <Text style={styles.heroAccent}>{story.accent}</Text>
@@ -338,17 +340,14 @@ export default function DiscoverScreen({ navigation }: DiscoverScreenProps) {
 
           {featured && !filtered ? (
             <View style={styles.sectionBlock}>
-              <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>In the spotlight</Text></View>
+              <SectionHeading eyebrow="HANDPICKED HIGHLIGHTS" title="In the spotlight" />
               <FeaturedEventCard event={featured} onPress={() => navigation.navigate('EventDetail', { eventId: featured.id })} />
             </View>
           ) : null}
 
           {liveNow.length > 0 && !filtered ? (
             <View style={styles.liveSection}>
-              <View style={styles.sectionHeading}>
-                <Text style={styles.sectionTitle}>Happening live</Text>
-                <Text style={styles.livePill}>● LIVE</Text>
-              </View>
+              <SectionHeading eyebrow="HAPPENING RIGHT NOW" title="Live experiences" action="Watch live" onAction={()=>navigation.navigate('LiveHub')} />
               <FlatList
                 horizontal
                 showsHorizontalScrollIndicator={false}
@@ -367,10 +366,9 @@ export default function DiscoverScreen({ navigation }: DiscoverScreenProps) {
             </View>
           ) : null}
 
-          <View style={styles.sectionHeading}>
-            <Text style={styles.sectionTitle}>{filtered ? 'Matching events' : 'Explore what’s next'}</Text>
-            <Text style={styles.sectionCount}>{filtered && searchTotal!==null ? searchTotal : visibleUpcoming.length} events</Text>
-          </View>
+          <SectionHeading eyebrow={filtered?'YOUR SEARCH RESULTS':'CURATED FOR DISCOVERY'}
+            title={filtered?'Matching events':'Explore what’s next'}
+            subtitle={`${filtered && searchTotal!==null ? searchTotal : visibleUpcoming.length} published events to explore`} />
           {filtered && searchBusy ? (
             <View style={styles.searchStatus}>
               <ActivityIndicator color={theme.colors.primary} size="small" />
@@ -477,13 +475,19 @@ function EventRow({ event, onPress }: { event: DiscoveryEventCard; onPress: () =
       {event.coverImageUrl ? <Image source={{uri:event.coverImageUrl}} style={styles.poster} accessibilityLabel={event.title+' artwork'} />
         : <View style={[styles.poster,styles.posterPlaceholder]}><Text style={styles.posterPlaceholderText} numberOfLines={2}>{event.title}</Text></View>}
       <View style={styles.eventPosterShade} />
+      <View style={styles.posterTopLabel}><Text style={styles.posterTopText}>iEVENTPLUX  ·  EXPERIENCE</Text></View>
       <View style={styles.eventPosterInfo}><Text style={styles.eventPosterInfoText}>{formatDate(event.startsAt)} · {event.city || (event.mode === 'VIRTUAL' || event.mode === 'ONLINE' ? 'Online' : 'Location TBA')}</Text></View>
     </View>
     <View style={styles.cardBody}>
-      <Text style={styles.title} numberOfLines={2}>{event.title}</Text>
-      <Text style={styles.meta} numberOfLines={1}>{event.org.name}</Text>
+      <View style={styles.eventTextRow}>
+        <View style={{flex:1}}>
+          <Text style={styles.title} numberOfLines={2}>{event.title}</Text>
+          <Text style={styles.meta} numberOfLines={1}>By {event.org.name}</Text>
+        </View>
+        <View style={styles.arrowBox}><Text style={styles.arrowText}>↗</Text></View>
+      </View>
       <View style={styles.cardFooter}>
-        <View style={styles.modeBadge}><Text style={styles.modeText}>{event.mode === 'VIRTUAL' || event.mode === 'ONLINE' ? 'Online' : event.mode === 'HYBRID' ? 'Hybrid' : 'In person'}</Text></View>
+        <LabelPill label={event.mode === 'VIRTUAL' || event.mode === 'ONLINE' ? 'Online event' : event.mode === 'HYBRID' ? 'Hybrid experience' : 'In person'} />
         <Text style={styles.price}>{priceLabel}</Text>
       </View>
     </View>
@@ -492,28 +496,28 @@ function EventRow({ event, onPress }: { event: DiscoveryEventCard; onPress: () =
 
 const styles = StyleSheet.create({
   list: { backgroundColor: theme.colors.bg },
-  listContent: { paddingHorizontal: 16, paddingTop: 13, paddingBottom: 30 },
-  introRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
-  introLabel: { color: theme.colors.primary, fontSize: 10, letterSpacing: 1.2, fontWeight: '800', marginBottom: 4 },
-  introTitle: { color: theme.colors.text, fontSize: 25, fontWeight: '900', letterSpacing: -.7 },
+  listContent: { paddingHorizontal: 18, paddingTop: 15, paddingBottom: 38 },
+  introRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 },
+  introLabel: { color: theme.colors.primary, fontSize: 10, letterSpacing: 1.7, fontWeight: '900', marginBottom: 6 },
+  introTitle: { color: theme.colors.text, fontSize: 28, fontWeight: '900', letterSpacing: -1.0 },
   liveShortcut: { backgroundColor: '#f9eeee', borderRadius: 100, paddingHorizontal: 13, minHeight: 37, justifyContent: 'center' },
   liveShortcutText: { color: '#a73530', fontSize: 10, fontWeight: '900', letterSpacing: .2 },
-  hero: { backgroundColor: '#103f34', borderRadius: 24, paddingHorizontal: 23, paddingVertical: 25, marginBottom: 20, overflow: 'hidden' },
+  hero: { backgroundColor: '#073e3b', borderRadius: 30, paddingHorizontal: 23, paddingTop: 30, paddingBottom: 19, marginBottom: 26, overflow: 'hidden', shadowColor: '#053a39', shadowOpacity:.24, shadowOffset:{width:0,height:13}, shadowRadius:20, elevation:7 },
   heroEyebrowRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
   heroDot: { width: 7, height: 7, backgroundColor: '#f3c464', borderRadius: 4 },
-  heroKicker: { color: '#b2e7d5', fontSize: 10, fontWeight: '800', letterSpacing: 1.0, flexShrink: 1 },
-  heroTitle: { color: '#ffffff', fontSize: 30, fontWeight: '900', letterSpacing: -1, lineHeight: 36 },
-  heroAccent: { color: '#b2e7d5', fontSize: 30, fontWeight: '900', letterSpacing: -1, lineHeight: 37 },
-  heroBody: { color: '#d1e2e0', fontSize: 13, lineHeight: 21, marginTop: 13 },
+  heroKicker: { color: '#d8fbe9', fontSize: 10, fontWeight: '900', letterSpacing: 1.15, flexShrink: 1 },
+  heroTitle: { color: '#ffffff', fontSize: 34, fontWeight: '900', letterSpacing: -1.5, lineHeight: 40, maxWidth:320 },
+  heroAccent: { color: '#caf8dc', fontSize: 34, fontWeight: '900', letterSpacing: -1.5, lineHeight: 40 },
+  heroBody: { color: '#e2f2ee', fontSize: 14, lineHeight: 22, marginTop: 17, maxWidth:340 },
   heroStatsRow: { flexDirection: 'row', alignItems: 'center', marginTop: 17, gap: 18 },
   heroStat: { alignItems: 'flex-start' },
   heroStatValue: { color: '#ffffff', fontWeight: '900', fontSize: 20 },
   heroStatLabel: { color: '#b9dccd', fontSize: 10, fontWeight: '600', marginTop: 2 },
   heroStatDivider: { height: 25, borderLeftWidth: 1, borderLeftColor: '#7caf9f' },
   heroActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 9, marginTop: 18 },
-  shopHeroButton: { flex: 1, minWidth: 120, minHeight: 45, borderRadius: 12, backgroundColor: '#e7faed', justifyContent: 'center', alignItems: 'center' },
+  shopHeroButton: { flex: 1, minWidth: 120, minHeight: 51, borderRadius: 15, backgroundColor: '#e7faed', justifyContent: 'center', alignItems: 'center' },
   shopHeroText: { fontSize: 12, fontWeight: '800', color: '#075c3d' },
-  organizerButton: { flex: 1, minWidth: 120, minHeight: 44, borderRadius: 12, borderWidth: 1, borderColor: '#629d87', justifyContent: 'center', alignItems: 'center' },
+  organizerButton: { flex: 1, minWidth: 120, minHeight: 51, borderRadius: 15, borderWidth: 1, borderColor: '#8bc7b5', backgroundColor:'#ffffff12', justifyContent: 'center', alignItems: 'center' },
   organizerButtonText: { color: '#e3f7ed', fontSize: 12, fontWeight: '800' },
   hostAction: { alignSelf:'flex-start', minHeight:42, justifyContent:'center', marginTop:4 },
   hostText: { color:'#e5f8f2',fontSize:12,fontWeight:'800' },
@@ -523,15 +527,15 @@ const styles = StyleSheet.create({
   heroControlActive:{width:23,backgroundColor:'#b2e7d5'},
   heroPause:{minHeight:36,marginLeft:5,justifyContent:'center',paddingHorizontal:6},
   heroPauseText:{fontWeight:'800',color:'#d2e9e5',fontSize:10},
-  heroFeatured:{marginTop:13,borderRadius:13,backgroundColor:'#ffffff18',borderWidth:1,borderColor:'#ffffff35',padding:9,flexDirection:'row',alignItems:'center',gap:10},
+  heroFeatured:{marginTop:17,borderRadius:17,backgroundColor:'#ffffff22',borderWidth:1,borderColor:'#ffffff44',padding:10,flexDirection:'row',alignItems:'center',gap:10},
   heroFeaturedImage:{height:43,width:43,borderRadius:9,backgroundColor:'#30685a'},
   heroFeaturedText:{flex:1},heroFeaturedLabel:{color:'#abddce',fontSize:10,fontWeight:'800',letterSpacing:1.0},
   heroFeaturedTitle:{color:'#ffffff',fontSize:12,fontWeight:'800',marginTop:3},
   heroFeaturedArrow:{color:'#d5f3e5',fontSize:22,fontWeight:'700'},
   heroFeatureSymbol:{height:43,width:43,overflow:'hidden',backgroundColor:'#ffffff18',borderRadius:10,textAlign:'center',textAlignVertical:'center',color:'#d5f3e5',fontSize:23},
-  searchField: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.colors.card, borderRadius: 16, borderWidth: 1, borderColor: theme.colors.border, minHeight: 52, marginBottom: 12, paddingHorizontal: 14 },
+  searchField: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.colors.card, borderRadius: 19, borderWidth: 1, borderColor: theme.colors.border, minHeight: 58, marginBottom: 14, paddingHorizontal: 15, shadowColor:mobileDesign.shadow,shadowOpacity:.04,shadowRadius:10,shadowOffset:{width:0,height:4},elevation:1 },
   searchIcon: { fontSize: 26, color: theme.colors.primary, marginRight: 8 },
-  searchInput: { flex: 1, fontSize: 15, color: theme.colors.text, paddingVertical: 12 },
+  searchInput: { flex: 1, fontSize: 14, color: theme.colors.text, paddingVertical: 12 },
   clearSearch: { minWidth: 36, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   clearSearchText: { color: theme.colors.textMuted, fontSize: 25 },
   filterControls:{flexDirection:'row',alignItems:'center',gap:9,marginBottom:12},
@@ -550,7 +554,7 @@ const styles = StyleSheet.create({
   searchRetryText:{fontSize:12,fontWeight:'800',color:theme.colors.primary},
   loadMore:{minHeight:47,borderWidth:1,borderColor:theme.colors.border,borderRadius:14,backgroundColor:'#fff',marginTop:7,alignItems:'center',justifyContent:'center'},
   loadMoreText:{fontSize:13,color:theme.colors.primary,fontWeight:'800'},
-  categoryScroll: { marginBottom: 22 },
+  categoryScroll: { marginBottom: 27 },
   searchStatus: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12 },
   searchStatusText: { color: theme.colors.textMuted, fontSize: 12, lineHeight: 19, marginBottom: 10 },
   categoryRow: { gap: 8, paddingBottom: 3 },
@@ -558,18 +562,18 @@ const styles = StyleSheet.create({
   categoryPillSelected: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
   categoryText: { color: theme.colors.textMuted, fontWeight: '700', fontSize: 12 },
   categoryTextSelected: { color: '#ffffff' },
-  sectionBlock: { marginBottom: 22 },
+  sectionBlock: { marginBottom: 29 },
   sectionHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
   sectionTitle: { color: theme.colors.text, fontSize: 20, fontWeight: '800', letterSpacing: -0.25 },
   sectionCount: { color: theme.colors.textMuted, fontSize: 12, fontWeight: '600' },
   livePill: { color: theme.colors.danger, fontWeight: '800', fontSize: 10 },
-  featuredCard: { borderRadius: 20, backgroundColor: '#061b28', overflow: 'hidden', elevation: 2, minHeight:250 },
-  featuredImage: { width: '100%',height: 255,resizeMode: 'cover' },
+  featuredCard: { borderRadius: 26, backgroundColor: '#061b28', overflow: 'hidden', elevation: 5, minHeight:250, shadowColor:mobileDesign.shadow,shadowOpacity:.13,shadowRadius:16,shadowOffset:{width:0,height:10} },
+  featuredImage: { width: '100%',height: 274,resizeMode: 'cover' },
   featuredTint: { position:'absolute',left:0,right:0,top:0,bottom:0,backgroundColor:'rgba(3,20,29,.56)' },
   featuredChip:{position:'absolute',top:14,left:14,backgroundColor:'#101b25bf',borderRadius:18,paddingHorizontal:12,paddingVertical:8,borderWidth:1,borderColor:'#ffffff55'},
   featuredBody: {position:'absolute',left:0,right:0,bottom:0,padding:16},
   featuredLabel: {fontSize:10,fontWeight:'900',color:'#fff',letterSpacing:1.1},
-  featuredTitle: {color:'#fff',fontWeight:'900',fontSize:22,lineHeight:27,marginTop:6},
+  featuredTitle: {color:'#fff',fontWeight:'900',fontSize:24,lineHeight:30,marginTop:8,letterSpacing:-.5},
   featuredMeta:{color:'#e4eee9',fontSize:12,marginTop:3},
   featuredOrg:{color:'#e3e9eb',fontSize:12,marginTop:4},
   featuredBottom:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',borderTopWidth:1,borderTopColor:'#ffffff55',marginTop:12,paddingTop:11},
@@ -609,22 +613,27 @@ const styles = StyleSheet.create({
   liveWatch: { color: theme.colors.primaryDark, fontWeight: '700', fontSize: 12, marginTop: theme.spacing.xs },
   card: {
     backgroundColor: theme.colors.card,
-    borderRadius: 20,
+    borderRadius: 24,
     borderWidth: 1,
     borderColor: theme.colors.border,
     marginBottom: theme.spacing.lg,
     overflow: 'hidden',
   },
   cardPressed: { opacity: 0.85 },
-  poster: { width: '100%',height: 184,resizeMode: 'cover' },
+  poster: { width: '100%',height: 206,resizeMode: 'cover' },
+  posterTopLabel:{position:'absolute',top:13,left:13,backgroundColor:'#091c2fae',borderRadius:10,paddingHorizontal:10,paddingVertical:7,borderWidth:1,borderColor:'#ffffff3c'},
+  posterTopText:{fontSize:9,color:'#ffffff',fontWeight:'900',letterSpacing:1},
+  eventTextRow:{flexDirection:'row',alignItems:'center',gap:10},
+  arrowBox:{width:38,height:38,borderRadius:13,backgroundColor:mobileDesign.mintSoft,justifyContent:'center',alignItems:'center'},
+  arrowText:{fontSize:21,fontWeight:'800',color:mobileDesign.emerald},
   eventPosterWrap: {position:'relative',backgroundColor:'#0d5349'},
   eventPosterShade:{position:'absolute',left:0,right:0,bottom:0,height:46,backgroundColor:'#091b28a8'},
   eventPosterInfo:{position:'absolute',left:12,bottom:11},
   eventPosterInfoText:{color:'#fff',fontWeight:'800',fontSize:12},
   posterPlaceholder: { backgroundColor: theme.colors.primaryDark, alignItems: 'center', justifyContent: 'center', padding: theme.spacing.sm },
   posterPlaceholderText: { color: '#ffffff', fontSize: 11, fontWeight: '600', textAlign: 'center' },
-  cardBody:{padding:15},
-  cardFooter:{flexDirection:'row',justifyContent:'space-between',alignItems:'center',marginTop:13},
+  cardBody:{padding:17},
+  cardFooter:{flexDirection:'row',justifyContent:'space-between',alignItems:'center',marginTop:18},
   modeBadge:{backgroundColor:'#edf7f4',paddingHorizontal:11,paddingVertical:7,borderRadius:18,borderWidth:1,borderColor:theme.colors.border},
   modeText:{fontSize:11,color:theme.colors.primary,fontWeight:'800'},
   title: { color: theme.colors.text, fontSize: 16, fontWeight: '800', lineHeight: 22 },
