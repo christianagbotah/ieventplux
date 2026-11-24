@@ -13,6 +13,8 @@ export type RootStackParamList = {
   Following: undefined
   Reels: undefined
   Account: undefined
+  OrganizerStudio: undefined
+  EventEditor: {orgId:string;eventId?:string}
   /** Event detail + checkout. Accepts the event id or slug. */
   EventDetail: { eventId: string }
   /** My tickets + order history. `orderRef` is set by the ieventplux://order/{ref}
@@ -68,3 +70,6 @@ export type AccountScreenProps = NativeStackScreenProps<RootStackParamList, 'Acc
 
 export type FollowingScreenProps = NativeStackScreenProps<RootStackParamList, 'Following'>
 export type ReelsScreenProps = NativeStackScreenProps<RootStackParamList, 'Reels'>
+
+export type OrganizerStudioScreenProps = NativeStackScreenProps<RootStackParamList, 'OrganizerStudio'>
+export type EventEditorScreenProps = NativeStackScreenProps<RootStackParamList, 'EventEditor'>

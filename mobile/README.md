@@ -212,3 +212,7 @@ The web public portal is the current canonical interface. Read [`../docs/NATIVE_
 Native Discover filtering uses `src/lib/discovery-filters.ts` and `src/components/DiscoverFilterSheet.tsx`. It sends the same `/events` filters as the web portal and never silently substitutes a partial cached list after a server failure. Update detection uses the public Android QA release index; the user still authorizes APK installation.
 
 Native event detail parity is implemented through `src/components/EventProgrammeSections.tsx` and `src/lib/event-programme.ts`. The component reads only the published/gated fields returned by `/api/v1/events/{id}`; it never assumes that an absent private programme or unavailable souvenir checkout is usable. The organizer/merchandise editors still require further native implementation and device QA.
+
+### Native Organizer Studio
+
+From the authenticated Account screen, tap **Organizer studio** to view accepted memberships and the server-authorized event catalogue. Roles with event creation permissions can create unpublished event drafts or edit basic metadata. Validation and the final organization/plan permission gates remain on the server. The event start/end fields explicitly use device-local 24-hour time (`YYYY-MM-DD`, `HH:MM`) and submit absolute ISO instants alongside the detected timezone; changing an existing event's schedule or visibility still requires the advanced web organizer studio. Native payments, ticket-tier management, publishing, document uploads and payouts are not asserted by this increment.

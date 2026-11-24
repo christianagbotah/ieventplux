@@ -12,7 +12,7 @@ export default function AccountScreen({ navigation }: AccountScreenProps) {
   const [linkError, setLinkError] = useState('')
   const initials = (user?.displayName || user?.email || 'U').trim().split(/\s+/).slice(0, 2).map(s => s[0]?.toUpperCase()).join('')
   const openPortal = async (path: string) => {
-    try { setLinkError(''); await Linking.openURL('https://ieventplux.lightworldtech.com' + path) }
+    try { setLinkError(''); await Linking.openURL('https://ieventplux.lightworldtech.com/#' + path) }
     catch { setLinkError('Unable to open the web portal on this device.') }
   }
   const logout = async () => {
@@ -39,7 +39,8 @@ export default function AccountScreen({ navigation }: AccountScreenProps) {
     </View>
     <Text style={styles.sectionLabel}>ORGANIZER & ACCOUNT TOOLS</Text>
     <View style={styles.group}>
-      <Row title="Organizer studio" detail="Create and manage events in the web portal" icon="◎" onPress={() => void openPortal('/organizer')} />
+      <Row title="Organizer studio" detail="Your organizations, drafts and event management" icon="◎" onPress={() => navigation.navigate('OrganizerStudio')} />
+      <Row title="Advanced organizer tools" detail="Lineup editing, ticket tiers and business settings on web" icon="▤" onPress={() => void openPortal('/organizer')} />
       <Row title="Profile & settings" detail="Manage your account in the web portal" icon="⚙" onPress={() => void openPortal('/')} last />
     </View>
     {linkError ? <Text accessibilityRole="alert" style={styles.error}>{linkError}</Text> : null}
