@@ -67,6 +67,7 @@ import {
   type SyncReport,
 } from '../lib/checkin-offline'
 import { theme } from '../theme'
+import {PremiumBackdrop,TileGlyph,mobileDesign} from '../ui/PremiumUI'
 import type { CheckinScreenProps } from '../navigation'
 
 const DEVICE_SCAN_ID_KEY = 'ieventplux.device.scanId'
@@ -288,11 +289,14 @@ export default function CheckinScreen({ route }: CheckinScreenProps) {
     return (
       <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
         <View style={styles.setupCard}>
-          <Text style={styles.setupTitle}>Check-in scanner</Text>
-          <Text style={styles.setupBody}>
-            Enter the event ID you are scanning for (find it in the organizer dashboard). The
-            API requires check-in staff permissions for the event's organization.
-          </Text>
+          <View style={styles.setupHero}><PremiumBackdrop mode="midnight"/>
+            <TileGlyph kind="scanner" size={70}/>
+            <Text style={styles.setupEyebrow}>✦  iEVENTPLUX EVENT ACCESS</Text>
+            <Text style={styles.setupTitle}>Check-in, made seamless.</Text>
+            <Text style={styles.setupHeroText}>Verify entry, welcome attendees and keep the event moving.</Text>
+          </View>
+          <Text style={styles.setupSectionTitle}>Select your event</Text>
+          <Text style={styles.setupBody}>Enter the event ID from the organizer dashboard. The server checks your staff permissions before accepting scans.</Text>
           <TextInput
             style={styles.input}
             value={manualCode}
@@ -323,6 +327,9 @@ export default function CheckinScreen({ route }: CheckinScreenProps) {
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
+        <View style={styles.scanHeading}><View style={styles.scanHeadingText}><Text style={styles.scanEyebrow}>✦  STAFF CHECK-IN</Text>
+          <Text style={styles.scanTitle}>Welcome your guests.</Text><Text style={styles.scanSubtitle}>Scan a ticket QR or enter its code securely.</Text></View>
+          <TileGlyph kind="scanner" size={48}/></View>
         <View style={styles.cameraWrap}>
           {permission === null ? (
             <View style={styles.center}>
@@ -331,13 +338,11 @@ export default function CheckinScreen({ route }: CheckinScreenProps) {
           ) : permission.granted ? (
             // expo-camera barcode scanning works in Expo Go (RTMP publishing does
             // not — that requires a development build; see docs/NATIVE_MODULES.md).
-            <CameraView
-              style={styles.camera}
-              barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
-              onBarcodeScanned={({ data }) => {
-                void handleScan(data)
-              }}
-            />
+            <View style={styles.cameraSurface}>
+              <CameraView style={styles.camera} barcodeScannerSettings={{barcodeTypes:['qr']}}
+                onBarcodeScanned={({data})=>{void handleScan(data)}}/>
+              <View style={styles.scanOverlay} pointerEvents="none"><View style={styles.reticle}/></View>
+            </View>
           ) : (
             <View style={styles.center}>
               <Text style={styles.permissionTitle}>Camera access needed</Text>
@@ -351,6 +356,7 @@ export default function CheckinScreen({ route }: CheckinScreenProps) {
 
         <BannerView banner={banner} eventId={eventId} />
 
+        <View style={styles.manualHeading}><Text style={styles.manualHeadingTitle}>Enter code manually</Text><Text style={styles.manualHeadingHint}>When a camera scan isn't possible</Text></View>
         <View style={styles.manualRow}>
           <TextInput
             style={styles.manualInput}
@@ -570,100 +576,49 @@ function BannerView({ banner, eventId }: { banner: Banner | null; eventId: strin
   )
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: theme.colors.bg },
-  scrollContent: { paddingBottom: theme.spacing.md },
-  cameraWrap: { height: 320, backgroundColor: '#0c0a09' },
-  camera: { flex: 1 },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: theme.spacing.xl },
-  permissionTitle: { color: theme.colors.text, fontSize: 16, fontWeight: '700', marginBottom: theme.spacing.sm },
-  setupCard: { flex: 1, padding: theme.spacing.xl, justifyContent: 'center' },
-  setupTitle: { color: theme.colors.text, fontSize: 20, fontWeight: '700', marginBottom: theme.spacing.sm },
-  setupBody: { color: theme.colors.textMuted, fontSize: 13, marginBottom: theme.spacing.lg },
-  setupHint: { color: theme.colors.textMuted, fontSize: 11, marginTop: theme.spacing.lg },
-  input: {
-    backgroundColor: theme.colors.card,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    borderRadius: theme.radius.md,
-    padding: theme.spacing.lg,
-    marginBottom: theme.spacing.lg,
-    color: theme.colors.text,
-  },
-  button: {
-    backgroundColor: theme.colors.primary,
-    borderRadius: theme.radius.md,
-    padding: theme.spacing.lg,
-    alignItems: 'center',
-  },
-  buttonDisabled: { opacity: 0.55 },
-  buttonText: { color: '#ffffff', fontWeight: '700' },
-  banner: { padding: theme.spacing.lg, minHeight: 64 },
-  bannerTitle: { color: '#ffffff', fontSize: 17, fontWeight: '800', letterSpacing: 0.5 },
-  bannerBody: { color: '#ffffff', fontSize: 12, marginTop: theme.spacing.xs, opacity: 0.95 },
-  bannerNeutral: {
-    padding: theme.spacing.md,
-    backgroundColor: '#ecfdf5',
-    borderBottomWidth: 1,
-    borderBottomColor: '#a7f3d0',
-  },
-  bannerNeutralText: { color: '#065f46', fontSize: 12 },
-  manualRow: { flexDirection: 'row', padding: theme.spacing.md, gap: theme.spacing.sm },
-  manualInput: {
-    flex: 1,
-    backgroundColor: theme.colors.card,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    borderRadius: theme.radius.md,
-    padding: theme.spacing.md,
-    color: theme.colors.text,
-  },
-  manualSubmit: { backgroundColor: theme.colors.primary, borderRadius: theme.radius.md, paddingHorizontal: theme.spacing.lg, justifyContent: 'center' },
-  rosterRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing.md,
-    padding: theme.spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: theme.colors.border,
-  },
-  rosterInfo: { flex: 1 },
-  rosterTitle: { color: theme.colors.text, fontSize: 12, fontWeight: '700' },
-  rosterNote: { color: theme.colors.textMuted, fontSize: 11, marginTop: 2 },
-  reviewToggle: { paddingVertical: theme.spacing.sm, paddingHorizontal: theme.spacing.md },
-  reviewToggleText: { color: theme.colors.primaryDark, fontSize: 12, fontWeight: '700' },
-  reviewPanel: {
-    marginHorizontal: theme.spacing.md,
-    marginBottom: theme.spacing.md,
-    backgroundColor: theme.colors.card,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    borderRadius: theme.radius.md,
-    padding: theme.spacing.md,
-  },
-  reviewHeading: { color: theme.colors.text, fontSize: 12, fontWeight: '700', marginBottom: theme.spacing.sm },
-  reviewEmpty: { color: theme.colors.textMuted, fontSize: 11 },
-  reviewItem: { marginBottom: theme.spacing.sm },
-  reviewResult: { fontSize: 12, fontWeight: '700' },
-  reviewDetail: { color: theme.colors.textMuted, fontSize: 11, marginTop: 2 },
-  footer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: theme.spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: theme.colors.border,
-  },
-  footerText: { color: theme.colors.textMuted, fontSize: 11, flex: 1 },
-  syncButton: {
-    backgroundColor: '#ecfdf5',
-    borderWidth: 1,
-    borderColor: theme.colors.primary,
-    borderRadius: theme.radius.sm,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.xs,
-    minWidth: 84,
-    alignItems: 'center',
-  },
-  syncButtonText: { color: theme.colors.primaryDark, fontWeight: '700', fontSize: 12 },
+const styles=StyleSheet.create({
+  safe:{flex:1,backgroundColor:mobileDesign.canvas},
+  scrollContent:{paddingTop:15,paddingHorizontal:18,paddingBottom:25,gap:14},
+  setupCard:{flex:1,padding:19,justifyContent:'center',gap:16},
+  setupHero:{backgroundColor:mobileDesign.forestDeep,borderRadius:28,padding:24,minHeight:265,justifyContent:'center',gap:11,overflow:'hidden'},
+  setupEyebrow:{color:'#caf7e5',fontSize:10,fontWeight:'900',letterSpacing:1.3,marginTop:8},
+  setupTitle:{fontSize:28,fontWeight:'900',color:'#fff',letterSpacing:-.8,lineHeight:35},
+  setupHeroText:{fontSize:13,lineHeight:21,color:'#e3f6ed'},
+  setupSectionTitle:{fontSize:19,color:mobileDesign.ink,fontWeight:'900',marginTop:7},
+  setupBody:{color:mobileDesign.inkMuted,fontSize:13,lineHeight:21},
+  setupHint:{color:mobileDesign.inkMuted,fontSize:11,lineHeight:20,backgroundColor:mobileDesign.mintSoft,padding:14,borderRadius:15},
+  input:{backgroundColor:'#fff',borderWidth:1,borderColor:mobileDesign.border,borderRadius:16,padding:14,minHeight:53,color:mobileDesign.ink,fontSize:14},
+  button:{backgroundColor:mobileDesign.emerald,borderRadius:15,minHeight:53,paddingHorizontal:16,alignItems:'center',justifyContent:'center'},
+  buttonDisabled:{opacity:.5},buttonText:{color:'#fff',fontSize:13,fontWeight:'900'},
+  scanHeading:{flexDirection:'row',alignItems:'center',gap:14,justifyContent:'space-between'},scanHeadingText:{flex:1},
+  scanEyebrow:{fontSize:10,fontWeight:'900',letterSpacing:1.2,color:mobileDesign.emerald},
+  scanTitle:{fontSize:23,fontWeight:'900',color:mobileDesign.ink,letterSpacing:-.6,marginTop:5},
+  scanSubtitle:{fontSize:12,color:mobileDesign.inkMuted,marginTop:6,lineHeight:19},
+  cameraWrap:{height:320,backgroundColor:'#0a2830',borderRadius:24,overflow:'hidden',position:'relative',shadowColor:mobileDesign.shadow,shadowOpacity:.14,shadowRadius:17,shadowOffset:{width:0,height:9},elevation:4},
+  cameraSurface:{flex:1,position:'relative'},camera:{flex:1},
+  scanOverlay:{position:'absolute',top:0,left:0,right:0,bottom:0,justifyContent:'center',alignItems:'center'},
+  reticle:{width:'62%',aspectRatio:1,borderWidth:2,borderColor:'#d7f9e2',borderRadius:22,backgroundColor:'transparent'},
+  center:{flex:1,alignItems:'center',justifyContent:'center',padding:22},
+  permissionTitle:{color:'#fff',fontSize:18,fontWeight:'900',marginBottom:10},
+  banner:{padding:16,minHeight:69,borderRadius:18,gap:5},bannerTitle:{color:'#fff',fontSize:16,fontWeight:'900'},
+  bannerBody:{color:'#fff',fontSize:12,lineHeight:19},
+  bannerNeutral:{padding:14,backgroundColor:mobileDesign.mintSoft,borderRadius:16,borderWidth:1,borderColor:'#d2ebe0'},
+  bannerNeutralText:{color:mobileDesign.emerald,fontSize:12,fontWeight:'700',lineHeight:19},
+  manualHeading:{marginTop:7},manualHeadingTitle:{fontSize:16,color:mobileDesign.ink,fontWeight:'900'},
+  manualHeadingHint:{fontSize:11,color:mobileDesign.inkMuted,marginTop:4},
+  manualRow:{flexDirection:'row',gap:9},manualInput:{flex:1,backgroundColor:'#fff',borderWidth:1,borderColor:mobileDesign.border,borderRadius:15,paddingHorizontal:12,minHeight:51,color:mobileDesign.ink,fontSize:13},
+  manualSubmit:{backgroundColor:mobileDesign.emerald,borderRadius:15,paddingHorizontal:16,justifyContent:'center',minHeight:51},
+  rosterRow:{flexDirection:'row',alignItems:'center',gap:12,padding:15,borderWidth:1,borderColor:mobileDesign.border,backgroundColor:'#fff',borderRadius:20},
+  rosterInfo:{flex:1},rosterTitle:{color:mobileDesign.ink,fontSize:12,fontWeight:'900',lineHeight:18},
+  rosterNote:{color:mobileDesign.inkMuted,fontSize:11,lineHeight:18,marginTop:6},
+  reviewToggle:{paddingVertical:13,paddingHorizontal:14,borderRadius:15,backgroundColor:mobileDesign.mintSoft,alignItems:'center'},
+  reviewToggleText:{color:mobileDesign.emerald,fontSize:12,fontWeight:'900',textAlign:'center'},
+  reviewPanel:{backgroundColor:'#fff',borderWidth:1,borderColor:mobileDesign.border,borderRadius:20,padding:16,gap:9},
+  reviewHeading:{color:mobileDesign.ink,fontSize:13,fontWeight:'900',marginBottom:6},reviewEmpty:{color:mobileDesign.inkMuted,fontSize:11},
+  reviewItem:{paddingVertical:10,borderBottomWidth:1,borderBottomColor:mobileDesign.border},reviewResult:{fontSize:12,fontWeight:'900'},
+  reviewDetail:{color:mobileDesign.inkMuted,fontSize:11,lineHeight:18,marginTop:4},
+  footer:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',paddingHorizontal:15,paddingVertical:13,borderTopWidth:1,borderTopColor:mobileDesign.border,backgroundColor:'#fff',gap:9},
+  footerText:{color:mobileDesign.inkMuted,fontSize:11,flex:1,lineHeight:18},
+  syncButton:{backgroundColor:mobileDesign.mintSoft,borderWidth:1,borderColor:'#bee2d2',borderRadius:14,paddingHorizontal:13,minHeight:45,minWidth:85,alignItems:'center',justifyContent:'center'},
+  syncButtonText:{color:mobileDesign.emerald,fontWeight:'900',fontSize:12},
 })

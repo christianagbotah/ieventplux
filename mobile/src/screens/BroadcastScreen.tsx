@@ -48,6 +48,7 @@ import {
   type PlaybackIssueResponse,
 } from '../api/client'
 import { theme } from '../theme'
+import {PremiumBackdrop,TileGlyph,mobileDesign} from '../ui/PremiumUI'
 import { useSession } from '../store/session'
 import type { BroadcastScreenProps } from '../navigation'
 
@@ -222,6 +223,8 @@ export default function BroadcastScreen({ route, navigation }: BroadcastScreenPr
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <ScrollView contentContainerStyle={styles.scrollContent} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void refresh()} tintColor={theme.colors.primary} />}>
         <View style={styles.headerCard}>
+          <PremiumBackdrop mode="midnight"/>
+          <View style={styles.headerKicker}><Text style={styles.headerKickerText}>✦  iEVENTPLUX BROADCAST</Text><Text style={styles.headerKickerMark}>◎</Text></View>
           <View style={styles.badgeRow}>
             <View style={[styles.badge, isLive ? styles.badgeLive : isReplayReady ? styles.badgeReplay : styles.badgeMuted]}>
               <Text style={[styles.badgeText, { color: '#ffffff' }]}>
@@ -267,23 +270,23 @@ export default function BroadcastScreen({ route, navigation }: BroadcastScreenPr
             )}
             {playState.status !== 'gate' && (
               <>
-                <Text style={styles.playTitle}>{isLive ? 'Join the live room' : 'Watch the replay'}</Text>
+                <Text style={styles.playTitle}>{isLive ? 'Preview the live session' : 'Preview the replay session'}</Text>
                 <Text style={styles.playBody}>
                   {isLive
-                    ? 'Entitlement checked, capacity enforced — your session stays alive with a periodic heartbeat.'
-                    : `On-demand replay${replay.effectivePriceMinor !== null && replay.effectivePriceMinor > 0 ? ` · ${formatMinor(replay.effectivePriceMinor)}` : ''}.`}
+                    ? 'The app verifies admission and session capacity. This native viewer currently shows a simulated preview, not actual live video.'
+                    : 'The app verifies replay eligibility. Native video playback is not yet implemented; this is a simulated preview.'}
                 </Text>
                 <Pressable
                   style={[styles.primaryButton, playState.status === 'requesting' && styles.buttonDisabled]}
                   disabled={playState.status === 'requesting'}
                   onPress={() => void handlePlay()}
                   accessibilityRole="button"
-                  accessibilityLabel={isLive ? 'Join the live broadcast' : 'Start the replay'}
+                  accessibilityLabel={isLive ? 'Start simulated live session preview' : 'Start simulated replay session preview'}
                 >
                   {playState.status === 'requesting' ? (
                     <ActivityIndicator size="small" color="#ffffff" />
                   ) : (
-                    <Text style={styles.primaryButtonText}>{isLive ? 'Watch live' : 'Watch replay'}</Text>
+                    <Text style={styles.primaryButtonText}>{'Open session preview'}</Text>
                   )}
                 </Pressable>
               </>
@@ -328,9 +331,10 @@ export default function BroadcastScreen({ route, navigation }: BroadcastScreenPr
 
         {/* Chat / transcript */}
         <View style={styles.chatCard}>
-          <Text style={styles.chatHeading}>
-            {isLive ? 'Live chat' : 'Chat'} · {messages.length} message{messages.length === 1 ? '' : 's'}
-          </Text>
+          <View style={styles.chatTop}><TileGlyph kind="organizer" size={45}/>
+            <View style={styles.chatTopText}><Text style={styles.chatKicker}>EVENT COMMUNITY</Text><Text style={styles.chatHeading}>
+              {isLive?'Live conversation':'Event transcript'} · {messages.length} message{messages.length===1?'':'s'}
+            </Text></View></View>
           {!isLive && (
             <Text style={styles.chatClosedNote}>
               {broadcast.status === 'ENDED' ? 'Chat closed after the live session — read-only transcript.' : 'Chat opens when the broadcast goes live.'}
@@ -399,6 +403,7 @@ function SimPlayer({ mode, delivery, deliveryNote, onLeave }: { mode: 'LIVE' | '
   return (
     <View style={styles.playerCard}>
       <View style={styles.playerSurface} accessibilityLabel={`Simulated ${mode.toLowerCase()} stream`}>
+        <PremiumBackdrop mode="midnight"/>
         <Animated.View style={[styles.playerPulse, { opacity: pulse }]} />
         <View style={styles.playerTag}>
           <Text style={styles.playerTagText}>
@@ -410,8 +415,7 @@ function SimPlayer({ mode, delivery, deliveryNote, onLeave }: { mode: 'LIVE' | '
         {deliveryNote}
       </Text>
       <Text style={styles.playerDelivery}>
-        Delivery: {delivery} — entitlement and session enforcement are fully active; a real
-        video track appears once {delivery === 'CLOUDFLARE_STREAM' ? 'the stream URL resolves' : 'Cloudflare Stream credentials are configured'}.
+        Delivery: {delivery}. This mobile viewer does not render live HLS video yet. This is a simulated visual; entitlement and session checks remain enforced.
       </Text>
       <Pressable style={styles.secondaryButton} onPress={onLeave} accessibilityRole="button" accessibilityLabel="Leave the broadcast">
         <Text style={styles.secondaryButtonText}>Leave</Text>
@@ -420,130 +424,52 @@ function SimPlayer({ mode, delivery, deliveryNote, onLeave }: { mode: 'LIVE' | '
   )
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: theme.colors.bg },
-  scrollContent: { padding: theme.spacing.lg, paddingBottom: theme.spacing.xxl },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: theme.spacing.xl },
-  headerCard: {
-    backgroundColor: theme.colors.card,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    borderRadius: theme.radius.lg,
-    padding: theme.spacing.md,
-    marginBottom: theme.spacing.md,
-  },
-  badgeRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm, marginBottom: theme.spacing.sm },
-  badge: { borderRadius: theme.radius.sm, paddingHorizontal: theme.spacing.sm, paddingVertical: 2 },
-  badgeLive: { backgroundColor: theme.colors.danger },
-  badgeReplay: { backgroundColor: theme.colors.primaryDark },
-  badgeMuted: { backgroundColor: theme.colors.textMuted },
-  badgeText: { fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
-  viewerMeta: { color: theme.colors.textMuted, fontSize: 11 },
-  title: { color: theme.colors.text, fontSize: 18, fontWeight: '700' },
-  meta: { color: theme.colors.textMuted, fontSize: 12, marginTop: theme.spacing.xs },
-  accessMeta: { color: theme.colors.primaryDark, fontSize: 12, marginTop: theme.spacing.xs, fontWeight: '600' },
-  playCard: {
-    backgroundColor: theme.colors.card,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    borderRadius: theme.radius.lg,
-    padding: theme.spacing.lg,
-    marginBottom: theme.spacing.md,
-  },
-  playTitle: { color: theme.colors.text, fontSize: 16, fontWeight: '700' },
-  playBody: { color: theme.colors.textMuted, fontSize: 12, marginTop: theme.spacing.sm, marginBottom: theme.spacing.md },
-  primaryButton: {
-    backgroundColor: theme.colors.primary,
-    borderRadius: theme.radius.md,
-    paddingVertical: theme.spacing.md,
-    paddingHorizontal: theme.spacing.xl,
-    alignItems: 'center',
-  },
-  primaryButtonText: { color: '#ffffff', fontWeight: '700' },
-  secondaryButton: {
-    marginTop: theme.spacing.md,
-    borderWidth: 1,
-    borderColor: theme.colors.primary,
-    borderRadius: theme.radius.md,
-    paddingVertical: theme.spacing.sm,
-    paddingHorizontal: theme.spacing.lg,
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-  },
-  secondaryButtonText: { color: theme.colors.primaryDark, fontWeight: '700', fontSize: 12 },
-  buttonDisabled: { opacity: 0.55 },
-  gateBox: {
-    backgroundColor: '#fffbeb',
-    borderWidth: 1,
-    borderColor: '#fde68a',
-    borderRadius: theme.radius.md,
-    padding: theme.spacing.md,
-    marginBottom: theme.spacing.md,
-  },
-  gateTitle: { color: '#92400e', fontSize: 13, fontWeight: '700' },
-  gateBody: { color: '#92400e', fontSize: 11, marginTop: theme.spacing.xs },
-  playerCard: {
-    backgroundColor: theme.colors.card,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    borderRadius: theme.radius.lg,
-    padding: theme.spacing.md,
-    marginBottom: theme.spacing.md,
-  },
-  playerSurface: {
-    height: 200,
-    borderRadius: theme.radius.md,
-    backgroundColor: '#0c0a09',
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  playerPulse: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: theme.colors.primary,
-  },
-  playerTag: { position: 'absolute', top: theme.spacing.sm, left: theme.spacing.sm, backgroundColor: 'rgba(28,25,23,0.7)', borderRadius: theme.radius.sm, paddingHorizontal: theme.spacing.sm, paddingVertical: 2 },
-  playerTagText: { color: '#ffffff', fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
-  playerNote: { color: theme.colors.textMuted, fontSize: 11, marginTop: theme.spacing.md },
-  playerDelivery: { color: theme.colors.textMuted, fontSize: 10, marginTop: theme.spacing.xs },
-  deliveryNote: { color: theme.colors.textMuted, fontSize: 10, marginBottom: theme.spacing.md },
-  chatCard: {
-    backgroundColor: theme.colors.card,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    borderRadius: theme.radius.lg,
-    padding: theme.spacing.md,
-  },
-  chatHeading: { color: theme.colors.text, fontSize: 13, fontWeight: '700', marginBottom: theme.spacing.xs },
-  chatClosedNote: { color: theme.colors.textMuted, fontSize: 11, marginBottom: theme.spacing.sm },
-  chatError: { color: theme.colors.danger, fontSize: 11, marginBottom: theme.spacing.sm },
-  chatEmpty: { color: theme.colors.textMuted, fontSize: 11 },
-  chatRow: { marginBottom: theme.spacing.sm },
-  chatAuthor: { color: theme.colors.primaryDark, fontSize: 11, fontWeight: '700' },
-  chatBody: { color: theme.colors.text, fontSize: 12, marginTop: 2 },
-  chatInputRow: { flexDirection: 'row', gap: theme.spacing.sm, marginTop: theme.spacing.sm },
-  chatInput: {
-    flex: 1,
-    backgroundColor: theme.colors.bg,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    borderRadius: theme.radius.md,
-    padding: theme.spacing.md,
-    color: theme.colors.text,
-    fontSize: 12,
-  },
-  chatSend: { backgroundColor: theme.colors.primary, borderRadius: theme.radius.md, paddingHorizontal: theme.spacing.lg, justifyContent: 'center' },
-  chatSendText: { color: '#ffffff', fontWeight: '700', fontSize: 12 },
-  retryButton: {
-    marginTop: theme.spacing.xl,
-    backgroundColor: theme.colors.primary,
-    borderRadius: theme.radius.md,
-    paddingVertical: theme.spacing.md,
-    paddingHorizontal: theme.spacing.xl,
-  },
-  retryButtonText: { color: '#ffffff', fontWeight: '700' },
-  errorTitle: { color: theme.colors.text, fontSize: 16, fontWeight: '700', marginBottom: theme.spacing.sm },
-  mutedCenter: { color: theme.colors.textMuted, fontSize: 12, textAlign: 'center' },
+const styles=StyleSheet.create({
+  safe:{flex:1,backgroundColor:mobileDesign.canvas},scrollContent:{padding:18,paddingBottom:43,gap:15},
+  center:{flex:1,alignItems:'center',justifyContent:'center',padding:25},
+  headerCard:{backgroundColor:mobileDesign.forestDeep,borderRadius:28,padding:23,overflow:'hidden',minHeight:218,
+    shadowColor:mobileDesign.forestDeep,shadowOpacity:.2,shadowRadius:18,shadowOffset:{width:0,height:10},elevation:5},
+  headerKicker:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',marginBottom:18},
+  headerKickerText:{fontSize:10,color:'#c5f6e3',fontWeight:'900',letterSpacing:1.15},headerKickerMark:{fontSize:23,color:mobileDesign.gold},
+  badgeRow:{flexDirection:'row',alignItems:'center',gap:11,marginBottom:14,flexWrap:'wrap'},
+  badge:{borderRadius:11,paddingHorizontal:12,paddingVertical:8},badgeLive:{backgroundColor:'#bc3335'},badgeReplay:{backgroundColor:mobileDesign.emerald},
+  badgeMuted:{backgroundColor:mobileDesign.inkMuted},badgeText:{fontSize:10,fontWeight:'900',letterSpacing:.6},
+  viewerMeta:{color:'#def3e9',fontSize:11,fontWeight:'700'},
+  title:{color:'#fff',fontSize:24,lineHeight:31,fontWeight:'900',letterSpacing:-.7},
+  meta:{color:'#e0f4e9',fontSize:12,marginTop:9},accessMeta:{color:'#c9f8e2',fontSize:12,marginTop:11,fontWeight:'900'},
+  playCard:{backgroundColor:'#fff',borderWidth:1,borderColor:mobileDesign.border,borderRadius:23,padding:19,
+    shadowColor:mobileDesign.shadow,shadowOpacity:.04,shadowRadius:12,shadowOffset:{width:0,height:7},elevation:1},
+  playTitle:{color:mobileDesign.ink,fontSize:18,fontWeight:'900'},
+  playBody:{color:mobileDesign.inkMuted,fontSize:12,lineHeight:20,marginTop:11,marginBottom:16},
+  primaryButton:{backgroundColor:mobileDesign.emerald,borderRadius:15,minHeight:51,paddingHorizontal:20,alignItems:'center',justifyContent:'center'},
+  primaryButtonText:{color:'#fff',fontWeight:'900',fontSize:13},
+  secondaryButton:{marginTop:13,borderWidth:1,borderColor:'#c4e6d5',backgroundColor:mobileDesign.mintSoft,borderRadius:15,minHeight:48,
+    paddingHorizontal:16,alignItems:'center',justifyContent:'center',alignSelf:'flex-start'},
+  secondaryButtonText:{color:mobileDesign.emerald,fontWeight:'900',fontSize:12},buttonDisabled:{opacity:.53},
+  gateBox:{backgroundColor:'#fff4e1',borderWidth:1,borderColor:'#f1dfb9',borderRadius:16,padding:14,marginBottom:12,gap:7},
+  gateTitle:{color:'#88531b',fontSize:14,fontWeight:'900'},gateBody:{color:'#88531b',fontSize:12,lineHeight:20},
+  playerCard:{backgroundColor:'#fff',borderWidth:1,borderColor:mobileDesign.border,borderRadius:23,padding:15,
+    shadowColor:mobileDesign.shadow,shadowOpacity:.04,shadowRadius:13,shadowOffset:{width:0,height:7},elevation:1},
+  playerSurface:{height:240,borderRadius:19,backgroundColor:mobileDesign.forestDeep,alignItems:'center',justifyContent:'center',overflow:'hidden'},
+  playerPulse:{width:130,height:130,borderRadius:65,backgroundColor:'#69cda8'},
+  playerTag:{position:'absolute',top:13,left:13,backgroundColor:'#0f2636da',borderRadius:12,paddingHorizontal:11,paddingVertical:8,borderColor:'#ffffff4d',borderWidth:1},
+  playerTagText:{color:'#fff',fontSize:10,fontWeight:'900',letterSpacing:.55},
+  playerNote:{color:mobileDesign.inkMuted,fontSize:11,lineHeight:18,marginTop:13},
+  playerDelivery:{color:mobileDesign.inkMuted,fontSize:10,lineHeight:17,marginTop:5},
+  deliveryNote:{color:mobileDesign.inkMuted,fontSize:11,lineHeight:19,paddingHorizontal:5},
+  chatCard:{backgroundColor:'#fff',borderWidth:1,borderColor:mobileDesign.border,borderRadius:23,padding:17},
+  chatTop:{flexDirection:'row',alignItems:'center',gap:12,marginBottom:15},chatTopText:{flex:1},
+  chatKicker:{fontSize:9,color:mobileDesign.emerald,fontWeight:'900',letterSpacing:.8},
+  chatHeading:{color:mobileDesign.ink,fontSize:15,fontWeight:'900',marginTop:4,lineHeight:21},
+  chatClosedNote:{color:mobileDesign.inkMuted,fontSize:11,lineHeight:18,marginBottom:10},
+  chatError:{color:theme.colors.danger,fontSize:11,marginBottom:10},chatEmpty:{color:mobileDesign.inkMuted,fontSize:12,lineHeight:19,paddingVertical:13},
+  chatRow:{marginBottom:10,padding:12,backgroundColor:'#f6f8f8',borderRadius:15},
+  chatAuthor:{color:mobileDesign.emerald,fontSize:11,fontWeight:'900'},chatBody:{color:mobileDesign.ink,fontSize:12,lineHeight:19,marginTop:5},
+  chatInputRow:{flexDirection:'row',gap:8,marginTop:12},
+  chatInput:{flex:1,backgroundColor:'#f7f9f8',borderWidth:1,borderColor:mobileDesign.border,borderRadius:14,paddingHorizontal:12,minHeight:50,color:mobileDesign.ink,fontSize:13},
+  chatSend:{backgroundColor:mobileDesign.emerald,borderRadius:14,paddingHorizontal:16,minHeight:50,justifyContent:'center'},
+  chatSendText:{color:'#fff',fontWeight:'900',fontSize:12},
+  retryButton:{marginTop:21,backgroundColor:mobileDesign.emerald,borderRadius:15,paddingHorizontal:22,minHeight:49,justifyContent:'center'},
+  retryButtonText:{color:'#fff',fontWeight:'900'},errorTitle:{color:mobileDesign.ink,fontSize:18,fontWeight:'900',marginBottom:10},
+  mutedCenter:{color:mobileDesign.inkMuted,fontSize:12,textAlign:'center',lineHeight:19},
 })
