@@ -3,7 +3,7 @@
 import {useCallback,useMemo,useRef,useState} from 'react'
 import {useFocusEffect} from '@react-navigation/native'
 import {ActivityIndicator,FlatList,Image,Linking,Pressable,RefreshControl,StyleSheet,Text,View} from 'react-native'
-import {api,formatDate,type Membership,type OrganizerEventCard} from '../api/client'
+import {absoluteUrl,api,formatDate,type Membership,type OrganizerEventCard} from '../api/client'
 import {canManageNativeEvent} from '../lib/organizer-event-form'
 import {useSession} from '../store/session'
 import {theme} from '../theme'
@@ -109,7 +109,7 @@ export default function OrganizerStudioScreen({navigation}:OrganizerStudioScreen
     ListEmptyComponent={orgId&&!loading&&!listError?<View style={styles.empty}><Text style={styles.emptyTitle}>No events yet</Text><Text style={styles.emptyBody}>Your organization's drafts and published events will appear here when created.</Text></View>:null}
     renderItem={({item})=><View style={styles.event}>
       <View style={styles.eventMain}>
-        {item.coverImageUrl?<Image source={{uri:item.coverImageUrl}} style={styles.eventImage}/>:<View style={[styles.eventImage,styles.eventImagePlaceholder]}><Text style={styles.imagePlaceholderText}>✦</Text></View>}
+        {item.coverImageUrl && absoluteUrl(item.coverImageUrl)?<Image source={{uri:absoluteUrl(item.coverImageUrl)!}} style={styles.eventImage} accessibilityLabel={item.title+' artwork'}/>:<View style={[styles.eventImage,styles.eventImagePlaceholder]}><Text style={styles.imagePlaceholderText}>✦</Text></View>}
         <View style={styles.eventInfo}><Text numberOfLines={2} style={styles.eventTitle}>{item.title}</Text><Text style={styles.eventDate}>{formatDate(item.startsAt)}</Text>
           <View style={styles.badge}><Text style={styles.badgeText}>{item.status.replaceAll('_',' ')} · {item.visibility.replaceAll('_',' ')}</Text></View>
         </View>
