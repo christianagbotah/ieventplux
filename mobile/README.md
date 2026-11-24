@@ -232,3 +232,7 @@ The Discover creator calls to action now use the native Organizer Studio and Cre
 ### Premium social views
 
 Following, Reels event previews, Live Hub and event detail/ticket-selection screens now reuse the premium React Native design system. See `../docs/NATIVE_PREMIUM_VISUAL_SYSTEM_20261124.md`. Following clears account-specific activity on sign-out. Reels remain truthful event/artwork previews and do not offer fake playable video. Real-time broadcasts appear only when the backend reports LIVE. Full visual certification requires physical-device screenshots and accessibility testing.
+
+### Premium community, networking and awards
+
+Community, consent-based private event networking, and award voting now use the shared native premium UI. Moderation and one-free-vote ballots continue through the original server permissions and use a custom native ActionDialog. Private profile and discussion requests are guarded against stale asynchronous responses; sensitive networking rosters are purged when consent is revoked. The UI does not fake public vote counts, identities or payment acceptance.

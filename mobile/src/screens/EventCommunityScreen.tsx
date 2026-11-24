@@ -2,18 +2,19 @@
  * First-class native event community, using the same moderated server API as
  * the web. No separate message store and no offline replay of private posts.
  */
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   ActivityIndicator, Image, Pressable, ScrollView, StyleSheet,
   Text, TextInput, View,
 } from 'react-native'
-import { api, ApiClientError, type CommunityComment } from '../api/client'
+import { absoluteUrl, api, ApiClientError, type CommunityComment } from '../api/client'
 import { ActionDialog, type ActionPrompt } from '../components/ActionDialog'
 import {
   communityCanPost, communityUnavailableStatus, mergeCommunityThreads, validCommunityPost,
 } from '../lib/event-social-policy'
 import { useSession } from '../store/session'
 import { theme } from '../theme'
+import {PremiumBackdrop,TileGlyph,mobileDesign} from '../ui/PremiumUI'
 import type { EventCommunityScreenProps } from '../navigation'
 
 const STARTERS = [
@@ -38,6 +39,7 @@ export default function EventCommunityScreen({ route }: EventCommunityScreenProp
   const [loadingMore, setLoadingMore] = useState(false)
   const [inaccessible, setInaccessible] = useState(false)
   const [error, setError] = useState('')
+  const [feedback, setFeedback] = useState('')
   const [draft, setDraft] = useState('')
   const [replyId, setReplyId] = useState<string | null>(null)
   const [replyDraft, setReplyDraft] = useState('')
@@ -45,18 +47,22 @@ export default function EventCommunityScreen({ route }: EventCommunityScreenProp
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
   const [prompt, setPrompt] = useState<ActionPrompt | null>(null)
   const [actionBusy, setActionBusy] = useState(false)
+  const requestRevision = useRef(0)
 
   const load = useCallback(async (targetPage: number, append = false) => {
+    const revision = ++requestRevision.current
     if (append) setLoadingMore(true)
     else setLoading(true)
     try {
       const response = await api.community.list(eventId, targetPage)
+      if (revision !== requestRevision.current) return
       setItems((current) => mergeCommunityThreads(current, response, append))
       setPage(targetPage)
       setTotal(response.total)
       setInaccessible(false)
       setError('')
     } catch (reason) {
+      if (revision !== requestRevision.current) return
       if (reason instanceof ApiClientError && communityUnavailableStatus(reason.status)) {
         setItems([])
         setInaccessible(true)
@@ -65,12 +71,11 @@ export default function EventCommunityScreen({ route }: EventCommunityScreenProp
         setError(reason instanceof ApiClientError ? reason.message : 'Unable to load conversations.')
       }
     } finally {
-      setLoading(false)
-      setLoadingMore(false)
+      if (revision === requestRevision.current) {setLoading(false);setLoadingMore(false)}
     }
   }, [eventId])
 
-  useEffect(() => { void load(1) }, [load])
+  useEffect(() => { void load(1); return () => {requestRevision.current++} }, [load])
 
   const publish = async (parentId?: string) => {
     const content = (parentId ? replyDraft : draft).trim()
@@ -82,8 +87,10 @@ export default function EventCommunityScreen({ route }: EventCommunityScreenProp
       setReplyDraft('')
       setReplyId(null)
       await load(1)
-      setError(parentId ? 'Reply posted successfully.' : 'Conversation published successfully.')
+      setError('')
+      setFeedback(parentId ? 'Reply posted successfully.' : 'Conversation published successfully.')
     } catch (reason) {
+      setFeedback('')
       setError(reason instanceof ApiClientError ? reason.message : 'Your message could not be published.')
     } finally {
       setPosting(false)
@@ -107,8 +114,10 @@ export default function EventCommunityScreen({ route }: EventCommunityScreenProp
             if (isRemoval) await api.community.remove(comment.id)
             else await api.community.report(comment.id)
             if (isRemoval) await load(1)
-            setError(isRemoval ? 'Message removed.' : 'Report sent to moderators.')
+            setError('')
+            setFeedback(isRemoval ? 'Message removed.' : 'Report sent to moderators.')
           } catch (reason) {
+            setFeedback('')
             setError(reason instanceof ApiClientError ? reason.message : 'Could not complete this action.')
           } finally { setActionBusy(false); setPrompt(null) }
         })()
@@ -118,7 +127,7 @@ export default function EventCommunityScreen({ route }: EventCommunityScreenProp
 
   const commentRow = (comment: CommunityComment, nested: boolean) =>
     <View key={comment.id} style={[styles.messageRow, nested && styles.replyBox]}>
-      {comment.user.avatarUrl ? <Image source={{ uri: comment.user.avatarUrl }} style={styles.avatar} /> :
+      {comment.user.avatarUrl && absoluteUrl(comment.user.avatarUrl) ? <Image source={{ uri: absoluteUrl(comment.user.avatarUrl)! }} style={styles.avatar} accessibilityLabel={comment.user.displayName+' profile photo'}/> :
         <View style={[styles.avatar, styles.avatarPlaceholder]}>
           <Text style={styles.avatarText}>{(comment.user.displayName || '?').slice(0, 1).toUpperCase()}</Text>
         </View>}
@@ -147,10 +156,12 @@ export default function EventCommunityScreen({ route }: EventCommunityScreenProp
   return <View style={styles.screen}>
     <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <View style={styles.hero}>
-        <Text style={styles.eyebrow}>EVENT COMMUNITY</Text>
-        <Text style={styles.title}>Join the conversation</Text>
-        <Text style={styles.heroDescription} numberOfLines={3}>{eventTitle}</Text>
-        <Text style={styles.heroNote}>Introduce yourself, ask questions and connect with other people around this event.</Text>
+        <PremiumBackdrop mode="midnight"/>
+        <View style={styles.heroTop}><Text style={styles.eyebrow}>✦  YOUR EVENT COMMUNITY</Text><Text style={styles.heroSymbol}>◎</Text></View>
+        <Text style={styles.title}>Good conversations start here.</Text>
+        <Text style={styles.heroDescription} numberOfLines={2}>{eventTitle}</Text>
+        <Text style={styles.heroNote}>Meet your community, ask questions and share the moments that bring people together.</Text>
+        <View style={styles.heroMeta}><Text style={styles.heroMetaText}>MODERATED CONVERSATIONS</Text><Text style={styles.heroMetaText}>●  EVENT COMMUNITY</Text></View>
       </View>
       {inaccessible ? <View style={styles.card}>
         <Text style={styles.cardTitle}>This community is private</Text>
@@ -160,7 +171,7 @@ export default function EventCommunityScreen({ route }: EventCommunityScreenProp
         </Pressable>
       </View> : <>
         {!canPost ? <Text style={styles.notice}>This event discussion is read-only.</Text> : <View style={styles.card}>
-          <Text style={styles.cardTitle}>Share something helpful</Text>
+          <View style={styles.composeHeading}><TileGlyph kind="organizer" size={45}/><View style={styles.composeHeadingText}><Text style={styles.cardTitle}>Join the discussion</Text><Text style={styles.muted}>Make your voice part of the experience</Text></View></View>
           <View style={styles.starters}>
             {STARTERS.map((starter) => <Pressable accessibilityRole="button"
               key={starter.label} onPress={() => setDraft(starter.text)}
@@ -183,14 +194,15 @@ export default function EventCommunityScreen({ route }: EventCommunityScreenProp
           </View>
         </View>}
         <View style={styles.threadHeader}>
-          <Text style={styles.cardTitle}>Conversations {total > 0 ? '(' + total + ')' : ''}</Text>
+          <View><Text style={styles.sectionEyebrow}>THE COMMUNITY FEED</Text><Text style={styles.threadTitle}>Conversations {total > 0 ? '(' + total + ')' : ''}</Text></View>
           <Pressable accessibilityRole="button" style={styles.refresh} onPress={() => void load(1)}>
             <Text style={styles.link}>Refresh</Text>
           </Pressable>
         </View>
         {loading && items.length === 0 ? <ActivityIndicator size="large" color={theme.colors.primary} /> :
           items.length === 0 ? <View style={styles.empty}>
-            <Text style={styles.cardTitle}>No conversations yet</Text>
+            <TileGlyph kind="organizer" size={70}/>
+            <Text style={styles.cardTitle}>Your community is ready for a conversation.</Text>
             <Text style={styles.muted}>Be the first to ask a question or introduce yourself.</Text>
           </View> :
             items.map((thread) => {
@@ -231,62 +243,53 @@ export default function EventCommunityScreen({ route }: EventCommunityScreenProp
           onPress={() => void load(page + 1, true)} disabled={loadingMore}
           style={styles.loadMore}><Text style={styles.secondaryText}>{loadingMore ? 'Loading…' : 'Load older conversations'}</Text></Pressable>}
       </>}
-      {error ? <Text accessibilityRole="alert" style={styles.feedback}>{error}</Text> : null}
+      {feedback ? <Text accessibilityRole="alert" style={styles.success}>{feedback}</Text> : null}
+      {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
     </ScrollView>
     <ActionDialog prompt={prompt} onDismiss={() => setPrompt(null)} busy={actionBusy} />
   </View>
 }
 
-const styles = StyleSheet.create({
-  screen: { flex:1, backgroundColor:theme.colors.bg },
-  content: { padding:16, gap:14, paddingBottom:45 },
-  hero: { backgroundColor:theme.colors.primaryDark, borderRadius:22, padding:20, gap:9 },
-  eyebrow: { color:'#9defc9', letterSpacing:2, fontSize:10, fontWeight:'800' },
-  title: { color:'#ffffff', fontSize:23, fontWeight:'800' },
-  heroDescription: { color:'#e0fff2', fontWeight:'700', fontSize:13 },
-  heroNote: { color:'#bde8d4', fontSize:12, lineHeight:19 },
-  card: { borderColor:theme.colors.border, borderWidth:1, borderRadius:18, padding:16,
-    backgroundColor:theme.colors.card, gap:13 },
-  cardTitle: { color:theme.colors.text, fontWeight:'800', fontSize:16 },
-  muted: { color:theme.colors.textMuted, fontSize:12, lineHeight:19 },
-  starters: { flexDirection:'row', flexWrap:'wrap', gap:7 },
-  starter: { borderRadius:40, borderWidth:1, borderColor:theme.colors.border, paddingVertical:9, paddingHorizontal:11 },
-  starterText: { fontSize:11, fontWeight:'700', color:theme.colors.primaryDark },
-  composer: { borderWidth:1, borderColor:theme.colors.border, borderRadius:12, padding:12,
-    fontSize:14, color:theme.colors.text, minHeight:105, backgroundColor:'#fcfefd' },
-  composeFooter: { flexDirection:'row', alignItems:'center', justifyContent:'space-between', gap:10 },
-  primaryButton: { backgroundColor:theme.colors.primary, borderRadius:12, minHeight:44, paddingHorizontal:15,
-    alignItems:'center', justifyContent:'center' },
-  primaryText: { color:'#ffffff', fontSize:13, fontWeight:'800' },
-  disabled: { opacity:0.45 },
-  secondaryButton: { borderColor:theme.colors.primary, borderWidth:1, borderRadius:12,
-    alignItems:'center', justifyContent:'center', minHeight:44 },
-  secondaryText: { color:theme.colors.primary, fontSize:13, fontWeight:'800' },
-  notice: { backgroundColor:'#fff5da', color:'#77470c', padding:12, borderRadius:12, fontSize:12 },
-  threadHeader: { flexDirection:'row', justifyContent:'space-between', alignItems:'center', marginTop:7 },
-  refresh: { minHeight:42, paddingHorizontal:9, justifyContent:'center' },
-  link: { color:theme.colors.primary, fontWeight:'800', fontSize:12 },
-  mutedLink: { color:theme.colors.textMuted, fontSize:12, fontWeight:'700' },
-  deleteLink: { color:theme.colors.danger, fontSize:12, fontWeight:'700' },
-  empty: { borderColor:theme.colors.border, borderWidth:1, borderStyle:'dashed', borderRadius:18,
-    alignItems:'center', gap:6, padding:24 },
-  messageRow: { flexDirection:'row', gap:10 },
-  avatar: { height:38, width:38, borderRadius:19 },
-  avatarPlaceholder: { backgroundColor:'#d7f2e5', justifyContent:'center', alignItems:'center' },
-  avatarText: { color:theme.colors.primaryDark, fontWeight:'800' },
-  messageContent: { flex:1, minWidth:0 },
-  author: { color:theme.colors.text, fontWeight:'800', fontSize:13 },
-  date: { color:theme.colors.textMuted, fontSize:10, marginTop:2 },
-  messageText: { color:theme.colors.text, fontSize:13, lineHeight:20, marginTop:6 },
-  actionRow: { flexDirection:'row', flexWrap:'wrap', gap:17, paddingVertical:10 },
-  replyBox: { backgroundColor:'#f1f8f4', borderRadius:13, padding:10, marginTop:8 },
-  threadReplies: { marginLeft:16, borderLeftWidth:2, borderLeftColor:'#cce6d8',
-    paddingLeft:13, gap:4 },
-  replyComposer: { borderRadius:12, padding:10, backgroundColor:'#f1f8f4', gap:10 },
-  replyInput: { minHeight:72, borderColor:theme.colors.border, borderWidth:1,
-    borderRadius:10, backgroundColor:'#ffffff', padding:11, fontSize:13, color:theme.colors.text },
-  loadMore: { borderWidth:1, borderColor:theme.colors.border, borderRadius:14,
-    minHeight:48, alignItems:'center', justifyContent:'center' },
-  feedback: { color:theme.colors.primaryDark, backgroundColor:'#e6f8eb', borderRadius:10,
-    padding:12, fontSize:12, lineHeight:18 },
+const styles=StyleSheet.create({
+  screen:{flex:1,backgroundColor:mobileDesign.canvas},content:{padding:18,gap:17,paddingBottom:45},
+  hero:{backgroundColor:mobileDesign.forestDeep,borderRadius:29,padding:23,overflow:'hidden',shadowColor:mobileDesign.forestDeep,shadowOpacity:.18,shadowRadius:19,shadowOffset:{width:0,height:11},elevation:5},
+  heroTop:{flexDirection:'row',alignItems:'center',justifyContent:'space-between'},heroSymbol:{fontSize:25,color:mobileDesign.gold,fontWeight:'900'},
+  eyebrow:{color:'#cbf9e6',letterSpacing:1.25,fontSize:10,fontWeight:'900'},
+  title:{color:'#fff',fontSize:29,lineHeight:37,letterSpacing:-.9,fontWeight:'900',marginTop:20},
+  heroDescription:{color:'#fff',fontWeight:'900',fontSize:13,marginTop:13,lineHeight:20},
+  heroNote:{color:'#d5f1e5',fontSize:13,lineHeight:21,marginTop:8},
+  heroMeta:{borderTopColor:'#ffffff45',borderTopWidth:1,marginTop:20,paddingTop:14,flexDirection:'row',gap:9,flexWrap:'wrap'},
+  heroMetaText:{color:'#cceae1',fontSize:9,fontWeight:'900',letterSpacing:.5},
+  card:{borderColor:mobileDesign.border,borderWidth:1,borderRadius:23,padding:17,backgroundColor:'#fff',gap:14,
+    shadowColor:mobileDesign.shadow,shadowOpacity:.045,shadowRadius:14,shadowOffset:{width:0,height:7},elevation:2},
+  cardTitle:{color:mobileDesign.ink,fontWeight:'900',fontSize:16},
+  muted:{color:mobileDesign.inkMuted,fontSize:12,lineHeight:19},
+  composeHeading:{flexDirection:'row',alignItems:'center',gap:11},composeHeadingText:{flex:1,gap:4},
+  starters:{flexDirection:'row',flexWrap:'wrap',gap:7},starter:{borderRadius:14,borderWidth:1,borderColor:'#d4ebe0',backgroundColor:mobileDesign.mintSoft,paddingVertical:11,paddingHorizontal:12,minHeight:43,justifyContent:'center'},
+  starterText:{fontSize:11,fontWeight:'800',color:mobileDesign.emerald},
+  composer:{borderWidth:1,borderColor:mobileDesign.border,borderRadius:16,padding:13,fontSize:14,color:mobileDesign.ink,minHeight:116,backgroundColor:'#f8fafb'},
+  composeFooter:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',gap:10},
+  primaryButton:{backgroundColor:mobileDesign.emerald,borderRadius:15,minHeight:47,paddingHorizontal:17,alignItems:'center',justifyContent:'center'},
+  primaryText:{color:'#fff',fontSize:12,fontWeight:'900'},disabled:{opacity:.5},
+  secondaryButton:{borderColor:'#c5e6d5',backgroundColor:mobileDesign.mintSoft,borderWidth:1,borderRadius:15,alignItems:'center',justifyContent:'center',minHeight:47},
+  secondaryText:{color:mobileDesign.emerald,fontSize:12,fontWeight:'900'},
+  notice:{backgroundColor:'#fff5da',color:'#77470c',padding:14,borderRadius:15,fontSize:12,lineHeight:19},
+  threadHeader:{flexDirection:'row',justifyContent:'space-between',alignItems:'center',marginTop:7},
+  sectionEyebrow:{color:mobileDesign.emerald,fontSize:9,letterSpacing:1.1,fontWeight:'900'},threadTitle:{fontSize:21,fontWeight:'900',color:mobileDesign.ink,marginTop:4},
+  refresh:{minHeight:44,paddingHorizontal:13,justifyContent:'center',backgroundColor:mobileDesign.mintSoft,borderRadius:13},
+  link:{color:mobileDesign.emerald,fontWeight:'900',fontSize:12},mutedLink:{color:mobileDesign.inkMuted,fontSize:12,fontWeight:'800'},
+  deleteLink:{color:theme.colors.danger,fontSize:12,fontWeight:'800'},
+  empty:{borderColor:mobileDesign.border,borderWidth:1,borderRadius:23,backgroundColor:'#fff',alignItems:'center',gap:12,padding:26},
+  messageRow:{flexDirection:'row',gap:12},avatar:{height:45,width:45,borderRadius:16},
+  avatarPlaceholder:{backgroundColor:mobileDesign.mintSoft,justifyContent:'center',alignItems:'center',borderWidth:1,borderColor:'#d9eee4'},
+  avatarText:{color:mobileDesign.emerald,fontSize:16,fontWeight:'900'},messageContent:{flex:1,minWidth:0},
+  author:{color:mobileDesign.ink,fontWeight:'900',fontSize:13},date:{color:mobileDesign.inkSoft,fontSize:10,marginTop:4},
+  messageText:{color:mobileDesign.ink,fontSize:13,lineHeight:21,marginTop:8},actionRow:{flexDirection:'row',flexWrap:'wrap',gap:17,paddingTop:12,paddingBottom:7},
+  replyBox:{backgroundColor:mobileDesign.mintSoft,borderRadius:16,padding:12,marginTop:8},
+  threadReplies:{marginLeft:15,borderLeftWidth:2,borderLeftColor:'#cce6d8',paddingLeft:13,gap:6},
+  replyComposer:{borderRadius:17,padding:13,backgroundColor:mobileDesign.mintSoft,gap:11},
+  replyInput:{minHeight:78,borderColor:mobileDesign.border,borderWidth:1,borderRadius:13,backgroundColor:'#fff',padding:12,fontSize:13,color:mobileDesign.ink},
+  loadMore:{borderWidth:1,borderColor:mobileDesign.border,borderRadius:15,minHeight:50,alignItems:'center',justifyContent:'center',backgroundColor:'#fff'},
+  success:{color:mobileDesign.emerald,backgroundColor:mobileDesign.mintSoft,borderRadius:14,padding:14,fontSize:12,lineHeight:19},
+  error:{color:theme.colors.danger,backgroundColor:'#fff1ef',borderRadius:14,padding:14,fontSize:12,lineHeight:19},
 })
