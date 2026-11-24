@@ -42,6 +42,8 @@ import {
   type TicketType,
 } from '../api/client'
 import { theme } from '../theme'
+import { EventProgrammeSections } from '../components/EventProgrammeSections'
+import { eventTimeLabel } from '../lib/event-programme'
 import type { EventDetailScreenProps } from '../navigation'
 
 type DetailState =
@@ -76,7 +78,8 @@ export default function EventDetailScreen({ navigation, route }: EventDetailScre
   const setQty = (tt: TicketType, next: number) => {
     setQuantities((prev) => {
       const current = prev[tt.id] ?? 0
-      const upper = Math.max(1, tt.perBuyerLimit)
+      const remaining = tt.quota > 0 ? Math.max(0, tt.quota - tt.soldCount - tt.reservedCount) : null
+      const upper = Math.min(Math.max(1, tt.perBuyerLimit), remaining ?? Number.MAX_SAFE_INTEGER)
       const bounded = Math.max(0, Math.min(upper, next))
       return bounded === current ? prev : { ...prev, [tt.id]: bounded }
     })
@@ -93,6 +96,19 @@ export default function EventDetailScreen({ navigation, route }: EventDetailScre
     () => selectedItems.reduce((sum, { tt, qty }) => sum + tt.priceMinor * qty, 0),
     [selectedItems]
   )
+
+  const openProgramme = async (path: string) => {
+    const url = absoluteUrl(path)
+    if (!url) {
+      Alert.alert('Programme unavailable', 'This app is not configured with a secure event server address.')
+      return
+    }
+    try {
+      await Linking.openURL(url)
+    } catch {
+      Alert.alert('Unable to open programme', 'Try again when your browser and internet connection are available. Invitation-only documents may require signing in on the website.')
+    }
+  }
 
   const buy = async () => {
     if (state.status !== 'ready') return
@@ -170,15 +186,27 @@ export default function EventDetailScreen({ navigation, route }: EventDetailScre
         </View>
       )}
 
-      <Text style={styles.title}>{event.title}</Text>
-      <Text style={styles.meta}>
-        {formatDateTime(event.startsAt)} · {event.city ?? 'Location TBA'} · by {event.org.name}
-      </Text>
-      <Text style={styles.meta}>
-        {event.venue ? `${event.venue.name} — ${event.venue.city ?? ''}` : 'Venue TBA'} · {stats.going} going
-      </Text>
-      {event.summary ? <Text style={styles.summary}>{event.summary}</Text> : null}
-      <Text style={styles.description}>{event.description}</Text>
+      <View style={styles.eventHeading}>
+        <View style={styles.eventBadges}>
+          <View style={styles.statusBadge}><Text style={styles.statusBadgeText}>{event.status === 'LIVE' ? '● LIVE NOW' : event.status.replace(/_/g,' ')}</Text></View>
+          <View style={styles.modeBadge}><Text style={styles.modeBadgeText}>{event.mode === 'VIRTUAL' ? 'ONLINE' : event.mode === 'HYBRID' ? 'HYBRID' : 'IN PERSON'}</Text></View>
+        </View>
+        <Text style={styles.title}>{event.title}</Text>
+        <Text style={styles.eventOrganizer}>Hosted by <Text style={styles.organizerName}>{event.org.name}</Text></Text>
+        <View style={styles.infoCard}>
+          <View style={styles.infoRow}><Text style={styles.infoIcon}>◷</Text><View style={styles.infoBody}><Text style={styles.infoLabel}>DATE & TIME</Text><Text style={styles.infoValue}>{eventTimeLabel(event.startsAt,event.timezone)}</Text><Text style={styles.infoSub}>Timezone: {event.timezone.replace(/_/g,' ')}</Text></View></View>
+          <View style={styles.infoDivider}/>
+          <View style={styles.infoRow}><Text style={styles.infoIcon}>⌖</Text><View style={styles.infoBody}><Text style={styles.infoLabel}>LOCATION</Text><Text style={styles.infoValue}>{event.mode === 'VIRTUAL' ? 'Online event' : event.venue?.name || 'Venue to be announced'}</Text>
+            {event.venue?.address ? <Text style={styles.infoSub}>{event.venue.address}{event.venue.city ? ', '+event.venue.city : ''}</Text> : event.city && event.visibility !== 'INVITE_ONLY' ? <Text style={styles.infoSub}>{event.city}</Text> : null}
+          </View></View>
+          <View style={styles.infoDivider}/>
+          <View style={styles.infoRow}><Text style={styles.infoIcon}>♧</Text><View style={styles.infoBody}><Text style={styles.infoLabel}>EVENT COMMUNITY</Text><Text style={styles.infoValue}>{stats.going.toLocaleString('en-US')} interested</Text></View></View>
+        </View>
+        {event.summary ? <Text style={styles.summary}>{event.summary}</Text> : null}
+        {event.description ? <Text style={styles.description}>{event.description}</Text> : null}
+      </View>
+
+      <EventProgrammeSections event={event} onOpenProgramme={path => void openProgramme(path)} />
 
       <Pressable
         style={[styles.staffButton, { marginTop: theme.spacing.lg }]}
@@ -301,7 +329,7 @@ function TicketTypeRow({
         <Pressable
           style={styles.qtyButton}
           onPress={onIncrement}
-          disabled={remaining !== null && remaining <= 0}
+          disabled={qty >= Math.max(1, ticketType.perBuyerLimit) || (remaining !== null && qty >= remaining)}
           accessibilityRole="button"
           accessibilityLabel={`Add one ${ticketType.name}`}
         >
@@ -317,14 +345,28 @@ const styles = StyleSheet.create({
   screen: { backgroundColor: theme.colors.bg, flex: 1 },
   content: { padding: theme.spacing.lg, paddingBottom: theme.spacing.xxl },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: theme.spacing.xl, backgroundColor: theme.colors.bg },
-  cover: { width: '100%', height: 200, borderRadius: theme.radius.lg, backgroundColor: theme.colors.border },
+  cover: { width: '100%', height: 246, borderRadius: 21, backgroundColor: theme.colors.border },
   coverPlaceholder: { alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.primaryDark, padding: theme.spacing.lg },
   coverPlaceholderText: { color: '#ffffff', fontSize: 18, fontWeight: '700', textAlign: 'center' },
-  title: { marginTop: theme.spacing.lg, fontSize: 22, fontWeight: '700', color: theme.colors.text },
+  title: { marginTop: 11, fontSize: 27, lineHeight:34, fontWeight: '900', color: theme.colors.text, letterSpacing:-.6 },
+  eventHeading:{marginTop:16},
+  eventBadges:{flexDirection:'row',flexWrap:'wrap',gap:8},
+  statusBadge:{borderRadius:9,paddingHorizontal:10,paddingVertical:6,backgroundColor:theme.web.tealSoft},
+  statusBadgeText:{fontSize:10,fontWeight:'900',color:theme.colors.primary},
+  modeBadge:{borderRadius:9,paddingHorizontal:10,paddingVertical:6,backgroundColor:'#ecf0f5'},
+  modeBadgeText:{fontSize:10,fontWeight:'900',color:theme.colors.textMuted},
+  eventOrganizer:{marginTop:8,fontSize:13,color:theme.colors.textMuted},
+  organizerName:{fontWeight:'900',color:theme.colors.primary},
+  infoCard:{marginTop:17,backgroundColor:theme.colors.card,borderRadius:18,paddingHorizontal:15,paddingVertical:9,borderWidth:1,borderColor:theme.colors.border},
+  infoRow:{flexDirection:'row',alignItems:'center',gap:12,paddingVertical:12},
+  infoIcon:{width:30,fontSize:23,fontWeight:'800',color:theme.colors.primary,textAlign:'center'},
+  infoBody:{flex:1,gap:3},infoLabel:{fontSize:10,color:theme.colors.textMuted,fontWeight:'900',letterSpacing:.8},
+  infoValue:{fontSize:13,color:theme.colors.text,fontWeight:'800'},infoSub:{fontSize:11,color:theme.colors.textMuted},
+  infoDivider:{height:1,backgroundColor:theme.colors.border},
   meta: { marginTop: theme.spacing.xs, color: theme.colors.textMuted, fontSize: 13 },
-  summary: { marginTop: theme.spacing.lg, color: theme.colors.text, fontSize: 14, fontWeight: '600' },
-  description: { marginTop: theme.spacing.md, color: theme.colors.textMuted, fontSize: 13, lineHeight: 20 },
-  sectionTitle: { marginTop: theme.spacing.xxl, marginBottom: theme.spacing.md, fontSize: 16, fontWeight: '700', color: theme.colors.text },
+  summary: { marginTop: theme.spacing.lg, color: theme.colors.text, fontSize: 15, lineHeight:23,fontWeight: '800' },
+  description: { marginTop: theme.spacing.md, color: theme.colors.textMuted, fontSize: 13, lineHeight: 22 },
+  sectionTitle: { marginTop: theme.spacing.xxl, marginBottom: theme.spacing.md, fontSize: 19, fontWeight: '900', color: theme.colors.text },
   ticketRow: {
     flexDirection: 'row',
     alignItems: 'center',

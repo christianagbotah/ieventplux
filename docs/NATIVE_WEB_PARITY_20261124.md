@@ -49,3 +49,13 @@ The current public web React SPA is the UI reference: `src/portal/AppPortal.tsx`
 - Country suggestions use `/discovery/locations`; when unavailable, the rest of the search remains usable.
 - The public Android QA index now forces a dynamic route and bypasses Next.js's persistent fetch cache while deduplicating concurrent lookups using a short **two-minute** in-process cache. Its responses are marked `no-store`. A test asserts the fetch/cache contract and newest verified asset selection. The GitHub release and valid APK asset remain authoritative; this does not enable silent Android installs.
 - Pending: successful GitHub CI and signed APK publish, deployment of the changed web route to the existing authorized environment, and physical-device testing of filters, keyboard/scroll, update prompts and data migration.
+
+## Third increment: native event detail programme parity
+
+The native `EventDetailScreen` now displays the **same server-approved event information** that the public web event page exposes: published artists, guests and speakers (role, topic, photo, biography and scheduled appearance); organizer-uploaded programme PDFs; official event agenda in the event's timezone; gallery images; souvenir catalogue with live server stock, product code and visible prices; announcements and accessibility/attendance/refund policies. The event heading also matches web emphasis on mode, status, time and venue.
+
+There is **no synthetic content and no mobile-only bypass**: only arrays provided by the event API are displayed. Invitation-only programme documents remain gated by the existing server endpoint, with their paths reconstructed from the returned event/document IDs rather than trusting an arbitrary download URL. External browser access may still require website authentication. Souvenir entries remain catalogue-only: do not label them as orderable or claim an operating checkout without a tested server workflow. Ticket purchase limits use available inventory and user-level maximums, while the server remains authoritative.
+
+Native Ghana-cedi prices now display `₵` with thousands grouping and two decimal places. Other currencies keep their ISO code. No database/payment changes were made.
+
+Remaining tests before claiming Android/iOS parity: physical device page inspection (large text, horizontal gallery swipe, longer biographies, PDF access, ticket quantity, paid checkout and camera/meeting flows), plus full native organizer editing and real merchandise order handling.

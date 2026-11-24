@@ -250,6 +250,42 @@ export interface Venue {
   country?: string | null
 }
 
+/** Public event programme fields delivered by GET /events/{id}; only published
+ * lineup, active souvenirs and approved-visible documents arrive from the API. */
+export interface EventContributor {
+  id: string
+  name: string
+  role: string
+  topic?: string | null
+  bio?: string | null
+  photoUrl?: string | null
+  startsAt?: string | null
+}
+export interface EventAgendaItem {
+  id: string
+  title: string
+  startsAt: string
+  endsAt?: string | null
+  speaker?: string | null
+  description?: string | null
+}
+export interface EventSouvenir {
+  id: string
+  name: string
+  variantLabel?: string | null
+  sku: string
+  priceMinor: number
+  imageUrl?: string | null
+  description?: string | null
+  available: number
+  onlineOrderingEnabled: boolean
+}
+export interface EventProgrammeFile {
+  id: string
+  title: string
+  downloadUrl: string
+}
+
 export interface EventDetail {
   id: string
   slug: string
@@ -275,7 +311,17 @@ export interface EventDetail {
     verifiedAt?: string | null
     orgType?: string | null
   }
-  venue?: Venue | null
+  venue?: (Venue & { mapsUrl?: string | null; accessibilityInfo?: string | null }) | null
+  directionsUrl?: string | null
+  accessibilityInfo?: string | null
+  attendanceRules?: string | null
+  ageGuidance?: string | null
+  refundPolicy?: string | null
+  agenda?: EventAgendaItem[]
+  contributors?: EventContributor[]
+  programmes?: EventProgrammeFile[]
+  souvenirs?: EventSouvenir[]
+  updates?: { id: string; title: string; body: string; important: boolean; createdAt: string }[]
   ticketTypes: TicketType[]
   gallery?: { id: string; url: string; caption?: string | null }[]
   feeNote?: string | null
@@ -774,7 +820,10 @@ export const api = {
 // ───────────────────────────────────── shared formatting helpers (GHS) ──────
 
 export function formatMinor(minor: number, currency = 'GHS'): string {
-  return `${currency} ${(minor / 100).toFixed(2)}`
+  const amount = (minor / 100).toLocaleString('en-US', {
+    minimumFractionDigits: 2, maximumFractionDigits: 2,
+  })
+  return currency === 'GHS' ? `₵${amount}` : `${currency} ${amount}`
 }
 
 export function minPriceLabel(priceMinors: number[]): string {
