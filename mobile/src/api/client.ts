@@ -95,6 +95,34 @@ export interface DiscoveryHome {
   stats: { upcomingEvents: number; organizers: number; liveNow: number }
 }
 
+/** Shared server-backed social surfaces: never invent reels, events or feed posts. */
+export interface NativeFollowingPage {
+  items: {
+    id: string
+    kind: 'EVENT' | 'UPDATE'
+    activityAt: string
+    title: string
+    body: string | null
+    important: boolean
+    event: DiscoveryEventCard
+  }[]
+  nextCursor: string | null
+  hasMore: boolean
+  followingCount: number
+}
+
+export interface NativeEventClip {
+  id: string
+  url: string
+  posterUrl: string
+  caption?: string | null
+  durationSec?: number | null
+  event: { id: string; title: string; slug: string; startsAt: string; org: { name: string } }
+  nextEvent: { id: string; title: string; slug: string } | null
+  org: { name: string; slug: string }
+  views: number
+}
+
 export interface TicketType {
   id: string
   eventId: string
@@ -604,6 +632,8 @@ export const api = {
   },
   discovery: {
     home: () => request<DiscoveryHome>('GET', '/discovery/home'),
+    /** The same public, real-catalogue event previews as the web Reels feed. */
+    reels: () => request<{ clips: NativeEventClip[] }>('GET', '/discovery/reels'),
     searchEvents: (query: string, category: string) => {
       const params = new URLSearchParams({ page: '1', pageSize: '36' })
       if (query.trim()) params.set('q', query.trim())
@@ -647,6 +677,15 @@ export const api = {
     ),
     report: (commentId: string) => request<{ report: { id: string } }>(
       'POST', '/social/report', { targetType: 'COMMENT', targetId: commentId, reason: 'OTHER' },
+    ),
+  },
+  social: {
+    /** Opt-in chronological timeline of public activity by followed organizers. */
+    feed: (cursor?: string | null) => request<NativeFollowingPage>(
+      'GET', '/social/feed?pageSize=12' + (cursor ? '&cursor=' + encodeURIComponent(cursor) : ''),
+    ),
+    react: (clipId: string) => request<{ ok: boolean }>(
+      'POST', '/social/reaction', { targetType: 'MEDIA', targetId: clipId, kind: 'HEART' },
     ),
   },
   networking: {

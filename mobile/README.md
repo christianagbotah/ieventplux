@@ -203,3 +203,8 @@ GitHub secret management for smooth upgrades. Never use QA keys for
 production Play signing. Older APKs built BEFORE this checker cannot
 show update notifications: install the next QA APK once to enable it.
 iOS distribution is separate and requires TestFlight or Apple store.
+
+
+### Cross-platform UI parity
+
+The web public portal is the current canonical interface. Read [`../docs/NATIVE_WEB_PARITY_20261124.md`](../docs/NATIVE_WEB_PARITY_20261124.md) for the audit, UX mappings, unfinished native work and device certification gates. `src/lib/web-parity.test.ts` checks the native six-tab navigation, hero copy and brand tokens against the actual web source so they cannot diverge silently.

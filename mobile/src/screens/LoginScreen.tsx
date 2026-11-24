@@ -23,6 +23,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { api, ApiClientError, isBaseUrlConfigured } from '../api/client'
 import { theme } from '../theme'
+import { AppBrand } from '../components/AppBrand'
 import { useSession } from '../store/session'
 import type { LoginScreenProps } from '../navigation'
 
@@ -116,7 +117,7 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
       >
         <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
           <View style={styles.brandBlock}>
-            <View style={styles.brandTop}><View style={styles.brandIcon}><Text style={styles.brandIconText}>✦</Text></View><Text style={styles.brandMark}>iEventPlux</Text></View>
+            <View style={styles.brandTop}><AppBrand inverted /></View>
             <Text style={styles.brandHero}>Experience the world,{'\n'}together.</Text>
             <Text style={styles.brandSub}>Explore events. Join communities. Make memories.</Text>
             <View style={styles.brandChips}><Text style={styles.brandChip}>◉  LIVE</Text><Text style={styles.brandChip}>✦  EVENTS</Text><Text style={styles.brandChip}>▣  TICKETS</Text></View>

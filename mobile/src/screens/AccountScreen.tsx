@@ -21,7 +21,7 @@ export default function AccountScreen({ navigation }: AccountScreenProps) {
     try {
       await clearTicketWallet()
       await signOut()
-      navigation.reset({ index: 0, routes: [{ name: 'Login' }] })
+      navigation.reset({ index: 0, routes: [{ name: 'Discover' }] })
     } finally { setBusy(false) }
   }
   return <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
