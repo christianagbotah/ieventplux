@@ -15,16 +15,19 @@
  * See mobile/README.md and mobile/docs/NATIVE_MODULES.md.
  */
 
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
 import Constants, { ExecutionEnvironment } from 'expo-constants'
-import { lazy, Suspense } from 'react'
-import { NavigationContainer, type LinkingOptions } from '@react-navigation/native'
+import { lazy, Suspense, useState } from 'react'
+import { NavigationContainer, createNavigationContainerRef, type LinkingOptions } from '@react-navigation/native'
+import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
 import { SessionProvider, useSession } from './src/store/session'
 import { theme } from './src/theme'
 import type { RootStackParamList, NativeMeetingScreenProps } from './src/navigation'
 import LoginScreen from './src/screens/LoginScreen'
 import DiscoverScreen from './src/screens/DiscoverScreen'
+import LiveHubScreen from './src/screens/LiveHubScreen'
+import AccountScreen from './src/screens/AccountScreen'
 import EventDetailScreen from './src/screens/EventDetailScreen'
 import MyTicketsScreen from './src/screens/MyTicketsScreen'
 import CheckinScreen from './src/screens/CheckinScreen'
@@ -36,6 +39,8 @@ import EventCompetitionsScreen from './src/screens/EventCompetitionsScreen'
 import MarketplaceScreen from './src/screens/MarketplaceScreen'
 import MarketplaceStoreScreen from './src/screens/MarketplaceStoreScreen'
 import { AndroidUpdateNotice } from './src/components/AndroidUpdateNotice'
+import { AppTabBar } from './src/components/AppTabBar'
+import { isMainTabRoute, type MainTabRoute } from './src/lib/main-tabs'
 
 /**
  * Keep the native WebRTC module out of Expo Go startup. Expo Go has no LiveKit
@@ -58,6 +63,7 @@ function NativeMeetingLoader(props: NativeMeetingScreenProps) {
 const NativeMeeting = lazy(() => import('./src/screens/NativeMeetingRoom'))
 
 const Stack = createNativeStackNavigator<RootStackParamList>()
+const navigationRef = createNavigationContainerRef<RootStackParamList>()
 
 const linking: LinkingOptions<RootStackParamList> = {
   prefixes: ['ieventplux://'],
@@ -70,7 +76,7 @@ const linking: LinkingOptions<RootStackParamList> = {
 }
 
 function AppRoutes() {
-  const { status, error } = useSession()
+  const { status, error, refresh } = useSession()
 
   // Session restore (cookie jar → GET /auth/me) happens before navigation mounts,
   // so initialRouteName is decided once, after the real session state is known.
@@ -87,10 +93,8 @@ function AppRoutes() {
     return (
       <View style={styles.splash}>
         <Text style={styles.splashBrand}>iEventPlux</Text>
-        <Text style={styles.splashError}>
-          Cannot reach the API. {error ?? ''}Set EXPO_PUBLIC_API_BASE_URL to your iEventPlux web
-          deployment and restart.
-        </Text>
+        <Text style={styles.splashMessage}>We couldn't connect right now. Please check your internet and try again.</Text>
+        <Pressable style={styles.retry} accessibilityRole="button" accessibilityLabel="Retry connection" onPress={() => void refresh()}><Text style={styles.retryText}>Try again</Text></Pressable>
       </View>
     )
   }
@@ -102,12 +106,14 @@ function AppRoutes() {
         headerStyle: { backgroundColor: theme.colors.card },
         headerTintColor: theme.colors.primaryDark,
         headerShadowVisible: false,
-        headerTitleStyle: { fontWeight: '700', color: theme.colors.text, fontSize: 17 },
+        headerTitleStyle: { fontWeight: '800', color: theme.colors.text, fontSize: 18 },
         contentStyle: { backgroundColor: theme.colors.bg },
       }}
     >
       <Stack.Screen name="Login" component={LoginScreen} options={{ title: 'Sign in', headerShown: false }} />
-      <Stack.Screen name="Discover" component={DiscoverScreen} options={{ title: 'Discover events' }} />
+      <Stack.Screen name="Discover" component={DiscoverScreen} options={{ title: 'iEventPlux' }} />
+      <Stack.Screen name="LiveHub" component={LiveHubScreen} options={{ title: 'Live now' }} />
+      <Stack.Screen name="Account" component={AccountScreen} options={{ title: 'Your space' }} />
       <Stack.Screen name="EventDetail" component={EventDetailScreen} options={{ title: 'Event' }} />
       <Stack.Screen name="MyTickets" component={MyTicketsScreen} options={{ title: 'My tickets' }} />
       <Stack.Screen name="Checkin" component={CheckinScreen} options={{ title: 'Check-in scanner' }} />
@@ -123,19 +129,34 @@ function AppRoutes() {
   )
 }
 
+function AppNavigation() {
+  const { status } = useSession()
+  const [currentRoute, setCurrentRoute] = useState<string | undefined>()
+  const syncRoute = () => setCurrentRoute(navigationRef.getCurrentRoute()?.name)
+  const navigateTab = (route: MainTabRoute) => {
+    if (!navigationRef.isReady() || navigationRef.getCurrentRoute()?.name === route) return
+    navigationRef.navigate(route)
+  }
+  return <NavigationContainer ref={navigationRef} linking={linking} onReady={syncRoute} onStateChange={syncRoute}>
+    <View style={styles.appContainer}>
+      <AppRoutes />
+      {status === 'authenticated' && isMainTabRoute(currentRoute) ?
+        <AppTabBar active={currentRoute} onSelect={navigateTab} /> : null}
+      <AndroidUpdateNotice />
+    </View>
+  </NavigationContainer>
+}
+
 export default function App() {
-  return (
-    <SessionProvider>
-      <NavigationContainer linking={linking}>
-        <AppRoutes />
-        <AndroidUpdateNotice />
-      </NavigationContainer>
-    </SessionProvider>
-  )
+  return <SessionProvider><SafeAreaProvider><AppNavigation /></SafeAreaProvider></SessionProvider>
 }
 
 const styles = StyleSheet.create({
+  appContainer: { flex: 1, backgroundColor: theme.colors.bg },
   splash: { flex: 1, backgroundColor: theme.colors.bg, alignItems: 'center', justifyContent: 'center', padding: theme.spacing.xl },
   splashBrand: { fontSize: 28, fontWeight: '700', color: theme.colors.primary, marginBottom: theme.spacing.lg },
   splashError: { color: theme.colors.danger, fontSize: 12, textAlign: 'center' },
+  splashMessage: { color: theme.colors.textMuted, fontSize: 14, textAlign: 'center', marginTop: 12, lineHeight: 21 },
+  retry: { marginTop: 20, backgroundColor: theme.colors.primary, paddingVertical: 13, paddingHorizontal: 30, borderRadius: 13 },
+  retryText: { color: '#fff', fontWeight: '800' },
 })

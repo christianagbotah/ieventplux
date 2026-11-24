@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   FlatList,
   Image,
+  Linking,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -102,14 +103,6 @@ export default function DiscoverScreen({ navigation }: DiscoverScreenProps) {
         <View style={styles.headerActions}>
           <Pressable
             style={styles.headerAction}
-            onPress={() => navigation.navigate('MyTickets')}
-            accessibilityRole="button"
-            accessibilityLabel="My tickets"
-          >
-            <Text style={styles.headerActionText}>Tickets</Text>
-          </Pressable>
-          <Pressable
-            style={styles.headerAction}
             onPress={() => navigation.navigate('Checkin')}
             accessibilityRole="button"
             accessibilityLabel="Open check-in scanner"
@@ -169,15 +162,29 @@ export default function DiscoverScreen({ navigation }: DiscoverScreenProps) {
       keyExtractor={(item) => item.id}
       ListHeaderComponent={
         <View>
-          <View style={styles.hero}>
-            <Text style={styles.heroKicker}>EVENTS. PEOPLE. EXPERIENCES.</Text>
-            <Text style={styles.heroTitle}>Make room for moments that matter.</Text>
-            <Text style={styles.heroBody}>Discover gatherings across Ghana, reserve your place and keep every ticket close.</Text>
-            <Text style={styles.heroStats}>{state.home.stats.upcomingEvents} upcoming · {state.home.stats.organizers} organizers · {state.home.stats.liveNow} live</Text>
-            <Pressable accessibilityRole="button" accessibilityLabel="Explore creator stores and products"
-              style={styles.shopHeroButton} onPress={() => navigation.navigate('Marketplace')}>
-              <Text style={styles.shopHeroText}>Explore shops & creators  ›</Text>
+          <View style={styles.introRow}>
+            <View><Text style={styles.introLabel}>DISCOVER iEVENTPLUX</Text><Text style={styles.introTitle}>Experience more.</Text></View>
+            <Pressable style={styles.liveShortcut} accessibilityRole="button" accessibilityLabel="Open live events" onPress={() => navigation.navigate('LiveHub')}>
+              <Text style={styles.liveShortcutText}>● {state.home.stats.liveNow} LIVE  ›</Text>
             </Pressable>
+          </View>
+          <View style={styles.hero}>
+            <View style={styles.heroEyebrowRow}><View style={styles.heroDot} /><Text style={styles.heroKicker}>THE WORLD IS YOUR STAGE</Text></View>
+            <Text style={styles.heroTitle}>Find your people.{'\n'}Make new memories.</Text>
+            <Text style={styles.heroBody}>Events, live experiences and independent creators — all in one vibrant community.</Text>
+            <View style={styles.heroStatsRow}>
+              <View style={styles.heroStat}><Text style={styles.heroStatValue}>{state.home.stats.upcomingEvents}</Text><Text style={styles.heroStatLabel}>Upcoming</Text></View>
+              <View style={styles.heroStatDivider} />
+              <View style={styles.heroStat}><Text style={styles.heroStatValue}>{state.home.stats.organizers}</Text><Text style={styles.heroStatLabel}>Organizers</Text></View>
+            </View>
+            <View style={styles.heroActions}>
+              <Pressable accessibilityRole="button" accessibilityLabel="Explore creator stores and products" style={styles.shopHeroButton} onPress={() => navigation.navigate('Marketplace')}>
+                <Text style={styles.shopHeroText}>Explore shops  ›</Text>
+              </Pressable>
+              <Pressable accessibilityRole="button" accessibilityLabel="Open organizer studio in web browser" style={styles.organizerButton} onPress={() => void Linking.openURL('https://ieventplux.lightworldtech.com/organizer')}>
+                <Text style={styles.organizerButtonText}>Host an event  ↗</Text>
+              </Pressable>
+            </View>
           </View>
 
           <View style={styles.searchField}>
@@ -226,7 +233,7 @@ export default function DiscoverScreen({ navigation }: DiscoverScreenProps) {
 
           {featured && !query && category === 'all' ? (
             <View style={styles.sectionBlock}>
-              <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Featured experience</Text></View>
+              <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>In the spotlight</Text></View>
               <FeaturedEventCard event={featured} onPress={() => navigation.navigate('EventDetail', { eventId: featured.id })} />
             </View>
           ) : null}
@@ -256,7 +263,7 @@ export default function DiscoverScreen({ navigation }: DiscoverScreenProps) {
           ) : null}
 
           <View style={styles.sectionHeading}>
-            <Text style={styles.sectionTitle}>{filtered ? 'Matching events' : 'Coming up'}</Text>
+            <Text style={styles.sectionTitle}>{filtered ? 'Matching events' : 'Explore what’s next'}</Text>
             <Text style={styles.sectionCount}>{visibleUpcoming.length} events</Text>
           </View>
           {filtered && searchBusy ? (
@@ -308,10 +315,10 @@ function FeaturedEventCard({ event, onPress }: { event: DiscoveryEventCard; onPr
         </View>
       )}
       <View style={styles.featuredBody}>
-        <Text style={styles.featuredLabel}>CURATED FOR YOU</Text>
+        <Text style={styles.featuredLabel}>✦  FEATURED EVENT</Text>
         <Text style={styles.featuredTitle} numberOfLines={2}>{event.title}</Text>
         <Text style={styles.featuredMeta} numberOfLines={2}>{formatDate(event.startsAt)} · {event.city ?? 'Location TBA'}</Text>
-        <Text style={styles.featuredAction}>Explore event  ›</Text>
+        <Text style={styles.featuredAction}>View event details  →</Text>
       </View>
     </Pressable>
   )
@@ -385,14 +392,28 @@ function EventRow({ event, onPress }: { event: DiscoveryEventCard; onPress: () =
 
 const styles = StyleSheet.create({
   list: { backgroundColor: theme.colors.bg },
-  listContent: { padding: theme.spacing.lg, paddingBottom: theme.spacing.xxl },
-  hero: { backgroundColor: theme.colors.primaryDark, borderRadius: 24, padding: 24, marginBottom: 18 },
-  heroKicker: { color: '#a9e6d0', fontSize: 10, fontWeight: '800', letterSpacing: 1.5, marginBottom: 10 },
-  heroTitle: { color: '#ffffff', fontSize: 29, fontWeight: '800', letterSpacing: -0.5, lineHeight: 34 },
-  heroBody: { color: '#cfe9e0', fontSize: 13, lineHeight: 20, marginTop: 12 },
-  heroStats: { color: '#d2f5e8', fontSize: 11, fontWeight: '700', marginTop: 16 },
-  shopHeroButton: { marginTop: 17, minHeight: 46, borderRadius: 12, backgroundColor: '#f1fff6', justifyContent: 'center', alignItems: 'center' },
-  shopHeroText: { fontSize: 13, fontWeight: '800', color: '#075c3d' },
+  listContent: { paddingHorizontal: 16, paddingTop: 13, paddingBottom: 30 },
+  introRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
+  introLabel: { color: theme.colors.primary, fontSize: 10, letterSpacing: 1.2, fontWeight: '800', marginBottom: 4 },
+  introTitle: { color: theme.colors.text, fontSize: 25, fontWeight: '900', letterSpacing: -.7 },
+  liveShortcut: { backgroundColor: '#f9eeee', borderRadius: 100, paddingHorizontal: 13, minHeight: 37, justifyContent: 'center' },
+  liveShortcutText: { color: '#a73530', fontSize: 10, fontWeight: '900', letterSpacing: .2 },
+  hero: { backgroundColor: '#103f34', borderRadius: 24, paddingHorizontal: 23, paddingVertical: 25, marginBottom: 20, overflow: 'hidden' },
+  heroEyebrowRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
+  heroDot: { width: 7, height: 7, backgroundColor: '#f3c464', borderRadius: 4 },
+  heroKicker: { color: '#a8e8ce', fontSize: 10, fontWeight: '800', letterSpacing: 1.3 },
+  heroTitle: { color: '#ffffff', fontSize: 29, fontWeight: '900', letterSpacing: -0.8, lineHeight: 36 },
+  heroBody: { color: '#d3eadf', fontSize: 13, lineHeight: 21, marginTop: 11 },
+  heroStatsRow: { flexDirection: 'row', alignItems: 'center', marginTop: 17, gap: 18 },
+  heroStat: { alignItems: 'flex-start' },
+  heroStatValue: { color: '#ffffff', fontWeight: '900', fontSize: 20 },
+  heroStatLabel: { color: '#b9dccd', fontSize: 10, fontWeight: '600', marginTop: 2 },
+  heroStatDivider: { height: 25, borderLeftWidth: 1, borderLeftColor: '#7caf9f' },
+  heroActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 9, marginTop: 18 },
+  shopHeroButton: { flex: 1, minWidth: 120, minHeight: 44, borderRadius: 12, backgroundColor: '#e7faed', justifyContent: 'center', alignItems: 'center' },
+  shopHeroText: { fontSize: 12, fontWeight: '800', color: '#075c3d' },
+  organizerButton: { flex: 1, minWidth: 120, minHeight: 44, borderRadius: 12, borderWidth: 1, borderColor: '#629d87', justifyContent: 'center', alignItems: 'center' },
+  organizerButtonText: { color: '#e3f7ed', fontSize: 12, fontWeight: '800' },
   searchField: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.colors.card, borderRadius: 16, borderWidth: 1, borderColor: theme.colors.border, minHeight: 52, marginBottom: 12, paddingHorizontal: 14 },
   searchIcon: { fontSize: 26, color: theme.colors.primary, marginRight: 8 },
   searchInput: { flex: 1, fontSize: 15, color: theme.colors.text, paddingVertical: 12 },
@@ -411,11 +432,11 @@ const styles = StyleSheet.create({
   sectionTitle: { color: theme.colors.text, fontSize: 20, fontWeight: '800', letterSpacing: -0.25 },
   sectionCount: { color: theme.colors.textMuted, fontSize: 12, fontWeight: '600' },
   livePill: { color: theme.colors.danger, fontWeight: '800', fontSize: 10 },
-  featuredCard: { borderRadius: 20, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.card, overflow: 'hidden' },
-  featuredImage: { width: '100%', height: 176, resizeMode: 'cover' },
+  featuredCard: { borderRadius: 22, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.card, overflow: 'hidden', elevation: 1 },
+  featuredImage: { width: '100%', height: 205, resizeMode: 'cover' },
   featuredBody: { padding: 16 },
   featuredLabel: { fontSize: 10, fontWeight: '800', color: theme.colors.primary, letterSpacing: 1.1, marginBottom: 5 },
-  featuredTitle: { color: theme.colors.text, fontWeight: '800', fontSize: 19 },
+  featuredTitle: { color: theme.colors.text, fontWeight: '900', fontSize: 21, lineHeight: 27 },
   featuredMeta: { color: theme.colors.textMuted, fontSize: 12, marginTop: 6 },
   featuredAction: { color: theme.colors.primary, fontWeight: '800', marginTop: 10, fontSize: 13 },
   filterEmpty: { alignItems: 'center', padding: theme.spacing.xxl, backgroundColor: theme.colors.card, borderRadius: theme.radius.lg },
@@ -460,13 +481,13 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   cardPressed: { opacity: 0.85 },
-  poster: { width: 108, height: 108, resizeMode: 'cover' },
+  poster: { width: 118, height: 124, resizeMode: 'cover' },
   posterPlaceholder: { backgroundColor: theme.colors.primaryDark, alignItems: 'center', justifyContent: 'center', padding: theme.spacing.sm },
   posterPlaceholderText: { color: '#ffffff', fontSize: 11, fontWeight: '600', textAlign: 'center' },
   cardBody: { flex: 1, padding: theme.spacing.md, justifyContent: 'center' },
-  title: { color: theme.colors.text, fontSize: 16, fontWeight: '700' },
+  title: { color: theme.colors.text, fontSize: 16, fontWeight: '800', lineHeight: 22 },
   meta: { color: theme.colors.textMuted, fontSize: 12, marginTop: theme.spacing.xs },
-  price: { color: theme.colors.primary, fontWeight: '700', marginTop: theme.spacing.xs },
+  price: { color: theme.colors.primaryDark, fontWeight: '900', marginTop: theme.spacing.sm, fontSize: 14 },
   errorTitle: { color: theme.colors.text, fontSize: 17, fontWeight: '700', marginBottom: theme.spacing.sm },
   errorBody: { color: theme.colors.textMuted, fontSize: 13, textAlign: 'center' },
   retryButton: {
