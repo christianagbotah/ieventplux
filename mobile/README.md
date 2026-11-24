@@ -244,3 +244,7 @@ The meeting prep screen and LiveKit native room use the premium visual language.
 ### Premium utility screens
 
 Check-in, marketplace storefront details, and broadcast viewer reuse the React Native premium visual system. The check-in workflow retains its idempotent server-side verdicts and offline queue/roster. Storefront variants use real server SKU/stock and do not expose unimplemented checkout. Broadcast viewers retain clearly labelled synthetic presentation until a verified playable stream is configured. Run device UAT before claiming production-ready media or scanning.
+
+### Real native reel playback (media-ready only)
+
+`expo-video` renders verified published MP4 clip URLs from this platform through `VerifiedReelMedia`. One visible clip may autoplay muted when Reels is focused and the app is active. Viewers control sound and pausing; off-screen clips are not loaded. Image-only event previews remain static. This does **not** create or approve public video assets: native video upload/moderation/transcoding and byte-range serving are separately required and subject to content-rights safeguards. Real-device playback needs verification on the newly built APK.

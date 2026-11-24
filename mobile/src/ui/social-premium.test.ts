@@ -10,13 +10,13 @@ test('second premium native pass uses the same real React Native visuals across 
     expect(code).not.toContain('WebView')
   }
 })
-test('social preview renders real server media and never invents a play button',()=>{
+test('Reels uses real server clip data and never plays poster-only media as video',()=>{
   const reel=screen('ReelsScreen')
   expect(reel).toContain('api.discovery.reels()')
-  expect(reel).toContain('absoluteUrl(item.posterUrl)')
-  expect(reel).toContain('supported media source exists')
-  expect(reel).not.toContain('VideoView')
-  expect(reel).not.toContain('onPress={play}')
+  expect(reel).toContain('<VerifiedReelMedia')
+  expect(reel).toContain('trustedReelVideoUrl(item.url)')
+  expect(reel).toContain('Artwork-only event previews stay static')
+  expect(reel).not.toContain('Linking.openURL')
 })
 test('account switches clear private following data and avoid stale request updates',()=>{
   const following=screen('FollowingScreen')

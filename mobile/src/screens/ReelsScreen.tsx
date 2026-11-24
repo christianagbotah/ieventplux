@@ -1,7 +1,10 @@
-/** Editorial, native event-preview reels. No fake video playback controls. */
-import {useCallback,useEffect,useState} from 'react'
-import {ActivityIndicator,FlatList,Image,Pressable,RefreshControl,Share,StyleSheet,Text,View,useWindowDimensions} from 'react-native'
-import {absoluteUrl,api,formatDate,type NativeEventClip} from '../api/client'
+/** Approved MP4 video plays natively; artwork-only event previews stay static. */
+import {useCallback,useEffect,useRef,useState} from 'react'
+import {ActivityIndicator,AppState,FlatList,Pressable,RefreshControl,Share,StyleSheet,Text,View,useWindowDimensions,type ViewToken} from 'react-native'
+import {api,formatDate,type NativeEventClip} from '../api/client'
+import {useIsFocused} from '@react-navigation/native'
+import {VerifiedReelMedia} from '../components/VerifiedReelMedia'
+import {trustedReelVideoUrl} from '../lib/reel-playback'
 import {useSession} from '../store/session'
 import {theme} from '../theme'
 import {PremiumBackdrop,TileGlyph,mobileDesign} from '../ui/PremiumUI'
@@ -10,6 +13,13 @@ import type {ReelsScreenProps} from '../navigation'
 const eventWebUrl=(slug:string)=>'https://ieventplux.lightworldtech.com/#/event/'+encodeURIComponent(slug)
 export default function ReelsScreen({navigation}:ReelsScreenProps){
   const {status}=useSession()
+  const focused=useIsFocused()
+  const [appActive,setAppActive]=useState(AppState.currentState==='active')
+  const [visibleClipId,setVisibleClipId]=useState<string|null>(null)
+  const viewConfig=useRef({itemVisiblePercentThreshold:65}).current
+  const onViewableItemsChanged=useRef(({viewableItems}:{viewableItems:ViewToken[]})=>{
+    setVisibleClipId(viewableItems.find(row=>row.isViewable)?.key??null)
+  }).current
   const {height}=useWindowDimensions()
   const [clips,setClips]=useState<NativeEventClip[]>([])
   const [busy,setBusy]=useState(true)
@@ -23,6 +33,7 @@ export default function ReelsScreen({navigation}:ReelsScreenProps){
     finally{setBusy(false);setRefreshing(false)}
   },[])
   useEffect(()=>{void load()},[load])
+  useEffect(()=>{const sub=AppState.addEventListener('change',state=>setAppActive(state==='active'));return()=>sub.remove()},[])
   const like=async(clip:NativeEventClip)=>{
     if(status!=='authenticated')return navigation.navigate('Login')
     if(reactionBusy||reacted[clip.id])return
@@ -38,11 +49,13 @@ export default function ReelsScreen({navigation}:ReelsScreenProps){
   const cardHeight=Math.max(390,Math.min(height-240,700))
   return <FlatList style={styles.screen} contentContainerStyle={styles.content}
     showsVerticalScrollIndicator={false} data={clips} keyExtractor={item=>item.id}
+    onViewableItemsChanged={onViewableItemsChanged} viewabilityConfig={viewConfig}
+    initialNumToRender={2} maxToRenderPerBatch={3} windowSize={5}
     refreshControl={<RefreshControl refreshing={refreshing} onRefresh={()=>{setRefreshing(true);void load()}} tintColor={theme.colors.primary}/>}
     ListHeaderComponent={<View>
       <View style={styles.headerTop}><View style={{flex:1}}><Text style={styles.eyebrow}>STORIES BEHIND THE EXPERIENCES</Text><Text style={styles.title}>Event moments.</Text></View>
         <View style={styles.headerMark}><Text style={styles.headerMarkText}>✦</Text></View></View>
-      <View style={styles.explainer}><Text style={styles.explainerIcon}>◎</Text><Text style={styles.explainerText}>Real event artwork and organizer previews. Full video playback will appear only where a supported media source exists.</Text></View>
+      <View style={styles.explainer}><Text style={styles.explainerIcon}>◎</Text><Text style={styles.explainerText}>Verified MP4 event clips play natively when visible. Artwork-only event previews stay static. Sound starts muted to respect your surroundings.</Text></View>
       {error?<View style={styles.errorBox}><Text accessibilityRole="alert" style={styles.error}>{error}</Text><Pressable accessibilityRole="button" onPress={()=>void load()} style={styles.errorRetry}><Text style={styles.errorRetryText}>Retry  ↗</Text></Pressable></View>:null}
       {busy?<ActivityIndicator color={theme.colors.primary} style={styles.loader}/>:null}
     </View>}
@@ -53,18 +66,17 @@ export default function ReelsScreen({navigation}:ReelsScreenProps){
       <Pressable style={styles.explore} accessibilityRole="button" onPress={()=>navigation.navigate('Discover')}><Text style={styles.exploreText}>Explore real events  →</Text></Pressable>
     </View>:null}
     renderItem={({item})=><View style={[styles.card,{minHeight:cardHeight}]}>
-      {absoluteUrl(item.posterUrl)?<Image source={{uri:absoluteUrl(item.posterUrl)!}} resizeMode="cover" style={styles.cover} accessibilityLabel={item.event.title+' event artwork'}/>:
-        <PremiumBackdrop mode="midnight"/>}
-      <View style={styles.shade}/>
-      <View style={styles.top}><View style={styles.chip}><Text style={styles.chipText}>✦  EVENT STORY</Text></View>
+      <VerifiedReelMedia clip={item} active={focused&&appActive&&visibleClipId===item.id}/>
+      <View style={styles.shade} pointerEvents="none"/>
+      <View style={styles.top} pointerEvents="box-none"><View style={styles.chip}><Text style={styles.chipText}>{trustedReelVideoUrl(item.url)?'▶  APPROVED VIDEO':'✦  EVENT STORY'}</Text></View>
         <Text style={styles.topBrand}>iEventPlux</Text></View>
-      <View style={styles.middle}>
-        <View style={styles.editorialMark}><Text style={styles.editorialMarkText}>EXPERIENCES ARE BETTER TOGETHER</Text></View>
+      <View style={styles.middle} pointerEvents="box-none">
+        {!trustedReelVideoUrl(item.url)?<View style={styles.editorialMark}><Text style={styles.editorialMarkText}>EXPERIENCES ARE BETTER TOGETHER</Text></View>:null}
       </View>
       <View style={styles.bottom}>
         <View style={styles.identityRow}>
           <View style={styles.avatar}><Text style={styles.avatarText}>{item.org.name.trim().slice(0,2).toUpperCase()}</Text></View>
-          <View style={styles.identityCopy}><Text style={styles.orgName} numberOfLines={1}>{item.org.name}</Text><Text style={styles.meta}>Experience preview · {formatDate(item.event.startsAt)}</Text></View>
+          <View style={styles.identityCopy}><Text style={styles.orgName} numberOfLines={1}>{item.org.name}</Text><Text style={styles.meta}>{trustedReelVideoUrl(item.url)?'Video moment':'Event preview'} · {formatDate(item.event.startsAt)}</Text></View>
         </View>
         {item.caption?<Text style={styles.caption} numberOfLines={3}>{item.caption}</Text>:null}
         <Text style={styles.eventName} numberOfLines={2}>{item.event.title}</Text>
@@ -87,7 +99,7 @@ export default function ReelsScreen({navigation}:ReelsScreenProps){
         </Pressable>
       </View>
     </View>}
-    ListFooterComponent={clips.length?<Text style={styles.footer}>Event previews showcase real organizer artwork. Watchable broadcasts are separately identified in Live.</Text>:null}
+    ListFooterComponent={clips.length?<Text style={styles.footer}>Approved real videos play in Reels. Image-only event previews remain static, and simulated broadcasts are never presented as video.</Text>:null}
   />
 }
 const styles=StyleSheet.create({
