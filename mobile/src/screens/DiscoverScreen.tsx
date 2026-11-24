@@ -11,7 +11,6 @@ import {
   ActivityIndicator,
   FlatList,
   Image,
-  Linking,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -253,7 +252,7 @@ export default function DiscoverScreen({ navigation }: DiscoverScreenProps) {
                 onPress={() => navigation.navigate('LiveHub')}><Text style={styles.organizerButtonText}>◉  Watch live</Text></Pressable>
             </View>
             <Pressable accessibilityRole="button" accessibilityLabel="Host an event" style={styles.hostAction}
-              onPress={() => void Linking.openURL(status === 'authenticated' ? 'https://ieventplux.lightworldtech.com/#/create-org' : 'https://ieventplux.lightworldtech.com/#/register')}>
+              onPress={() => navigation.navigate(status === 'authenticated' ? 'OrganizerStudio' : 'Login')}>
               <Text style={styles.hostText}>Host an event  ↗</Text>
             </Pressable>
             <View style={styles.heroControls}>
@@ -275,7 +274,7 @@ export default function DiscoverScreen({ navigation }: DiscoverScreenProps) {
             </Pressable> : heroIndex === 1 ? <Pressable accessibilityRole="button" style={styles.heroFeatured}
               onPress={() => navigation.navigate('LiveHub')}><Text style={styles.heroFeatureSymbol}>◎</Text><View style={styles.heroFeaturedText}><Text style={styles.heroFeaturedLabel}>EXPLORE ONLINE</Text><Text style={styles.heroFeaturedTitle}>Experiences from anywhere</Text></View><Text style={styles.heroFeaturedArrow}>›</Text></Pressable>
               : <Pressable accessibilityRole="button" style={styles.heroFeatured}
-                  onPress={() => void Linking.openURL(status === 'authenticated' ? 'https://ieventplux.lightworldtech.com/#/create-org' : 'https://ieventplux.lightworldtech.com/#/register')}><Text style={styles.heroFeatureSymbol}>✦</Text><View style={styles.heroFeaturedText}><Text style={styles.heroFeaturedLabel}>FOR EVENT CREATORS</Text><Text style={styles.heroFeaturedTitle}>Create your own gathering</Text></View><Text style={styles.heroFeaturedArrow}>›</Text></Pressable>}
+                  onPress={() => navigation.navigate(status === 'authenticated' ? 'OrganizerStudio' : 'Login')}><Text style={styles.heroFeatureSymbol}>✦</Text><View style={styles.heroFeaturedText}><Text style={styles.heroFeaturedLabel}>FOR EVENT CREATORS</Text><Text style={styles.heroFeaturedTitle}>Create your own gathering</Text></View><Text style={styles.heroFeaturedArrow}>›</Text></Pressable>}
           </View>
 
           </> : null}

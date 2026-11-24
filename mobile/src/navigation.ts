@@ -14,6 +14,7 @@ export type RootStackParamList = {
   Reels: undefined
   Account: undefined
   OrganizerStudio: undefined
+  CreateOrganizer: undefined
   EventEditor: {orgId:string;eventId?:string}
   /** Event detail + checkout. Accepts the event id or slug. */
   EventDetail: { eventId: string }
@@ -73,3 +74,5 @@ export type ReelsScreenProps = NativeStackScreenProps<RootStackParamList, 'Reels
 
 export type OrganizerStudioScreenProps = NativeStackScreenProps<RootStackParamList, 'OrganizerStudio'>
 export type EventEditorScreenProps = NativeStackScreenProps<RootStackParamList, 'EventEditor'>
+
+export type CreateOrganizerScreenProps = NativeStackScreenProps<RootStackParamList, 'CreateOrganizer'>

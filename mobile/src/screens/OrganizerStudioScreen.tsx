@@ -98,7 +98,7 @@ export default function OrganizerStudioScreen({navigation}:OrganizerStudioScreen
       {listError?<View style={styles.alert}><Text style={styles.error} accessibilityRole="alert">{listError}</Text><Pressable accessibilityRole="button" onPress={()=>void load(1,true)} style={styles.retry}><Text style={styles.retryText}>Retry</Text></Pressable></View>:null}
       {loading?<ActivityIndicator color={theme.colors.primary} style={styles.loader}/>:null}
     </>:!orgLoading?<View style={styles.empty}><Text style={styles.emptyTitle}>Start with an organizer profile</Text><Text style={styles.emptyBody}>You need an organization or creator profile before publishing events. Set it up using the secure organizer registration on the web portal.</Text>
-      <Pressable accessibilityRole="button" style={styles.create} onPress={()=>void openWeb('/create-org')}><Text style={styles.createText}>Create organizer profile ↗</Text></Pressable>
+      <Pressable accessibilityRole="button" style={styles.create} onPress={()=>navigation.navigate('CreateOrganizer')}><Text style={styles.createText}>Create organizer profile</Text></Pressable>
       <Pressable accessibilityRole="button" style={styles.secondaryAction} onPress={()=>void refreshOrgs()}><Text style={styles.secondaryText}>Refresh my organizations</Text></Pressable>
     </View>:null}
   </View>
