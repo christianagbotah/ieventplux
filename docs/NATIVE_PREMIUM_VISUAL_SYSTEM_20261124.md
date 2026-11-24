@@ -51,3 +51,12 @@ The native-only visual system is extended to four more high-traffic destinations
 Native social cards never silently switch to web-based content. Exception: the user-initiated system share sheet can share a public website event URL, and secure payment authorization can open the hosted provider as before.
 
 **Acceptance limits:** Source checks, TypeScript and CI bundle success do not certify these screens on actual devices. Review small Android phones, long event names, large accessibility font scaling, absent artwork, network retries, safe area and 2×2 shortcut wraps; then compare iOS separately. The verified QA APK is the correct deliverable for on-device visual feedback. The Reels API must gain actual playable media and rights/moderation checks before presenting the screen as a full TikTok-style video player.
+
+## Third native visual increment — community, networking and award voting
+
+- Community discussion now uses the same gradient editorial hero, modern moderated feed cards, user avatars, clearer composer/quick-start prompts and real threaded replies. Success messages are differentiated from errors; pending loads are revision-guarded to prevent a stale private response from overwriting a later result.
+- Attendee networking now uses native premium profile, consent and privacy panels. The roster remains opt-in, restricted by backend attendee eligibility and reloaded only after server confirmation. Relative avatar image paths are normalized; leaving the network clears the sensitive roster and invalidates outstanding requests.
+- Awards & supporter voting now use category sections, stronger nominee photo cards, legible status/availability and genuine published vote counts only when the backend marks counts visible. This remains **one free vote per account/category** and the existing authenticated server-authorized ballot. Payment and vote ranking are not invented in the UI.
+- `ActionDialog` provides consistent React Native confirmation modals (including destructive-action styling) for consent, moderation and voting. This is a native modal, not a JavaScript browser prompt.
+
+On-device visual QA and accessibility scaling remain necessary. The current build does not claim real live voting commerce, unlimited meetings, full social video reels or iOS release signing.

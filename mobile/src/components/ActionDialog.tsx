@@ -1,59 +1,52 @@
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native'
-import { theme } from '../theme'
+/** Premium native confirmation modal: shared for votes, moderation, consent. */
+import {ActivityIndicator,Modal,Pressable,StyleSheet,Text,View} from 'react-native'
+import {mobileDesign} from '../ui/PremiumUI'
 
-/** Themed native dialog: explicit destructive/consent actions, no silent changes. */
-export type ActionPrompt = {
-  title: string
-  description: string
-  confirmLabel: string
-  destructive?: boolean
-  onConfirm: () => void
+export type ActionPrompt={
+  title:string
+  description:string
+  confirmLabel:string
+  destructive?:boolean
+  onConfirm:()=>void
 }
 
-export function ActionDialog({ prompt, onDismiss, busy = false }: {
-  prompt: ActionPrompt | null
-  onDismiss: () => void
-  busy?: boolean
-}) {
+export function ActionDialog({prompt,onDismiss,busy=false}:{prompt:ActionPrompt|null;onDismiss:()=>void;busy?:boolean}){
   return <Modal transparent visible={Boolean(prompt)} animationType="fade"
-    onRequestClose={() => { if (!busy) onDismiss() }}
-    accessibilityViewIsModal>
+    onRequestClose={()=>{if(!busy)onDismiss()}} accessibilityViewIsModal>
     <View style={styles.backdrop}>
       <View style={styles.panel}>
-        <View style={styles.marker} />
-        <Text style={styles.title}>{prompt?.title}</Text>
+        <View style={[styles.iconSurface,prompt?.destructive&&styles.iconSurfaceDanger]}>
+          <Text style={[styles.icon,prompt?.destructive&&styles.iconDanger]}>{prompt?.destructive?'!':'✓'}</Text>
+        </View>
+        <Text accessibilityRole="header" style={styles.title}>{prompt?.title}</Text>
         <Text style={styles.description}>{prompt?.description}</Text>
         <View style={styles.actions}>
-          <Pressable accessibilityRole="button" disabled={busy} onPress={onDismiss}
-            style={styles.cancel}>
+          <Pressable accessibilityRole="button" disabled={busy} onPress={onDismiss} style={({pressed})=>[styles.cancel,pressed&&styles.pressed]}>
             <Text style={styles.cancelText}>Cancel</Text>
           </Pressable>
-          <Pressable accessibilityRole="button" disabled={busy}
-            accessibilityLabel={prompt?.confirmLabel || 'Confirm action'}
-            onPress={() => prompt?.onConfirm()}
-            style={[styles.confirm, prompt?.destructive && styles.danger, busy && styles.disabled]}>
-            <Text style={styles.confirmText}>{busy ? 'Working…' : prompt?.confirmLabel}</Text>
+          <Pressable accessibilityRole="button" disabled={busy} accessibilityLabel={prompt?.confirmLabel||'Confirm action'}
+            onPress={()=>prompt?.onConfirm()} style={({pressed})=>[styles.confirm,prompt?.destructive&&styles.danger,(busy||pressed)&&styles.pressed]}>
+            {busy?<ActivityIndicator color="#fff" size="small"/>:<Text numberOfLines={2} style={styles.confirmText}>{prompt?.confirmLabel}</Text>}
           </Pressable>
         </View>
+        <Text style={styles.note}>Your changes will be processed securely.</Text>
       </View>
     </View>
   </Modal>
 }
-
-const styles = StyleSheet.create({
-  backdrop: { flex:1, justifyContent:'center', padding:22, backgroundColor:'rgba(7,27,19,0.66)' },
-  panel: { borderRadius:22, padding:22, backgroundColor:theme.colors.card, gap:12,
-    borderWidth:1,borderColor:theme.colors.border, elevation:8 },
-  marker: { width:48, height:5, backgroundColor:theme.colors.primary, borderRadius:6, marginBottom:4 },
-  title: { color:theme.colors.text, fontSize:19, fontWeight:'800', lineHeight:26 },
-  description: { color:theme.colors.textMuted, fontSize:14, lineHeight:22 },
-  actions: { flexDirection:'row', gap:10, justifyContent:'flex-end', marginTop:10 },
-  cancel: { flex:1, minHeight:46, borderRadius:12, borderWidth:1, borderColor:theme.colors.border,
-    alignItems:'center', justifyContent:'center' },
-  cancelText: { fontSize:14, fontWeight:'700', color:theme.colors.text },
-  confirm: { flex:1, minHeight:46, borderRadius:12, backgroundColor:theme.colors.primary,
-    alignItems:'center', justifyContent:'center' },
-  confirmText: { fontSize:14, fontWeight:'800', color:'#ffffff', textAlign:'center' },
-  danger: { backgroundColor:theme.colors.danger },
-  disabled: { opacity:0.6 },
+const styles=StyleSheet.create({
+  backdrop:{flex:1,justifyContent:'center',alignItems:'center',paddingHorizontal:20,backgroundColor:'rgba(9,21,33,.70)'},
+  panel:{width:'100%',maxWidth:420,borderRadius:27,padding:23,backgroundColor:'#fff',gap:11,borderWidth:1,borderColor:mobileDesign.border,
+    shadowColor:mobileDesign.shadow,shadowOpacity:.19,shadowRadius:24,shadowOffset:{width:0,height:12},elevation:12},
+  iconSurface:{width:57,height:57,borderRadius:20,backgroundColor:mobileDesign.mintSoft,alignItems:'center',justifyContent:'center',marginBottom:5},
+  iconSurfaceDanger:{backgroundColor:'#fff0eb'},icon:{color:mobileDesign.emerald,fontSize:27,fontWeight:'900'},iconDanger:{color:'#b34b3e'},
+  title:{color:mobileDesign.ink,fontSize:22,fontWeight:'900',lineHeight:29,letterSpacing:-.55},
+  description:{color:mobileDesign.inkMuted,fontSize:13,lineHeight:22},
+  actions:{flexDirection:'row',gap:10,marginTop:12},
+  cancel:{flex:1,minHeight:52,borderRadius:16,borderWidth:1,borderColor:mobileDesign.border,alignItems:'center',justifyContent:'center',padding:8},
+  cancelText:{fontSize:13,fontWeight:'900',color:mobileDesign.ink},
+  confirm:{flex:1,minHeight:52,borderRadius:16,backgroundColor:mobileDesign.emerald,alignItems:'center',justifyContent:'center',paddingHorizontal:9},
+  confirmText:{fontSize:12,fontWeight:'900',color:'#fff',textAlign:'center',lineHeight:17},
+  danger:{backgroundColor:'#bb4943'},pressed:{opacity:.67},
+  note:{fontSize:10,color:mobileDesign.inkSoft,textAlign:'center',marginTop:3},
 })
