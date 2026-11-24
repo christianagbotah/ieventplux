@@ -151,7 +151,8 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
 
     if (action === 'media') {
       const items = await db.mediaAsset.findMany({
-        where: { eventId: id, OR: [{ linksToEventId: id }] },
+        // Never expose pending creator-video quarantine locators through event media.
+        where: { eventId: id, status: 'READY', OR: [{ linksToEventId: id }] },
         select: { id: true, kind: true, url: true, posterUrl: true, durationSec: true, caption: true, status: true, views: true, createdAt: true },
         orderBy: { createdAt: 'desc' },
       })
