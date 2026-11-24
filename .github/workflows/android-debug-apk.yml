@@ -103,6 +103,55 @@ jobs:
           grep -q 'android.permission.CAMERA' android/app/src/main/AndroidManifest.xml
           grep -q 'android.permission.RECORD_AUDIO' android/app/src/main/AndroidManifest.xml
 
+      # A fresh runner generates a DIFFERENT debug keystore every run. Without a
+      # persistent QA identity Android rejects in-place upgrades (INSTALL_FAILED_UPDATE_INCOMPATIBLE).
+      # These secrets are protected in GitHub Actions and NEVER committed to git.
+      - name: Restore persistent QA signing identity
+        if: ${{ !inputs.diagnostics_only && inputs.standalone_qa }}
+        shell: bash
+        env:
+          QA_KEYSTORE_BASE64: ${{ secrets.IEVENTPLUX_QA_KEYSTORE_BASE64 }}
+          QA_STORE_PASSWORD: ${{ secrets.IEVENTPLUX_QA_KEYSTORE_PASSWORD }}
+          QA_KEY_ALIAS: ${{ secrets.IEVENTPLUX_QA_KEY_ALIAS }}
+          QA_KEY_PASSWORD: ${{ secrets.IEVENTPLUX_QA_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for name in QA_KEYSTORE_BASE64 QA_STORE_PASSWORD QA_KEY_ALIAS QA_KEY_PASSWORD; do
+            if [ -z "${!name:-}" ]; then
+              echo "Missing protected Android QA signing secret: $name"
+              exit 21
+            fi
+          done
+          KEYSTORE="$RUNNER_TEMP/ieventplux-qa-release.p12"
+          printf '%s' "$QA_KEYSTORE_BASE64" | base64 -d > "$KEYSTORE"
+          chmod 600 "$KEYSTORE"
+          keytool -list -storetype PKCS12 -keystore "$KEYSTORE" \
+            -storepass "$QA_STORE_PASSWORD" -alias "$QA_KEY_ALIAS" >/dev/null
+          echo "IEV_QA_KEYSTORE_PATH=$KEYSTORE" >> "$GITHUB_ENV"
+          echo "IEV_QA_STORE_PASSWORD=$QA_STORE_PASSWORD" >> "$GITHUB_ENV"
+          echo "IEV_QA_KEY_ALIAS=$QA_KEY_ALIAS" >> "$GITHUB_ENV"
+          echo "IEV_QA_KEY_PASSWORD=$QA_KEY_PASSWORD" >> "$GITHUB_ENV"
+          python3 - <<'PYGRADLE'
+          from pathlib import Path
+          import re
+          path = Path('mobile/android/app/build.gradle')
+          source = path.read_text()
+          assert source.count('signingConfigs {') == 1, 'Unexpected generated Gradle signing config'
+          qa = '''signingConfigs {
+                qa {
+                    storeFile file(System.getenv('IEV_QA_KEYSTORE_PATH'))
+                    storePassword System.getenv('IEV_QA_STORE_PASSWORD')
+                    keyAlias System.getenv('IEV_QA_KEY_ALIAS')
+                    keyPassword System.getenv('IEV_QA_KEY_PASSWORD')
+                }'''
+          source = source.replace('signingConfigs {', qa, 1)
+          pattern = r'(?m)^(\s*release\s*\{\s*\n\s*)signingConfig signingConfigs\.debug'
+          source, count = re.subn(pattern, r'\1signingConfig signingConfigs.qa', source, count=1)
+          assert count == 1, 'Could not find the generated release signing config'
+          path.write_text(source)
+          PYGRADLE
+          grep -F 'signingConfig signingConfigs.qa' mobile/android/app/build.gradle
+
       - name: Compile and debug-sign installable APK
         working-directory: mobile/android
         shell: bash
@@ -118,7 +167,7 @@ jobs:
             TASK=":expo-modules-core:configureCMakeDebug[arm64-v8a]"
           elif [ "${{ inputs.standalone_qa }}" = "true" ]; then
             # Release build embeds JavaScript. Test signing only, NOT Play Store.
-            grep -q 'signingConfig signingConfigs.debug' app/build.gradle || exit 17
+            grep -q 'signingConfig signingConfigs.qa' app/build.gradle || exit 17
             TASK=":app:assembleRelease"
           else
             TASK=":app:assembleDebug"
@@ -204,6 +253,11 @@ jobs:
             test -s "$APK"
           fi
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify "$APK"
+          if [ "${{ inputs.standalone_qa }}" = "true" ]; then
+            # Public certificate fingerprint only; never print secret passwords or keys.
+            "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs "$APK" | \
+              grep -F 'Signer #1 certificate SHA-256 digest:'
+          fi
           sha256sum "$APK"
           ls -lh "$APK"
 
@@ -259,7 +313,7 @@ jobs:
           if gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "Immutable QA release $TAG already exists; not replacing prior APK"
           else
-            gh release create "$TAG" "$APK" -R "$GITHUB_REPOSITORY" --prerelease               --title "iEventPlux Android QA $TAG"               --notes "Test-signed Android QA build for commit $SHA. Not Google Play certified. Changing QA signing keys may require uninstall/reinstall. Camera, mic and native meetings still require physical-device testing."
+            gh release create "$TAG" "$APK" -R "$GITHUB_REPOSITORY" --prerelease               --title "iEventPlux Android QA $TAG"               --notes "Test-signed Android QA build for commit $SHA. Not Google Play certified. Persistent QA signing identity starts with this build. Older test APKs may require one uninstall/reinstall due to the old ephemeral key; subsequent fixed-key releases support in-place updates. Device approval remains required. Camera, mic and native meetings still require physical-device testing."
           fi
           gh release view "$TAG" -R "$GITHUB_REPOSITORY" --json assets             --jq '.assets[]|select(.name=="app-release.apk")|.url' |
             grep -F "https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/app-release.apk"

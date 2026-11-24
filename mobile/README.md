@@ -172,6 +172,16 @@ Initial marketplace/awards APK: android-qa-614f3b2, app-release.apk.
 The GitHub pre-release provides a persistent asset, unlike temporary
 7-day GitHub Actions artifacts.
 
+**Installation and update security:** the app checks for a signed, published
+GitHub QA release on launch and return to foreground, then asks users whether
+to download. Android still requires the user to open/approve APK installation;
+this is not silent auto-installation or Google Play automatic updates. Test APKs
+from before the fixed QA signing identity may require a **one-time uninstall**
+(because a new signing certificate cannot replace the old one). From the first
+persistent-key build onward, future builds with the same protected QA key
+can be installed over the existing app, preserving user data. The signing
+keystore and passwords live only in protected GitHub Actions secrets, not git.
+
 After a successful main branch CI run involving native mobile source,
 the Android QA Auto Build After CI workflow dispatches the standalone
 Android APK build. Once it passes signature and JS-bundle checks, a
