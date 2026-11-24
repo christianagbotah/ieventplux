@@ -11,6 +11,7 @@ import {
 } from '../lib/organizer-event-form'
 import {useSession} from '../store/session'
 import {theme} from '../theme'
+import {PremiumBackdrop,mobileDesign} from '../ui/PremiumUI'
 import type {EventEditorScreenProps} from '../navigation'
 
 function Field({label,value,onChange,placeholder,multiline=false,maxLength=200,helper,keyboardType='default'}:{
@@ -104,6 +105,7 @@ export default function EventEditorScreen({navigation,route}:EventEditorScreenPr
   return <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS==='ios'?'padding':undefined}>
     <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
       <View style={styles.hero}>
+        <PremiumBackdrop mode="midnight"/>
         <Text style={styles.kicker}>{editing?'MANAGE EVENT':'NEW EVENT'}</Text>
         <Text style={styles.title}>{editing?'Edit event details':'Create a new experience'}</Text>
         <Text style={styles.subtitle}>{editing?'Update event information safely. Existing publication, tickets and agenda stay untouched.':'Start an unpublished event draft. Add tickets, speakers, artwork and publishing settings in the full web studio.'}</Text>
@@ -150,10 +152,10 @@ export default function EventEditorScreen({navigation,route}:EventEditorScreenPr
 const styles=StyleSheet.create({
   screen:{flex:1,backgroundColor:theme.colors.bg},content:{padding:16,paddingBottom:40,gap:14},
   center:{flex:1,alignItems:'center',justifyContent:'center',gap:16,padding:22},
-  hero:{backgroundColor:'#0d4f46',padding:22,borderRadius:21},kicker:{fontSize:10,color:'#c7f5e4',fontWeight:'900',letterSpacing:1.1},
-  title:{fontSize:25,lineHeight:31,color:'#fff',fontWeight:'900',marginTop:8},subtitle:{fontSize:12,lineHeight:20,color:'#d7efe6',marginTop:10},
+  hero:{backgroundColor:mobileDesign.forestDeep,padding:25,borderRadius:27,overflow:'hidden',shadowColor:mobileDesign.forestDeep,shadowOpacity:.17,shadowRadius:16,shadowOffset:{width:0,height:9},elevation:4},kicker:{fontSize:10,color:'#c7f5e4',fontWeight:'900',letterSpacing:1.1},
+  title:{fontSize:29,lineHeight:36,color:'#fff',fontWeight:'900',marginTop:8},subtitle:{fontSize:12,lineHeight:20,color:'#d7efe6',marginTop:10},
   orgName:{fontSize:12,fontWeight:'800',color:'#b1f0d5',marginTop:12},
-  panel:{borderRadius:18,backgroundColor:'#fff',borderColor:theme.colors.border,borderWidth:1,padding:17,gap:13},
+  panel:{borderRadius:23,backgroundColor:'#fff',borderColor:theme.colors.border,borderWidth:1,padding:17,gap:13},
   sectionTitle:{fontSize:18,fontWeight:'900',color:theme.colors.text,marginBottom:2},
   field:{gap:7},label:{fontSize:12,fontWeight:'800',color:theme.colors.text},
   input:{minHeight:48,backgroundColor:theme.colors.bg,borderWidth:1,borderColor:theme.colors.border,borderRadius:13,paddingVertical:10,paddingHorizontal:12,color:theme.colors.text,fontSize:14},

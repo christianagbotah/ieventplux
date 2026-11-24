@@ -7,6 +7,7 @@ import {absoluteUrl,api,formatDate,type Membership,type OrganizerEventCard} from
 import {canManageNativeEvent} from '../lib/organizer-event-form'
 import {useSession} from '../store/session'
 import {theme} from '../theme'
+import {PremiumBackdrop,mobileDesign} from '../ui/PremiumUI'
 import type {OrganizerStudioScreenProps} from '../navigation'
 
 const WEB='https://ieventplux.lightworldtech.com/#'
@@ -75,6 +76,7 @@ export default function OrganizerStudioScreen({navigation}:OrganizerStudioScreen
   }
   const header=<View style={styles.header}>
     <View style={styles.hero}>
+      <PremiumBackdrop mode="midnight"/>
       <Text style={styles.kicker}>THE CREATOR WORKSPACE</Text>
       <Text style={styles.heroTitle}>Your events, your community.</Text>
       <Text style={styles.heroSub}>Manage real events across your authorized organizations. Your native workspace uses the same server as the web portal.</Text>
@@ -97,7 +99,7 @@ export default function OrganizerStudioScreen({navigation}:OrganizerStudioScreen
       <Text style={styles.sectionLabel}>MANAGE EVENTS</Text>
       {listError?<View style={styles.alert}><Text style={styles.error} accessibilityRole="alert">{listError}</Text><Pressable accessibilityRole="button" onPress={()=>void load(1,true)} style={styles.retry}><Text style={styles.retryText}>Retry</Text></Pressable></View>:null}
       {loading?<ActivityIndicator color={theme.colors.primary} style={styles.loader}/>:null}
-    </>:!orgLoading?<View style={styles.empty}><Text style={styles.emptyTitle}>Start with an organizer profile</Text><Text style={styles.emptyBody}>You need an organization or creator profile before publishing events. Set it up using the secure organizer registration on the web portal.</Text>
+    </>:!orgLoading?<View style={styles.empty}><Text style={styles.emptyTitle}>Start with an organizer profile</Text><Text style={styles.emptyBody}>You need an organization or creator profile before publishing events. Set it up here in the native app and complete any required verification afterwards.</Text>
       <Pressable accessibilityRole="button" style={styles.create} onPress={()=>navigation.navigate('CreateOrganizer')}><Text style={styles.createText}>Create organizer profile</Text></Pressable>
       <Pressable accessibilityRole="button" style={styles.secondaryAction} onPress={()=>void refreshOrgs()}><Text style={styles.secondaryText}>Refresh my organizations</Text></Pressable>
     </View>:null}
@@ -125,28 +127,28 @@ export default function OrganizerStudioScreen({navigation}:OrganizerStudioScreen
   />
 }
 const styles=StyleSheet.create({
-  screen:{flex:1,backgroundColor:theme.colors.bg},content:{padding:16,paddingBottom:35},
-  header:{gap:12,marginBottom:9},hero:{backgroundColor:'#0d4f46',padding:23,borderRadius:23,marginBottom:8},
-  kicker:{color:'#aee7d7',fontSize:10,fontWeight:'900',letterSpacing:1.2},heroTitle:{color:'#fff',fontSize:24,lineHeight:31,fontWeight:'900',marginTop:7},
-  heroSub:{color:'#dcece8',fontSize:12,lineHeight:19,marginTop:9},
+  screen:{flex:1,backgroundColor:theme.colors.bg},content:{paddingHorizontal:18,paddingTop:16,paddingBottom:42},
+  header:{gap:12,marginBottom:9},hero:{backgroundColor:mobileDesign.forestDeep,padding:25,borderRadius:28,marginBottom:11,overflow:'hidden',shadowColor:mobileDesign.forestDeep,shadowOpacity:.19,shadowRadius:19,shadowOffset:{width:0,height:10},elevation:5},
+  kicker:{color:'#aee7d7',fontSize:10,fontWeight:'900',letterSpacing:1.2},heroTitle:{color:'#fff',fontSize:30,lineHeight:37,fontWeight:'900',marginTop:11,letterSpacing:-1},
+  heroSub:{color:'#e4f4ef',fontSize:13,lineHeight:21,marginTop:12},
   sectionLabel:{fontSize:11,fontWeight:'900',letterSpacing:1,color:theme.colors.textMuted,marginTop:8},
-  orgs:{flexDirection:'row',flexWrap:'wrap',gap:8},orgChip:{borderWidth:1,borderColor:theme.colors.border,backgroundColor:'#fff',borderRadius:14,minHeight:54,paddingHorizontal:13,paddingVertical:9,maxWidth:'100%'},
+  orgs:{flexDirection:'row',flexWrap:'wrap',gap:8},orgChip:{borderWidth:1,borderColor:theme.colors.border,backgroundColor:'#fff',borderRadius:16,minHeight:57,paddingHorizontal:15,paddingVertical:10,maxWidth:'100%'},
   orgActive:{borderColor:theme.colors.primary,backgroundColor:theme.web.tealSoft},
   orgName:{fontSize:12,fontWeight:'800',color:theme.colors.text},orgNameActive:{color:theme.colors.primary},
   orgRole:{fontSize:10,fontWeight:'700',color:theme.colors.textMuted,marginTop:4},orgRoleActive:{color:theme.colors.primary},
-  summaryRow:{flexDirection:'row',gap:9},stats:{flex:1,padding:14,borderRadius:16,backgroundColor:'#fff',borderWidth:1,borderColor:theme.colors.border},
+  summaryRow:{flexDirection:'row',gap:9},stats:{flex:1,padding:18,borderRadius:21,backgroundColor:'#fff',borderWidth:1,borderColor:theme.colors.border},
   statNumber:{fontSize:23,fontWeight:'900',color:theme.colors.text},statCaption:{fontSize:11,color:theme.colors.textMuted,marginTop:4},
-  create:{backgroundColor:theme.colors.primary,borderRadius:14,minHeight:50,paddingHorizontal:16,alignItems:'center',justifyContent:'center'},
+  create:{backgroundColor:theme.colors.primary,borderRadius:16,minHeight:54,paddingHorizontal:16,alignItems:'center',justifyContent:'center'},
   createText:{fontSize:14,fontWeight:'900',color:'#fff'},permissionNote:{fontSize:12,color:theme.colors.textMuted,lineHeight:19},
   loader:{marginVertical:20},error:{fontSize:12,lineHeight:19,color:theme.colors.danger},alert:{padding:12,backgroundColor:'#fff',borderRadius:12,gap:9},
   retry:{alignSelf:'flex-start',paddingHorizontal:14,paddingVertical:10,backgroundColor:theme.web.tealSoft,borderRadius:10},retryText:{color:theme.colors.primary,fontWeight:'800'},
   empty:{borderWidth:1,borderColor:theme.colors.border,backgroundColor:'#fff',borderRadius:18,padding:19,gap:11,marginVertical:8},
   emptyTitle:{fontSize:17,fontWeight:'900',color:theme.colors.text},emptyBody:{fontSize:12,lineHeight:20,color:theme.colors.textMuted},
   secondaryAction:{minHeight:45,alignItems:'center',justifyContent:'center'},secondaryText:{color:theme.colors.primary,fontWeight:'800'},
-  event:{borderWidth:1,borderColor:theme.colors.border,backgroundColor:'#fff',borderRadius:18,marginBottom:12,padding:13,gap:12},
-  eventMain:{flexDirection:'row',gap:12},eventImage:{height:87,width:88,borderRadius:12,backgroundColor:theme.colors.border},
+  event:{borderWidth:1,borderColor:theme.colors.border,backgroundColor:'#fff',borderRadius:23,marginBottom:15,padding:15,gap:13,shadowColor:mobileDesign.shadow,shadowOpacity:.05,shadowRadius:12,shadowOffset:{width:0,height:7},elevation:2},
+  eventMain:{flexDirection:'row',gap:12},eventImage:{height:94,width:94,borderRadius:16,backgroundColor:theme.colors.border},
   eventImagePlaceholder:{justifyContent:'center',alignItems:'center',backgroundColor:theme.web.tealSoft},imagePlaceholderText:{fontSize:29,color:theme.colors.primary},
-  eventInfo:{flex:1,justifyContent:'center',gap:5},eventTitle:{fontWeight:'900',fontSize:14,lineHeight:19,color:theme.colors.text},
+  eventInfo:{flex:1,justifyContent:'center',gap:5},eventTitle:{fontWeight:'900',fontSize:15,lineHeight:21,color:theme.colors.text},
   eventDate:{fontSize:11,color:theme.colors.textMuted},badge:{backgroundColor:theme.web.tealSoft,alignSelf:'flex-start',borderRadius:9,paddingHorizontal:8,paddingVertical:5},
   badgeText:{fontSize:10,fontWeight:'800',color:theme.colors.primary},eventActions:{flexDirection:'row',gap:9},
   actionPrimary:{flex:1,minHeight:43,borderRadius:12,justifyContent:'center',alignItems:'center',backgroundColor:theme.colors.primary},

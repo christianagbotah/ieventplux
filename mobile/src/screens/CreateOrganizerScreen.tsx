@@ -8,6 +8,7 @@ import {EMPTY_ORGANIZER_FORM,ORGANIZER_CATEGORIES,ORGANIZER_PROFILE_FIELDS,organ
 import type {CreateOrganizerScreenProps} from '../navigation'
 import {useSession} from '../store/session'
 import {theme} from '../theme'
+import {PremiumBackdrop,mobileDesign} from '../ui/PremiumUI'
 
 function Field({label,value,onChange,placeholder,multiline=false,maxLength=180,autoCapitalize='sentences'}:{
   label:string;value:string;onChange:(s:string)=>void;placeholder:string;multiline?:boolean;maxLength?:number;
@@ -45,6 +46,7 @@ export default function CreateOrganizerScreen({navigation}:CreateOrganizerScreen
   return <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS==='ios'?'padding':undefined}>
     <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
       <View style={styles.hero}>
+        <PremiumBackdrop mode="midnight"/>
         <Text style={styles.kicker}>CREATE WITH iEVENTPLUX</Text>
         <Text style={styles.heroTitle}>Start your organizer profile.</Text>
         <Text style={styles.heroBody}>Create a public identity for your events without leaving the app. Your profile starts unverified and private identity documents are handled separately.</Text>
@@ -96,9 +98,9 @@ export default function CreateOrganizerScreen({navigation}:CreateOrganizerScreen
 }
 const styles=StyleSheet.create({
   screen:{flex:1,backgroundColor:theme.colors.bg},content:{padding:16,gap:14,paddingBottom:36},
-  hero:{backgroundColor:'#0d4f46',padding:22,borderRadius:23},kicker:{color:'#b8ead4',fontSize:10,fontWeight:'900',letterSpacing:1.1},
-  heroTitle:{fontSize:25,lineHeight:32,color:'#fff',fontWeight:'900',marginTop:9},heroBody:{color:'#ddf4ec',fontSize:12,lineHeight:20,marginTop:8},
-  panel:{backgroundColor:'#fff',borderRadius:17,padding:16,borderWidth:1,borderColor:theme.colors.border,gap:13},
+  hero:{backgroundColor:mobileDesign.forestDeep,padding:25,borderRadius:27,overflow:'hidden',shadowColor:mobileDesign.forestDeep,shadowOpacity:.17,shadowRadius:16,shadowOffset:{width:0,height:9},elevation:4},kicker:{color:'#b8ead4',fontSize:10,fontWeight:'900',letterSpacing:1.1},
+  heroTitle:{fontSize:30,lineHeight:37,color:'#fff',fontWeight:'900',marginTop:9},heroBody:{color:'#ddf4ec',fontSize:12,lineHeight:20,marginTop:8},
+  panel:{backgroundColor:'#fff',borderRadius:23,padding:16,borderWidth:1,borderColor:theme.colors.border,gap:13},
   section:{fontSize:17,fontWeight:'900',color:theme.colors.text},title:{fontSize:19,fontWeight:'900',color:theme.colors.text},description:{fontSize:12,lineHeight:19,color:theme.colors.textMuted},
   choices:{gap:9},choice:{borderWidth:1,borderColor:theme.colors.border,backgroundColor:theme.colors.bg,borderRadius:13,padding:13,gap:4},
   choiceActive:{borderColor:theme.colors.primary,backgroundColor:theme.web.tealSoft},choiceTitle:{fontSize:14,color:theme.colors.text,fontWeight:'800'},

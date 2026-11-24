@@ -44,18 +44,25 @@ export function AppTabBar({ active, onSelect }: { active: MainTabRoute; onSelect
           <TabIcon name={tab.icon} selected={selected} />
         </View>
         <Text allowFontScaling numberOfLines={1} style={[styles.label, selected && styles.selectedLabel]}>{tab.label}</Text>
+        <View style={[styles.indicator,selected&&styles.indicatorActive]}/>
       </Pressable>
     })}
   </View>
 }
 
 const styles = StyleSheet.create({
-  outer: { flexDirection: 'row', backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: theme.colors.border,
-    paddingTop: 6, paddingHorizontal: 5, elevation: 10, shadowColor: '#17362a', shadowOpacity: 0.07, shadowRadius: 14, shadowOffset: { width: 0, height: -3 } },
-  tab: { flex: 1, minHeight: 55, alignItems: 'center', justifyContent: 'center', gap: 1, paddingHorizontal: 2 },
-  iconBox: { height: 31, minWidth: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 15 },
-  selectedIcon: { backgroundColor: '#e7f5f0' },
-  label: { fontSize: 11, fontWeight: '600', color: theme.colors.textMuted },
-  selectedLabel: { color: theme.colors.primaryDark, fontWeight: '800' },
-  pressed: { opacity: 0.7 },
+  outer: {
+    flexDirection:'row',alignItems:'center',backgroundColor:'#ffffff',
+    borderRadius:24,borderWidth:1,borderColor:theme.colors.border,
+    paddingTop:8,paddingHorizontal:5,marginHorizontal:10,marginTop:5,marginBottom:4,
+    elevation:14,shadowColor:'#102f36',shadowOpacity:.13,shadowRadius:22,shadowOffset:{width:0,height:-3},
+  },
+  tab:{flex:1,minHeight:59,alignItems:'center',justifyContent:'center',gap:2,paddingHorizontal:1},
+  iconBox:{height:33,minWidth:42,alignItems:'center',justifyContent:'center',borderRadius:14},
+  selectedIcon:{backgroundColor:'#e4f5ee'},
+  label:{fontSize:10,fontWeight:'700',color:theme.colors.textMuted,letterSpacing:-.1},
+  selectedLabel:{color:theme.colors.primaryDark,fontWeight:'900'},
+  indicator:{height:3,width:13,borderRadius:2,backgroundColor:'transparent',marginTop:2},
+  indicatorActive:{backgroundColor:theme.colors.primary},
+  pressed:{opacity:.68},
 })

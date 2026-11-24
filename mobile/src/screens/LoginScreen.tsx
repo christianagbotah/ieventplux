@@ -23,6 +23,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { api, ApiClientError, isBaseUrlConfigured } from '../api/client'
 import { theme } from '../theme'
+import { PremiumBackdrop, mobileDesign } from '../ui/PremiumUI'
 import { AppBrand } from '../components/AppBrand'
 import { useSession } from '../store/session'
 import type { LoginScreenProps } from '../navigation'
@@ -117,6 +118,7 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
       >
         <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
           <View style={styles.brandBlock}>
+            <PremiumBackdrop mode="midnight"/>
             <View style={styles.brandTop}><AppBrand inverted /></View>
             <Text style={styles.brandHero}>Experience the world,{'\n'}together.</Text>
             <Text style={styles.brandSub}>Explore events. Join communities. Make memories.</Text>
@@ -251,17 +253,17 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.colors.bg },
   flex: { flex: 1 },
-  container: { flexGrow: 1, paddingHorizontal: 21, paddingTop: 23, paddingBottom: 28, justifyContent: 'center', maxWidth: 560, alignSelf: 'center', width: '100%' },
-  brandBlock: { backgroundColor: '#103f34', padding: 23, borderRadius: 25, marginBottom: 26 },
+  container: { flexGrow: 1, paddingHorizontal: 19, paddingTop: 21, paddingBottom: 34, justifyContent: 'center', maxWidth: 560, alignSelf: 'center', width: '100%' },
+  brandBlock: { backgroundColor: mobileDesign.forestDeep, padding: 25, borderRadius: 29, marginBottom: 30, overflow:'hidden',shadowColor:mobileDesign.forestDeep,shadowOpacity:.23,shadowRadius:22,shadowOffset:{width:0,height:13},elevation:6 },
   brandTop: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 24 },
   brandIcon: { width: 37, height: 37, borderRadius: 12, backgroundColor: '#d8f6e5', justifyContent: 'center', alignItems: 'center' },
   brandIconText: { color: '#0d6345', fontWeight: '900', fontSize: 24 },
   brandMark: { fontSize: 23, fontWeight: '900', color: '#ffffff', letterSpacing: -0.7 },
-  brandHero: { fontSize: 27, lineHeight: 34, fontWeight: '900', color: '#fff', letterSpacing: -.6 },
-  brandSub: { marginTop: 8, color: '#d0e8db', fontSize: 13, lineHeight: 20 },
+  brandHero: { fontSize: 32, lineHeight: 39, fontWeight: '900', color: '#fff', letterSpacing: -1.15 },
+  brandSub: { marginTop: 12, color: '#e5f4eb', fontSize: 13, lineHeight: 21 },
   brandChips: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 20, gap: 8 },
-  brandChip: { backgroundColor: '#ffffff1a', color: '#e2f9ed', fontSize: 9, fontWeight: '800', paddingVertical: 7, paddingHorizontal: 9, borderRadius: 7, letterSpacing: .4 },
-  formTitle: { fontSize: 24, color: theme.colors.text, fontWeight: '900', letterSpacing: -.4, marginBottom: 4 },
+  brandChip: { backgroundColor: '#ffffff20', color: '#e6faed', fontSize: 9, fontWeight: '900', paddingVertical: 9, paddingHorizontal: 11, borderRadius: 12, letterSpacing: .7,overflow:'hidden' },
+  formTitle: { fontSize: 28, color: theme.colors.text, fontWeight: '900', letterSpacing: -.75, marginBottom: 7 },
   formSub: { color: theme.colors.textMuted, fontSize: 13, marginBottom: 21 },
   warningBox: {
     backgroundColor: '#fef3c7',
@@ -278,7 +280,7 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.card,
     borderWidth: 1,
     borderColor: theme.colors.border,
-    borderRadius: 14,
+    borderRadius: 17,
     padding: theme.spacing.lg,
     marginBottom: theme.spacing.lg,
     color: theme.colors.text,
@@ -287,7 +289,7 @@ const styles = StyleSheet.create({
   error: { color: theme.colors.danger, fontSize: 13, marginBottom: theme.spacing.lg },
   success: { color: theme.colors.primaryDark, fontSize: 13, marginBottom: theme.spacing.lg, lineHeight: 19 },
   resetHint: { color: theme.colors.textMuted, fontSize: 13, lineHeight: 20, marginBottom: theme.spacing.lg },
-  passwordWrap: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.colors.card, borderRadius: 14, borderWidth: 1, borderColor: theme.colors.border, marginBottom: theme.spacing.md },
+  passwordWrap: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.colors.card, borderRadius: 17, borderWidth: 1, borderColor: theme.colors.border, marginBottom: theme.spacing.md },
   passwordField: { flex: 1, padding: theme.spacing.lg, color: theme.colors.text, fontSize: 16, minHeight: 52 },
   eyeButton: { minWidth: 55, minHeight: 52, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10 },
   eyeText: { color: theme.colors.primaryDark, fontWeight: '800', fontSize: 12 },
@@ -297,8 +299,8 @@ const styles = StyleSheet.create({
   secondaryButtonText: { color: theme.colors.primaryDark, fontSize: 14, fontWeight: '700' },
   button: {
     backgroundColor: theme.colors.primary,
-    borderRadius: 14,
-    minHeight: 53,
+    borderRadius: 17,
+    minHeight: 55,
     padding: theme.spacing.lg,
     alignItems: 'center',
   },
