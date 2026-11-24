@@ -23,7 +23,12 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
       select: { id: true, slug: true, title: true, summary: true, coverImageUrl: true, startsAt: true, city: true, mode: true, status: true, categorySlug: true, ticketTypes: { select: { priceMinor: true }, where: { active: true } } },
     })
     const followers = await db.follow.count({ where: { orgId: org.id } })
-    const clips = await db.mediaAsset.findMany({ where: { orgId: org.id, kind: 'CLIP' }, orderBy: { createdAt: 'desc' }, take: 8 })
+    const clips = await db.mediaAsset.findMany({
+      where: { orgId: org.id, kind: 'CLIP', status: 'READY',
+        event: { visibility: 'PUBLIC', deletedAt: null, status: { in: ['PUBLISHED', 'LIVE', 'ENDED'] } },
+        org: { status: 'ACTIVE', deletedAt: null },
+      }, orderBy: { createdAt: 'desc' }, take: 8,
+    })
     return jsonOk({
       org: {
         id: org.id, name: org.name, slug: org.slug, tagline: org.tagline, description: org.description,

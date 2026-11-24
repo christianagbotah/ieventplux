@@ -113,7 +113,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ view: strin
     if (view === 'reels') {
       // Short-clip feed from public events (synthetic dev media; see docs/PROVIDER_CAPABILITIES.md).
       const clips = await db.mediaAsset.findMany({
-        where: { kind: 'CLIP', status: 'READY', event: { visibility: 'PUBLIC', deletedAt: null, status: { in: ['PUBLISHED', 'LIVE', 'ENDED'] } } },
+        where: { kind: 'CLIP', status: 'READY', org: { status: 'ACTIVE', deletedAt: null }, event: { visibility: 'PUBLIC', deletedAt: null, status: { in: ['PUBLISHED', 'LIVE', 'ENDED'] }, org: { status: 'ACTIVE', deletedAt: null } } },
         include: {
           event: { select: { id: true, slug: true, title: true, startsAt: true, org: { select: { name: true, slug: true } }, ticketTypes: { select: { priceMinor: true }, where: { active: true } } } },
           linksTo: { select: { id: true, slug: true, title: true } },
