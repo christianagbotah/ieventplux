@@ -5,7 +5,7 @@
  * loading / error / empty states. Tapping a row opens EventDetail.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AccessibilityInfo,
   ActivityIndicator,
@@ -32,6 +32,8 @@ import {
 import { theme } from '../theme'
 import { useSession } from '../store/session'
 import { HOME_STORIES } from '../lib/home-stories'
+import { DiscoverFilterSheet } from '../components/DiscoverFilterSheet'
+import { buildDiscoveryQuery, isDiscoveryFiltered, type DiscoveryFilters } from '../lib/discovery-filters'
 import type { DiscoverScreenProps } from '../navigation'
 
 type ListState =
@@ -64,6 +66,37 @@ export default function DiscoverScreen({ navigation }: DiscoverScreenProps) {
   const [serverResults, setServerResults] = useState<DiscoveryEventCard[] | null>(null)
   const [searchBusy, setSearchBusy] = useState(false)
   const [searchError, setSearchError] = useState(false)
+  const [filterOpen, setFilterOpen] = useState(false)
+  const [countries, setCountries] = useState<{ code: string; count: number }[]>([])
+  const [advanced, setAdvanced] = useState<Pick<DiscoveryFilters,'country'|'city'|'mode'|'price'|'when'>>({
+    country: '', city: '', mode: '', price: '', when: '',
+  })
+  const [searchTotal, setSearchTotal] = useState<number | null>(null)
+  const [searchPage, setSearchPage] = useState(1)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [loadMoreError, setLoadMoreError] = useState(false)
+  const [retryFilters, setRetryFilters] = useState(0)
+  const searchRevision = useRef(0)
+  const timeZone = useMemo(() => {
+    try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' } catch { return 'UTC' }
+  }, [])
+  const activeFilters: DiscoveryFilters = useMemo(() => ({q:search,category:category==='all'?'':category,...advanced}), [search,category,advanced])
+  const filterKey = JSON.stringify(activeFilters)
+  const isFiltered = isDiscoveryFiltered(activeFilters)
+  const activeCount = Object.values(activeFilters).filter(v=>v.trim()).length
+  const setQuickFilter = (key: keyof typeof advanced, value: string) => {
+    setAdvanced(old => ({...old,[key]:old[key] === value ? '' : value}))
+  }
+  const resetFilters = () => {
+    setSearch('');setCategory('all');setAdvanced({country:'',city:'',mode:'',price:'',when:''})
+    setServerResults(null);setSearchError(false);setSearchBusy(false)
+    listRef.current?.scrollToOffset({offset:0,animated:true})
+  }
+  useEffect(() => {
+    let mounted=true
+    void api.discovery.locations().then(data => { if(mounted) setCountries(data.countries) }).catch(() => {})
+    return () => {mounted=false}
+  }, [])
 
   const load = useCallback(async () => {
     setState((prev) => (prev.status === 'ready' || prev.status === 'empty' ? prev : { status: 'loading' }))
@@ -88,6 +121,7 @@ export default function DiscoverScreen({ navigation }: DiscoverScreenProps) {
       // rather than wiping a usable screen with an error state.
     } finally {
       setRefreshing(false)
+      setRetryFilters(value=>value+1)
     }
   }, [])
 
@@ -95,27 +129,52 @@ export default function DiscoverScreen({ navigation }: DiscoverScreenProps) {
     void load()
   }, [load])
 
-  // Search the complete server catalogue with debounce, not just the small
-  // homepage rail. Keep a clearly labelled local fallback if connectivity fails.
+  // Search the full public server catalogue using the web portal's exact
+  // query vocabulary, never a misleading client-side subset of homepage items.
+  // Ignore stale responses when the user edits filters during an in-flight call.
   useEffect(() => {
-    const query = search.trim()
-    if (!query && category === 'all') return
-    let cancelled = false
-    const handle = setTimeout(() => {
-      void api.discovery.searchEvents(query, category).then((result) => {
-        if (cancelled) return
-        setServerResults(result.items)
-        setSearchError(false)
+    const revision=++searchRevision.current
+    if (!isFiltered) {
+      setServerResults(null);setSearchBusy(false);setSearchError(false)
+      setSearchTotal(null);setSearchPage(1)
+      return
+    }
+    let cancelled=false
+    setSearchBusy(true);setSearchError(false);setLoadMoreError(false);setServerResults(null)
+    setSearchTotal(null);setSearchPage(1)
+    const handle=setTimeout(() => {
+      void api.discovery.filterEvents(buildDiscoveryQuery(activeFilters,1,timeZone)).then(result => {
+        if (cancelled || revision!==searchRevision.current) return
+        setServerResults(result.items);setSearchTotal(result.total)
+        setSearchPage(1);setSearchError(false)
       }).catch(() => {
-        if (cancelled) return
-        setServerResults(null)
-        setSearchError(true)
+        if (cancelled || revision!==searchRevision.current) return
+        setServerResults([]);setSearchError(true)
       }).finally(() => {
-        if (!cancelled) setSearchBusy(false)
+        if (!cancelled && revision===searchRevision.current) setSearchBusy(false)
       })
-    }, 300)
-    return () => { cancelled = true; clearTimeout(handle) }
-  }, [search, category])
+    },300)
+    return () => {cancelled=true;clearTimeout(handle)}
+  }, [filterKey,retryFilters,timeZone])
+
+  const loadMore = async () => {
+    if (!isFiltered || loadingMore || searchBusy || searchTotal === null ||
+        (serverResults?.length ?? 0)>=searchTotal) return
+    const revision=searchRevision.current
+    setLoadingMore(true);setLoadMoreError(false)
+    try {
+      const result=await api.discovery.filterEvents(buildDiscoveryQuery(activeFilters,searchPage+1,timeZone))
+      if (revision!==searchRevision.current) return
+      setServerResults(old => {
+        const previous=old ?? []
+        const seen=new Set(previous.map(item=>item.id))
+        return [...previous,...result.items.filter(item=>!seen.has(item.id))]
+      })
+      setSearchPage(page=>page+1)
+      setSearchTotal(result.total)
+    } catch { if(revision===searchRevision.current) setLoadMoreError(true) }
+    finally {setLoadingMore(false)}
+  }
 
   useEffect(() => {
     navigation.setOptions({
@@ -158,18 +217,13 @@ export default function DiscoverScreen({ navigation }: DiscoverScreenProps) {
   }
 
   const liveNow = state.home.liveNow.filter((e) => e.broadcasts.some((b) => b.status === 'LIVE'))
-  const query = search.trim().toLocaleLowerCase()
-  const filtered = query.length > 0 || category !== 'all'
-  const fallbackUpcoming = state.home.upcoming.filter((event) => {
-    const matchesCategory = category === 'all' || event.categorySlug === category
-    const searchable = [event.title, event.org.name, event.city ?? '', event.categorySlug ?? ''].join(' ').toLocaleLowerCase()
-    return matchesCategory && (!query || searchable.includes(query))
-  })
-  const visibleUpcoming = filtered ? (serverResults ?? fallbackUpcoming) : state.home.upcoming
+  const filtered = isFiltered
+  const visibleUpcoming = filtered ? (serverResults ?? []) : state.home.upcoming
   const featured = state.home.featured[0]
   const story = HOME_STORIES[heroIndex] ?? HOME_STORIES[0]
 
   return (
+    <View style={{flex:1}}>
     <FlatList<DiscoveryEventCard>
       ref={listRef}
       style={styles.list}
@@ -178,6 +232,7 @@ export default function DiscoverScreen({ navigation }: DiscoverScreenProps) {
       keyExtractor={(item) => item.id}
       ListHeaderComponent={
         <View>
+          {!filtered ? <>
           <View style={styles.introRow}>
             <View><Text style={styles.introLabel}>DISCOVER iEVENTPLUX</Text><Text style={styles.introTitle}>Experience more.</Text></View>
             <Pressable style={styles.liveShortcut} accessibilityRole="button" accessibilityLabel="Open live events" onPress={() => navigation.navigate('LiveHub')}>
@@ -223,17 +278,13 @@ export default function DiscoverScreen({ navigation }: DiscoverScreenProps) {
                   onPress={() => void Linking.openURL(status === 'authenticated' ? 'https://ieventplux.lightworldtech.com/#/create-org' : 'https://ieventplux.lightworldtech.com/#/register')}><Text style={styles.heroFeatureSymbol}>✦</Text><View style={styles.heroFeaturedText}><Text style={styles.heroFeaturedLabel}>FOR EVENT CREATORS</Text><Text style={styles.heroFeaturedTitle}>Create your own gathering</Text></View><Text style={styles.heroFeaturedArrow}>›</Text></Pressable>}
           </View>
 
+          </> : null}
           <View style={styles.searchField}>
             <Text style={styles.searchIcon} accessibilityElementsHidden>⌕</Text>
             <TextInput
               style={styles.searchInput}
               value={search}
-              onChangeText={(text) => {
-                setSearch(text)
-                setServerResults(null)
-                setSearchError(false)
-                setSearchBusy(Boolean(text.trim() || category !== 'all'))
-              }}
+              onChangeText={setSearch}
               placeholder="Search upcoming events or cities"
               placeholderTextColor={theme.colors.textMuted}
               autoCorrect={false}
@@ -241,22 +292,41 @@ export default function DiscoverScreen({ navigation }: DiscoverScreenProps) {
               accessibilityLabel="Search upcoming events"
             />
             {search ? (
-              <Pressable onPress={() => { setSearch(''); setServerResults(null); setSearchError(false); setSearchBusy(category !== 'all') }} accessibilityRole="button" accessibilityLabel="Clear search" style={styles.clearSearch}>
+              <Pressable onPress={() => setSearch('')} accessibilityRole="button" accessibilityLabel="Clear search" style={styles.clearSearch}>
                 <Text style={styles.clearSearchText}>×</Text>
               </Pressable>
             ) : null}
           </View>
 
+          <View style={styles.filterControls}>
+            <Pressable accessibilityRole="button" accessibilityLabel="Open advanced event filters"
+              style={styles.filterButton} onPress={()=>setFilterOpen(true)}>
+              <Text style={styles.filterButtonText}>☷  Filters{activeCount?' · '+activeCount:''}</Text>
+            </Pressable>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickFilters}>
+              {([
+                {key:'when' as const,value:'TODAY',label:'Today'},
+                {key:'when' as const,value:'THIS_WEEKEND',label:'This weekend'},
+                {key:'price' as const,value:'FREE',label:'Free'},
+                {key:'mode' as const,value:'ONLINE',label:'Join online'},
+              ]).map(item => <Pressable key={item.key+item.value} accessibilityRole="button"
+                accessibilityState={{selected: advanced[item.key]===item.value}}
+                style={[styles.quickChip,advanced[item.key]===item.value && styles.quickSelected]}
+                onPress={()=>setQuickFilter(item.key,item.value)}>
+                <Text style={[styles.quickText,advanced[item.key]===item.value && styles.quickTextSelected]}>{item.label}</Text>
+              </Pressable>)}
+            </ScrollView>
+          </View>
+          {filtered ? <View style={styles.activeFilterBanner}>
+            <Text style={styles.activeFilterLabel}>Filtering the full event catalogue · {activeCount} active</Text>
+            <Pressable accessibilityRole="button" accessibilityLabel="Clear all event filters" onPress={resetFilters}><Text style={styles.clearFilterLabel}>Clear all</Text></Pressable>
+          </View> : null}
+
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryScroll} contentContainerStyle={styles.categoryRow}>
             {[{ slug: 'all', name: 'All events' }, ...state.home.categories].map((option) => (
               <Pressable
                 key={option.slug}
-                onPress={() => {
-                  setCategory(option.slug)
-                  setServerResults(null)
-                  setSearchError(false)
-                  setSearchBusy(Boolean(search.trim() || option.slug !== 'all'))
-                }}
+                onPress={() => setCategory(option.slug)}
                 style={[styles.categoryPill, category === option.slug && styles.categoryPillSelected]}
                 accessibilityRole="button"
                 accessibilityState={{ selected: category === option.slug }}
@@ -267,14 +337,14 @@ export default function DiscoverScreen({ navigation }: DiscoverScreenProps) {
             ))}
           </ScrollView>
 
-          {featured && !query && category === 'all' ? (
+          {featured && !filtered ? (
             <View style={styles.sectionBlock}>
               <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>In the spotlight</Text></View>
               <FeaturedEventCard event={featured} onPress={() => navigation.navigate('EventDetail', { eventId: featured.id })} />
             </View>
           ) : null}
 
-          {liveNow.length > 0 && !query && category === 'all' ? (
+          {liveNow.length > 0 && !filtered ? (
             <View style={styles.liveSection}>
               <View style={styles.sectionHeading}>
                 <Text style={styles.sectionTitle}>Happening live</Text>
@@ -300,7 +370,7 @@ export default function DiscoverScreen({ navigation }: DiscoverScreenProps) {
 
           <View style={styles.sectionHeading}>
             <Text style={styles.sectionTitle}>{filtered ? 'Matching events' : 'Explore what’s next'}</Text>
-            <Text style={styles.sectionCount}>{visibleUpcoming.length} events</Text>
+            <Text style={styles.sectionCount}>{filtered && searchTotal!==null ? searchTotal : visibleUpcoming.length} events</Text>
           </View>
           {filtered && searchBusy ? (
             <View style={styles.searchStatus}>
@@ -309,15 +379,17 @@ export default function DiscoverScreen({ navigation }: DiscoverScreenProps) {
             </View>
           ) : null}
           {filtered && searchError ? (
-            <Text style={styles.searchStatusText} accessibilityRole="alert">Online search is unavailable. Showing only the events already downloaded.</Text>
+            <View><Text style={styles.searchError} accessibilityRole="alert">Event search could not be completed. No stale results are shown.</Text>
+              <Pressable accessibilityRole="button" style={styles.searchRetry} onPress={()=>setRetryFilters(n=>n+1)}><Text style={styles.searchRetryText}>Try search again</Text></Pressable>
+            </View>
           ) : null}
         </View>
       }
       ListEmptyComponent={
-        <View style={styles.filterEmpty}>
+        filtered && (searchBusy || searchError) ? null : <View style={styles.filterEmpty}>
           <Text style={styles.emptyTitle}>{filtered ? 'No matching events' : 'No upcoming events yet'}</Text>
           <Text style={styles.errorBody}>{filtered ? 'Try another search or category to explore more gatherings.' : 'Organizers will appear here as they publish real experiences. Explore the live and social sections in the meantime.'}</Text>
-          {filtered ? <Pressable style={styles.retryButton} accessibilityRole="button" onPress={() => { setSearch(''); setCategory('all'); setServerResults(null); setSearchError(false); setSearchBusy(false) }}>
+          {filtered ? <Pressable style={styles.retryButton} accessibilityRole="button" onPress={resetFilters}>
             <Text style={styles.retryButtonText}>Clear filters</Text>
           </Pressable> : null}
         </View>
@@ -328,10 +400,23 @@ export default function DiscoverScreen({ navigation }: DiscoverScreenProps) {
           onPress={() => navigation.navigate('EventDetail', { eventId: item.id })}
         />
       )}
+      ListFooterComponent={filtered && searchTotal!==null && (serverResults?.length??0)<searchTotal ?
+        <View>{loadMoreError ? <Text style={styles.searchError} accessibilityRole="alert">Could not load more events. Your existing results are preserved.</Text> : null}
+          <Pressable accessibilityRole="button" disabled={loadingMore} style={styles.loadMore} onPress={() => void loadMore()}>
+            <Text style={styles.loadMoreText}>{loadingMore ? 'Loading more…' : loadMoreError ? 'Retry loading more' : 'Load more events'}</Text>
+          </Pressable></View> : null}
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={() => void refresh()} tintColor={theme.colors.primary} />
       }
     />
+    <DiscoverFilterSheet visible={filterOpen} filters={activeFilters} categories={state.home.categories}
+      countries={countries} onClose={()=>setFilterOpen(false)} onApply={next=>{
+        setSearch(next.q);setCategory(next.category || 'all')
+        setAdvanced({country:next.country,city:next.city,mode:next.mode,price:next.price,when:next.when})
+        setFilterOpen(false)
+        listRef.current?.scrollToOffset({offset:0,animated:true})
+      }} />
+    </View>
   )
 }
 
@@ -450,6 +535,22 @@ const styles = StyleSheet.create({
   searchInput: { flex: 1, fontSize: 15, color: theme.colors.text, paddingVertical: 12 },
   clearSearch: { minWidth: 36, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   clearSearchText: { color: theme.colors.textMuted, fontSize: 25 },
+  filterControls:{flexDirection:'row',alignItems:'center',gap:9,marginBottom:12},
+  filterButton:{minHeight:42,borderRadius:12,backgroundColor:theme.web.tealSoft,borderColor:theme.colors.primary,borderWidth:1,paddingHorizontal:14,justifyContent:'center'},
+  filterButtonText:{fontSize:12,fontWeight:'900',color:theme.colors.primary},
+  quickFilters:{alignItems:'center',gap:7,paddingRight:12},
+  quickChip:{minHeight:40,borderRadius:13,borderWidth:1,borderColor:theme.colors.border,backgroundColor:'#fff',paddingHorizontal:12,justifyContent:'center'},
+  quickSelected:{backgroundColor:theme.colors.primary,borderColor:theme.colors.primary},
+  quickText:{fontSize:11,color:theme.colors.text,fontWeight:'700'},
+  quickTextSelected:{color:'#fff'},
+  activeFilterBanner:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',gap:10,marginBottom:12},
+  activeFilterLabel:{color:theme.colors.textMuted,fontSize:11,flex:1},
+  clearFilterLabel:{color:theme.colors.primary,fontWeight:'800',fontSize:12},
+  searchError:{fontSize:12,color:theme.colors.danger,marginBottom:9},
+  searchRetry:{minHeight:42,alignSelf:'flex-start',paddingHorizontal:15,backgroundColor:theme.web.tealSoft,borderRadius:12,justifyContent:'center',marginBottom:15},
+  searchRetryText:{fontSize:12,fontWeight:'800',color:theme.colors.primary},
+  loadMore:{minHeight:47,borderWidth:1,borderColor:theme.colors.border,borderRadius:14,backgroundColor:'#fff',marginTop:7,alignItems:'center',justifyContent:'center'},
+  loadMoreText:{fontSize:13,color:theme.colors.primary,fontWeight:'800'},
   categoryScroll: { marginBottom: 22 },
   searchStatus: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12 },
   searchStatusText: { color: theme.colors.textMuted, fontSize: 12, lineHeight: 19, marginBottom: 10 },

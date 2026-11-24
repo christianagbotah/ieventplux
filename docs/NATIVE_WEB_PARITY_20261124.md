@@ -41,3 +41,11 @@ The current public web React SPA is the UI reference: `src/portal/AppPortal.tsx`
 6. Dark-mode parity and shared per-platform screenshot baselines.
 
 **Status:** This increment is a foundation for parity; it is not a declaration of complete Android/iOS feature parity or production readiness.
+
+## Second increment: native discovery filters and Android QA update freshness
+
+- Native Discover now has a proper modal filter drawer, quick chips and active-filter indicators for **date window, entry price, online/hybrid/physical access, category, country and city**. It uses the same server-backed `/events` query vocabulary as the public web, including `access=ONLINE` for online + hybrid gatherings, and carries the attendee's time zone.
+- Search uses a debounced full server catalogue; stale in-flight queries cannot overwrite newer filters. Filter failures no longer show potentially inaccurate homepage matches. Pagination loads more genuine results and preserves the loaded list if a later page fails.
+- Country suggestions use `/discovery/locations`; when unavailable, the rest of the search remains usable.
+- The public Android QA index now forces a dynamic route and bypasses Next.js's persistent fetch cache while deduplicating concurrent lookups using a short **two-minute** in-process cache. Its responses are marked `no-store`. A test asserts the fetch/cache contract and newest verified asset selection. The GitHub release and valid APK asset remain authoritative; this does not enable silent Android installs.
+- Pending: successful GitHub CI and signed APK publish, deployment of the changed web route to the existing authorized environment, and physical-device testing of filters, keyboard/scroll, update prompts and data migration.
