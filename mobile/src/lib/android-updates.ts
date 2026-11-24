@@ -43,3 +43,40 @@ export function shouldOfferAndroidUpdate(args: {
   }
   return true
 }
+
+/** Independent public-source fallback while the web update endpoint is on an
+ * older deployment. Trust only official prereleases with real APK assets. */
+export function latestQaAndroidFromGithub(input: unknown): QaAndroidRelease | null {
+  if (!Array.isArray(input)) return null
+  const releases: QaAndroidRelease[] = []
+  for (const entry of input.slice(0,30)) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue
+    const r=entry as Record<string,unknown>
+    if (r.draft!==false || r.prerelease!==true || typeof r.tag_name!=='string' ||
+      !/^android-qa-[a-f0-9]{7,40}$/.test(r.tag_name) || !Array.isArray(r.assets)) continue
+    const tag=r.tag_name
+    for (const asset of r.assets) {
+      if(!asset||typeof asset!=='object'||Array.isArray(asset))continue
+      const a=asset as Record<string,unknown>
+      if(a.name!=='app-release.apk' && a.name!=='ieventplux-android-qa.apk')continue
+      const release={
+        tag,revision:tag.slice('android-qa-'.length),
+        downloadUrl:a.browser_download_url,
+        publishedAt:r.published_at,
+        sizeBytes:a.size,
+        notes:typeof r.body==='string'?r.body.slice(0,500):'',
+      }
+      if(validQaAndroidRelease(release))releases.push(release)
+    }
+  }
+  releases.sort((a,b)=>Date.parse(b.publishedAt)-Date.parse(a.publishedAt))
+  return releases[0]??null
+}
+
+export function newestVerifiedQaAndroidRelease(web: unknown, github: unknown):QaAndroidRelease|null {
+  const first=validQaAndroidRelease(web)?web:null
+  const second=validQaAndroidRelease(github)?github:null
+  if(!first)return second
+  if(!second)return first
+  return Date.parse(second.publishedAt)>Date.parse(first.publishedAt)?second:first
+}
