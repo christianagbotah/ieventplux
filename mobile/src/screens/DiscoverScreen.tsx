@@ -393,13 +393,13 @@ function EventRow({ event, onPress }: { event: DiscoveryEventCard; onPress: () =
       {event.coverImageUrl ? <Image source={{uri:event.coverImageUrl}} style={styles.poster} accessibilityLabel={event.title+' artwork'} />
         : <View style={[styles.poster,styles.posterPlaceholder]}><Text style={styles.posterPlaceholderText} numberOfLines={2}>{event.title}</Text></View>}
       <View style={styles.eventPosterShade} />
-      <View style={styles.eventPosterInfo}><Text style={styles.eventPosterInfoText}>{formatDate(event.startsAt)} · {event.city || (event.mode === 'VIRTUAL' ? 'Online' : 'Location TBA')}</Text></View>
+      <View style={styles.eventPosterInfo}><Text style={styles.eventPosterInfoText}>{formatDate(event.startsAt)} · {event.city || (event.mode === 'VIRTUAL' || event.mode === 'ONLINE' ? 'Online' : 'Location TBA')}</Text></View>
     </View>
     <View style={styles.cardBody}>
       <Text style={styles.title} numberOfLines={2}>{event.title}</Text>
       <Text style={styles.meta} numberOfLines={1}>{event.org.name}</Text>
       <View style={styles.cardFooter}>
-        <View style={styles.modeBadge}><Text style={styles.modeText}>{event.mode === 'VIRTUAL' ? 'Online' : event.mode === 'HYBRID' ? 'Hybrid' : 'In person'}</Text></View>
+        <View style={styles.modeBadge}><Text style={styles.modeText}>{event.mode === 'VIRTUAL' || event.mode === 'ONLINE' ? 'Online' : event.mode === 'HYBRID' ? 'Hybrid' : 'In person'}</Text></View>
         <Text style={styles.price}>{priceLabel}</Text>
       </View>
     </View>

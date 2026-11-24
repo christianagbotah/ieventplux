@@ -55,7 +55,7 @@ const styles = StyleSheet.create({
   tab: { flex: 1, minHeight: 55, alignItems: 'center', justifyContent: 'center', gap: 1, paddingHorizontal: 2 },
   iconBox: { height: 31, minWidth: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 15 },
   selectedIcon: { backgroundColor: '#e7f5f0' },
-  label: { fontSize: 9.5, fontWeight: '600', color: theme.colors.textMuted },
+  label: { fontSize: 11, fontWeight: '600', color: theme.colors.textMuted },
   selectedLabel: { color: theme.colors.primaryDark, fontWeight: '800' },
   pressed: { opacity: 0.7 },
 })
