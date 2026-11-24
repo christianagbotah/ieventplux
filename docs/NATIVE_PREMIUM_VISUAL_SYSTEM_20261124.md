@@ -70,3 +70,11 @@ On-device visual QA and accessibility scaling remain necessary. The current buil
 - The older web meeting route remains a user-initiated secure fallback, and phone screen capture/sharing remains explicitly unsupported. LiveKit native media requires the custom development/QA APK, not Expo Go.
 
 Acceptance: verify camera and mic first permission, previously denied permission, device settings round-trip, listener-to-speaker toggles, 2+ concurrent real devices, network reconnect, leave behavior and user consent. A static unit test or compiled APK alone is not a proof of working media.
+
+## Fifth native visual increment — check-in, storefront and broadcast viewer
+
+- **Staff check-in:** native branded scanner onboarding and camera surface, legible ticket results, offline roster/download and sync review cards, safer spacing for manual codes and a readable persistent synchronization dock. The existing OS camera grant, offline queue, idempotent scan IDs and reconciliation remain unchanged.
+- **Storefront detail:** branded image-led seller identity, real published products, readable prices from each variant currency, relative image path normalization, inventory and SKU cards, specifications and appropriate verified-seller labels. Checkout/delivery **remain explicitly unavailable** pending genuine provider settlement and delivery certification.
+- **Broadcast viewing:** premium branded broadcast identity, styled simulated-stream surface, live/recording status, entitlement notices and chat cards. Real streaming is not falsely claimed; the server still controls playback authorization/capacity and heartbeat. The placeholder remains explicitly labelled simulated; even if the server selects CLOUDFLARE_STREAM, a genuine native HLS player must be implemented before claiming playable video.
+
+Acceptance: test offline/online camera scanning and 500-item queue behavior on actual event devices, accessibility scaling, genuine product images/long specs, denied seller access, and secure live-broadcast viewing only when the real streaming service is available. A successful compiler is not a camera or physical-stream certification.

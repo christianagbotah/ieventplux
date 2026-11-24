@@ -1,14 +1,11 @@
-/**
- * Native product catalogue with real server SKU/stock. No hosted payment
- * fallback: merchant checkout remains disabled until certified settlement.
- */
-import { useCallback, useEffect, useState } from 'react'
-import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
-import { api, ApiClientError, type NativeStoreDetail } from '../api/client'
-import { theme } from '../theme'
-import type { MarketplaceStoreScreenProps } from '../navigation'
+/** Real seller catalogue; no checkout until certified provider settlement. */
+import {useCallback,useEffect,useState} from 'react'
+import {ActivityIndicator,Image,Pressable,ScrollView,StyleSheet,Text,View} from 'react-native'
+import {absoluteUrl,api,ApiClientError,formatMinor,type NativeStoreDetail,type NativeMarketplaceProduct} from '../api/client'
+import {theme} from '../theme'
+import {LabelPill,PremiumBackdrop,SectionHeading,TileGlyph,mobileDesign} from '../ui/PremiumUI'
+import type {MarketplaceStoreScreenProps} from '../navigation'
 
-const cedis=(minor:number)=>'₵'+(minor/100).toLocaleString('en-GH',{minimumFractionDigits:2,maximumFractionDigits:2})
 export default function MarketplaceStoreScreen({route}:MarketplaceStoreScreenProps){
   const {slug}=route.params
   const [detail,setDetail]=useState<NativeStoreDetail|null>(null)
@@ -19,87 +16,115 @@ export default function MarketplaceStoreScreen({route}:MarketplaceStoreScreenPro
     try{
       setDetail(await api.marketplace.store(slug))
       setError('')
-    }catch(cause){
-      setDetail(null)
-      setError(cause instanceof ApiClientError?cause.message:'Cannot load storefront.')
-    }finally{setLoading(false)}
+    }catch(cause){setDetail(null);setError(cause instanceof ApiClientError?cause.message:'Cannot load storefront.')}
+    finally{setLoading(false)}
   },[slug])
   useEffect(()=>{void load()},[load])
-  return <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-    {loading&&!detail?<ActivityIndicator size="large" color={theme.colors.primary}/>:null}
-    {error?<Text style={styles.error} accessibilityRole="alert">{error}</Text>:null}
-    {detail?<><View style={styles.hero}>
-      {detail.store.logoUrl?<Image source={{uri:detail.store.logoUrl}} style={styles.shopLogo}/>:<Text style={styles.shopLogoFallback}>🛍</Text>}
-      <Text style={styles.title}>{detail.store.name}</Text>
-      {detail.store.tagline?<Text style={styles.heroText}>{detail.store.tagline}</Text>:null}
-      <Text style={styles.heroText}>{[detail.store.city,detail.store.country].filter(Boolean).join(', ')} · {detail.store.category}</Text>
-      {detail.store.verificationState==='VERIFIED'?<Text style={styles.verified}>✓ Verified seller</Text>:<Text style={styles.heroText}>Independent seller · Not platform verified</Text>}
-    </View>
-      {detail.store.description?<Text style={styles.paragraph}>{detail.store.description}</Text>:null}
-      <View style={styles.banner}><Text style={styles.bannerTitle}>Products & inventory</Text>
-        <Text style={styles.bannerText}>Product prices and availability come directly from the seller's live catalogue. Online checkout is not enabled yet.</Text>
-      </View>
-      {detail.products.length===0?<View style={styles.empty}>
-        <Text style={styles.productName}>This store has no published products yet</Text>
-        <Text style={styles.muted}>Browse again as the seller publishes more items.</Text>
-      </View>:detail.products.map(item=><View key={item.id} style={styles.card}>
-        {item.images[0]?<Image source={{uri:item.images[0]}} style={styles.productImage}/>:<View style={styles.productPlaceholder}><Text style={styles.placeholderIcon}>📦</Text></View>}
-        <View style={styles.cardBody}>
-          <Text style={styles.meta}>{item.category}</Text>
-          <Text style={styles.productName}>{item.name}</Text>
-          {item.brand?<Text style={styles.muted}>{item.brand}</Text>:null}
-          <Text style={styles.paragraph}>{item.description}</Text>
-          {Object.keys(item.specifications).length>0?<View style={styles.specs}>
-            {Object.entries(item.specifications).map(([key,value])=><View key={key} style={styles.specRow}>
-              <Text style={styles.muted}>{key}</Text><Text style={styles.specValue}>{value}</Text>
-            </View>)}
-          </View>:null}
-          {item.variants.map(variant=><View key={variant.id} style={styles.variant}>
-            <Text style={styles.productName}>{variant.title}</Text>
-            <Text style={styles.price}>{cedis(variant.priceMinor)}</Text>
-            <Text style={styles.muted}>SKU {variant.sku} · {variant.available} available</Text>
-          </View>)}
-          <Pressable accessibilityRole="button" disabled style={styles.disabledCheckout}>
-            <Text style={styles.disabledCheckoutText}>Checkout and delivery coming later</Text>
-          </Pressable>
+  const store=detail?.store
+  const cover=store?.coverUrl?absoluteUrl(store.coverUrl):null
+  const logo=store?.logoUrl?absoluteUrl(store.logoUrl):null
+  return <ScrollView style={styles.screen} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+    {loading&&!detail?<ActivityIndicator size="large" color={theme.colors.primary} style={styles.loader}/>:null}
+    {error?<View style={styles.errorBox}><Text style={styles.error} accessibilityRole="alert">{error}</Text>
+      <Pressable accessibilityRole="button" onPress={()=>void load()} style={styles.retry}><Text style={styles.retryText}>Try again  ↗</Text></Pressable></View>:null}
+    {detail&&store?<>
+      <View style={styles.hero}>
+        <PremiumBackdrop mode="midnight"/>
+        {cover?<Image source={{uri:cover}} style={styles.cover} resizeMode="cover" accessibilityLabel={store.name+' storefront cover'}/>:null}
+        {cover?<View style={styles.coverShade}/>:null}
+        <View style={styles.heroTop}><Text style={styles.kicker}>THE iEVENTPLUX MARKETPLACE</Text><Text style={styles.heroMark}>✦</Text></View>
+        <View style={styles.heroSpacer}/>
+        <View style={styles.heroIdentity}>
+          <View style={styles.logoBox}>{logo?<Image source={{uri:logo}} style={styles.logo} accessibilityLabel={store.name+' store logo'}/>:<TileGlyph kind="store" size={57}/>}</View>
+          <View style={styles.heroLabels}><LabelPill label={store.verificationState==='VERIFIED'?'✓ VERIFIED SELLER':'INDEPENDENT SELLER'} tone={store.verificationState==='VERIFIED'?'mint':'light'}/>
+            <Text style={styles.storeTitle}>{store.name}</Text></View>
         </View>
-      </View>)}
+        {store.tagline?<Text style={styles.heroTagline}>{store.tagline}</Text>:null}
+        <View style={styles.heroBottom}><Text style={styles.heroMeta}>{[store.city,store.country].filter(Boolean).join(', ')}  ·  {store.category}</Text>
+          <Text style={styles.heroCount}>{detail.products.length} products</Text></View>
+      </View>
+      {store.description?<View style={styles.about}><Text style={styles.aboutTitle}>About this store</Text><Text style={styles.aboutText}>{store.description}</Text></View>:null}
+      <View style={styles.notice}><Text style={styles.noticeIcon}>ⓘ</Text><View style={styles.noticeBody}>
+        <Text style={styles.noticeTitle}>Product discovery only</Text><Text style={styles.noticeText}>Prices, stock and options come from the seller's published catalogue. Online checkout and delivery are not yet available.</Text>
+      </View></View>
+      <SectionHeading eyebrow="DISCOVER WHAT'S AVAILABLE" title="Products & inventory" subtitle={`${detail.products.length} published products at this storefront`}/>
+      {detail.products.length===0?<View style={styles.empty}><TileGlyph kind="store" size={70}/><Text style={styles.emptyTitle}>More products are on the way.</Text>
+        <Text style={styles.emptyBody}>This store has no published products yet. Check back as the seller adds new items.</Text></View>:
+        detail.products.map(item=><ProductCard key={item.id} item={item}/>)}
     </>:null}
-    <Pressable onPress={()=>void load()} style={styles.reload} accessibilityRole="button">
-      <Text style={styles.reloadText}>Refresh catalogue</Text>
-    </Pressable>
+    {detail?<Pressable onPress={()=>void load()} style={styles.reload} accessibilityRole="button"><Text style={styles.reloadText}>Refresh catalogue  ↻</Text></Pressable>:null}
   </ScrollView>
 }
+function ProductCard({item}:{item:NativeMarketplaceProduct}){
+  const photo=item.images[0]?absoluteUrl(item.images[0]):null
+  const priced=item.variants.filter(variant=>variant.priceMinor>=0)
+  const from=priced.length?priced.reduce((min,v)=>v.priceMinor<min.priceMinor?v:min,priced[0]!):null
+  return <View style={styles.card}>
+    <View style={styles.photoWrap}>
+      {photo?<Image source={{uri:photo}} style={styles.productImage} resizeMode="cover" accessibilityLabel={item.name+' product photograph'}/>:
+        <View style={styles.productPlaceholder}><PremiumBackdrop mode="ocean"/><TileGlyph kind="store" size={74}/></View>}
+      <View style={styles.productCategory}><Text style={styles.productCategoryText}>{item.category}</Text></View>
+    </View>
+    <View style={styles.cardBody}>
+      <Text style={styles.productName}>{item.name}</Text>
+      {item.brand?<Text style={styles.brand}>By {item.brand}</Text>:null}
+      {item.shortDesc?<Text style={styles.productDescription}>{item.shortDesc}</Text>:null}
+      {item.description?<Text style={styles.productDescription}>{item.description}</Text>:null}
+      {from?<Text style={styles.price}>From {formatMinor(from.priceMinor,from.currency)}</Text>:null}
+      {Object.keys(item.specifications).length>0?<View style={styles.specs}><Text style={styles.specTitle}>PRODUCT DETAILS</Text>
+        {Object.entries(item.specifications).map(([key,value])=><View key={key} style={styles.specRow}><Text style={styles.specKey}>{key}</Text><Text style={styles.specValue}>{value}</Text></View>)}
+      </View>:null}
+      {item.variants.length>0?<View style={styles.variants}><Text style={styles.variantsTitle}>AVAILABLE OPTIONS</Text>
+        {item.variants.map(variant=><View key={variant.id} style={styles.variant}>
+          <View style={{flex:1}}><Text style={styles.variantName}>{variant.title}</Text><Text style={styles.variantSku}>SKU {variant.sku}</Text></View>
+          <View style={styles.variantRight}><Text style={styles.variantPrice}>{formatMinor(variant.priceMinor,variant.currency)}</Text>
+            <Text style={[styles.variantStock,variant.available===0&&styles.variantOut]}>{variant.available>0?`${variant.available} in stock`:'Out of stock'}</Text>
+          </View>
+        </View>)}
+      </View>:null}
+      <View style={styles.checkoutNotice}><Text style={styles.checkoutNoticeText}>Checkout & delivery not yet available</Text></View>
+    </View>
+  </View>
+}
 const styles=StyleSheet.create({
-  screen:{flex:1,backgroundColor:theme.colors.bg},
-  content:{padding:16,paddingBottom:50,gap:14},
-  hero:{padding:20,backgroundColor:theme.colors.primaryDark,borderRadius:20,alignItems:'center',gap:8},
-  shopLogo:{height:60,width:60,borderRadius:13,backgroundColor:'#fff'},
-  shopLogoFallback:{fontSize:35},
-  title:{color:'#fff',fontSize:21,fontWeight:'800',textAlign:'center'},
-  heroText:{color:'#cceada',fontSize:12,textAlign:'center',lineHeight:18},
-  verified:{color:'#91f8ba',fontWeight:'800',fontSize:12},
-  paragraph:{color:theme.colors.text,fontSize:13,lineHeight:21},
-  banner:{borderRadius:13,backgroundColor:'#e3f5e9',padding:14,gap:7},
-  bannerTitle:{color:theme.colors.primaryDark,fontWeight:'800',fontSize:15},
-  bannerText:{color:theme.colors.primaryDark,fontSize:12,lineHeight:19},
-  empty:{padding:22,borderRadius:15,backgroundColor:theme.colors.card},
-  card:{backgroundColor:theme.colors.card,borderRadius:18,overflow:'hidden',borderWidth:1,borderColor:theme.colors.border},
-  productImage:{width:'100%',height:175},
-  productPlaceholder:{height:130,alignItems:'center',justifyContent:'center',backgroundColor:'#e3f3ea'},
-  placeholderIcon:{fontSize:42},
-  cardBody:{padding:14,gap:11},
-  meta:{fontSize:11,fontWeight:'800',color:theme.colors.primaryDark},
-  productName:{fontSize:15,fontWeight:'800',color:theme.colors.text},
-  muted:{fontSize:12,color:theme.colors.textMuted},
-  specs:{padding:10,borderRadius:11,backgroundColor:'#f4f9f5',gap:6},
-  specRow:{flexDirection:'row',justifyContent:'space-between',gap:14},
-  specValue:{fontSize:12,color:theme.colors.text,fontWeight:'700',flexShrink:1},
-  variant:{padding:11,borderRadius:10,borderWidth:1,borderColor:theme.colors.border,gap:4},
-  price:{fontSize:18,fontWeight:'800',color:theme.colors.primary},
-  disabledCheckout:{borderRadius:10,backgroundColor:'#e2eae5',padding:13,alignItems:'center'},
-  disabledCheckoutText:{fontSize:12,fontWeight:'800',color:theme.colors.textMuted},
-  reload:{borderRadius:12,borderWidth:1,borderColor:theme.colors.primary,padding:14,alignItems:'center'},
-  reloadText:{fontSize:13,color:theme.colors.primaryDark,fontWeight:'800'},
-  error:{padding:13,backgroundColor:'#fff1e5',borderRadius:12,color:'#99431a',fontSize:13},
+  screen:{flex:1,backgroundColor:mobileDesign.canvas},content:{padding:18,paddingBottom:42,gap:18},loader:{margin:22},
+  hero:{backgroundColor:mobileDesign.forestDeep,borderRadius:28,overflow:'hidden',padding:21,minHeight:315,
+    shadowColor:mobileDesign.forestDeep,shadowOpacity:.22,shadowRadius:20,shadowOffset:{width:0,height:12},elevation:5},
+  cover:{position:'absolute',width:'100%',height:'100%'},coverShade:{position:'absolute',top:0,bottom:0,left:0,right:0,backgroundColor:'rgba(6,23,34,.48)'},
+  heroTop:{flexDirection:'row',justifyContent:'space-between',alignItems:'center'},kicker:{color:'#e1f7e8',fontSize:10,fontWeight:'900',letterSpacing:1.1},heroMark:{fontSize:24,color:mobileDesign.gold},
+  heroSpacer:{minHeight:65,flex:1},heroIdentity:{flexDirection:'row',alignItems:'center',gap:12},
+  logoBox:{height:70,width:70,borderRadius:21,backgroundColor:'#fff',alignItems:'center',justifyContent:'center',overflow:'hidden',borderColor:'#ffffffbd',borderWidth:3},
+  logo:{height:'100%',width:'100%'},heroLabels:{flex:1,alignItems:'flex-start',gap:9},
+  storeTitle:{fontSize:25,lineHeight:31,fontWeight:'900',color:'#fff',letterSpacing:-.8},
+  heroTagline:{fontSize:13,lineHeight:20,color:'#e8f7ed',marginTop:14},
+  heroBottom:{borderTopWidth:1,borderTopColor:'#ffffff3f',marginTop:17,paddingTop:13,flexDirection:'row',justifyContent:'space-between',gap:9,alignItems:'center'},
+  heroMeta:{fontSize:11,color:'#d1e8e0',flex:1},heroCount:{color:'#fff',fontSize:11,fontWeight:'900'},
+  about:{backgroundColor:'#fff',borderWidth:1,borderColor:mobileDesign.border,borderRadius:21,padding:17,gap:8},
+  aboutTitle:{fontSize:16,fontWeight:'900',color:mobileDesign.ink},aboutText:{fontSize:13,lineHeight:22,color:mobileDesign.inkMuted},
+  notice:{backgroundColor:mobileDesign.mintSoft,borderRadius:18,padding:14,flexDirection:'row',gap:11},noticeIcon:{fontSize:18,color:mobileDesign.emerald},
+  noticeBody:{flex:1,gap:5},noticeTitle:{fontSize:13,fontWeight:'900',color:mobileDesign.emerald},noticeText:{fontSize:11,lineHeight:19,color:'#37665c'},
+  empty:{padding:27,backgroundColor:'#fff',borderWidth:1,borderColor:mobileDesign.border,borderRadius:24,alignItems:'center',gap:12},
+  emptyTitle:{color:mobileDesign.ink,fontSize:20,fontWeight:'900',textAlign:'center'},emptyBody:{color:mobileDesign.inkMuted,fontSize:12,lineHeight:20,textAlign:'center'},
+  card:{backgroundColor:'#fff',borderRadius:25,overflow:'hidden',borderWidth:1,borderColor:mobileDesign.border,
+    shadowColor:mobileDesign.shadow,shadowOpacity:.07,shadowRadius:15,shadowOffset:{width:0,height:8},elevation:2},
+  photoWrap:{height:220,backgroundColor:mobileDesign.forest,overflow:'hidden'},productImage:{width:'100%',height:'100%'},
+  productPlaceholder:{flex:1,alignItems:'center',justifyContent:'center',overflow:'hidden'},
+  productCategory:{position:'absolute',top:14,left:14,backgroundColor:'#0b2737d7',paddingVertical:8,paddingHorizontal:11,borderRadius:11,borderWidth:1,borderColor:'#ffffff55'},
+  productCategoryText:{fontSize:10,fontWeight:'900',color:'#fff',letterSpacing:.3},
+  cardBody:{padding:17,gap:10},productName:{fontSize:19,lineHeight:25,fontWeight:'900',color:mobileDesign.ink},
+  brand:{fontSize:11,color:mobileDesign.emerald,fontWeight:'800'},productDescription:{fontSize:12,lineHeight:20,color:mobileDesign.inkMuted},
+  price:{fontSize:20,color:mobileDesign.emerald,fontWeight:'900',marginTop:4},
+  specs:{borderRadius:16,backgroundColor:'#f5f8f7',padding:13,gap:9},specTitle:{fontSize:9,fontWeight:'900',color:mobileDesign.emerald,letterSpacing:.8},
+  specRow:{flexDirection:'row',justifyContent:'space-between',gap:14},specKey:{color:mobileDesign.inkMuted,fontSize:11,flex:1},specValue:{color:mobileDesign.ink,fontSize:11,fontWeight:'800',flex:1,textAlign:'right'},
+  variants:{gap:10,marginTop:4},variantsTitle:{fontSize:10,fontWeight:'900',letterSpacing:.8,color:mobileDesign.emerald},
+  variant:{flexDirection:'row',alignItems:'center',gap:12,borderRadius:15,borderWidth:1,borderColor:mobileDesign.border,padding:13},
+  variantName:{fontSize:12,fontWeight:'900',color:mobileDesign.ink},variantSku:{fontSize:10,color:mobileDesign.inkSoft,marginTop:4},
+  variantRight:{alignItems:'flex-end'},variantPrice:{fontSize:14,color:mobileDesign.emerald,fontWeight:'900'},
+  variantStock:{fontSize:10,color:mobileDesign.emerald,marginTop:4},variantOut:{color:'#b34843'},
+  checkoutNotice:{backgroundColor:'#eef1f3',minHeight:48,borderRadius:14,justifyContent:'center',alignItems:'center',paddingHorizontal:11},
+  checkoutNoticeText:{fontSize:12,color:mobileDesign.inkMuted,fontWeight:'900',textAlign:'center'},
+  reload:{minHeight:50,borderRadius:15,borderWidth:1,borderColor:mobileDesign.border,backgroundColor:'#fff',alignItems:'center',justifyContent:'center'},
+  reloadText:{color:mobileDesign.emerald,fontSize:12,fontWeight:'900'},
+  errorBox:{padding:15,borderRadius:15,backgroundColor:'#fff0ed',gap:9},error:{color:theme.colors.danger,fontSize:12,lineHeight:18},
+  retry:{alignSelf:'flex-start',minHeight:37,justifyContent:'center'},retryText:{color:mobileDesign.emerald,fontWeight:'900',fontSize:12},
 })

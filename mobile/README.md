@@ -240,3 +240,7 @@ Community, consent-based private event networking, and award voting now use the 
 ### Native meeting controls and permissions
 
 The meeting prep screen and LiveKit native room use the premium visual language. In-app camera/microphone toggles request the phone OS permission when enabling a device after listen-only joining. Native LiveKit is the primary eligible route; secure browser joining is explicitly a fallback. Participant tiles are paginated (8 at a time), not subject to an artificial meeting attendee count. Phone screen sharing is not implemented. Real-device two-party call and previously denied permission tests remain mandatory.
+
+### Premium utility screens
+
+Check-in, marketplace storefront details, and broadcast viewer reuse the React Native premium visual system. The check-in workflow retains its idempotent server-side verdicts and offline queue/roster. Storefront variants use real server SKU/stock and do not expose unimplemented checkout. Broadcast viewers retain clearly labelled synthetic presentation until a verified playable stream is configured. Run device UAT before claiming production-ready media or scanning.
