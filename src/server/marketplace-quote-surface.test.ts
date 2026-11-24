@@ -26,3 +26,16 @@ test('native storefront uses the same server quote and does not offer fake check
  expect(page).toContain('Checkout & delivery not yet available')
  expect(api).toContain("'/marketplace/stores/' + encodeURIComponent(slug) + '/quote'")
 })
+
+test('both storefronts invalidate in-flight quotes when catalogue or store changes',()=>{
+ for(const path of ['portal/views/MarketplaceStorefront.tsx','../mobile/src/screens/MarketplaceStoreScreen.tsx']){
+   const page=contents(path)
+   expect(page).toContain('const request=++quoteEpoch.current')
+   expect(page).toContain('if(request===quoteEpoch.current)setQuote(result)')
+   expect(page).toContain('if(request===quoteEpoch.current)setQuoteLoading(false)')
+   expect(page).toContain("quoteEpoch.current++;setQuote(null);setQuoteError('');setQuoteLoading(false)")
+   expect(page).toContain('return()=>{quoteEpoch.current++;catalogueEpoch.current++}')
+   expect(page).toContain('if(request===catalogueEpoch.current)setLoading(false)')
+   expect(page).toContain('next>20||quoteLoading||loading||((basket[variantId]??0)<next&&next>available)')
+ }
+})

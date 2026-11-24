@@ -1,5 +1,5 @@
 'use client'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { ArrowLeft, BadgeCheck, Box, CheckCircle2, Globe, Loader2, Package, Plus, ShieldAlert, Store, Truck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -51,32 +51,37 @@ export default function MarketplaceStorefront({slug}:{slug:string}) {
  const [quote,setQuote]=useState<StoreQuote|null>(null)
  const [quoteLoading,setQuoteLoading]=useState(false)
  const [quoteError,setQuoteError]=useState('')
+ const quoteEpoch=useRef(0)
+ const catalogueEpoch=useRef(0)
  const lines=basketSelection(basket)
  const selectQty=(variantId:string,next:number,available:number)=>{
-   if(!Number.isSafeInteger(next)||next<0||next>Math.min(available,20))return
+   if(!Number.isSafeInteger(next)||next<0||next>20||quoteLoading||loading||((basket[variantId]??0)<next&&next>available))return
    setBasket(prev=>{const output={...prev};if(next===0)delete output[variantId];else output[variantId]=next;return output})
-   setQuote(null);setQuoteError('')
+   quoteEpoch.current++;setQuote(null);setQuoteError('')
  }
  async function reviewBasket(){
-   if(!lines.length||quoteLoading)return
+   if(!lines.length||quoteLoading||loading)return
+   const request=++quoteEpoch.current
    setQuoteLoading(true);setQuoteError('');setQuote(null)
    try{
      const result=await api.post<StoreQuote>('/marketplace/stores/'+encodeURIComponent(slug)+'/quote',{items:lines})
      if(result.checkoutEnabled!==false||result.inventoryReserved!==false)throw new Error('The basket could not be safely reviewed.')
-     setQuote(result)
-   }catch(e){setQuoteError(e instanceof Error?e.message:'Current prices could not be verified. Refresh and try again.')}
-   finally{setQuoteLoading(false)}
+     if(request===quoteEpoch.current)setQuote(result)
+   }catch(e){if(request===quoteEpoch.current)setQuoteError(e instanceof Error?e.message:'Current prices could not be verified. Refresh and try again.')}
+   finally{if(request===quoteEpoch.current)setQuoteLoading(false)}
  }
  const load=useCallback(async()=>{
+   const request=++catalogueEpoch.current
+   quoteEpoch.current++;setQuote(null);setQuoteError('');setQuoteLoading(false)
    setLoading(true)
    try {
      const result=await api.get<Detail>('/marketplace/stores/'+encodeURIComponent(slug))
-     setData(result);setError('')
+     if(request===catalogueEpoch.current){setData(result);setError('')}
    }catch(e){
-     setData(null);setError(e instanceof ApiClientError?e.message:'Store could not be loaded.')
-   }finally{setLoading(false)}
+     if(request===catalogueEpoch.current){setData(null);setError(e instanceof ApiClientError?e.message:'Store could not be loaded.')}
+   }finally{if(request===catalogueEpoch.current)setLoading(false)}
  },[slug])
- useEffect(()=>{setBasket({});setQuote(null);setQuoteError('');void load()},[load,user?.id])
+ useEffect(()=>{setData(null);setBasket({});setQuote(null);setQuoteError('');void load();return()=>{quoteEpoch.current++;catalogueEpoch.current++}},[load,user?.id])
 
  async function setStoreStatus(status:'DRAFT'|'ACTIVE'){
    if(!data||busy)return
@@ -232,11 +237,11 @@ export default function MarketplaceStorefront({slug}:{slug:string}) {
                 {!data.canManage&&<div className="mt-3 flex items-center justify-between gap-3">
                   <span className="text-xs font-medium text-muted-foreground">{v.available>0?'Select quantity':'Unavailable'}</span>
                   <div className="flex items-center gap-2" role="group" aria-label={`${product.name}, ${v.title}, quantity`}>
-                    <Button type="button" size="sm" variant="outline" className="size-9 p-0" disabled={!basket[v.id]||quoteLoading}
+                    <Button type="button" size="sm" variant="outline" className="size-9 p-0" disabled={!basket[v.id]||quoteLoading||loading}
                       onClick={()=>selectQty(v.id,(basket[v.id]??0)-1,v.available)} aria-label={`Remove one ${v.title}`}>−</Button>
                     <span className="w-6 text-center text-sm font-bold tabular-nums" aria-live="polite">{basket[v.id]??0}</span>
                     <Button type="button" size="sm" variant="outline" className="size-9 p-0"
-                      disabled={v.available<=0||(basket[v.id]??0)>=Math.min(v.available,20)||quoteLoading}
+                      disabled={v.available<=0||(basket[v.id]??0)>=Math.min(v.available,20)||quoteLoading||loading}
                       onClick={()=>selectQty(v.id,(basket[v.id]??0)+1,v.available)} aria-label={`Add one ${v.title}`}>+</Button>
                   </div>
                 </div>}
@@ -254,7 +259,7 @@ export default function MarketplaceStorefront({slug}:{slug:string}) {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div><h2 className="text-lg font-extrabold">Review selected items</h2>
           <p className="mt-1 text-xs text-muted-foreground">{lines.reduce((n,line)=>n+line.quantity,0)} units across {lines.length} options · Stock and prices checked on the server</p></div>
-        <Button disabled={!lines.length||quoteLoading} onClick={()=>void reviewBasket()}>
+        <Button disabled={!lines.length||quoteLoading||loading} onClick={()=>void reviewBasket()}>
           {quoteLoading?<Loader2 className="mr-2 size-4 animate-spin"/>:<CheckCircle2 className="mr-2 size-4"/>}
           {quoteLoading?'Checking catalogue…':'Check prices & stock'}
         </Button>

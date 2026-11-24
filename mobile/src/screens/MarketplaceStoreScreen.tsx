@@ -1,5 +1,5 @@
 /** Real seller catalogue; no checkout until certified provider settlement. */
-import {useCallback,useEffect,useState} from 'react'
+import {useCallback,useEffect,useRef,useState} from 'react'
 import {ActivityIndicator,Image,Pressable,ScrollView,StyleSheet,Text,View} from 'react-native'
 import {absoluteUrl,api,ApiClientError,formatMinor,type NativeStoreDetail,type NativeMarketplaceProduct,type NativeMarketplaceQuote} from '../api/client'
 import {marketplaceBasketSelection} from '../lib/marketplace-basket'
@@ -16,31 +16,36 @@ export default function MarketplaceStoreScreen({route}:MarketplaceStoreScreenPro
   const [quote,setQuote]=useState<NativeMarketplaceQuote|null>(null)
   const [quoteLoading,setQuoteLoading]=useState(false)
   const [quoteError,setQuoteError]=useState('')
+  const quoteEpoch=useRef(0)
+  const catalogueEpoch=useRef(0)
   const selected=marketplaceBasketSelection(basket)
   const changeQuantity=(variantId:string,next:number,available:number)=>{
-    if(!Number.isSafeInteger(next)||next<0||next>Math.min(available,20)||quoteLoading)return
+    if(!Number.isSafeInteger(next)||next<0||next>20||quoteLoading||loading||((basket[variantId]??0)<next&&next>available))return
     setBasket(previous=>{const out={...previous};if(next===0)delete out[variantId];else out[variantId]=next;return out})
-    setQuote(null);setQuoteError('')
+    quoteEpoch.current++;setQuote(null);setQuoteError('')
   }
   const reviewBasket=async()=>{
-    if(!selected.length||quoteLoading)return
+    if(!selected.length||quoteLoading||loading)return
+    const request=++quoteEpoch.current
     setQuoteLoading(true);setQuoteError('');setQuote(null)
     try{
       const result=await api.marketplace.quote(slug,selected)
       if(result.checkoutEnabled!==false||result.inventoryReserved!==false)throw new Error('Basket review was not safe.')
-      setQuote(result)
-    }catch(cause){setQuoteError(cause instanceof ApiClientError?cause.message:cause instanceof Error?cause.message:'Could not check the basket. Please refresh.')}
-    finally{setQuoteLoading(false)}
+      if(request===quoteEpoch.current)setQuote(result)
+    }catch(cause){if(request===quoteEpoch.current)setQuoteError(cause instanceof ApiClientError?cause.message:cause instanceof Error?cause.message:'Could not check the basket. Please refresh.')}
+    finally{if(request===quoteEpoch.current)setQuoteLoading(false)}
   }
   const load=useCallback(async()=>{
+    const request=++catalogueEpoch.current
+    quoteEpoch.current++;setQuote(null);setQuoteError('');setQuoteLoading(false)
     setLoading(true)
     try{
-      setDetail(await api.marketplace.store(slug))
-      setError('')
-    }catch(cause){setDetail(null);setError(cause instanceof ApiClientError?cause.message:'Cannot load storefront.')}
-    finally{setLoading(false)}
+      const result=await api.marketplace.store(slug)
+      if(request===catalogueEpoch.current){setDetail(result);setError('')}
+    }catch(cause){if(request===catalogueEpoch.current){setDetail(null);setError(cause instanceof ApiClientError?cause.message:'Cannot load storefront.')}}
+    finally{if(request===catalogueEpoch.current)setLoading(false)}
   },[slug])
-  useEffect(()=>{setBasket({});setQuote(null);setQuoteError('');void load()},[load])
+  useEffect(()=>{setDetail(null);setBasket({});setQuote(null);setQuoteError('');void load();return()=>{quoteEpoch.current++;catalogueEpoch.current++}},[load])
   const store=detail?.store
   const cover=store?.coverUrl?absoluteUrl(store.coverUrl):null
   const logo=store?.logoUrl?absoluteUrl(store.logoUrl):null
@@ -71,14 +76,14 @@ export default function MarketplaceStoreScreen({route}:MarketplaceStoreScreenPro
       <SectionHeading eyebrow="DISCOVER WHAT'S AVAILABLE" title="Products & inventory" subtitle={`${detail.products.length} published products at this storefront`}/>
       {detail.products.length===0?<View style={styles.empty}><TileGlyph kind="store" size={70}/><Text style={styles.emptyTitle}>More products are on the way.</Text>
         <Text style={styles.emptyBody}>This store has no published products yet. Check back as the seller adds new items.</Text></View>:
-        detail.products.map(item=><ProductCard key={item.id} item={item} basket={basket} onChangeQty={changeQuantity} canSelect={!detail.canManage}/>)}
+        detail.products.map(item=><ProductCard key={item.id} item={item} basket={basket} onChangeQty={changeQuantity} canSelect={!detail.canManage} selectionLocked={quoteLoading||loading}/>)}
     </>:null}
     {detail&&!detail.canManage?<View style={styles.basketPanel}>
       <Text style={styles.basketKicker}>YOUR SHOPPING SELECTION</Text>
       <Text style={styles.basketTitle}>Review product prices & stock</Text>
       <Text style={styles.basketInfo}>{selected.reduce((sum,line)=>sum+line.quantity,0)} units · {selected.length} selected options. No stock is held.</Text>
-      <Pressable accessibilityRole="button" disabled={!selected.length||quoteLoading} onPress={()=>void reviewBasket()}
-        style={[styles.quoteButton,(!selected.length||quoteLoading)&&styles.quoteDisabled]}>
+      <Pressable accessibilityRole="button" disabled={!selected.length||quoteLoading||loading} onPress={()=>void reviewBasket()}
+        style={[styles.quoteButton,(!selected.length||quoteLoading||loading)&&styles.quoteDisabled]}>
         <Text style={styles.quoteButtonText}>{quoteLoading?'Checking live catalogue…':'Check current prices & stock'}</Text>
       </Pressable>
       {quoteError?<Text style={styles.quoteError} accessibilityRole="alert">{quoteError}</Text>:null}
@@ -96,7 +101,7 @@ export default function MarketplaceStoreScreen({route}:MarketplaceStoreScreenPro
     {detail?<Pressable onPress={()=>void load()} style={styles.reload} accessibilityRole="button"><Text style={styles.reloadText}>Refresh catalogue  ↻</Text></Pressable>:null}
   </ScrollView>
 }
-function ProductCard({item,basket,onChangeQty,canSelect}:{item:NativeMarketplaceProduct;basket:Record<string,number>;onChangeQty:(id:string,next:number,available:number)=>void;canSelect:boolean}){
+function ProductCard({item,basket,onChangeQty,canSelect,selectionLocked}:{item:NativeMarketplaceProduct;basket:Record<string,number>;onChangeQty:(id:string,next:number,available:number)=>void;canSelect:boolean;selectionLocked:boolean}){
   const photo=item.images[0]?absoluteUrl(item.images[0]):null
   const priced=item.variants.filter(variant=>variant.priceMinor>=0)
   const from=priced.length?priced.reduce((min,v)=>v.priceMinor<min.priceMinor?v:min,priced[0]!):null
@@ -123,12 +128,12 @@ function ProductCard({item,basket,onChangeQty,canSelect}:{item:NativeMarketplace
           </View></View>
           {canSelect?<View style={styles.qtyGroup}>
             <Pressable accessibilityRole="button" accessibilityLabel={'Remove one '+variant.title}
-              disabled={!(basket[variant.id]??0)} style={[styles.qtyButton,!(basket[variant.id]??0)&&styles.qtyDisabled]}
+              disabled={selectionLocked||!(basket[variant.id]??0)} style={[styles.qtyButton,(selectionLocked||!(basket[variant.id]??0))&&styles.qtyDisabled]}
               onPress={()=>onChangeQty(variant.id,(basket[variant.id]??0)-1,variant.available)}><Text style={styles.qtyGlyph}>−</Text></Pressable>
             <Text style={styles.qtyText}>{basket[variant.id]??0}</Text>
             <Pressable accessibilityRole="button" accessibilityLabel={'Add one '+variant.title}
-              disabled={variant.available<=0||(basket[variant.id]??0)>=Math.min(variant.available,20)}
-              style={[styles.qtyButton,(variant.available<=0||(basket[variant.id]??0)>=Math.min(variant.available,20))&&styles.qtyDisabled]}
+              disabled={selectionLocked||variant.available<=0||(basket[variant.id]??0)>=Math.min(variant.available,20)}
+              style={[styles.qtyButton,(selectionLocked||variant.available<=0||(basket[variant.id]??0)>=Math.min(variant.available,20))&&styles.qtyDisabled]}
               onPress={()=>onChangeQty(variant.id,(basket[variant.id]??0)+1,variant.available)}><Text style={styles.qtyGlyph}>+</Text></Pressable>
           </View>:null}
         </View>)}
