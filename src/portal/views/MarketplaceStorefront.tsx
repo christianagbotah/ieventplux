@@ -12,6 +12,7 @@ import { useConfirm } from '@/components/ui/confirm-dialog-provider'
 import { useToast } from '@/hooks/use-toast'
 import { api, ApiClientError } from '../api'
 import { navigate } from '../router'
+import {basketSelection,type StoreQuote} from '../lib/marketplace-basket'
 import { usePortal } from '../store'
 
 type Variant = {id:string;sku:string;title:string;priceMinor:number;available:number;currency:string;stockOnHand?:number;reserved?:number;active:boolean}
@@ -46,6 +47,26 @@ export default function MarketplaceStorefront({slug}:{slug:string}) {
  const [stockVariant,setStockVariant]=useState<Variant|null>(null)
  const [delta,setDelta]=useState('10')
  const [reason,setReason]=useState('New stock received from supplier')
+ const [basket,setBasket]=useState<Record<string,number>>({})
+ const [quote,setQuote]=useState<StoreQuote|null>(null)
+ const [quoteLoading,setQuoteLoading]=useState(false)
+ const [quoteError,setQuoteError]=useState('')
+ const lines=basketSelection(basket)
+ const selectQty=(variantId:string,next:number,available:number)=>{
+   if(!Number.isSafeInteger(next)||next<0||next>Math.min(available,20))return
+   setBasket(prev=>{const output={...prev};if(next===0)delete output[variantId];else output[variantId]=next;return output})
+   setQuote(null);setQuoteError('')
+ }
+ async function reviewBasket(){
+   if(!lines.length||quoteLoading)return
+   setQuoteLoading(true);setQuoteError('');setQuote(null)
+   try{
+     const result=await api.post<StoreQuote>('/marketplace/stores/'+encodeURIComponent(slug)+'/quote',{items:lines})
+     if(result.checkoutEnabled!==false||result.inventoryReserved!==false)throw new Error('The basket could not be safely reviewed.')
+     setQuote(result)
+   }catch(e){setQuoteError(e instanceof Error?e.message:'Current prices could not be verified. Refresh and try again.')}
+   finally{setQuoteLoading(false)}
+ }
  const load=useCallback(async()=>{
    setLoading(true)
    try {
@@ -55,7 +76,7 @@ export default function MarketplaceStorefront({slug}:{slug:string}) {
      setData(null);setError(e instanceof ApiClientError?e.message:'Store could not be loaded.')
    }finally{setLoading(false)}
  },[slug])
- useEffect(()=>{void load()},[load,user?.id])
+ useEffect(()=>{setBasket({});setQuote(null);setQuoteError('');void load()},[load,user?.id])
 
  async function setStoreStatus(status:'DRAFT'|'ACTIVE'){
    if(!data||busy)return
@@ -208,6 +229,17 @@ export default function MarketplaceStorefront({slug}:{slug:string}) {
               {product.variants.map(v=><div key={v.id} className="rounded-xl border bg-card p-3 text-xs">
                 <div className="flex items-center justify-between gap-2"><span className="font-semibold">{v.title}</span><span className="text-base font-extrabold text-primary">{price(v.priceMinor)}</span></div>
                 <p className="mt-1 text-muted-foreground">SKU: {v.sku} · Available: {v.available}</p>
+                {!data.canManage&&<div className="mt-3 flex items-center justify-between gap-3">
+                  <span className="text-xs font-medium text-muted-foreground">{v.available>0?'Select quantity':'Unavailable'}</span>
+                  <div className="flex items-center gap-2" role="group" aria-label={`${product.name}, ${v.title}, quantity`}>
+                    <Button type="button" size="sm" variant="outline" className="size-9 p-0" disabled={!basket[v.id]||quoteLoading}
+                      onClick={()=>selectQty(v.id,(basket[v.id]??0)-1,v.available)} aria-label={`Remove one ${v.title}`}>−</Button>
+                    <span className="w-6 text-center text-sm font-bold tabular-nums" aria-live="polite">{basket[v.id]??0}</span>
+                    <Button type="button" size="sm" variant="outline" className="size-9 p-0"
+                      disabled={v.available<=0||(basket[v.id]??0)>=Math.min(v.available,20)||quoteLoading}
+                      onClick={()=>selectQty(v.id,(basket[v.id]??0)+1,v.available)} aria-label={`Add one ${v.title}`}>+</Button>
+                  </div>
+                </div>}
                 {data.canManage&&<Button size="sm" variant="outline" className="mt-2 w-full" onClick={()=>{setStockVariant(v);setDelta('10');setReason('New stock received from supplier')}}>Adjust inventory</Button>}
               </div>)}
             </div>
@@ -218,6 +250,26 @@ export default function MarketplaceStorefront({slug}:{slug:string}) {
         </Card>)}
       </div>:<div className="rounded-2xl border border-dashed px-5 py-14 text-center"><Box className="mx-auto size-12 text-primary/30"/><h3 className="mt-3 font-bold">No published products yet</h3><p className="mt-2 text-sm text-muted-foreground">{data.canManage?'Add your first product and its variants to begin.':'Check this store again as it adds products.'}</p></div>}
     </section>
+    {!data.canManage&&<section className="rounded-2xl border border-primary/25 bg-primary/5 p-4 sm:p-6" aria-label="Basket price and stock review">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div><h2 className="text-lg font-extrabold">Review selected items</h2>
+          <p className="mt-1 text-xs text-muted-foreground">{lines.reduce((n,line)=>n+line.quantity,0)} units across {lines.length} options · Stock and prices checked on the server</p></div>
+        <Button disabled={!lines.length||quoteLoading} onClick={()=>void reviewBasket()}>
+          {quoteLoading?<Loader2 className="mr-2 size-4 animate-spin"/>:<CheckCircle2 className="mr-2 size-4"/>}
+          {quoteLoading?'Checking catalogue…':'Check prices & stock'}
+        </Button>
+      </div>
+      {quoteError&&<div role="alert" className="mt-3 rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{quoteError}</div>}
+      {quote&&<div className="mt-4 space-y-3 rounded-xl border bg-card p-4" role="status">
+        {quote.items.map(item=><div key={item.variantId} className="flex flex-wrap justify-between gap-3 border-b pb-2 text-sm">
+          <div><span className="font-semibold">{item.productName}</span> <span className="text-muted-foreground">{item.variantTitle} × {item.quantity}</span></div>
+          <span className="font-bold tabular-nums">{price(item.lineMinor)}</span>
+        </div>)}
+        <div className="flex items-center justify-between gap-2"><span className="text-sm font-bold">Merchandise subtotal</span><strong className="text-xl tabular-nums text-primary">{price(quote.totalMinor)}</strong></div>
+        <p className="text-xs text-muted-foreground">{quote.notice} Delivery fees, taxes, and final payment are not calculated. Checked at {new Date(quote.quotedAt).toLocaleTimeString()}.</p>
+      </div>}
+      {!quote&&<p className="mt-3 text-xs text-muted-foreground">Select available variants above, then check the live catalogue. No inventory is held and no order or payment will be created.</p>}
+    </section>}
     <p className="rounded-xl border bg-muted/30 p-4 text-xs leading-6 text-muted-foreground">
       <CheckCircle2 className="mr-1 inline size-4 text-primary"/> Product listings show seller-provided descriptions and inventory. Platform checkout, order delivery and refunds are not yet enabled for independent stores. Unverified sellers are not represented as verified.
     </p>

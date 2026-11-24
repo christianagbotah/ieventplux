@@ -202,6 +202,18 @@ export interface NativeMarketplaceProduct {
   specifications: Record<string,string>
   variants: NativeMarketplaceVariant[]
 }
+export interface NativeMarketplaceQuote {
+  storeSlug: string
+  quotedAt: string
+  currency: string
+  unitCount: number
+  totalMinor: number
+  checkoutEnabled: false
+  inventoryReserved: false
+  notice: string
+  items: Array<{variantId:string;sku:string;variantTitle:string;productName:string;quantity:number;
+    unitPriceMinor:number;lineMinor:number;available:number;currency:string}>
+}
 export interface NativeStoreDetail {
   store: NativeMarketplaceStore & { description: string | null; status: string }
   products: NativeMarketplaceProduct[]
@@ -731,6 +743,9 @@ export const api = {
     ),
     store: (slug: string) => request<NativeStoreDetail>(
       'GET', '/marketplace/stores/' + encodeURIComponent(slug),
+    ),
+    quote: (slug: string, items: Array<{variantId:string;quantity:number}>) => request<NativeMarketplaceQuote>(
+      'POST','/marketplace/stores/' + encodeURIComponent(slug) + '/quote', {items},
     ),
   },
   competitions: {
