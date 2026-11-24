@@ -32,3 +32,7 @@ Updated 2026-11-24. Product contract: `docs/GLOBAL_SOCIAL_COMMERCE_AND_COMPETITI
 - After a successful upload, the queue refreshes without requiring the user to reload the whole page; status remains PROCESSING, not a fake playable video.
 - Public Reels cards only mount an HTML `<video>` for approved same-origin MP4 paths; otherwise actual event artwork remains and is labelled Preview. Only the visible and foreground clip may play and autoplay is muted, with explicit sound/pause controls.
 - Web lint/typecheck, full CI/integration smoke, production bundle and live deployment verification precede public readiness claims. Both mobile APK and web must be certified separately.
+
+### November 24 commerce parity addendum
+
+A shared read-only variant-quantity basket preview is now implemented in `feat/marketplace-crossplatform-quote-20261124`: the seller's live catalogue is the source of truth for prices, stock, and availability; both browser and native storefronts receive the same server quote response. This adds genuine shopping *planning*, not checkout/stock reservation/payments. The global marketplace order, delivery, payments and reconciliation gates above remain outstanding. See `docs/MARKETPLACE_BASKET_QUOTE_PARITY_20261124.md`.

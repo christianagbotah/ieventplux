@@ -1,7 +1,8 @@
 /** Real seller catalogue; no checkout until certified provider settlement. */
 import {useCallback,useEffect,useState} from 'react'
 import {ActivityIndicator,Image,Pressable,ScrollView,StyleSheet,Text,View} from 'react-native'
-import {absoluteUrl,api,ApiClientError,formatMinor,type NativeStoreDetail,type NativeMarketplaceProduct} from '../api/client'
+import {absoluteUrl,api,ApiClientError,formatMinor,type NativeStoreDetail,type NativeMarketplaceProduct,type NativeMarketplaceQuote} from '../api/client'
+import {marketplaceBasketSelection} from '../lib/marketplace-basket'
 import {theme} from '../theme'
 import {LabelPill,PremiumBackdrop,SectionHeading,TileGlyph,mobileDesign} from '../ui/PremiumUI'
 import type {MarketplaceStoreScreenProps} from '../navigation'
@@ -11,6 +12,26 @@ export default function MarketplaceStoreScreen({route}:MarketplaceStoreScreenPro
   const [detail,setDetail]=useState<NativeStoreDetail|null>(null)
   const [loading,setLoading]=useState(true)
   const [error,setError]=useState('')
+  const [basket,setBasket]=useState<Record<string,number>>({})
+  const [quote,setQuote]=useState<NativeMarketplaceQuote|null>(null)
+  const [quoteLoading,setQuoteLoading]=useState(false)
+  const [quoteError,setQuoteError]=useState('')
+  const selected=marketplaceBasketSelection(basket)
+  const changeQuantity=(variantId:string,next:number,available:number)=>{
+    if(!Number.isSafeInteger(next)||next<0||next>Math.min(available,20)||quoteLoading)return
+    setBasket(previous=>{const out={...previous};if(next===0)delete out[variantId];else out[variantId]=next;return out})
+    setQuote(null);setQuoteError('')
+  }
+  const reviewBasket=async()=>{
+    if(!selected.length||quoteLoading)return
+    setQuoteLoading(true);setQuoteError('');setQuote(null)
+    try{
+      const result=await api.marketplace.quote(slug,selected)
+      if(result.checkoutEnabled!==false||result.inventoryReserved!==false)throw new Error('Basket review was not safe.')
+      setQuote(result)
+    }catch(cause){setQuoteError(cause instanceof ApiClientError?cause.message:cause instanceof Error?cause.message:'Could not check the basket. Please refresh.')}
+    finally{setQuoteLoading(false)}
+  }
   const load=useCallback(async()=>{
     setLoading(true)
     try{
@@ -19,7 +40,7 @@ export default function MarketplaceStoreScreen({route}:MarketplaceStoreScreenPro
     }catch(cause){setDetail(null);setError(cause instanceof ApiClientError?cause.message:'Cannot load storefront.')}
     finally{setLoading(false)}
   },[slug])
-  useEffect(()=>{void load()},[load])
+  useEffect(()=>{setBasket({});setQuote(null);setQuoteError('');void load()},[load])
   const store=detail?.store
   const cover=store?.coverUrl?absoluteUrl(store.coverUrl):null
   const logo=store?.logoUrl?absoluteUrl(store.logoUrl):null
@@ -50,12 +71,32 @@ export default function MarketplaceStoreScreen({route}:MarketplaceStoreScreenPro
       <SectionHeading eyebrow="DISCOVER WHAT'S AVAILABLE" title="Products & inventory" subtitle={`${detail.products.length} published products at this storefront`}/>
       {detail.products.length===0?<View style={styles.empty}><TileGlyph kind="store" size={70}/><Text style={styles.emptyTitle}>More products are on the way.</Text>
         <Text style={styles.emptyBody}>This store has no published products yet. Check back as the seller adds new items.</Text></View>:
-        detail.products.map(item=><ProductCard key={item.id} item={item}/>)}
+        detail.products.map(item=><ProductCard key={item.id} item={item} basket={basket} onChangeQty={changeQuantity} canSelect={!detail.canManage}/>)}
     </>:null}
+    {detail&&!detail.canManage?<View style={styles.basketPanel}>
+      <Text style={styles.basketKicker}>YOUR SHOPPING SELECTION</Text>
+      <Text style={styles.basketTitle}>Review product prices & stock</Text>
+      <Text style={styles.basketInfo}>{selected.reduce((sum,line)=>sum+line.quantity,0)} units · {selected.length} selected options. No stock is held.</Text>
+      <Pressable accessibilityRole="button" disabled={!selected.length||quoteLoading} onPress={()=>void reviewBasket()}
+        style={[styles.quoteButton,(!selected.length||quoteLoading)&&styles.quoteDisabled]}>
+        <Text style={styles.quoteButtonText}>{quoteLoading?'Checking live catalogue…':'Check current prices & stock'}</Text>
+      </Pressable>
+      {quoteError?<Text style={styles.quoteError} accessibilityRole="alert">{quoteError}</Text>:null}
+      {quote?<View style={styles.quoteResult}>
+        {quote.items.map(line=><View key={line.variantId} style={styles.quoteRow}>
+          <Text style={styles.quoteLine}>{line.productName} · {line.variantTitle} × {line.quantity}</Text>
+          <Text style={styles.quotePrice}>{formatMinor(line.lineMinor,line.currency)}</Text>
+        </View>)}
+        <View style={styles.quoteRow}><Text style={styles.quoteTotalLabel}>Merchandise subtotal</Text>
+          <Text style={styles.quoteTotal}>{formatMinor(quote.totalMinor,quote.currency)}</Text></View>
+        <Text style={styles.basketInfo}>{quote.notice} Delivery fees, taxes and final payment are not calculated.</Text>
+      </View>:null}
+      {!quote?<Text style={styles.basketInfo}>Select product quantities above. This is an estimate, not an order or checkout.</Text>:null}
+    </View>:null}
     {detail?<Pressable onPress={()=>void load()} style={styles.reload} accessibilityRole="button"><Text style={styles.reloadText}>Refresh catalogue  ↻</Text></Pressable>:null}
   </ScrollView>
 }
-function ProductCard({item}:{item:NativeMarketplaceProduct}){
+function ProductCard({item,basket,onChangeQty,canSelect}:{item:NativeMarketplaceProduct;basket:Record<string,number>;onChangeQty:(id:string,next:number,available:number)=>void;canSelect:boolean}){
   const photo=item.images[0]?absoluteUrl(item.images[0]):null
   const priced=item.variants.filter(variant=>variant.priceMinor>=0)
   const from=priced.length?priced.reduce((min,v)=>v.priceMinor<min.priceMinor?v:min,priced[0]!):null
@@ -76,13 +117,23 @@ function ProductCard({item}:{item:NativeMarketplaceProduct}){
       </View>:null}
       {item.variants.length>0?<View style={styles.variants}><Text style={styles.variantsTitle}>AVAILABLE OPTIONS</Text>
         {item.variants.map(variant=><View key={variant.id} style={styles.variant}>
-          <View style={{flex:1}}><Text style={styles.variantName}>{variant.title}</Text><Text style={styles.variantSku}>SKU {variant.sku}</Text></View>
+          <View style={styles.variantDetails}><View style={{flex:1}}><Text style={styles.variantName}>{variant.title}</Text><Text style={styles.variantSku}>SKU {variant.sku}</Text></View>
           <View style={styles.variantRight}><Text style={styles.variantPrice}>{formatMinor(variant.priceMinor,variant.currency)}</Text>
             <Text style={[styles.variantStock,variant.available===0&&styles.variantOut]}>{variant.available>0?`${variant.available} in stock`:'Out of stock'}</Text>
-          </View>
+          </View></View>
+          {canSelect?<View style={styles.qtyGroup}>
+            <Pressable accessibilityRole="button" accessibilityLabel={'Remove one '+variant.title}
+              disabled={!(basket[variant.id]??0)} style={[styles.qtyButton,!(basket[variant.id]??0)&&styles.qtyDisabled]}
+              onPress={()=>onChangeQty(variant.id,(basket[variant.id]??0)-1,variant.available)}><Text style={styles.qtyGlyph}>−</Text></Pressable>
+            <Text style={styles.qtyText}>{basket[variant.id]??0}</Text>
+            <Pressable accessibilityRole="button" accessibilityLabel={'Add one '+variant.title}
+              disabled={variant.available<=0||(basket[variant.id]??0)>=Math.min(variant.available,20)}
+              style={[styles.qtyButton,(variant.available<=0||(basket[variant.id]??0)>=Math.min(variant.available,20))&&styles.qtyDisabled]}
+              onPress={()=>onChangeQty(variant.id,(basket[variant.id]??0)+1,variant.available)}><Text style={styles.qtyGlyph}>+</Text></Pressable>
+          </View>:null}
         </View>)}
       </View>:null}
-      <View style={styles.checkoutNotice}><Text style={styles.checkoutNoticeText}>Checkout & delivery not yet available</Text></View>
+      {canSelect?<View style={styles.checkoutNotice}><Text style={styles.checkoutNoticeText}>Checkout & delivery not yet available</Text></View>:null}
     </View>
   </View>
 }
@@ -117,10 +168,28 @@ const styles=StyleSheet.create({
   specs:{borderRadius:16,backgroundColor:'#f5f8f7',padding:13,gap:9},specTitle:{fontSize:9,fontWeight:'900',color:mobileDesign.emerald,letterSpacing:.8},
   specRow:{flexDirection:'row',justifyContent:'space-between',gap:14},specKey:{color:mobileDesign.inkMuted,fontSize:11,flex:1},specValue:{color:mobileDesign.ink,fontSize:11,fontWeight:'800',flex:1,textAlign:'right'},
   variants:{gap:10,marginTop:4},variantsTitle:{fontSize:10,fontWeight:'900',letterSpacing:.8,color:mobileDesign.emerald},
-  variant:{flexDirection:'row',alignItems:'center',gap:12,borderRadius:15,borderWidth:1,borderColor:mobileDesign.border,padding:13},
+  variant:{gap:10,borderRadius:15,borderWidth:1,borderColor:mobileDesign.border,padding:13},
+  variantDetails:{flexDirection:'row',alignItems:'center',gap:12},
   variantName:{fontSize:12,fontWeight:'900',color:mobileDesign.ink},variantSku:{fontSize:10,color:mobileDesign.inkSoft,marginTop:4},
   variantRight:{alignItems:'flex-end'},variantPrice:{fontSize:14,color:mobileDesign.emerald,fontWeight:'900'},
   variantStock:{fontSize:10,color:mobileDesign.emerald,marginTop:4},variantOut:{color:'#b34843'},
+  qtyGroup:{flexDirection:'row',alignItems:'center',gap:9,marginTop:10,justifyContent:'flex-end'},
+  qtyButton:{height:38,width:38,borderWidth:1,borderColor:mobileDesign.border,borderRadius:12,backgroundColor:'#f5faf7',alignItems:'center',justifyContent:'center'},
+  qtyDisabled:{opacity:.35},qtyGlyph:{fontSize:21,fontWeight:'900',color:mobileDesign.emerald},
+  qtyText:{fontSize:13,fontWeight:'900',color:mobileDesign.ink,minWidth:26,textAlign:'center'},
+  basketPanel:{padding:19,backgroundColor:'#fff',borderRadius:23,borderWidth:1,borderColor:mobileDesign.border,gap:12},
+  basketKicker:{fontSize:10,fontWeight:'900',letterSpacing:1.1,color:mobileDesign.emerald},
+  basketTitle:{fontSize:19,lineHeight:25,fontWeight:'900',color:mobileDesign.ink},
+  basketInfo:{fontSize:11,lineHeight:18,color:mobileDesign.inkMuted},
+  quoteButton:{minHeight:50,alignItems:'center',justifyContent:'center',borderRadius:16,backgroundColor:mobileDesign.emerald,padding:12},
+  quoteDisabled:{opacity:.45},quoteButtonText:{color:'#fff',fontSize:12,fontWeight:'900'},
+  quoteError:{color:theme.colors.danger,fontSize:12,lineHeight:18},
+  quoteResult:{backgroundColor:'#f5faf7',padding:13,borderRadius:15,gap:11},
+  quoteRow:{flexDirection:'row',alignItems:'flex-start',justifyContent:'space-between',gap:9},
+  quoteLine:{flex:1,fontSize:11,lineHeight:18,color:mobileDesign.ink},
+  quotePrice:{fontSize:12,fontWeight:'900',color:mobileDesign.emerald},
+  quoteTotalLabel:{fontSize:13,fontWeight:'900',color:mobileDesign.ink},
+  quoteTotal:{fontSize:18,fontWeight:'900',color:mobileDesign.emerald},
   checkoutNotice:{backgroundColor:'#eef1f3',minHeight:48,borderRadius:14,justifyContent:'center',alignItems:'center',paddingHorizontal:11},
   checkoutNoticeText:{fontSize:12,color:mobileDesign.inkMuted,fontWeight:'900',textAlign:'center'},
   reload:{minHeight:50,borderRadius:15,borderWidth:1,borderColor:mobileDesign.border,backgroundColor:'#fff',alignItems:'center',justifyContent:'center'},
