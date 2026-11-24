@@ -9,6 +9,8 @@ export type RootStackParamList = {
   Login: undefined
   /** Event discovery feed (GET /api/v1/discovery/home). */
   Discover: undefined
+  LiveHub: undefined
+  Account: undefined
   /** Event detail + checkout. Accepts the event id or slug. */
   EventDetail: { eventId: string }
   /** My tickets + order history. `orderRef` is set by the ieventplux://order/{ref}
@@ -58,3 +60,6 @@ export type EventCompetitionsScreenProps = NativeStackScreenProps<RootStackParam
 
 export type MarketplaceScreenProps = NativeStackScreenProps<RootStackParamList, 'Marketplace'>
 export type MarketplaceStoreScreenProps = NativeStackScreenProps<RootStackParamList, 'MarketplaceStore'>
+
+export type LiveHubScreenProps = NativeStackScreenProps<RootStackParamList, 'LiveHub'>
+export type AccountScreenProps = NativeStackScreenProps<RootStackParamList, 'Account'>

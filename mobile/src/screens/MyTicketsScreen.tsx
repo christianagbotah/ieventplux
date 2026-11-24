@@ -191,6 +191,11 @@ export default function MyTicketsScreen({ navigation, route }: MyTicketsScreenPr
 
   return (
     <View style={styles.screen}>
+      <View style={styles.walletHero}>
+        <Text style={styles.walletEyebrow}>YOUR DIGITAL EVENT WALLET</Text>
+        <Text style={styles.walletTitle}>Your moments, saved.</Text>
+        <Text style={styles.walletDescription}>Tickets, QR entry passes and orders together in one secure place.</Text>
+      </View>
       {orderRef ? (
         <View style={styles.returnBanner}>
           <Text style={styles.returnBannerText}>
@@ -250,8 +255,9 @@ export default function MyTicketsScreen({ navigation, route }: MyTicketsScreenPr
           <View style={styles.center}>
             <Text style={styles.emptyTitle}>No tickets yet</Text>
             <Text style={styles.mutedCenter}>
-              Paid orders issue tickets after checkout confirmation — pull to refresh after paying.
+              Book your first experience to keep your event passes here.
             </Text>
+            <Pressable style={styles.retryButton} accessibilityRole="button" accessibilityLabel="Find events" onPress={() => navigation.navigate('Discover')}><Text style={styles.retryButtonText}>Find an event</Text></Pressable>
           </View>
         ) : (
           <FlatList<TicketSummary>
@@ -462,6 +468,10 @@ function TicketQrModal({ ticketId, onClose }: { ticketId: string | null; onClose
 }
 
 const styles = StyleSheet.create({
+  walletHero: { backgroundColor: '#103f34', paddingHorizontal: 20, paddingVertical: 19, marginHorizontal: 15, marginTop: 12, marginBottom: 12, borderRadius: 20 },
+  walletEyebrow: { color: '#b0ecce', fontSize: 10, fontWeight: '800', letterSpacing: 1.2, marginBottom: 8 },
+  walletTitle: { color: '#fff', fontWeight: '900', fontSize: 23, letterSpacing: -.6 },
+  walletDescription: { color: '#d2e9dc', fontSize: 12, lineHeight: 19, marginTop: 5 },
   screen: { flex: 1, backgroundColor: theme.colors.bg },
   list: { flex: 1 },
   listContent: { padding: theme.spacing.lg },

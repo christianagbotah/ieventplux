@@ -116,9 +116,13 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
       >
         <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
           <View style={styles.brandBlock}>
-            <Text style={styles.brandMark}>iEventPlux</Text>
-            <Text style={styles.brandSub}>Experiences · Tickets · Live — Lightworld Technologies</Text>
+            <View style={styles.brandTop}><View style={styles.brandIcon}><Text style={styles.brandIconText}>✦</Text></View><Text style={styles.brandMark}>iEventPlux</Text></View>
+            <Text style={styles.brandHero}>Experience the world,{'\n'}together.</Text>
+            <Text style={styles.brandSub}>Explore events. Join communities. Make memories.</Text>
+            <View style={styles.brandChips}><Text style={styles.brandChip}>◉  LIVE</Text><Text style={styles.brandChip}>✦  EVENTS</Text><Text style={styles.brandChip}>▣  TICKETS</Text></View>
           </View>
+          <Text style={styles.formTitle}>{resetMode ? 'Reset your password' : 'Welcome back'}</Text>
+          <Text style={styles.formSub}>{resetMode ? 'Securely regain access to your account.' : 'Sign in to continue your experiences.'}</Text>
 
           {!isBaseUrlConfigured() ? (
             <View style={styles.warningBox}>
@@ -234,8 +238,8 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
           )}
 
           <Text style={styles.footnote}>
-            Discovery is public, but tickets, orders and check-in require an account.
-            Sessions use the same cookie credential as the web app (see src/api/client.ts).
+            Your event experiences and tickets stay connected across devices.
+            Powered by Lightworld Technologies.
           </Text>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -246,10 +250,18 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.colors.bg },
   flex: { flex: 1 },
-  container: { flexGrow: 1, padding: theme.spacing.xl, justifyContent: 'center', maxWidth: 560, alignSelf: 'center', width: '100%' },
-  brandBlock: { alignItems: 'center', marginBottom: theme.spacing.xxl },
-  brandMark: { fontSize: 36, fontWeight: '800', color: theme.colors.primary, letterSpacing: -0.8 },
-  brandSub: { marginTop: theme.spacing.xs, color: theme.colors.textMuted, fontSize: 13 },
+  container: { flexGrow: 1, paddingHorizontal: 21, paddingTop: 23, paddingBottom: 28, justifyContent: 'center', maxWidth: 560, alignSelf: 'center', width: '100%' },
+  brandBlock: { backgroundColor: '#103f34', padding: 23, borderRadius: 25, marginBottom: 26 },
+  brandTop: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 24 },
+  brandIcon: { width: 37, height: 37, borderRadius: 12, backgroundColor: '#d8f6e5', justifyContent: 'center', alignItems: 'center' },
+  brandIconText: { color: '#0d6345', fontWeight: '900', fontSize: 24 },
+  brandMark: { fontSize: 23, fontWeight: '900', color: '#ffffff', letterSpacing: -0.7 },
+  brandHero: { fontSize: 27, lineHeight: 34, fontWeight: '900', color: '#fff', letterSpacing: -.6 },
+  brandSub: { marginTop: 8, color: '#d0e8db', fontSize: 13, lineHeight: 20 },
+  brandChips: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 20, gap: 8 },
+  brandChip: { backgroundColor: '#ffffff1a', color: '#e2f9ed', fontSize: 9, fontWeight: '800', paddingVertical: 7, paddingHorizontal: 9, borderRadius: 7, letterSpacing: .4 },
+  formTitle: { fontSize: 24, color: theme.colors.text, fontWeight: '900', letterSpacing: -.4, marginBottom: 4 },
+  formSub: { color: theme.colors.textMuted, fontSize: 13, marginBottom: 21 },
   warningBox: {
     backgroundColor: '#fef3c7',
     borderColor: '#fcd34d',
@@ -260,12 +272,12 @@ const styles = StyleSheet.create({
   },
   warningTitle: { color: '#92400e', fontWeight: '700', marginBottom: theme.spacing.xs },
   warningBody: { color: '#92400e', fontSize: 12 },
-  label: { color: theme.colors.text, fontWeight: '600', marginBottom: theme.spacing.xs },
+  label: { color: theme.colors.text, fontWeight: '800', fontSize: 13, marginBottom: 8 },
   input: {
     backgroundColor: theme.colors.card,
     borderWidth: 1,
     borderColor: theme.colors.border,
-    borderRadius: theme.radius.md,
+    borderRadius: 14,
     padding: theme.spacing.lg,
     marginBottom: theme.spacing.lg,
     color: theme.colors.text,
@@ -274,7 +286,7 @@ const styles = StyleSheet.create({
   error: { color: theme.colors.danger, fontSize: 13, marginBottom: theme.spacing.lg },
   success: { color: theme.colors.primaryDark, fontSize: 13, marginBottom: theme.spacing.lg, lineHeight: 19 },
   resetHint: { color: theme.colors.textMuted, fontSize: 13, lineHeight: 20, marginBottom: theme.spacing.lg },
-  passwordWrap: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.colors.card, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, marginBottom: theme.spacing.md },
+  passwordWrap: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.colors.card, borderRadius: 14, borderWidth: 1, borderColor: theme.colors.border, marginBottom: theme.spacing.md },
   passwordField: { flex: 1, padding: theme.spacing.lg, color: theme.colors.text, fontSize: 16, minHeight: 52 },
   eyeButton: { minWidth: 55, minHeight: 52, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10 },
   eyeText: { color: theme.colors.primaryDark, fontWeight: '800', fontSize: 12 },
@@ -284,16 +296,18 @@ const styles = StyleSheet.create({
   secondaryButtonText: { color: theme.colors.primaryDark, fontSize: 14, fontWeight: '700' },
   button: {
     backgroundColor: theme.colors.primary,
-    borderRadius: theme.radius.md,
+    borderRadius: 14,
+    minHeight: 53,
     padding: theme.spacing.lg,
     alignItems: 'center',
   },
   buttonDisabled: { opacity: 0.6 },
-  buttonText: { color: '#ffffff', fontWeight: '700', fontSize: 16 },
+  buttonText: { color: '#ffffff', fontWeight: '800', fontSize: 15 },
   footnote: {
     marginTop: theme.spacing.xl,
     color: theme.colors.textMuted,
-    fontSize: 12,
+    fontSize: 11,
+    lineHeight: 18,
     textAlign: 'center',
   },
 })
