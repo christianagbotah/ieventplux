@@ -27,6 +27,8 @@ import type { RootStackParamList, NativeMeetingScreenProps } from './src/navigat
 import LoginScreen from './src/screens/LoginScreen'
 import DiscoverScreen from './src/screens/DiscoverScreen'
 import LiveHubScreen from './src/screens/LiveHubScreen'
+import FollowingScreen from './src/screens/FollowingScreen'
+import ReelsScreen from './src/screens/ReelsScreen'
 import AccountScreen from './src/screens/AccountScreen'
 import EventDetailScreen from './src/screens/EventDetailScreen'
 import MyTicketsScreen from './src/screens/MyTicketsScreen'
@@ -40,7 +42,8 @@ import MarketplaceScreen from './src/screens/MarketplaceScreen'
 import MarketplaceStoreScreen from './src/screens/MarketplaceStoreScreen'
 import { AndroidUpdateNotice } from './src/components/AndroidUpdateNotice'
 import { AppTabBar } from './src/components/AppTabBar'
-import { isMainTabRoute, type MainTabRoute } from './src/lib/main-tabs'
+import { isMainTabRoute, requiresAuthentication, type MainTabRoute } from './src/lib/main-tabs'
+import { AppBrand } from './src/components/AppBrand'
 
 /**
  * Keep the native WebRTC module out of Expo Go startup. Expo Go has no LiveKit
@@ -101,7 +104,7 @@ function AppRoutes() {
 
   return (
     <Stack.Navigator
-      initialRouteName={status === 'authenticated' ? 'Discover' : 'Login'}
+      initialRouteName='Discover'
       screenOptions={{
         headerStyle: { backgroundColor: theme.colors.card },
         headerTintColor: theme.colors.primaryDark,
@@ -111,8 +114,10 @@ function AppRoutes() {
       }}
     >
       <Stack.Screen name="Login" component={LoginScreen} options={{ title: 'Sign in', headerShown: false }} />
-      <Stack.Screen name="Discover" component={DiscoverScreen} options={{ title: 'iEventPlux' }} />
+      <Stack.Screen name="Discover" component={DiscoverScreen} options={{ headerTitle: () => <AppBrand /> }} />
       <Stack.Screen name="LiveHub" component={LiveHubScreen} options={{ title: 'Live now' }} />
+      <Stack.Screen name="Following" component={FollowingScreen} options={{ title: 'Following' }} />
+      <Stack.Screen name="Reels" component={ReelsScreen} options={{ title: 'Reels' }} />
       <Stack.Screen name="Account" component={AccountScreen} options={{ title: 'Your space' }} />
       <Stack.Screen name="EventDetail" component={EventDetailScreen} options={{ title: 'Event' }} />
       <Stack.Screen name="MyTickets" component={MyTicketsScreen} options={{ title: 'My tickets' }} />
@@ -135,12 +140,16 @@ function AppNavigation() {
   const syncRoute = () => setCurrentRoute(navigationRef.getCurrentRoute()?.name)
   const navigateTab = (route: MainTabRoute) => {
     if (!navigationRef.isReady() || navigationRef.getCurrentRoute()?.name === route) return
+    if (status !== 'authenticated' && requiresAuthentication(route)) {
+      navigationRef.navigate('Login')
+      return
+    }
     navigationRef.navigate(route)
   }
   return <NavigationContainer ref={navigationRef} linking={linking} onReady={syncRoute} onStateChange={syncRoute}>
     <View style={styles.appContainer}>
       <AppRoutes />
-      {status === 'authenticated' && isMainTabRoute(currentRoute) ?
+      {(status === 'authenticated' || status === 'anonymous') && isMainTabRoute(currentRoute) ?
         <AppTabBar active={currentRoute} onSelect={navigateTab} /> : null}
       <AndroidUpdateNotice />
     </View>

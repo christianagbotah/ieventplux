@@ -173,7 +173,7 @@ export default function MyTicketsScreen({ navigation, route }: MyTicketsScreenPr
   const handleSignOut = async () => {
     await clearTicketWallet() // credentials do not outlive the session
     await signOut()
-    navigation.reset({ index: 0, routes: [{ name: 'Login' }] })
+    navigation.reset({ index: 0, routes: [{ name: 'Discover' }] })
   }
 
   useEffect(() => {

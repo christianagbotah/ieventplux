@@ -14,9 +14,12 @@ function TabIcon({ name, selected }: { name: IconName; selected: boolean }) {
     {name === 'compass' ? <>
       <Circle cx="12" cy="12" r="9" {...common} />
       <Path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z" {...common} />
-    </> : name === 'live' ? <>
-      <Circle cx="12" cy="12" r="2" {...common} />
-      <Path d="M7.8 7.8a6 6 0 0 0 0 8.4M16.2 7.8a6 6 0 0 1 0 8.4M4.5 4.5a10.6 10.6 0 0 0 0 15M19.5 4.5a10.6 10.6 0 0 1 0 15" {...common} />
+    </> : name === 'users' ? <>
+      <Circle cx="9" cy="8" r="3" {...common} />
+      <Path d="M3 20v-1.5c0-3 2.5-5 6-5s6 2 6 5V20M16 5.5a3 3 0 0 1 0 5.5M18 14c2.3.5 3 2.2 3 4.5V20" {...common} />
+    </> : name === 'film' ? <>
+      <Rect x="3" y="4" width="18" height="16" rx="2.5" {...common} />
+      <Path d="M7 4v16M17 4v16M3 9h4M3 15h4M17 9h4M17 15h4M10 9l4.8 3-4.8 3z" {...common} />
     </> : name === 'bag' ? <>
       <Rect x="3.5" y="7.5" width="17" height="14" rx="2.4" {...common} />
       <Path d="M8.5 9V6a3.5 3.5 0 0 1 7 0v3" {...common} />
@@ -50,9 +53,9 @@ const styles = StyleSheet.create({
   outer: { flexDirection: 'row', backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: theme.colors.border,
     paddingTop: 6, paddingHorizontal: 5, elevation: 10, shadowColor: '#17362a', shadowOpacity: 0.07, shadowRadius: 14, shadowOffset: { width: 0, height: -3 } },
   tab: { flex: 1, minHeight: 55, alignItems: 'center', justifyContent: 'center', gap: 1, paddingHorizontal: 2 },
-  iconBox: { height: 31, minWidth: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 15 },
-  selectedIcon: { backgroundColor: '#e3f6ed' },
-  label: { fontSize: 10, fontWeight: '600', color: theme.colors.textMuted },
+  iconBox: { height: 31, minWidth: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 15 },
+  selectedIcon: { backgroundColor: '#e7f5f0' },
+  label: { fontSize: 9.5, fontWeight: '600', color: theme.colors.textMuted },
   selectedLabel: { color: theme.colors.primaryDark, fontWeight: '800' },
   pressed: { opacity: 0.7 },
 })

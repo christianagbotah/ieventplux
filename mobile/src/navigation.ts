@@ -10,6 +10,8 @@ export type RootStackParamList = {
   /** Event discovery feed (GET /api/v1/discovery/home). */
   Discover: undefined
   LiveHub: undefined
+  Following: undefined
+  Reels: undefined
   Account: undefined
   /** Event detail + checkout. Accepts the event id or slug. */
   EventDetail: { eventId: string }
@@ -63,3 +65,6 @@ export type MarketplaceStoreScreenProps = NativeStackScreenProps<RootStackParamL
 
 export type LiveHubScreenProps = NativeStackScreenProps<RootStackParamList, 'LiveHub'>
 export type AccountScreenProps = NativeStackScreenProps<RootStackParamList, 'Account'>
+
+export type FollowingScreenProps = NativeStackScreenProps<RootStackParamList, 'Following'>
+export type ReelsScreenProps = NativeStackScreenProps<RootStackParamList, 'Reels'>
