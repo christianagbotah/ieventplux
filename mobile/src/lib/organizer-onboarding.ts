@@ -20,7 +20,6 @@ export const ORGANIZER_PROFILE_FIELDS:Record<OrganizerCategory,readonly ProfileF
           {key:'campusName',label:'Campus or branch',placeholder:'Main campus'},
           {key:'schoolHead',label:'School head',placeholder:'Principal or headteacher'}],
   COMPANY:[{key:'industry',label:'Industry',placeholder:'Technology, entertainment, hospitality'},
-           {key:'registrationNumber',label:'Registration number',placeholder:'Optional official business number'},
            {key:'contactPerson',label:'Contact person',placeholder:'Public representative'}],
   MINISTRY:[{key:'ministryFocus',label:'Ministry focus',placeholder:'Music, youth, outreach'},
             {key:'ministryLeader',label:'Ministry leader',placeholder:'Public ministry leader'}],

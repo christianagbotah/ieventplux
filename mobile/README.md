@@ -223,4 +223,4 @@ From the authenticated Account screen, tap **Organizer studio** to view accepted
 
 ### Native creator journey
 
-The Discover creator calls to action now use the native Organizer Studio and Create Organizer screens, not web links. Registration uses the existing `/orgs` API and mirrors all six organizer types with role-specific public profile fields. New organizations are pending verification, not approved for paid sales. Document upload, payout configuration and advanced editor tooling remain under the secure web workflows until corresponding native capability is certified. 
+The Discover creator calls to action now use the native Organizer Studio and Create Organizer screens, not web links. Registration uses the existing `/orgs` API and mirrors all six organizer types with role-specific public profile fields. New organizations are pending verification, not approved for paid sales. Document upload, payout configuration and advanced editor tooling remain under the secure web workflows until corresponding native capability is certified.

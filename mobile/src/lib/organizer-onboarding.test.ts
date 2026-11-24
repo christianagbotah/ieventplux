@@ -29,3 +29,7 @@ test('public creator entry actions stay inside native navigation',()=>{
   expect(source.includes("navigation.navigate(status === 'authenticated' ? 'OrganizerStudio' : 'Login')")).toBe(true)
   expect(source.includes('ieventplux.lightworldtech.com/#/create-org')).toBe(false)
 })
+
+test('native public onboarding does not solicit company registration identifiers',()=>{
+  expect(ORGANIZER_PROFILE_FIELDS.COMPANY.some(x=>x.key==='registrationNumber')).toBe(false)
+})
