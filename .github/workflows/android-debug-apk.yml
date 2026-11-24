@@ -145,9 +145,18 @@ jobs:
                     keyPassword System.getenv('IEV_QA_KEY_PASSWORD')
                 }'''
           source = source.replace('signingConfigs {', qa, 1)
-          pattern = r'(?m)^(\s*release\s*\{\s*\n\s*)signingConfig signingConfigs\.debug'
-          source, count = re.subn(pattern, r'\1signingConfig signingConfigs.qa', source, count=1)
-          assert count == 1, 'Could not find the generated release signing config'
+          # Expo SDK 52 emits comments between `release {` and its signing
+          # line, so do not assume the signingConfig immediately follows `{`.
+          # Scope the replacement to release inside buildTypes; leave the
+          # debug build's signing identity unchanged.
+          build_types = source.index('buildTypes {')
+          release_block = source.index('release {', build_types)
+          old_signing = 'signingConfig signingConfigs.debug'
+          signing_line = source.find(old_signing, release_block)
+          assert signing_line != -1 and signing_line - release_block < 1800, \
+              'Could not find Expo generated release signing config'
+          source = source[:signing_line] + 'signingConfig signingConfigs.qa' + \
+              source[signing_line + len(old_signing):]
           path.write_text(source)
           PYGRADLE
           grep -F 'signingConfig signingConfigs.qa' mobile/android/app/build.gradle
