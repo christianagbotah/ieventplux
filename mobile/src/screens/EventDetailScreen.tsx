@@ -42,6 +42,7 @@ import {
   type TicketType,
 } from '../api/client'
 import { theme } from '../theme'
+import {PremiumBackdrop,SectionHeading,TileGlyph,mobileDesign} from '../ui/PremiumUI'
 import { EventProgrammeSections } from '../components/EventProgrammeSections'
 import { eventTimeLabel } from '../lib/event-programme'
 import type { EventDetailScreenProps } from '../navigation'
@@ -177,14 +178,13 @@ export default function EventDetailScreen({ navigation, route }: EventDetailScre
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      {event.coverImageUrl ? (
-        // eslint-disable-next-line jsx-a11y/alt-text -- React Native Image uses accessibility props, not alt
-        <Image source={{ uri: event.coverImageUrl }} style={styles.cover} accessibilityLabel={`${event.title} artwork`} />
-      ) : (
-        <View style={[styles.cover, styles.coverPlaceholder]}>
-          <Text style={styles.coverPlaceholderText}>{event.title}</Text>
-        </View>
-      )}
+      <View style={styles.coverShell}>
+        {event.coverImageUrl && absoluteUrl(event.coverImageUrl) ?
+          <Image source={{uri:absoluteUrl(event.coverImageUrl)!}} style={styles.cover} resizeMode="cover" accessibilityLabel={event.title+' event artwork'}/>:
+          <View style={[styles.cover,styles.coverPlaceholder]}><PremiumBackdrop mode="midnight"/><Text style={styles.coverPlaceholderText} numberOfLines={3}>{event.title}</Text></View>}
+        <View style={styles.coverRibbon}><Text style={styles.coverRibbonText}>✦  iEVENTPLUX EXPERIENCE</Text></View>
+        <View style={styles.coverCaption}><Text style={styles.coverCaptionText}>BE PART OF SOMETHING</Text></View>
+      </View>
 
       <View style={styles.eventHeading}>
         <View style={styles.eventBadges}>
@@ -208,38 +208,25 @@ export default function EventDetailScreen({ navigation, route }: EventDetailScre
 
       <EventProgrammeSections event={event} onOpenProgramme={path => void openProgramme(path)} />
 
-      <Pressable
-        style={[styles.staffButton, { marginTop: theme.spacing.lg }]}
-        accessibilityRole="button"
-        accessibilityLabel="Open this event's group meeting and device permissions"
-        onPress={() => navigation.navigate('MeetingAccess', { eventId: event.id })}
-      >
-        <Text style={styles.staffButtonText}>Meeting & camera/microphone access</Text>
-      </Pressable>
-
-      <View style={styles.socialButtons}>
-        <Pressable style={styles.staffButton} accessibilityRole="button"
-          accessibilityLabel="Open event community discussions and replies"
-          onPress={() => navigation.navigate('EventCommunity', {
-            eventId: event.id, eventTitle: event.title, status: event.status, canManage,
-          })}>
-          <Text style={styles.staffButtonText}>Community conversations</Text>
-        </Pressable>
-        <Pressable style={styles.staffButton} accessibilityRole="button"
-          accessibilityLabel="See private opt-in attendee network for this event"
-          onPress={() => navigation.navigate('EventNetwork', { eventId: event.id, eventTitle: event.title })}>
-          <Text style={styles.staffButtonText}>Meet fellow attendees</Text>
-        </Pressable>
-        <Pressable style={styles.staffButton} accessibilityRole="button"
-          accessibilityLabel="View award nominees and cast a free supporter vote"
-          onPress={() => navigation.navigate('EventCompetitions', {
-            eventId: event.id, eventTitle: event.title,
-          })}>
-          <Text style={styles.staffButtonText}>Awards & supporter voting</Text>
-        </Pressable>
+      <View style={styles.engageSection}>
+        <SectionHeading eyebrow="BEYOND THE TICKET" title="Experience together" subtitle="Meet people, join conversations and be part of the event."/>
+        <View style={styles.socialButtons}>
+          <SocialShortcut title="Group meetings" detail="Camera, mic & live rooms" kind="event"
+            accessibilityLabel="Open this event's group meeting and device permissions"
+            onPress={()=>navigation.navigate('MeetingAccess',{eventId:event.id})}/>
+          <SocialShortcut title="Conversations" detail="Discuss with your community" kind="organizer"
+            accessibilityLabel="Open event community discussions and replies"
+            onPress={()=>navigation.navigate('EventCommunity',{eventId:event.id,eventTitle:event.title,status:event.status,canManage})}/>
+          <SocialShortcut title="Find your people" detail="Opt-in attendee connections" kind="organizer"
+            accessibilityLabel="See private opt-in attendee network for this event"
+            onPress={()=>navigation.navigate('EventNetwork',{eventId:event.id,eventTitle:event.title})}/>
+          <SocialShortcut title="Awards & voting" detail="Celebrate your favorites" kind="spark"
+            accessibilityLabel="View award nominees and cast a free supporter vote"
+            onPress={()=>navigation.navigate('EventCompetitions',{eventId:event.id,eventTitle:event.title})}/>
+        </View>
       </View>
 
-      <Text style={styles.sectionTitle}>Tickets</Text>
+      <View style={styles.ticketsHeading}><SectionHeading eyebrow="SAVE YOUR PLACE" title="Tickets & entry" subtitle="Choose your pass to join this event"/></View>
       {event.ticketTypes.length === 0 ? (
         <Text style={styles.muted}>No ticket types are on sale for this event yet.</Text>
       ) : (
@@ -254,6 +241,7 @@ export default function EventDetailScreen({ navigation, route }: EventDetailScre
         ))
       )}
 
+      {selectedItems.length>0?<View style={styles.totalSummary}><Text style={styles.totalSummaryText}>{selectedItems.reduce((n,item)=>n+item.qty,0)} {selectedItems.reduce((n,item)=>n+item.qty,0)===1?'pass':'passes'} selected</Text><Text style={styles.totalSummaryAmount}>{estimatedMinor===0?'Free':formatMinor(estimatedMinor,currency)}</Text></View>:null}
       <Pressable
         style={[styles.buyButton, (buying || selectedItems.length === 0) && styles.buyButtonDisabled]}
         onPress={() => void buy()}
@@ -293,136 +281,108 @@ export default function EventDetailScreen({ navigation, route }: EventDetailScre
   )
 }
 
-function TicketTypeRow({
-  ticketType,
-  qty,
-  onDecrement,
-  onIncrement,
-}: {
-  ticketType: TicketType
-  qty: number
-  onDecrement: () => void
-  onIncrement: () => void
-}) {
-  const price =
-    ticketType.priceMinor === 0 ? 'Free' : formatMinor(ticketType.priceMinor, ticketType.currency)
-  const remaining = ticketType.quota > 0 ? ticketType.quota - ticketType.soldCount - ticketType.reservedCount : null
-  return (
-    <View style={styles.ticketRow}>
+type SocialShortcutKind='event'|'organizer'|'spark'
+function SocialShortcut({title,detail,kind,accessibilityLabel,onPress}:{
+  title:string;detail:string;kind:SocialShortcutKind;accessibilityLabel:string;onPress:()=>void
+}){
+  return <Pressable accessibilityRole="button" accessibilityLabel={accessibilityLabel} onPress={onPress}
+    style={({pressed})=>[styles.socialTile,pressed&&{opacity:.8}]}>
+    <View style={styles.socialTileTop}><TileGlyph kind={kind} size={45}/><Text style={styles.socialTileArrow}>↗</Text></View>
+    <Text style={styles.socialTileTitle} numberOfLines={2}>{title}</Text>
+    <Text style={styles.socialTileDetail} numberOfLines={2}>{detail}</Text>
+  </Pressable>
+}
+
+function TicketTypeRow({ticketType,qty,onDecrement,onIncrement}:{ticketType:TicketType;qty:number;onDecrement:()=>void;onIncrement:()=>void}){
+  const price=ticketType.priceMinor===0?'Free':formatMinor(ticketType.priceMinor,ticketType.currency)
+  const remaining=ticketType.quota>0?ticketType.quota-ticketType.soldCount-ticketType.reservedCount:null
+  const limit=Math.max(1,ticketType.perBuyerLimit)
+  const cannotAdd=qty>=limit||(remaining!==null&&qty>=remaining)
+  return <View style={styles.ticketRow}>
+    <View style={styles.ticketMain}>
+      <TileGlyph kind="ticket" size={48}/>
       <View style={styles.ticketInfo}>
         <Text style={styles.ticketName}>{ticketType.name}</Text>
-        {ticketType.description ? (
-          <Text style={styles.ticketDescription} numberOfLines={2}>
-            {ticketType.description}
-          </Text>
-        ) : null}
+        {ticketType.description?<Text style={styles.ticketDescription} numberOfLines={3}>{ticketType.description}</Text>:null}
+      </View>
+      <View style={styles.ticketTypeBadge}><Text style={styles.ticketTypeBadgeText}>PASS</Text></View>
+    </View>
+    <View style={styles.ticketBottom}>
+      <View style={styles.ticketPriceBlock}>
         <Text style={styles.ticketPrice}>{price}</Text>
-        {remaining !== null && remaining <= 10 ? (
-          <Text style={styles.ticketLowStock}>Only {Math.max(0, remaining)} left</Text>
-        ) : null}
+        {remaining!==null&&remaining<=10?<Text style={styles.ticketLowStock}>Only {Math.max(0,remaining)} left</Text>:<Text style={styles.ticketUnit}>per pass</Text>}
       </View>
       <View style={styles.qtyControls}>
-        <Pressable style={styles.qtyButton} onPress={onDecrement} disabled={qty === 0} accessibilityRole="button" accessibilityLabel={`Remove one ${ticketType.name}`}>
-          <Text style={styles.qtyButtonText}>–</Text>
+        <Pressable style={[styles.qtyButton,qty===0&&styles.qtyDisabled]} onPress={onDecrement}
+          disabled={qty===0} accessibilityRole="button" accessibilityLabel={'Remove one '+ticketType.name}>
+          <Text style={styles.qtyButtonText}>−</Text>
         </Pressable>
-        <Text style={styles.qtyValue}>{qty}</Text>
-        <Pressable
-          style={styles.qtyButton}
-          onPress={onIncrement}
-          disabled={qty >= Math.max(1, ticketType.perBuyerLimit) || (remaining !== null && qty >= remaining)}
-          accessibilityRole="button"
-          accessibilityLabel={`Add one ${ticketType.name}`}
-        >
+        <Text style={styles.qtyValue} accessibilityLabel={'Selected quantity '+qty}>{qty}</Text>
+        <Pressable style={[styles.qtyButton,cannotAdd&&styles.qtyDisabled]} onPress={onIncrement}
+          disabled={cannotAdd} accessibilityRole="button" accessibilityLabel={'Add one '+ticketType.name}>
           <Text style={styles.qtyButtonText}>+</Text>
         </Pressable>
       </View>
     </View>
-  )
+  </View>
 }
 
-const styles = StyleSheet.create({
-  socialButtons: { marginTop: 12, gap: 10 },
-  screen: { backgroundColor: theme.colors.bg, flex: 1 },
-  content: { padding: theme.spacing.lg, paddingBottom: theme.spacing.xxl },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: theme.spacing.xl, backgroundColor: theme.colors.bg },
-  cover: { width: '100%', height: 246, borderRadius: 21, backgroundColor: theme.colors.border },
-  coverPlaceholder: { alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.primaryDark, padding: theme.spacing.lg },
-  coverPlaceholderText: { color: '#ffffff', fontSize: 18, fontWeight: '700', textAlign: 'center' },
-  title: { marginTop: 11, fontSize: 27, lineHeight:34, fontWeight: '900', color: theme.colors.text, letterSpacing:-.6 },
-  eventHeading:{marginTop:16},
-  eventBadges:{flexDirection:'row',flexWrap:'wrap',gap:8},
-  statusBadge:{borderRadius:9,paddingHorizontal:10,paddingVertical:6,backgroundColor:theme.web.tealSoft},
-  statusBadgeText:{fontSize:10,fontWeight:'900',color:theme.colors.primary},
-  modeBadge:{borderRadius:9,paddingHorizontal:10,paddingVertical:6,backgroundColor:'#ecf0f5'},
-  modeBadgeText:{fontSize:10,fontWeight:'900',color:theme.colors.textMuted},
-  eventOrganizer:{marginTop:8,fontSize:13,color:theme.colors.textMuted},
-  organizerName:{fontWeight:'900',color:theme.colors.primary},
-  infoCard:{marginTop:17,backgroundColor:theme.colors.card,borderRadius:18,paddingHorizontal:15,paddingVertical:9,borderWidth:1,borderColor:theme.colors.border},
-  infoRow:{flexDirection:'row',alignItems:'center',gap:12,paddingVertical:12},
-  infoIcon:{width:30,fontSize:23,fontWeight:'800',color:theme.colors.primary,textAlign:'center'},
-  infoBody:{flex:1,gap:3},infoLabel:{fontSize:10,color:theme.colors.textMuted,fontWeight:'900',letterSpacing:.8},
-  infoValue:{fontSize:13,color:theme.colors.text,fontWeight:'800'},infoSub:{fontSize:11,color:theme.colors.textMuted},
-  infoDivider:{height:1,backgroundColor:theme.colors.border},
-  meta: { marginTop: theme.spacing.xs, color: theme.colors.textMuted, fontSize: 13 },
-  summary: { marginTop: theme.spacing.lg, color: theme.colors.text, fontSize: 15, lineHeight:23,fontWeight: '800' },
-  description: { marginTop: theme.spacing.md, color: theme.colors.textMuted, fontSize: 13, lineHeight: 22 },
-  sectionTitle: { marginTop: theme.spacing.xxl, marginBottom: theme.spacing.md, fontSize: 19, fontWeight: '900', color: theme.colors.text },
-  ticketRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: theme.colors.card,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    borderRadius: theme.radius.md,
-    padding: theme.spacing.md,
-    marginBottom: theme.spacing.md,
-  },
-  ticketInfo: { flex: 1 },
-  ticketName: { color: theme.colors.text, fontWeight: '700', fontSize: 14 },
-  ticketDescription: { marginTop: theme.spacing.xs, color: theme.colors.textMuted, fontSize: 12 },
-  ticketPrice: { marginTop: theme.spacing.xs, color: theme.colors.primary, fontWeight: '700' },
-  ticketLowStock: { marginTop: theme.spacing.xs, color: theme.colors.accent, fontSize: 12, fontWeight: '600' },
-  qtyControls: { flexDirection: 'row', alignItems: 'center' },
-  qtyButton: {
-    width: 34,
-    height: 34,
-    borderRadius: theme.radius.sm,
-    backgroundColor: '#ecfdf5',
-    borderWidth: 1,
-    borderColor: theme.colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  qtyButtonText: { color: theme.colors.primaryDark, fontSize: 18, fontWeight: '700' },
-  qtyValue: { minWidth: 28, textAlign: 'center', fontSize: 15, fontWeight: '700', color: theme.colors.text },
-  buyButton: {
-    marginTop: theme.spacing.lg,
-    backgroundColor: theme.colors.primary,
-    borderRadius: theme.radius.md,
-    padding: theme.spacing.lg,
-    alignItems: 'center',
-  },
-  buyButtonDisabled: { opacity: 0.55 },
-  buyButtonText: { color: '#ffffff', fontWeight: '700', fontSize: 16 },
-  staffButton: {
-    marginTop: theme.spacing.lg,
-    borderWidth: 1,
-    borderColor: theme.colors.primary,
-    borderRadius: theme.radius.md,
-    padding: theme.spacing.md,
-    alignItems: 'center',
-  },
-  staffButtonText: { color: theme.colors.primaryDark, fontWeight: '600' },
-  footnote: { marginTop: theme.spacing.md, color: theme.colors.textMuted, fontSize: 11, textAlign: 'center' },
-  errorTitle: { color: theme.colors.text, fontSize: 17, fontWeight: '700', marginBottom: theme.spacing.sm },
-  muted: { color: theme.colors.textMuted, fontSize: 13 },
-  mutedCenter: { color: theme.colors.textMuted, fontSize: 13, textAlign: 'center' },
-  retryButton: {
-    marginTop: theme.spacing.xl,
-    backgroundColor: theme.colors.primary,
-    borderRadius: theme.radius.md,
-    paddingVertical: theme.spacing.md,
-    paddingHorizontal: theme.spacing.xl,
-  },
-  retryButtonText: { color: '#ffffff', fontWeight: '700' },
+const styles=StyleSheet.create({
+  screen:{backgroundColor:mobileDesign.canvas,flex:1},content:{paddingHorizontal:18,paddingTop:17,paddingBottom:44},
+  center:{flex:1,alignItems:'center',justifyContent:'center',padding:24,backgroundColor:mobileDesign.canvas},
+  coverShell:{height:284,borderRadius:27,backgroundColor:mobileDesign.forestDeep,overflow:'hidden',position:'relative',
+    shadowColor:mobileDesign.shadow,shadowOpacity:.13,shadowRadius:20,shadowOffset:{width:0,height:10},elevation:5},
+  cover:{width:'100%',height:'100%'},coverPlaceholder:{alignItems:'center',justifyContent:'center',padding:23,overflow:'hidden'},
+  coverPlaceholderText:{color:'#fff',fontSize:24,lineHeight:32,fontWeight:'900',textAlign:'center',letterSpacing:-.7},
+  coverRibbon:{position:'absolute',top:15,left:15,backgroundColor:'#102637bb',borderRadius:13,paddingVertical:9,paddingHorizontal:12,borderWidth:1,borderColor:'#ffffff66'},
+  coverRibbonText:{fontSize:10,color:'#fff',fontWeight:'900',letterSpacing:.9},
+  coverCaption:{position:'absolute',bottom:15,right:15,backgroundColor:'#102637b0',paddingVertical:9,paddingHorizontal:12,borderRadius:12},
+  coverCaptionText:{fontSize:9,color:'#e6f9eb',fontWeight:'900',letterSpacing:1},
+  eventHeading:{marginTop:22},eventBadges:{flexDirection:'row',flexWrap:'wrap',gap:8},
+  statusBadge:{backgroundColor:mobileDesign.mintSoft,borderRadius:12,paddingHorizontal:12,paddingVertical:8},
+  statusBadgeText:{fontSize:10,fontWeight:'900',color:mobileDesign.emerald,letterSpacing:.4},
+  modeBadge:{backgroundColor:'#eff2f8',borderRadius:12,paddingHorizontal:12,paddingVertical:8},
+  modeBadgeText:{fontSize:10,fontWeight:'900',color:mobileDesign.inkMuted,letterSpacing:.3},
+  title:{marginTop:13,fontSize:29,lineHeight:37,fontWeight:'900',color:mobileDesign.ink,letterSpacing:-1},
+  eventOrganizer:{marginTop:11,fontSize:13,color:mobileDesign.inkMuted,lineHeight:19},organizerName:{fontWeight:'900',color:mobileDesign.emerald},
+  infoCard:{marginTop:22,backgroundColor:'#fff',borderRadius:23,paddingHorizontal:18,paddingVertical:9,borderWidth:1,borderColor:mobileDesign.border,
+    shadowColor:mobileDesign.shadow,shadowOpacity:.04,shadowRadius:13,shadowOffset:{width:0,height:7},elevation:2},
+  infoRow:{flexDirection:'row',alignItems:'center',gap:12,paddingVertical:16},
+  infoIcon:{width:37,fontSize:23,fontWeight:'900',color:mobileDesign.emerald,textAlign:'center'},
+  infoBody:{flex:1,gap:4},infoLabel:{fontSize:10,color:mobileDesign.inkMuted,fontWeight:'900',letterSpacing:1},
+  infoValue:{fontSize:14,color:mobileDesign.ink,fontWeight:'900',lineHeight:20},infoSub:{fontSize:11,color:mobileDesign.inkMuted,lineHeight:18},
+  infoDivider:{height:1,backgroundColor:mobileDesign.border},
+  meta:{marginTop:4,color:mobileDesign.inkMuted,fontSize:13},
+  summary:{marginTop:23,color:mobileDesign.ink,fontSize:16,lineHeight:24,fontWeight:'800'},
+  description:{marginTop:12,color:mobileDesign.inkMuted,fontSize:13,lineHeight:23},
+  engageSection:{marginTop:32},socialButtons:{flexDirection:'row',flexWrap:'wrap',justifyContent:'space-between',gap:12},
+  socialTile:{width:'47.5%',padding:15,minHeight:158,backgroundColor:'#fff',borderWidth:1,borderColor:mobileDesign.border,borderRadius:23,
+    shadowColor:mobileDesign.shadow,shadowOpacity:.05,shadowRadius:12,shadowOffset:{width:0,height:6},elevation:2},
+  socialTileTop:{flexDirection:'row',alignItems:'flex-start',justifyContent:'space-between',marginBottom:17},socialTileArrow:{fontSize:20,color:mobileDesign.emerald,fontWeight:'900'},
+  socialTileTitle:{fontSize:15,lineHeight:20,fontWeight:'900',color:mobileDesign.ink},
+  socialTileDetail:{fontSize:11,lineHeight:17,color:mobileDesign.inkMuted,marginTop:6},
+  ticketsHeading:{marginTop:35},sectionTitle:{fontSize:21,fontWeight:'900',color:mobileDesign.ink},
+  ticketRow:{backgroundColor:'#fff',borderWidth:1,borderColor:mobileDesign.border,borderRadius:23,padding:17,marginBottom:13,
+    shadowColor:mobileDesign.shadow,shadowOpacity:.045,shadowRadius:12,shadowOffset:{width:0,height:7},elevation:1},
+  ticketMain:{flexDirection:'row',alignItems:'flex-start',gap:12},ticketInfo:{flex:1},
+  ticketName:{fontSize:15,fontWeight:'900',color:mobileDesign.ink,lineHeight:21},ticketDescription:{fontSize:12,lineHeight:19,color:mobileDesign.inkMuted,marginTop:5},
+  ticketTypeBadge:{backgroundColor:mobileDesign.mintSoft,paddingHorizontal:9,paddingVertical:6,borderRadius:10},
+  ticketTypeBadgeText:{fontSize:9,color:mobileDesign.emerald,fontWeight:'900',letterSpacing:.4},
+  ticketBottom:{marginTop:18,paddingTop:14,borderTopWidth:1,borderTopColor:mobileDesign.border,flexDirection:'row',alignItems:'center',justifyContent:'space-between',gap:12},
+  ticketPriceBlock:{flex:1},ticketPrice:{fontSize:20,fontWeight:'900',color:mobileDesign.emerald},ticketLowStock:{fontSize:11,fontWeight:'800',color:'#b25a24',marginTop:3},
+  ticketUnit:{fontSize:11,color:mobileDesign.inkMuted,marginTop:3},
+  qtyControls:{flexDirection:'row',alignItems:'center',gap:5},
+  qtyButton:{width:44,height:44,borderRadius:14,backgroundColor:mobileDesign.mintSoft,borderWidth:1,borderColor:'#c6e6da',alignItems:'center',justifyContent:'center'},
+  qtyDisabled:{opacity:.45},qtyButtonText:{fontSize:23,color:mobileDesign.emerald,fontWeight:'800'},
+  qtyValue:{minWidth:31,fontSize:16,fontWeight:'900',color:mobileDesign.ink,textAlign:'center'},
+  totalSummary:{backgroundColor:'#fff',borderRadius:17,padding:15,flexDirection:'row',justifyContent:'space-between',alignItems:'center',borderWidth:1,borderColor:mobileDesign.border,marginTop:9},
+  totalSummaryText:{fontSize:12,color:mobileDesign.inkMuted,fontWeight:'700'},totalSummaryAmount:{fontSize:16,fontWeight:'900',color:mobileDesign.ink},
+  buyButton:{backgroundColor:mobileDesign.emerald,borderRadius:17,minHeight:55,paddingHorizontal:15,alignItems:'center',justifyContent:'center',marginTop:17},
+  buyButtonDisabled:{opacity:.52},buyButtonText:{fontWeight:'900',fontSize:14,color:'#fff'},
+  staffButton:{marginTop:20,borderWidth:1,borderColor:'#c4e2d5',borderRadius:15,padding:14,alignItems:'center',backgroundColor:mobileDesign.mintSoft},
+  staffButtonText:{fontWeight:'900',fontSize:12,color:mobileDesign.emerald},
+  footnote:{marginTop:13,fontSize:11,color:mobileDesign.inkMuted,lineHeight:18,textAlign:'center',marginHorizontal:6},
+  errorTitle:{fontSize:19,fontWeight:'900',color:mobileDesign.ink,marginBottom:11},muted:{fontSize:13,color:mobileDesign.inkMuted,lineHeight:21},
+  mutedCenter:{fontSize:13,color:mobileDesign.inkMuted,textAlign:'center',lineHeight:21},
+  retryButton:{marginTop:20,backgroundColor:mobileDesign.emerald,borderRadius:15,paddingHorizontal:24,minHeight:48,justifyContent:'center'},retryButtonText:{color:'#fff',fontWeight:'900'},
 })

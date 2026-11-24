@@ -38,3 +38,16 @@ The implementation is **source/UI modernization, not device-certified visual par
 5. Do not claim real video reels, completed native shopping checkout, identity verification uploads or automatic Android installation merely because the screen is attractive.
 
 CI must pass TypeScript, native unit tests, web integration and the signed QA build. The final visual signoff requires actual screenshots or a device session; a successful compiler is **not** a visual QA pass.
+
+## Second native visual increment — social, Live, and event details
+
+The native-only visual system is extended to four more high-traffic destinations:
+
+- **Following:** editorial gradient hero and real followed-organizer count, personalized activity feed with richer organization identity and image-led cards, native guest onboarding, honest empty state. The feed is cleared on logout/account transitions, and stale in-flight requests do not repopulate private activity under a different session.
+- **Event previews (Reels):** immersive editorial artwork cards, branded organizer identity, clear native Love/Share/Event buttons, real event destinations and event-next-occurrence CTA. The design still labels these as **event previews**. It does not claim playable videos or synthesize missing creators/media from sample data. Poster URL normalization accepts the API's existing relative-media pattern.
+- **Live:** full native hero, genuine live-broadcast count, image-led cards, reliable relative artwork paths, retry/refresh and honest empty states. Only broadcasts the server reports `LIVE` are shown.
+- **Event details:** image-led cover, stronger date/venue/community hierarchy, clean 2×2 native community/meeting/network/voting shortcuts, better checkout summary, and 44px ticket quantity controls. Order creation, inventory limits, free RSVP and Hubtel hosted checkout remain **server-authorized and functionally unchanged**.
+
+Native social cards never silently switch to web-based content. Exception: the user-initiated system share sheet can share a public website event URL, and secure payment authorization can open the hosted provider as before.
+
+**Acceptance limits:** Source checks, TypeScript and CI bundle success do not certify these screens on actual devices. Review small Android phones, long event names, large accessibility font scaling, absent artwork, network retries, safe area and 2×2 shortcut wraps; then compare iOS separately. The verified QA APK is the correct deliverable for on-device visual feedback. The Reels API must gain actual playable media and rights/moderation checks before presenting the screen as a full TikTok-style video player.
