@@ -30,6 +30,8 @@ import LiveHubScreen from './src/screens/LiveHubScreen'
 import FollowingScreen from './src/screens/FollowingScreen'
 import ReelsScreen from './src/screens/ReelsScreen'
 import AccountScreen from './src/screens/AccountScreen'
+import OrganizerStudioScreen from './src/screens/OrganizerStudioScreen'
+import EventEditorScreen from './src/screens/EventEditorScreen'
 import EventDetailScreen from './src/screens/EventDetailScreen'
 import MyTicketsScreen from './src/screens/MyTicketsScreen'
 import CheckinScreen from './src/screens/CheckinScreen'
@@ -119,6 +121,8 @@ function AppRoutes() {
       <Stack.Screen name="Following" component={FollowingScreen} options={{ title: 'Following' }} />
       <Stack.Screen name="Reels" component={ReelsScreen} options={{ title: 'Reels' }} />
       <Stack.Screen name="Account" component={AccountScreen} options={{ title: 'Your space' }} />
+      <Stack.Screen name="OrganizerStudio" component={OrganizerStudioScreen} options={{ title: 'Organizer Studio' }} />
+      <Stack.Screen name="EventEditor" component={EventEditorScreen} options={{ title: 'Event editor' }} />
       <Stack.Screen name="EventDetail" component={EventDetailScreen} options={{ title: 'Event' }} />
       <Stack.Screen name="MyTickets" component={MyTicketsScreen} options={{ title: 'My tickets' }} />
       <Stack.Screen name="Checkin" component={CheckinScreen} options={{ title: 'Check-in scanner' }} />

@@ -334,6 +334,22 @@ export interface EventDetailResponse {
   canManage: boolean
 }
 
+export interface OrganizerEventCard extends DiscoveryEventCard {
+  status: string
+  visibility: string
+  publishAt?: string | null
+  timezone: string
+  country: string
+  org: OrgRef & { id: string }
+}
+export interface OrganizerEventPage {
+  items: OrganizerEventCard[]
+  total: number
+  page: number
+  pageSize: number
+  hasMore: boolean
+}
+
 export interface CreateOrderPayload {
   eventId: string
   items: { ticketTypeId: string; qty: number }[]
@@ -693,6 +709,18 @@ export const api = {
     /** `idOrSlug` — the server accepts the event slug or the internal id. */
     get: (idOrSlug: string) =>
       request<EventDetailResponse>('GET', `/events/${encodeURIComponent(idOrSlug)}`),
+  },
+  organizer: {
+    memberships: () => request<{ items: Membership[] }>('GET','/orgs'),
+    events: (orgId: string, page=1) => request<OrganizerEventPage>(
+      'GET', '/events?mine=1&orgId='+encodeURIComponent(orgId)+'&page='+page+'&pageSize=20',
+    ),
+    createDraft: (payload: unknown) => request<{ event: {id:string;slug:string;title:string;status:string} }>(
+      'POST','/events',payload,
+    ),
+    editDetails: (id:string,payload:unknown) => request<{event: {id:string;title:string}}>(
+      'PATCH','/events/'+encodeURIComponent(id),payload,
+    ),
   },
   marketplace: {
     stores: (q = '') => request<{ stores: NativeMarketplaceStore[]; checkoutEnabled: false }>(

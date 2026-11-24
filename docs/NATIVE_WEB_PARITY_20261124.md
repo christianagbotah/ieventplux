@@ -59,3 +59,15 @@ There is **no synthetic content and no mobile-only bypass**: only arrays provide
 Native Ghana-cedi prices now display `₵` with thousands grouping and two decimal places. Other currencies keep their ISO code. No database/payment changes were made.
 
 Remaining tests before claiming Android/iOS parity: physical device page inspection (large text, horizontal gallery swipe, longer biographies, PDF access, ticket quantity, paid checkout and camera/meeting flows), plus full native organizer editing and real merchandise order handling.
+
+## Fourth increment: native Organizer Studio and basic event drafts
+
+- The Android/iOS Account hub now opens a genuine native **Organizer Studio** instead of sending all event management to a web browser. The studio lists the user's server-authorized organization memberships, scopes `/events?mine=1&orgId=...` to the selected organization, and displays draft and published events with page-based loading and refresh.
+- Owners, admins and event managers can create **unpublished DRAFT events** in the native editor using the existing `POST /events` endpoint. Draft metadata includes title, summary, description, category, format, country, city, start/end time and visibility. Validation rejects invalid calendar dates and end times preceding start times. Times are clearly labelled as the device's timezone and converted to UTC instants before submission.
+- Those same roles can edit basic event metadata via the existing permission-checked `PATCH /events/{id}` endpoint. The native editor intentionally omits publication status, existing event visibility, date changes, payout data and ticket workflows from the PATCH payload. The server remains authoritative about accepted membership, subscription quotas, and editing permission.
+- Users without an organization can continue via the existing secure website organizer registration. Advanced lineup, schedule, ticketing, publication, verification and payout tools remain in the web workspace until native workflows receive end-to-end QA. The Account portal handoff now uses the SPA's correct `/#/organizer` fragment URL.
+- Add physical Android and iOS QA for safe-area scroll, keyboard dates, attendee locale differences, edit permissions, membership changes, failed network writes, draft revisit and multi-organization switching. Successful source tests do **not** imply this device QA is complete.
+
+## QA update index fallback
+
+Until the live web standalone artifact is deployed from the newest compatible code, the native Android QA notice now checks the official GitHub public prerelease index **alongside** the website's release endpoint. Both sources must pass strict original-repository, release-tag, asset filename, APK-size and published-date checks. If GitHub reports a newer valid prerelease than the older deployed endpoint, the device can offer it. Checks are throttled per foreground session and fail silently offline; all downloads remain user-initiated and require Android installation approval. This is a resilience measure, not a substitute for rolling out the latest tested web artifact and verifying certificate continuity on real devices.

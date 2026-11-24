@@ -7,15 +7,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AppState, Linking, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native'
 import Constants, { ExecutionEnvironment } from 'expo-constants'
-import { shouldOfferAndroidUpdate, type QaAndroidRelease, type QaAndroidReleaseResponse } from '../lib/android-updates'
+import { latestQaAndroidFromGithub, newestVerifiedQaAndroidRelease, shouldOfferAndroidUpdate, type QaAndroidRelease, type QaAndroidReleaseResponse } from '../lib/android-updates'
 import { theme } from '../theme'
 
 const ENDPOINT = 'https://ieventplux.lightworldtech.com/api/v1/mobile/releases/android'
+const RELEASE_INDEX = 'https://api.github.com/repos/christianagbotah/ieventplux/releases?per_page=20'
 
 export function AndroidUpdateNotice() {
   const [latest, setLatest] = useState<QaAndroidRelease | null>(null)
   const [opening, setOpening] = useState(false)
   const dismissedRevision = useRef<string | null>(null)
+  const lastCheckAt = useRef(0)
+  const checking = useRef(false)
 
   const check = useCallback(async () => {
     if (Platform.OS !== 'android' || Constants.executionEnvironment === ExecutionEnvironment.StoreClient) return
@@ -23,25 +26,39 @@ export function AndroidUpdateNotice() {
       ? Constants.expoConfig.extra.androidBuildRevision : null
     const installedBuiltAt = typeof Constants.expoConfig?.extra?.androidBuiltAt === 'string'
       ? Constants.expoConfig.extra.androidBuiltAt : null
+    // Mobile QA users may open the app repeatedly or move in/out of focus;
+    // don't spam GitHub's unauthenticated API or overlap release checks.
+    if (checking.current || Date.now()-lastCheckAt.current < 120_000) return
+    checking.current=true
+    lastCheckAt.current=Date.now()
     const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 6500)
+    const timeout = setTimeout(() => controller.abort(), 7000)
     try {
-      const response = await fetch(ENDPOINT, {
-        headers: { Accept: 'application/json' },
-        signal: controller.signal,
-      })
-      if (!response.ok) return
-      const body = await response.json() as QaAndroidReleaseResponse
-      if (body.channel !== 'qa' || body.platform !== 'android') return
-      if (shouldOfferAndroidUpdate({release:body.latest,installedRevision,installedBuiltAt}) &&
-        body.latest && dismissedRevision.current !== body.latest.revision) {
-        setLatest(previous => previous?.revision === body.latest?.revision ? previous : body.latest)
+      // The deployed web API can lag behind the published, signed GitHub QA
+      // prerelease. Query both sources and accept only vetted official assets.
+      const [web,github] = await Promise.allSettled([
+        fetch(ENDPOINT,{headers:{Accept:'application/json'},signal:controller.signal}),
+        fetch(RELEASE_INDEX,{headers:{Accept:'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'},signal:controller.signal}),
+      ])
+      let webRelease:unknown=null
+      let githubRelease:unknown=null
+      if(web.status==='fulfilled' && web.value.ok){
+        const body=await web.value.json() as QaAndroidReleaseResponse
+        if(body.channel==='qa'&&body.platform==='android')webRelease=body.latest
+      }
+      if(github.status==='fulfilled' && github.value.ok){
+        githubRelease=latestQaAndroidFromGithub(await github.value.json())
+      }
+      const chosen=newestVerifiedQaAndroidRelease(webRelease,githubRelease)
+      if (shouldOfferAndroidUpdate({release:chosen,installedRevision,installedBuiltAt}) &&
+        chosen && dismissedRevision.current !== chosen.revision) {
+        setLatest(previous=>previous?.revision===chosen.revision?previous:chosen)
       } else {
         setLatest(null)
       }
     } catch {
       // Offline devices must remain usable; failed update checks are silent.
-    } finally { clearTimeout(timeout) }
+    } finally { clearTimeout(timeout);checking.current=false }
   }, [])
 
   useEffect(() => {
