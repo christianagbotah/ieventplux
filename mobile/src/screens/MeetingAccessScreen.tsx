@@ -9,12 +9,13 @@ import { useCallback, useEffect, useState } from 'react'
 import { CameraView, useCameraPermissions, useMicrophonePermissions } from 'expo-camera'
 import Constants, { ExecutionEnvironment } from 'expo-constants'
 import {
-  ActivityIndicator, Alert, Linking, Platform, Pressable,
+  ActivityIndicator, Linking, Platform, Pressable,
   ScrollView, StyleSheet, Text, View,
 } from 'react-native'
 import { api, ApiClientError, absoluteUrl } from '../api/client'
 import type { MeetingAccessScreenProps } from '../navigation'
 import { theme } from '../theme'
+import {PremiumBackdrop,TileGlyph,LabelPill,mobileDesign} from '../ui/PremiumUI'
 import { nativePermissionStatus, secureMeetingUrl } from '../lib/meeting-device-access'
 import { mayEnterNativeRoom, validNativeMeetingCredentials } from '../lib/native-meeting-policy'
 
@@ -71,7 +72,7 @@ export default function MeetingAccessScreen({ route, navigation }: MeetingAccess
   const openSettings = async () => {
     try { await Linking.openSettings() }
     catch {
-      Alert.alert('Device settings', 'Open your phone settings, find iEventPlux, and allow camera and microphone access.')
+      setNotice('Open your phone settings, find iEventPlux, and allow camera and microphone access.')
     }
   }
 
@@ -135,23 +136,25 @@ export default function MeetingAccessScreen({ route, navigation }: MeetingAccess
       await Linking.openURL(url)
       setNotice('Opened the meeting in your system browser. You may need to sign in again there, then allow camera and microphone access.')
     } catch {
-      Alert.alert('Open meeting in browser', 'Could not open the secure meeting link. Use Chrome or Safari to visit the iEventPlux event page.')
+      setNotice('Could not open the secure meeting link. Use Chrome or Safari to visit the iEventPlux event page.')
     } finally { setBusy(null) }
   }
 
   return <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
     <View style={styles.heading}>
-      <Text style={styles.eyebrow}>NATIVE DEVICE CHECK</Text>
-      <Text style={styles.title}>Ready for your meeting?</Text>
-      <Text style={styles.description}>Check your phone's camera and microphone permissions before you enter the live room. Nothing is recorded or uploaded by these checks.</Text>
+      <PremiumBackdrop mode="midnight"/>
+      <View style={styles.heroTop}><Text style={styles.eyebrow}>✦  iEVENTPLUX MEETINGS</Text><Text style={styles.heroSymbol}>◎</Text></View>
+      <Text style={styles.title}>Your room. Your people. Your moment.</Text>
+      <Text style={styles.description}>Join a secure event meeting directly in the app. Choose your camera and microphone preferences before entering.</Text>
+      <View style={styles.heroFoot}><Text style={styles.heroFootText}>NATIVE LIVEKIT VIDEO</Text><Text style={styles.heroFootText}>SECURE EVENT ACCESS</Text></View>
     </View>
+    {notice?<Text accessibilityRole="alert" style={styles.notice}>{notice}</Text>:null}
 
     <View style={styles.card}>
-      <Text style={styles.cardTitle}>Device access</Text>
-      <Text style={styles.cardDescription}>Permissions are requested directly from Android or iOS when you tap each button.</Text>
+      <View style={styles.cardHead}><TileGlyph kind="scanner" size={46}/><View style={styles.cardHeadText}><Text style={styles.cardTitle}>Check your devices</Text><Text style={styles.cardDescription}>OS permissions are requested only when you choose to enable them.</Text></View></View>
       <View style={styles.permissionRow}>
         <View style={styles.permissionInfo}>
-          <Text style={styles.permissionTitle}>Camera</Text>
+          <Text style={styles.permissionTitle}>Camera  ▣</Text>
           <Text style={styles.permissionStatus}>{nativePermissionStatus(camera?.granted, camera?.canAskAgain)}</Text>
         </View>
         <Pressable accessibilityRole="button" accessibilityLabel="Request native camera permission"
@@ -161,7 +164,7 @@ export default function MeetingAccessScreen({ route, navigation }: MeetingAccess
       </View>
       <View style={styles.permissionRow}>
         <View style={styles.permissionInfo}>
-          <Text style={styles.permissionTitle}>Microphone</Text>
+          <Text style={styles.permissionTitle}>Microphone  ◉</Text>
           <Text style={styles.permissionStatus}>{nativePermissionStatus(microphone?.granted, microphone?.canAskAgain)}</Text>
         </View>
         <Pressable accessibilityRole="button" accessibilityLabel="Request native microphone permission"
@@ -182,11 +185,10 @@ export default function MeetingAccessScreen({ route, navigation }: MeetingAccess
         <CameraView style={styles.cameraView} facing="front" />
         <Text style={styles.previewNote}>Local preview only · no recording or upload</Text>
       </View>}
-      {notice ? <Text accessibilityRole="alert" style={styles.notice}>{notice}</Text> : null}
     </View>
 
     <View style={styles.card}>
-      <Text style={styles.cardTitle}>Group meeting</Text>
+      <View style={styles.cardHead}><TileGlyph kind="event" size={46}/><View style={styles.cardHeadText}><Text style={styles.cardTitle}>Enter your group meeting</Text><Text style={styles.cardDescription}>Meet attendees and organizers securely.</Text></View></View>
       {room.status === 'loading' ? <ActivityIndicator style={styles.indicator} color={theme.colors.primary} /> :
         room.status === 'error' ? <>
           <Text style={styles.cardDescription}>{room.reason}</Text>
@@ -195,11 +197,11 @@ export default function MeetingAccessScreen({ route, navigation }: MeetingAccess
         : !room.data.meeting ? <Text style={styles.cardDescription}>The organizer has not created a group meeting for this event yet.</Text>
         : <>
           <Text style={styles.meetingTitle}>{room.data.meeting.title}</Text>
-          <Text style={styles.cardDescription}>Meeting status: {room.data.meeting.status}</Text>
+          <LabelPill label={room.data.meeting.status==='LIVE'?'● LIVE NOW':room.data.meeting.status.replace(/_/g,' ')} tone={room.data.meeting.status==='LIVE'?'mint':'cream'}/>
           {room.data.meeting.mediaEngine === 'sfu' &&
             Constants.executionEnvironment !== ExecutionEnvironment.StoreClient && <>
             <View style={styles.nativeOptions}>
-              <Text style={styles.meetingTitle}>Native call preferences</Text>
+              <Text style={styles.meetingTitle}>Choose how you join</Text>
               <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: joinMic }}
                 style={styles.optionRow} onPress={() => setJoinMic((value) => !value)}>
                 <Text style={styles.optionText}>{joinMic ? '☑' : '☐'}  Join with microphone</Text>
@@ -208,21 +210,21 @@ export default function MeetingAccessScreen({ route, navigation }: MeetingAccess
                 style={styles.optionRow} onPress={() => setJoinCamera((value) => !value)}>
                 <Text style={styles.optionText}>{joinCamera ? '☑' : '☐'}  Join with camera</Text>
               </Pressable>
-              <Text style={styles.cardDescription}>Turn both off to join as a listener. All participants share the existing LiveKit event room.</Text>
+              <Text style={styles.cardDescription}>Keep both off for listen-only. All attendees join the same LiveKit event room without an artificial attendee limit.</Text>
             </View>
             <Pressable style={[styles.primaryButton, (room.data.meeting.status !== 'LIVE' || busy !== null) && styles.disabled]}
               disabled={room.data.meeting.status !== 'LIVE' || busy !== null}
               accessibilityRole="button" accessibilityLabel="Join group video meeting in iEventPlux"
               onPress={() => void joinNativeMeeting()}>
               {busy === 'joining' ? <ActivityIndicator color="#ffffff" /> :
-                <Text style={styles.primaryText}>Join in iEventPlux</Text>}
+                <Text style={styles.primaryText}>Join meeting in iEventPlux  →</Text>}
             </Pressable>
           </>}
           <Pressable style={[styles.secondaryButton, (room.data.meeting.status !== 'LIVE' || busy !== null) && styles.disabled]}
             disabled={room.data.meeting.status !== 'LIVE' || busy !== null}
             accessibilityRole="button" accessibilityLabel="Open live meeting in system browser"
             onPress={() => void openWebMeeting()}>
-            {busy === 'opening' ? <ActivityIndicator color={theme.colors.primary} /> : <Text style={styles.secondaryText}>Open in system browser instead</Text>}
+            {busy === 'opening' ? <ActivityIndicator color={theme.colors.primary} /> : <Text style={styles.secondaryText}>Use browser fallback instead</Text>}
           </Pressable>
         </>}
       <Text style={styles.handoff}>
@@ -236,37 +238,35 @@ export default function MeetingAccessScreen({ route, navigation }: MeetingAccess
   </ScrollView>
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: theme.colors.bg },
-  content: { padding: theme.spacing.lg, paddingBottom: 48, gap: 16 },
-  heading: { paddingVertical: 8 },
-  eyebrow: { color: theme.colors.primary, fontSize: 11, fontWeight: '800', letterSpacing: 2, marginBottom: 10 },
-  title: { color: theme.colors.text, fontSize: 26, fontWeight: '800', marginBottom: 8 },
-  description: { color: theme.colors.textMuted, fontSize: 14, lineHeight: 22 },
-  card: { backgroundColor: theme.colors.card, borderRadius: 20, borderWidth: 1, borderColor: theme.colors.border, padding: 17, gap: 13 },
-  cardTitle: { color: theme.colors.text, fontSize: 17, fontWeight: '800' },
-  cardDescription: { color: theme.colors.textMuted, fontSize: 13, lineHeight: 21 },
-  permissionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderColor: theme.colors.border, paddingTop: 12, gap: 10 },
-  permissionInfo: { flex: 1 },
-  permissionTitle: { color: theme.colors.text, fontSize: 14, fontWeight: '700' },
-  permissionStatus: { color: theme.colors.textMuted, fontSize: 12, marginTop: 3 },
-  secondaryButton: { borderColor: theme.colors.primary, borderWidth: 1, borderRadius: 12, minHeight: 44, minWidth: 100, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10 },
-  secondaryText: { color: theme.colors.primaryDark, fontWeight: '700', fontSize: 12 },
-  previewToggle: { alignSelf: 'flex-start', marginTop: 3 },
-  previewWrap: { overflow: 'hidden', borderRadius: 14, backgroundColor: '#081b18' },
-  cameraView: { width: '100%', aspectRatio: 4 / 3 },
-  previewNote: { color: '#e1f5ec', fontSize: 11, padding: 10, textAlign: 'center' },
-  settingsButton: { padding: 12, borderRadius: 12, backgroundColor: '#fff7ed' },
-  settingsText: { color: '#9a3412', fontSize: 13, fontWeight: '700' },
-  notice: { fontSize: 12, lineHeight: 19, padding: 12, borderRadius: 10, color: theme.colors.primaryDark, backgroundColor: '#ecfdf5' },
-  meetingTitle: { color: theme.colors.text, fontSize: 15, fontWeight: '700' },
-  primaryButton: { marginTop: 4, backgroundColor: theme.colors.primary, minHeight: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  primaryText: { color: '#fff', fontSize: 15, fontWeight: '800' },
-  nativeOptions: { marginTop:12, borderTopWidth:1, borderColor:theme.colors.border, paddingTop:10, gap:6 },
-  optionRow: { paddingVertical:8, minHeight:44, justifyContent:'center' },
-  optionText: { fontSize:14, fontWeight:'600', color:theme.colors.text },
-  disabled: { opacity: 0.5 },
-  handoff: { paddingTop: 10, borderTopWidth: 1, borderColor: theme.colors.border, color: theme.colors.textMuted, fontSize: 12, lineHeight: 19 },
-  indicator: { marginVertical: 15 },
-  footer: { color: theme.colors.textMuted, fontSize: 12, lineHeight: 19, textAlign: 'center' },
+const styles=StyleSheet.create({
+  screen:{flex:1,backgroundColor:mobileDesign.canvas},content:{padding:18,paddingBottom:49,gap:17},
+  heading:{backgroundColor:mobileDesign.forestDeep,borderRadius:29,padding:24,overflow:'hidden',shadowColor:mobileDesign.forestDeep,shadowOpacity:.2,shadowRadius:18,shadowOffset:{width:0,height:10},elevation:5},
+  heroTop:{flexDirection:'row',alignItems:'center',justifyContent:'space-between'},heroSymbol:{fontSize:25,color:mobileDesign.gold},
+  eyebrow:{color:'#c7f6e6',fontSize:10,fontWeight:'900',letterSpacing:1.2},
+  title:{color:'#fff',fontSize:28,lineHeight:36,fontWeight:'900',letterSpacing:-.9,marginTop:21},
+  description:{color:'#def2eb',fontSize:13,lineHeight:22,marginTop:12},
+  heroFoot:{marginTop:21,paddingTop:15,borderTopWidth:1,borderTopColor:'#ffffff40',flexDirection:'row',flexWrap:'wrap',gap:12},
+  heroFootText:{fontSize:9,fontWeight:'900',color:'#d4f4e6',letterSpacing:.65},
+  card:{backgroundColor:'#fff',borderRadius:23,borderWidth:1,borderColor:mobileDesign.border,padding:17,gap:15,
+    shadowColor:mobileDesign.shadow,shadowOpacity:.05,shadowRadius:12,shadowOffset:{width:0,height:7},elevation:2},
+  cardHead:{flexDirection:'row',alignItems:'center',gap:12},cardHeadText:{flex:1,gap:5},
+  cardTitle:{color:mobileDesign.ink,fontSize:17,fontWeight:'900'},
+  cardDescription:{color:mobileDesign.inkMuted,fontSize:12,lineHeight:19},
+  permissionRow:{flexDirection:'row',justifyContent:'space-between',alignItems:'center',borderTopWidth:1,borderColor:mobileDesign.border,paddingTop:15,gap:10},
+  permissionInfo:{flex:1},permissionTitle:{color:mobileDesign.ink,fontSize:14,fontWeight:'900'},
+  permissionStatus:{color:mobileDesign.inkMuted,fontSize:11,marginTop:5,lineHeight:17},
+  secondaryButton:{borderColor:'#c2e6d6',backgroundColor:mobileDesign.mintSoft,borderWidth:1,borderRadius:15,minHeight:48,minWidth:106,alignItems:'center',justifyContent:'center',paddingHorizontal:13},
+  secondaryText:{color:mobileDesign.emerald,fontWeight:'900',fontSize:12,textAlign:'center'},
+  previewToggle:{alignSelf:'flex-start'},previewWrap:{overflow:'hidden',borderRadius:17,backgroundColor:mobileDesign.forestDeep},
+  cameraView:{width:'100%',aspectRatio:4/3},previewNote:{color:'#e5f7ed',fontSize:11,padding:12,textAlign:'center'},
+  settingsButton:{padding:14,borderRadius:15,backgroundColor:'#fff4e9'},settingsText:{color:'#8b5318',fontSize:12,fontWeight:'900'},
+  notice:{fontSize:12,lineHeight:20,padding:14,borderRadius:16,color:mobileDesign.forest,backgroundColor:mobileDesign.mintSoft},
+  meetingTitle:{color:mobileDesign.ink,fontSize:15,fontWeight:'900',lineHeight:22},
+  primaryButton:{backgroundColor:mobileDesign.emerald,minHeight:54,borderRadius:17,alignItems:'center',justifyContent:'center',paddingHorizontal:14},
+  primaryText:{color:'#fff',fontSize:13,fontWeight:'900',textAlign:'center'},
+  nativeOptions:{marginTop:8,borderTopWidth:1,borderColor:mobileDesign.border,paddingTop:15,gap:9},
+  optionRow:{minHeight:50,justifyContent:'center',backgroundColor:'#f6f9f8',borderRadius:14,paddingHorizontal:13,borderWidth:1,borderColor:mobileDesign.border},
+  optionText:{fontSize:13,fontWeight:'800',color:mobileDesign.ink},disabled:{opacity:.47},
+  handoff:{paddingTop:13,borderTopWidth:1,borderColor:mobileDesign.border,color:mobileDesign.inkMuted,fontSize:11,lineHeight:18},
+  indicator:{marginVertical:15},footer:{color:mobileDesign.inkMuted,fontSize:11,lineHeight:18,textAlign:'center'},
 })

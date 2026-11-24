@@ -236,3 +236,7 @@ Following, Reels event previews, Live Hub and event detail/ticket-selection scre
 ### Premium community, networking and awards
 
 Community, consent-based private event networking, and award voting now use the shared native premium UI. Moderation and one-free-vote ballots continue through the original server permissions and use a custom native ActionDialog. Private profile and discussion requests are guarded against stale asynchronous responses; sensitive networking rosters are purged when consent is revoked. The UI does not fake public vote counts, identities or payment acceptance.
+
+### Native meeting controls and permissions
+
+The meeting prep screen and LiveKit native room use the premium visual language. In-app camera/microphone toggles request the phone OS permission when enabling a device after listen-only joining. Native LiveKit is the primary eligible route; secure browser joining is explicitly a fallback. Participant tiles are paginated (8 at a time), not subject to an artificial meeting attendee count. Phone screen sharing is not implemented. Real-device two-party call and previously denied permission tests remain mandatory.

@@ -5,8 +5,9 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, View,
+  ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View,
 } from 'react-native'
+import {useCameraPermissions,useMicrophonePermissions} from 'expo-camera'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import {
   AudioSession, LiveKitRoom, VideoTrack, isTrackReference, useLocalParticipant,
@@ -17,6 +18,7 @@ import { Track } from 'livekit-client'
 import { api, ApiClientError } from '../api/client'
 import type { NativeMeetingScreenProps } from '../navigation'
 import { theme } from '../theme'
+import {PremiumBackdrop,mobileDesign} from '../ui/PremiumUI'
 
 registerGlobals()
 
@@ -28,6 +30,8 @@ function RoomControls({ onLeave }: { onLeave: () => void }) {
   const { isCameraEnabled, isMicrophoneEnabled } = useLocalParticipant()
   const [working, setWorking] = useState<DeviceKind | null>(null)
   const [error, setError] = useState('')
+  const [cameraAccess,requestCamera] = useCameraPermissions()
+  const [micAccess,requestMicrophone] = useMicrophonePermissions()
 
   const toggle = async (kind: DeviceKind) => {
     if (working) return
@@ -35,12 +39,22 @@ function RoomControls({ onLeave }: { onLeave: () => void }) {
     setError('')
     try {
       if (kind === 'microphone') {
-        await room.localParticipant.setMicrophoneEnabled(!room.localParticipant.isMicrophoneEnabled)
+        const turnOn=!room.localParticipant.isMicrophoneEnabled
+        if(turnOn&&!micAccess?.granted){
+          const permission=await requestMicrophone()
+          if(!permission.granted)throw new Error('Microphone permission denied. Enable it in app settings to speak.')
+        }
+        await room.localParticipant.setMicrophoneEnabled(turnOn)
       } else {
-        await room.localParticipant.setCameraEnabled(!room.localParticipant.isCameraEnabled)
+        const turnOn=!room.localParticipant.isCameraEnabled
+        if(turnOn&&!cameraAccess?.granted){
+          const permission=await requestCamera()
+          if(!permission.granted)throw new Error('Camera permission denied. Enable it in app settings to show video.')
+        }
+        await room.localParticipant.setCameraEnabled(turnOn)
       }
-    } catch {
-      setError(kind === 'camera'
+    } catch(reason) {
+      setError(reason instanceof Error?reason.message:kind==='camera'
         ? 'Camera could not start. Allow camera permission in app settings and retry.'
         : 'Microphone could not start. Allow microphone permission in app settings and retry.')
     } finally {
@@ -50,21 +64,25 @@ function RoomControls({ onLeave }: { onLeave: () => void }) {
   return <View style={styles.controls}>
     {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
     <View style={styles.buttonRow}>
-      <Pressable accessibilityRole="button" accessibilityLabel={isMicrophoneEnabled ? 'Mute microphone' : 'Turn on microphone'}
-        disabled={working !== null} onPress={() => void toggle('microphone')}
-        style={[styles.controlButton, !isMicrophoneEnabled && styles.controlOff]}>
-        {working === 'microphone' ? <ActivityIndicator color={theme.colors.primary} />
-          : <Text style={styles.controlText}>{isMicrophoneEnabled ? 'Mute mic' : 'Unmute mic'}</Text>}
+      <Pressable accessibilityRole="button" accessibilityLabel={isMicrophoneEnabled?'Mute microphone':'Turn on microphone'}
+        disabled={working!==null} onPress={()=>void toggle('microphone')}
+        style={[styles.controlButton,!isMicrophoneEnabled&&styles.controlOff]}>
+        {working==='microphone'?<ActivityIndicator color={mobileDesign.emerald}/>:<>
+          <Text style={styles.controlIcon}>{isMicrophoneEnabled?'◉':'⊘'}</Text>
+          <Text style={styles.controlText}>{isMicrophoneEnabled?'Mute':'Unmute'}</Text>
+        </>}
       </Pressable>
-      <Pressable accessibilityRole="button" accessibilityLabel={isCameraEnabled ? 'Turn off camera' : 'Turn on camera'}
-        disabled={working !== null} onPress={() => void toggle('camera')}
-        style={[styles.controlButton, !isCameraEnabled && styles.controlOff]}>
-        {working === 'camera' ? <ActivityIndicator color={theme.colors.primary} />
-          : <Text style={styles.controlText}>{isCameraEnabled ? 'Camera off' : 'Camera on'}</Text>}
+      <Pressable accessibilityRole="button" accessibilityLabel={isCameraEnabled?'Turn off camera':'Turn on camera'}
+        disabled={working!==null} onPress={()=>void toggle('camera')}
+        style={[styles.controlButton,!isCameraEnabled&&styles.controlOff]}>
+        {working==='camera'?<ActivityIndicator color={mobileDesign.emerald}/>:<>
+          <Text style={styles.controlIcon}>{isCameraEnabled?'▣':'⊘'}</Text>
+          <Text style={styles.controlText}>{isCameraEnabled?'Video off':'Video on'}</Text>
+        </>}
       </Pressable>
       <Pressable accessibilityRole="button" accessibilityLabel="Leave the meeting"
-        onPress={onLeave} style={[styles.controlButton, styles.leave]}>
-        <Text style={styles.leaveText}>Leave</Text>
+        onPress={onLeave} style={[styles.controlButton,styles.leave]}>
+        <Text style={styles.leaveIcon}>⌁</Text><Text style={styles.leaveText}>Leave</Text>
       </Pressable>
     </View>
   </View>
@@ -95,7 +113,8 @@ function ParticipantTiles() {
     </View>
   )
   return <View style={styles.grow}>
-    <Text style={styles.peopleCount}>{participants.length} in this meeting · {tracks.length} video tiles</Text>
+    <View style={styles.participantsHeader}><Text style={styles.peopleCount}>{participants.length.toLocaleString('en-US')} participants</Text>
+      <Text style={styles.tilesCount}>{tracks.length} available video tracks</Text></View>
     <FlatList data={selected} renderItem={renderTile}
       keyExtractor={(item) => item.participant.identity + ':' + item.source}
       numColumns={2} columnWrapperStyle={styles.tileRow}
@@ -167,11 +186,13 @@ export default function NativeMeetingRoom({ navigation, route }: NativeMeetingSc
 
   return <SafeAreaView style={styles.screen} edges={['top','bottom']}>
     <View style={styles.header}>
+      <PremiumBackdrop mode="midnight"/>
+      <View style={styles.headerMark}><Text style={styles.headerMarkText}>✦</Text></View>
       <View style={styles.grow}>
-        <Text style={styles.heading}>Event group meeting</Text>
-        <Text style={styles.subheading}>{connected ? 'Connected · secure audio/video' : 'Connecting to secure room…'}</Text>
+        <Text style={styles.heading}>iEventPlux Meeting</Text>
+        <Text style={styles.subheading}>{connected?'●  Connected securely':'◌  Connecting to secure room…'}</Text>
       </View>
-      <Pressable accessibilityRole="button" onPress={leave} style={styles.headerLeave}>
+      <Pressable accessibilityRole="button" accessibilityLabel="Leave meeting" onPress={leave} style={styles.headerLeave}>
         <Text style={styles.leaveText}>Leave</Text>
       </Pressable>
     </View>
@@ -197,43 +218,35 @@ export default function NativeMeetingRoom({ navigation, route }: NativeMeetingSc
         <ActivityIndicator size="large" color={theme.colors.primary} />
         <Text style={styles.loadingText}>Preparing native audio and media…</Text>
       </View>}
-    <Text style={styles.footer}>
-      Secure LiveKit group call · camera and microphone can be turned off ·
-      screen sharing from this phone is not yet supported.
-    </Text>
+    <Text style={styles.footer}>SECURE LIVEKIT CALL  ·  MICROPHONE & CAMERA CONTROLS  ·  PHONE SCREEN SHARING NOT YET AVAILABLE</Text>
   </SafeAreaView>
 }
 
-const styles = StyleSheet.create({
-  screen: { flex:1, backgroundColor:'#091a16' },
-  header: { padding:16, flexDirection:'row', alignItems:'center', borderBottomWidth:1, borderColor:'#214237', gap:12 },
-  grow: { flex:1 },
-  heading: { color:'#ffffff', fontSize:18, fontWeight:'800' },
-  subheading: { color:'#a9d8c6', fontSize:12, marginTop:4 },
-  headerLeave: { backgroundColor:'#7f1d1d', paddingHorizontal:14, paddingVertical:10, borderRadius:12 },
-  leaveText: { color:'#ffffff', fontSize:13, fontWeight:'800' },
-  peopleCount: { color:'#c9e7da', fontSize:12, padding:12 },
-  tiles: { padding:8, paddingBottom:16 },
-  tileRow: { gap:8, marginBottom:8 },
-  tile: { flex:1, minWidth:0, borderRadius:12, backgroundColor:'#142e27', overflow:'hidden' },
-  video: { width:'100%', aspectRatio: 4/3 },
-  placeholder: { backgroundColor:'#17382c', justifyContent:'center', alignItems:'center' },
-  placeholderName: { color:'#b7d8c9', fontSize:12 },
-  tileCaption: { color:'#ffffff', padding:7, fontWeight:'600', fontSize:11 },
-  empty: { color:'#b9d2c7', padding:16, textAlign:'center' },
-  pagination: { flexDirection:'row', alignItems:'center', justifyContent:'space-around', padding:8 },
-  pageButton: { borderRadius:9, borderWidth:1, borderColor:'#3f6b5c', padding:10 },
-  pageText: { color:'#dcf5ea', fontSize:12, fontWeight:'700' },
-  controls: { padding:12, borderTopWidth:1, borderColor:'#2f574a', gap:8 },
-  buttonRow: { flexDirection:'row', gap:8 },
-  controlButton: { flex:1, minHeight:48, borderRadius:12, backgroundColor:'#e2f3ea', alignItems:'center', justifyContent:'center' },
-  controlText: { color:'#075744', fontSize:12, fontWeight:'800' },
-  controlOff: { backgroundColor:'#b9ccbf' },
-  leave: { backgroundColor:'#b91c1c' },
-  errorCard: { padding:12, backgroundColor:'#451a19', gap:8 },
-  error: { color:'#fed7d7', fontSize:12, lineHeight:19 },
-  errorClose: { borderRadius:8, borderColor:'#fca5a5', borderWidth:1, padding:8, alignSelf:'flex-start' },
-  loading: { flex:1, justifyContent:'center', alignItems:'center', gap:15 },
-  loadingText: { color:'#d1fae5', fontSize:13 },
-  footer: { padding:12, textAlign:'center', color:'#bad5c9', fontSize:10, lineHeight:15 },
+const styles=StyleSheet.create({
+  screen:{flex:1,backgroundColor:'#091b24'},
+  header:{padding:15,flexDirection:'row',alignItems:'center',borderBottomWidth:1,borderColor:'#ffffff22',gap:10,backgroundColor:mobileDesign.forestDeep,overflow:'hidden'},
+  headerMark:{width:41,height:41,backgroundColor:'#ffffff25',borderRadius:14,alignItems:'center',justifyContent:'center'},
+  headerMarkText:{color:'#c7f8df',fontSize:22},grow:{flex:1},
+  heading:{color:'#fff',fontSize:16,fontWeight:'900',letterSpacing:-.2},subheading:{color:'#c3e4d9',fontSize:11,marginTop:5,fontWeight:'700'},
+  headerLeave:{backgroundColor:'#a63534',paddingHorizontal:15,minHeight:43,justifyContent:'center',borderRadius:14},
+  leaveText:{color:'#fff',fontSize:12,fontWeight:'900'},
+  participantsHeader:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',gap:9,paddingHorizontal:15,paddingTop:15,paddingBottom:11},
+  peopleCount:{color:'#fff',fontSize:14,fontWeight:'900'},tilesCount:{color:'#b5d7ca',fontSize:11,fontWeight:'700'},
+  tiles:{paddingHorizontal:8,paddingBottom:16},tileRow:{gap:8,marginBottom:8},
+  tile:{flex:1,minWidth:0,borderRadius:18,backgroundColor:'#142d36',overflow:'hidden',borderColor:'#ffffff20',borderWidth:1},
+  video:{width:'100%',aspectRatio:4/3},placeholder:{backgroundColor:'#14333d',justifyContent:'center',alignItems:'center'},
+  placeholderName:{color:'#b7d9d1',fontSize:12,fontWeight:'700'},tileCaption:{color:'#fff',padding:10,fontWeight:'800',fontSize:11},
+  empty:{color:'#c9e4dc',padding:24,textAlign:'center',fontSize:13,lineHeight:20},
+  pagination:{flexDirection:'row',alignItems:'center',justifyContent:'space-around',padding:10,gap:8},
+  pageButton:{borderRadius:13,borderWidth:1,borderColor:'#507a6d',padding:12,minHeight:44,justifyContent:'center'},
+  pageText:{color:'#e1f7ea',fontSize:12,fontWeight:'800'},
+  controls:{paddingHorizontal:11,paddingVertical:13,borderTopWidth:1,borderColor:'#ffffff2a',backgroundColor:'#0d2732',gap:8},
+  buttonRow:{flexDirection:'row',gap:10},
+  controlButton:{flex:1,minHeight:66,borderRadius:18,backgroundColor:'#e4f5ea',alignItems:'center',justifyContent:'center',gap:4,padding:7},
+  controlText:{color:'#0e5b4d',fontSize:11,fontWeight:'900'},controlIcon:{color:'#0e5b4d',fontSize:21,fontWeight:'900'},
+  controlOff:{backgroundColor:'#cad5d0'},leave:{backgroundColor:'#b53d3d'},leaveIcon:{color:'#fff',fontSize:22,fontWeight:'900'},
+  errorCard:{padding:14,backgroundColor:'#562926',gap:10},error:{color:'#ffe1dd',fontSize:12,lineHeight:20},
+  errorClose:{borderRadius:13,borderColor:'#e9a29e',borderWidth:1,padding:12,alignSelf:'flex-start'},
+  loading:{flex:1,justifyContent:'center',alignItems:'center',gap:15},loadingText:{color:'#d1f5e9',fontSize:13,fontWeight:'700'},
+  footer:{paddingHorizontal:14,paddingVertical:11,textAlign:'center',color:'#9bc6b8',fontSize:9,lineHeight:15,fontWeight:'800',letterSpacing:.2},
 })
