@@ -60,3 +60,13 @@ Native social cards never silently switch to web-based content. Exception: the u
 - `ActionDialog` provides consistent React Native confirmation modals (including destructive-action styling) for consent, moderation and voting. This is a native modal, not a JavaScript browser prompt.
 
 On-device visual QA and accessibility scaling remain necessary. The current build does not claim real live voting commerce, unlimited meetings, full social video reels or iOS release signing.
+
+## Fourth native visual increment — Meeting Access and LiveKit room
+
+- Meeting Access now emphasizes direct native joining, with the same premium SVG hero and branded device-permission cards. Android/iOS camera/microphone requests are explicit and tied to user gestures. System-browser opening is labeled as a **fallback**, not the primary joining method. Permission errors appear as native inline notices instead of `Alert.alert`.
+- The true LiveKit native room now has a stronger on-air header, clear secure-connection status, rounded participant video tiles, improved audio/video controls and a clearer leave button.
+- **Listener-to-speaker permission fix:** When an attendee initially joins with camera/mic disabled and later enables a device inside the room, Expo asks the OS permission directly if not already granted, before invoking LiveKit `setCameraEnabled` or `setMicrophoneEnabled`. This fixes a missing permission-request opportunity but cannot guarantee OS grant; physical-device QA is required.
+- Participant videos remain **paginated 8 visible tiles at a time** for mobile performance, NOT capped at 8 participants. Server admission and SFU capacity are separate infrastructure concerns; no invented unlimited-load certification.
+- The older web meeting route remains a user-initiated secure fallback, and phone screen capture/sharing remains explicitly unsupported. LiveKit native media requires the custom development/QA APK, not Expo Go.
+
+Acceptance: verify camera and mic first permission, previously denied permission, device settings round-trip, listener-to-speaker toggles, 2+ concurrent real devices, network reconnect, leave behavior and user consent. A static unit test or compiled APK alone is not a proof of working media.
