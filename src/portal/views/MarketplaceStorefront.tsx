@@ -17,6 +17,7 @@ import { usePortal } from '../store'
 import { MARKETPLACE_CATEGORIES } from '@/lib/marketplace-options'
 import { MarketplaceSelect } from '../components/MarketplaceSelect'
 import {MarketplaceRequests} from '../components/MarketplaceRequests'
+import {MarketplacePaymentSettings} from '../components/MarketplacePaymentSettings'
 
 type Variant = {id:string;sku:string;title:string;priceMinor:number;available:number;currency:string;stockOnHand?:number;reserved?:number;active:boolean}
 type Product = {id:string;slug:string;name:string;shortDesc:string|null;description:string;brand:string|null;category:string;productKind:string;specifications:Record<string,string>;images:string[];status:string;variants:Variant[]}
@@ -305,6 +306,7 @@ export default function MarketplaceStorefront({slug}:{slug:string}) {
       </div>}
       {!quote&&<p className="mt-3 text-xs text-muted-foreground">Select available variants above, then check the live catalogue. No inventory is held and no order or payment will be created.</p>}
     </section>}
+    {data.canManage&&<MarketplacePaymentSettings key={slug} slug={slug}/>}
     {user&&<MarketplaceRequests key={user.id+':'+slug+':'+data.canManage} slug={slug} seller={data.canManage} quote={quote} onSubmitted={submitted=>setQuote(current=>current===submitted?null:current)}/>}
     {!user&&!data.canManage&&<Button variant="outline" onClick={()=>navigate('/signin')}>Sign in to submit purchase requests</Button>}
     <p className="rounded-xl border bg-muted/30 p-4 text-xs leading-6 text-muted-foreground">
