@@ -1620,6 +1620,7 @@ model MarketplaceStore {
   owner             User           @relation("MarketplaceStoreOwner", fields: [ownerId], references: [id])
   organization      Organization?  @relation(fields: [orgId], references: [id])
   purchaseRequests  MarketplacePurchaseRequest[]
+  paymentPreferences MarketplacePaymentPreference?
   products          MarketplaceProduct[]
   variants          MarketplaceVariant[]
 
@@ -1712,4 +1713,23 @@ model MarketplacePurchaseRequest {
   @@unique([buyerId, storeId, requestKey])
   @@index([storeId, createdAt])
   @@index([buyerId, createdAt])
+}
+
+// Seller preferences do not authorize checkout or identify a payment recipient.
+model MarketplacePaymentPreference {
+  storeId String @id
+  mobileMoney Boolean @default(false)
+  card Boolean @default(false)
+  cash Boolean @default(false)
+  destination String @default("BANK")
+  updatedAt DateTime @updatedAt
+  store MarketplaceStore @relation(fields: [storeId], references: [id], onDelete: Cascade)
+}
+
+// Approved fee configuration is independent of ticket fees and payment credentials.
+model MarketplaceCommissionRule {
+  key String @id
+  basisPoints Int
+  updatedBy String
+  updatedAt DateTime @updatedAt
 }
