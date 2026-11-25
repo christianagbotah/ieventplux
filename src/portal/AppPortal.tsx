@@ -27,6 +27,7 @@ const EventCompareView = lazy(() => import('./views/EventCompareView'))
 const LiveNow = lazy(() => import('./views/LiveNow'))
 const Reels = lazy(() => import('./views/Reels'))
 const FollowingFeed = lazy(() => import('./views/FollowingFeed'))
+const TransportCharterPlanner = lazy(() => import('./views/TransportCharterPlanner'))
 const TransportDriverRoster = lazy(() => import('./views/TransportDriverRoster'))
 const ServiceEnquiries = lazy(() => import('./views/ServiceEnquiries'))
 const ServiceDirectory = lazy(() => import('./views/ServiceDirectory'))
@@ -181,7 +182,7 @@ export default function AppPortal() {
       case 'shop':
         return param ? <MarketplaceStorefront key={param} slug={param} /> : <MarketplaceExplore />
       case 'services':
-        return param==='drivers'?<TransportDriverRoster/>:param==='enquiries'?<ServiceEnquiries route={route}/>:<ServiceDirectory key={param||'discover'} manage={param==='manage'}/>
+        return param==='charters'?<TransportCharterPlanner/>:param==='drivers'?<TransportDriverRoster/>:param==='enquiries'?<ServiceEnquiries route={route}/>:<ServiceDirectory key={param||'discover'} manage={param==='manage'}/>
       case 'seller':
         return <MarketplaceSellerStudio />
       case 'effects':
