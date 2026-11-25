@@ -701,7 +701,13 @@ export type ServiceProviderCategory={id:string;division:string;regulated:boolean
 export type PublicServiceProvider={id:string;displayName:string;category:string;community:string;availability:string;lastConfirmedAt:string|null}
 export type OwnedServiceProvider={id:string;displayName:string;category:string;community:string;reviewStatus:string;published:boolean;availabilityState:string;availableUntil:string|null}
 export type ServiceEnquiry={id:string;providerId:string;description:string;community:string;status:string;quoteMinor:number|null;quoteNote:string|null;quoteExpiresAt:string|null;role:'CUSTOMER'|'PROVIDER';provider:{displayName:string;category:string};customer:{displayName:string}}
+export type ServiceAppointment={id:string;enquiryId:string;startsAt:string;endsAt:string;status:string;role:'CUSTOMER'|'PROVIDER';provider:{displayName:string};customer:{displayName:string}}
 export const api = {
+  serviceAppointments:{
+    list:()=>request<{items:ServiceAppointment[]}>('GET','/service-appointments'),
+    create:(body:{enquiryId:string;startsAt:string;durationMinutes:number})=>request<{item:{id:string;status:string}}>('POST','/service-appointments',body),
+    decide:(id:string,action:string)=>request<{item:{id:string;status:string}}>('PATCH','/service-appointments/'+encodeURIComponent(id),{action}),
+  },
   serviceEnquiries:{
     list:()=>request<{items:ServiceEnquiry[]}>('GET','/service-enquiries'),
     create:(body:{providerId:string;requestKey:string;description:string;community:string})=>request<{id:string;status:string}>('POST','/service-enquiries',body),

@@ -20,7 +20,7 @@ export async function PATCH(req:NextRequest,ctx:Context){
    try{status=appointmentDecision(role,row,raw,now)}catch(e){throw errors.badRequest(e instanceof Error?e.message:'Decision unavailable.')}
    if(status==='CONFIRMED'){
     await requireAppointmentEligibility(tx,q,now)
-    const overlap=await tx.serviceAppointment.findFirst({where:{id:{not:id},status:'CONFIRMED',startsAt:{lt:row.endsAt},endsAt:{gt:row.startsAt},enquiry:{OR:[{provider:{ownerId:q.provider.ownerId}},{customerId:q.customerId}]}}})
+    const overlap=await tx.serviceAppointment.findFirst({where:{id:{not:id},status:'CONFIRMED',startsAt:{lt:row.endsAt},endsAt:{gt:row.startsAt},enquiry:{OR:[{provider:{ownerId:{in:[q.provider.ownerId,q.customerId]}}},{customerId:{in:[q.provider.ownerId,q.customerId]}}}]}}})
     if(overlap)throw errors.conflict('The provider or customer already has an overlapping appointment.')
    }
    const item=await tx.serviceAppointment.update({where:{id},data:{status},select:{id:true,status:true,startsAt:true,endsAt:true}})
