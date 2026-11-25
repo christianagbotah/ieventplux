@@ -14,11 +14,13 @@ import { api, ApiClientError } from '../api'
 import { navigate } from '../router'
 import {basketSelection,canAddBasketUnit,type StoreQuote} from '../lib/marketplace-basket'
 import { usePortal } from '../store'
+import { MARKETPLACE_CATEGORIES } from '@/lib/marketplace-options'
+import { MarketplaceSelect } from '../components/MarketplaceSelect'
 import {MarketplaceRequests} from '../components/MarketplaceRequests'
 
 type Variant = {id:string;sku:string;title:string;priceMinor:number;available:number;currency:string;stockOnHand?:number;reserved?:number;active:boolean}
 type Product = {id:string;slug:string;name:string;shortDesc:string|null;description:string;brand:string|null;category:string;productKind:string;specifications:Record<string,string>;images:string[];status:string;variants:Variant[]}
-type Shop = {id:string;slug:string;name:string;tagline:string|null;description:string|null;category:string;status:string;verificationState:string;logoUrl:string|null;coverUrl:string|null;website:string|null;country:string;city:string|null;currency:string}
+type Shop = {id:string;slug:string;name:string;tagline:string|null;description:string|null;category:string;status:string;verificationState:string;logoUrl:string|null;coverUrl:string|null;website:string|null;country:string;region?:string|null;city:string|null;currency:string}
 type Detail = {store:Shop;products:Product[];canManage:boolean;checkoutEnabled:false}
 const price=(v:number)=>'₵'+(v/100).toLocaleString('en-GH',{minimumFractionDigits:2,maximumFractionDigits:2})
 function toMinor(raw:string){
@@ -42,9 +44,11 @@ export default function MarketplaceStorefront({slug}:{slug:string}) {
  const [category,setCategory]=useState('')
  const [description,setDescription]=useState('')
  const [brand,setBrand]=useState('')
- const [specs,setSpecs]=useState('')
- const [images,setImages]=useState('')
- const [variantLines,setVariantLines]=useState('Standard | SKU-001 | 10.00')
+ const [specs,setSpecs]=useState<{field:string;value:string}[]>([])
+ const [images,setImages]=useState<string[]>([])
+ const [uploading,setUploading]=useState(false)
+ const [productKind,setProductKind]=useState<'GOODS'|'SERVICE'|'DIGITAL'>('GOODS')
+ const [variantLines,setVariantLines]=useState([{title:'Standard',sku:'',price:''}])
  const [priceVariant,setPriceVariant]=useState<Variant|null>(null)
  const [newPrice,setNewPrice]=useState('')
  const [stockVariant,setStockVariant]=useState<Variant|null>(null)
@@ -107,32 +111,35 @@ export default function MarketplaceStorefront({slug}:{slug:string}) {
    }finally{setBusy(false)}
  }
 
+ async function uploadImages(files:FileList|null,featured:boolean){
+   if(!files?.length||uploading||busy)return
+   setUploading(true)
+   try{
+     const limit=featured?1:Math.max(0,10-images.length)
+     if(files.length>limit)throw new Error('Choose no more than the remaining image slots (10 total).')
+     const uploaded:string[]=[]
+     for(const file of Array.from(files)){const form=new FormData();form.append('file',file);const result=await api.upload<{url:string}>('/marketplace/stores/'+encodeURIComponent(slug)+'/images',form);uploaded.push(result.url)}
+     setImages(prev=>featured?[uploaded[0],...prev.slice(1)]:[...prev,...uploaded])
+   }catch(e){toast({title:'Image upload failed',description:e instanceof Error?e.message:'Try a JPG, PNG or WebP image.',variant:'destructive'})}finally{setUploading(false)}
+ }
  async function submitProduct(){
-   if(!data||busy)return
+   if(!data||busy||uploading)return
    setBusy(true)
    try{
-     const variants=variantLines.split(/\r?\n/).filter(s=>s.trim()).map(line=>{
-       const bits=line.split('|').map(s=>s.trim())
-       if(bits.length!==3)throw new Error('Variants must follow: Name | SKU | Price in ₵')
-       return {title:bits[0],sku:bits[1],priceMinor:toMinor(bits[2]),optionValues:{}}
-     })
+     const variants=variantLines.map((line,i)=>({title:line.title.trim(),sku:line.sku.trim()||('SKU-'+crypto.randomUUID().slice(0,8).toUpperCase()+'-'+(i+1)),priceMinor:toMinor(line.price),optionValues:{}}))
      const specifications:Record<string,string>={}
-     for(const line of specs.split(/\r?\n/).filter(s=>s.trim())){
-       const i=line.indexOf(':')
-       if(i<2)throw new Error('Enter each specification as Field: Value')
-       specifications[line.slice(0,i).trim()]=line.slice(i+1).trim()
-     }
+     for(const {field,value} of specs){if(!field.trim()&&!value.trim())continue;if(!field.trim()||!value.trim())throw new Error('Complete both specification fields.');if(Object.hasOwn(specifications,field.trim()))throw new Error('Each specification name must be unique.');specifications[field.trim()]=value.trim()}
      const productSlug=name.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g,'')
        .replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,60).replace(/-$/,'')
      await api.post('/marketplace/stores/'+encodeURIComponent(slug)+'/products',{
        name,slug:productSlug,shortDesc:description.slice(0,180),description,
-       brand,category,productKind:'GOODS',
-       specifications,images:images.split(/\r?\n/).map(s=>s.trim()).filter(Boolean),
+       brand,category,productKind,
+       specifications,images,
        variants,
      })
      await load()
      setProductOpen(false)
-     setName('');setDescription('');setSpecs('');setImages('');setVariantLines('')
+     setName('');setDescription('');setSpecs([]);setImages([]);setBrand('');setProductKind('GOODS');setVariantLines([{title:'Standard',sku:'',price:''}])
      toast({title:'Product draft created',description:'Receive stock and publish the product when ready.'})
    }catch(e){
      toast({title:'Could not create product',description:e instanceof Error?e.message:'Check the form.',variant:'destructive'})
@@ -202,24 +209,24 @@ export default function MarketplaceStorefront({slug}:{slug:string}) {
   <p className="mt-2 text-sm text-muted-foreground">{error||'This store may be private or unavailable.'}</p>
   <Button className="mt-5" onClick={()=>navigate('/shop')}>Return to marketplace</Button>
  </div>
- return <div className="pb-14">
+ return <div className="pb-28 sm:pb-16">
   <div className="relative h-44 overflow-hidden bg-gradient-to-br from-emerald-950 via-emerald-800 to-slate-900 sm:h-56">
     {data.store.coverUrl&&<img src={data.store.coverUrl} alt="" className="h-full w-full object-cover opacity-65"/>}
     <button type="button" onClick={()=>navigate('/shop')} className="absolute left-4 top-4 flex items-center gap-2 rounded-full bg-black/45 px-4 py-2 text-sm font-semibold text-white backdrop-blur-sm"><ArrowLeft className="size-4"/>Marketplace</button>
   </div>
   <div className="mx-auto max-w-7xl space-y-8 px-4">
-    <div className="-mt-8 relative flex flex-wrap items-start gap-4">
+    <div className="-mt-8 relative grid grid-cols-[auto_minmax(0,1fr)] items-start gap-3 sm:gap-4 lg:grid-cols-[auto_minmax(0,1fr)_auto]">
       {data.store.logoUrl?<img src={data.store.logoUrl} alt="" className="size-20 rounded-2xl border-4 border-background bg-white object-contain shadow-xl"/>:
         <div className="grid size-20 place-items-center rounded-2xl border-4 border-background bg-primary text-white shadow-xl"><Store className="size-8"/></div>}
-      <div className="min-w-0 flex-1 pt-5">
-        <div className="flex flex-wrap items-center gap-2"><h1 className="text-2xl font-extrabold sm:text-3xl">{data.store.name}</h1>
+      <div className="min-w-0 pt-9 sm:pt-5">
+        <div className="flex flex-wrap items-center gap-2"><h1 className="break-words text-2xl font-extrabold sm:text-3xl">{data.store.name}</h1>
           {data.store.verificationState==='VERIFIED'&&<Badge variant="secondary" className="gap-1"><BadgeCheck className="size-3"/>Verified</Badge>}
           {data.canManage&&<Badge variant="outline">{data.store.status}</Badge>}
         </div>
         <p className="mt-1 text-sm text-muted-foreground">{data.store.tagline||data.store.category}</p>
-        <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground"><Globe className="size-3.5"/>{[data.store.city,data.store.country].filter(Boolean).join(', ')} <span>·</span> {data.store.category}</p>
+        <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground"><Globe className="size-3.5"/>{[data.store.city,data.store.region,data.store.country==='GH'?'Ghana':data.store.country].filter(Boolean).join(', ')} <span>·</span> {data.store.category}</p>
       </div>
-      {data.canManage&&<div className="flex flex-wrap gap-2 pt-5">
+      {data.canManage&&<div className="col-span-2 grid grid-cols-2 gap-2 lg:col-span-1 lg:flex lg:flex-wrap lg:pt-5">
         <Button variant="outline" onClick={()=>navigate('/seller')}>Seller studio</Button>
         <Button disabled={busy} onClick={()=>void setStoreStatus(data.store.status==='ACTIVE'?'DRAFT':'ACTIVE')}>
           {data.store.status==='ACTIVE'?'Unpublish store':'Publish store'}
@@ -240,6 +247,7 @@ export default function MarketplaceStorefront({slug}:{slug:string}) {
             {product.images[0]?<img src={product.images[0]} alt={product.name} loading="lazy" className="h-full w-full object-cover"/>:<Package className="size-11 text-primary/40"/>}
           </div>
           <CardContent className="space-y-3 p-4">
+            {product.images.length>1&&<div className="flex gap-2 overflow-x-auto">{product.images.slice(1).map((url,i)=><a key={i} href={url} target="_blank" rel="noreferrer"><img src={url} alt={product.name+' gallery '+(i+1)} className="size-16 rounded-md object-cover"/></a>)}</div>}
             <div className="flex flex-wrap items-center gap-2"><Badge variant="outline">{product.category}</Badge>{data.canManage&&<Badge variant="outline">{product.status}</Badge>}</div>
             <h3 className="line-clamp-2 text-base font-extrabold">{product.name}</h3>
             <p className="line-clamp-3 text-sm leading-relaxed text-muted-foreground">{product.description}</p>
@@ -249,8 +257,8 @@ export default function MarketplaceStorefront({slug}:{slug:string}) {
             <div className="space-y-2">
               {product.variants.map(v=><div key={v.id} className="rounded-xl border bg-card p-3 text-xs">
                 <div className="flex items-center justify-between gap-2"><span className="font-semibold">{v.title}</span><span className="text-base font-extrabold text-primary">{price(v.priceMinor)}</span></div>
-                <p className="mt-1 text-muted-foreground">SKU: {v.sku} · Available: {v.available}</p>
-                {!data.canManage&&<div className="mt-3 flex items-center justify-between gap-3">
+                <p className="mt-1 text-muted-foreground">SKU: {v.sku}{product.productKind==='GOODS'?' · Available: '+v.available:''}</p>
+                {!data.canManage&&product.productKind==='GOODS'&&<div className="mt-3 flex items-center justify-between gap-3">
                   <span className="text-xs font-medium text-muted-foreground">{v.available>0?'Select quantity':'Unavailable'}</span>
                   <div className="flex items-center gap-2" role="group" aria-label={`${product.name}, ${v.title}, quantity`}>
                     <Button type="button" size="sm" variant="outline" className="size-9 p-0" disabled={!basket[v.id]||quoteLoading||loading}
@@ -262,7 +270,7 @@ export default function MarketplaceStorefront({slug}:{slug:string}) {
                   </div>
                 </div>}
                 {data.canManage&&v.active&&product.status!=='ARCHIVED'&&data.store.status!=='SUSPENDED'&&<Button size="sm" variant="outline" className="mt-2 w-full" disabled={busy} onClick={()=>{setPriceVariant(v);setNewPrice((v.priceMinor/100).toFixed(2))}}>Edit price</Button>}
-                {data.canManage&&<Button size="sm" variant="outline" className="mt-2 w-full" onClick={()=>{setStockVariant(v);setDelta('10');setReason('New stock received from supplier')}}>Adjust inventory</Button>}
+                {data.canManage&&product.productKind==='GOODS'&&<Button size="sm" variant="outline" className="mt-2 w-full" onClick={()=>{setStockVariant(v);setDelta('10');setReason('New stock received from supplier')}}>Adjust inventory</Button>}
               </div>)}
             </div>
             {data.canManage&&product.status==='DRAFT'&&<Button className="w-full" disabled={busy} onClick={()=>void publishProduct(product,'ACTIVE')}>Publish product</Button>}
@@ -304,19 +312,19 @@ export default function MarketplaceStorefront({slug}:{slug:string}) {
     </p>
   </div>
   <Dialog open={productOpen} onOpenChange={setProductOpen}>
-    <DialogContent className="max-h-[90dvh] max-w-2xl overflow-y-auto rounded-2xl">
+    <DialogContent className="flex max-h-[calc(100dvh-1.5rem)] max-w-2xl flex-col gap-3 overflow-hidden rounded-2xl" onOpenAutoFocus={e=>e.preventDefault()}>
       <DialogHeader><DialogTitle>Add a new product</DialogTitle></DialogHeader>
-      <div className="space-y-3">
+      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-1 py-1">
         <div><Label htmlFor="product-name">Product name</Label><Input id="product-name" maxLength={150} value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. Handwoven Kente cloth"/></div>
-        <div><Label htmlFor="product-category">Category</Label><Input id="product-category" maxLength={90} value={category} onChange={e=>setCategory(e.target.value)}/></div>
-        <div><Label htmlFor="product-brand">Brand or manufacturer (optional)</Label><Input id="product-brand" maxLength={100} value={brand} onChange={e=>setBrand(e.target.value)}/></div>
+        <div><Label htmlFor="product-category">Category</Label><MarketplaceSelect id="product-category" options={MARKETPLACE_CATEGORIES} value={category} onChange={setCategory} placeholder="Choose product category"/></div>
+        <div><Label htmlFor="product-kind">Listing type</Label><select id="product-kind" className="h-11 w-full rounded-md border border-input bg-background px-3" value={productKind} onChange={e=>setProductKind(e.target.value as typeof productKind)}><option value="GOODS">Physical product</option><option value="SERVICE">Service (catalogue listing only)</option><option value="DIGITAL">Digital product (catalogue listing only)</option></select></div><div><Label htmlFor="product-brand">Brand or manufacturer (optional)</Label><Input id="product-brand" maxLength={100} value={brand} onChange={e=>setBrand(e.target.value)}/></div>
         <div><Label htmlFor="product-description">Full description</Label><Textarea id="product-description" rows={5} maxLength={8000} value={description} onChange={e=>setDescription(e.target.value)} placeholder="Materials, size, care, origin, condition and other product details"/></div>
-        <div><Label htmlFor="product-specs">Specifications (one per line: Field: Value)</Label><Textarea id="product-specs" rows={4} value={specs} onChange={e=>setSpecs(e.target.value)} placeholder={'Material: Cotton\nLength cm: 250'}/></div>
-        <div><Label htmlFor="product-images">Product image URLs (HTTPS, one per line)</Label><Textarea id="product-images" rows={3} value={images} onChange={e=>setImages(e.target.value)} placeholder="https://your-store.com/product.jpg"/></div>
-        <div><Label htmlFor="product-variants">Variants: Label | SKU | Price in ₵ (one per line)</Label><Textarea id="product-variants" rows={4} value={variantLines} onChange={e=>setVariantLines(e.target.value)} placeholder={'Large | KENTE-L | 350.00\nMedium | KENTE-M | 290.00'}/></div>
-        <p className="text-xs text-muted-foreground">Prices are stored in integer minor units, not floating-point currency. Inventory starts at zero and must be received separately.</p>
+        <div className="space-y-2"><Label>Product specifications (optional)</Label><p className="text-xs text-muted-foreground">Add size, material, RAM, storage, colour, service duration or any other relevant detail.</p>{specs.map((spec,i)=><div key={i} className="grid grid-cols-1 gap-2 rounded-lg border p-2 sm:grid-cols-[1fr_1fr_auto]"><Input aria-label={'Specification name '+(i+1)} placeholder="e.g. RAM" value={spec.field} onChange={e=>setSpecs(prev=>prev.map((row,j)=>j===i?{...row,field:e.target.value}:row))}/><Input aria-label={'Specification value '+(i+1)} placeholder="e.g. 16 GB" value={spec.value} onChange={e=>setSpecs(prev=>prev.map((row,j)=>j===i?{...row,value:e.target.value}:row))}/><Button type="button" variant="outline" size="sm" onClick={()=>setSpecs(prev=>prev.filter((_,j)=>j!==i))}>Remove</Button></div>)}<Button type="button" variant="outline" size="sm" disabled={specs.length>=30} onClick={()=>setSpecs(prev=>[...prev,{field:'',value:''}])}>Add specification</Button></div>
+        <div className="space-y-3"><Label htmlFor="product-featured">Featured image</Label><Input id="product-featured" type="file" accept="image/jpeg,image/png,image/webp" disabled={uploading||busy} onChange={e=>{void uploadImages(e.target.files,true);e.target.value=''}}/><Label htmlFor="product-gallery">Gallery images (up to 9 additional)</Label><Input id="product-gallery" type="file" multiple accept="image/jpeg,image/png,image/webp" disabled={uploading||busy||!images.length||images.length>=10} onChange={e=>{void uploadImages(e.target.files,false);e.target.value=''}}/>{uploading&&<p role="status" className="text-sm">Uploading images…</p>}<div className="grid grid-cols-3 gap-2">{images.map((url,i)=><div key={url} className="min-w-0 space-y-1"><img src={url} alt={i===0?'Featured image':'Gallery image'} className="aspect-square w-full rounded-lg object-cover"/><p className="text-xs">{i===0?'Featured':'Gallery'}</p><Button type="button" size="sm" variant="outline" className="w-full" disabled={busy||uploading} onClick={()=>setImages(prev=>prev.filter((_,j)=>j!==i))}>Remove</Button></div>)}</div><p className="text-xs text-muted-foreground">JPG, PNG or WebP, up to 5 MB each. Listing images are public; do not upload private documents.</p></div>
+        <div className="space-y-2"><Label>Price and variants</Label>{variantLines.map((v,i)=><div key={i} className="space-y-2 rounded-xl border p-3"><Label htmlFor={'variant-title-'+i}>Option name</Label><Input id={'variant-title-'+i} value={v.title} placeholder="e.g. Large / Black" onChange={e=>setVariantLines(prev=>prev.map((r,j)=>j===i?{...r,title:e.target.value}:r))}/><div className="grid gap-2 sm:grid-cols-2"><div><Label htmlFor={'variant-sku-'+i}>SKU (optional)</Label><Input id={'variant-sku-'+i} value={v.sku} placeholder="Automatically generated" onChange={e=>setVariantLines(prev=>prev.map((r,j)=>j===i?{...r,sku:e.target.value}:r))}/></div><div><Label htmlFor={'variant-cost-'+i}>Price (₵)</Label><Input id={'variant-cost-'+i} value={v.price} inputMode="decimal" placeholder="0.00" onChange={e=>setVariantLines(prev=>prev.map((r,j)=>j===i?{...r,price:e.target.value}:r))}/></div></div>{variantLines.length>1&&<Button type="button" size="sm" variant="outline" onClick={()=>setVariantLines(prev=>prev.filter((_,j)=>j!==i))}>Remove option</Button>}</div>)}<Button type="button" variant="outline" size="sm" disabled={variantLines.length>=24} onClick={()=>setVariantLines(prev=>[...prev,{title:'',sku:'',price:''}])}>Add variant</Button></div>
+        <p className="text-xs text-muted-foreground">Physical stock starts at zero. Add stock after creating a draft. Services and digital items can be listed but do not support purchase requests or checkout yet.</p>
       </div>
-      <DialogFooter><Button variant="outline" onClick={()=>setProductOpen(false)} disabled={busy}>Cancel</Button><Button disabled={busy||name.trim().length<3||description.trim().length<15} onClick={()=>void submitProduct()}>{busy&&<Loader2 className="mr-1 size-4 animate-spin"/>}Create draft</Button></DialogFooter>
+      <DialogFooter className="shrink-0 border-t pt-3"><Button variant="outline" onClick={()=>setProductOpen(false)} disabled={busy||uploading}>Cancel</Button><Button disabled={busy||uploading||!category||variantLines.some(v=>!v.title.trim()||!v.price.trim())||name.trim().length<3||description.trim().length<15} onClick={()=>void submitProduct()}>{busy&&<Loader2 className="mr-1 size-4 animate-spin"/>}Create draft</Button></DialogFooter>
     </DialogContent>
   </Dialog>
   <Dialog open={priceVariant!==null} onOpenChange={open=>{if(!open&&!busy)setPriceVariant(null)}}>

@@ -2,6 +2,7 @@
  * 24/7 seller storefront validation.
  * No buyer checkout or payment collection until merchant settlement gates.
  */
+import { GHANA_REGIONS } from '@/lib/marketplace-options'
 export class MarketplacePolicyError extends Error {}
 
 function cleaned(value: unknown, max: number): string {
@@ -29,7 +30,7 @@ function slug(value: unknown): string {
 export type StoreDraft = {
   name: string; slug: string; tagline: string | null; description: string | null
   category: string; logoUrl: string | null; coverUrl: string | null
-  website: string | null; city: string | null; pickupAddress: string | null
+  website: string | null; country: string; region: string | null; city: string | null; pickupAddress: string | null
 }
 export function parseStoreDraft(raw: unknown): StoreDraft {
   if (!raw || Array.isArray(raw) || typeof raw !== 'object') throw new MarketplacePolicyError('Store information is required.')
@@ -38,7 +39,11 @@ export function parseStoreDraft(raw: unknown): StoreDraft {
   if (name.length < 3 || name.length > 100) throw new MarketplacePolicyError('Store name must be 3–100 characters.')
   const category = cleaned(x.category, 60)
   if (category.length < 2 || category.length > 60) throw new MarketplacePolicyError('Store category must be 2–60 characters.')
-  return { name, slug: slug(x.slug), category,
+  const country=x.country??'GH'
+  if(country!=='GH')throw new MarketplacePolicyError('Marketplace settlement is currently available in Ghana only.')
+  const region=optionalText(x.region,60)
+  if(region&&!GHANA_REGIONS.some(r=>r===region))throw new MarketplacePolicyError('Choose a valid Ghana region.')
+  return { name, slug: slug(x.slug), category,country,region,
     tagline: optionalText(x.tagline, 180), description: optionalText(x.description, 2400),
     logoUrl: httpsUrl(x.logoUrl), coverUrl: httpsUrl(x.coverUrl),
     website: httpsUrl(x.website), city: optionalText(x.city, 90),
@@ -76,7 +81,7 @@ export function parseProductDraft(raw: unknown): ProductDraft {
   }
   if (!Array.isArray(x.images) || x.images.length > 10)
     throw new MarketplacePolicyError('Products support up to 10 HTTPS images.')
-  const images = x.images.map(item => httpsUrl(item))
+  const images = x.images.map(item => typeof item==='string'&&/^\/uploads\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(jpg|png|webp)$/i.test(item)?item:httpsUrl(item))
   if (images.some(item => !item)) throw new MarketplacePolicyError('Product images must be valid HTTPS URLs.')
   if (!Array.isArray(x.variants) || !x.variants.length || x.variants.length > 24)
     throw new MarketplacePolicyError('Provide 1–24 distinct product variants.')

@@ -52,3 +52,16 @@ test('variant price updates reject stock, identity and noninteger price changes'
     {priceMinor:1250},{priceMinor:1250,expectedPriceMinor:1000,stockOnHand:999},
     {priceMinor:1250,expectedPriceMinor:1000,ownerId:'other'}])expect(()=>parseVariantPriceChange(raw)).toThrow()
 })
+
+test('Ghana region and pickup address are accepted; unsupported geography is rejected',()=>{
+ const x=parseStoreDraft({...goodStore,country:'GH',region:'Greater Accra',city:'Accra',pickupAddress:'Example street'})
+ expect(x.region).toBe('Greater Accra')
+ expect(x.pickupAddress).toBe('Example street')
+ expect(()=>parseStoreDraft({...goodStore,country:'US'})).toThrow()
+ expect(()=>parseStoreDraft({...goodStore,region:'Unknown'})).toThrow()
+})
+test('product accepts durable public upload path and rejects traversal',()=>{
+ const path='/uploads/cc181bfa-502d-45d1-878c-daf8e78ed3bc.webp'
+ expect(JSON.parse(parseProductDraft({...goodProduct,images:[path]}).images)).toEqual([path])
+ expect(()=>parseProductDraft({...goodProduct,images:['/uploads/../../secret']})).toThrow()
+})
