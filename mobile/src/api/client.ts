@@ -702,7 +702,17 @@ export type PublicServiceProvider={id:string;displayName:string;category:string;
 export type OwnedServiceProvider={id:string;displayName:string;category:string;community:string;reviewStatus:string;published:boolean;availabilityState:string;availableUntil:string|null}
 export type ServiceEnquiry={id:string;providerId:string;description:string;community:string;status:string;quoteMinor:number|null;quoteNote:string|null;quoteExpiresAt:string|null;role:'CUSTOMER'|'PROVIDER';provider:{displayName:string;category:string};customer:{displayName:string}}
 export type ServiceAppointment={id:string;enquiryId:string;startsAt:string;endsAt:string;status:string;role:'CUSTOMER'|'PROVIDER';provider:{displayName:string};customer:{displayName:string}}
+export type ServiceArea={id:string;name:string;region:string}
+export type ServiceAreaConsent={consentedAt:string;revokedAt:string|null;area:ServiceArea&{active:boolean}}
+export type NearbyServiceProvider=PublicServiceProvider&{region:string;proximity:string}
 export const api = {
+  serviceAreas:{
+    list:(region:string,q:string)=>request<{items:ServiceArea[];regions:string[]}>('GET','/service-areas?region='+encodeURIComponent(region)+'&q='+encodeURIComponent(q)),
+    nearby:(areaId:string,category:string)=>request<{items:NearbyServiceProvider[]}>('GET','/service-providers/nearby?areaId='+encodeURIComponent(areaId)+'&category='+encodeURIComponent(category)),
+    consent:(id:string)=>request<{consent:ServiceAreaConsent|null}>('GET','/service-providers/'+encodeURIComponent(id)+'/area'),
+    save:(id:string,areaId:string)=>request<{consent:ServiceAreaConsent}>('POST','/service-providers/'+encodeURIComponent(id)+'/area',{areaId,consent:true}),
+    revoke:(id:string)=>request<{revoked:boolean}>('DELETE','/service-providers/'+encodeURIComponent(id)+'/area'),
+  },
   serviceAppointments:{
     list:()=>request<{items:ServiceAppointment[]}>('GET','/service-appointments'),
     create:(body:{enquiryId:string;startsAt:string;durationMinutes:number})=>request<{item:{id:string;status:string}}>('POST','/service-appointments',body),
