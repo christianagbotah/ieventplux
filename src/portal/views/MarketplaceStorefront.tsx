@@ -247,7 +247,7 @@ export default function MarketplaceStorefront({slug}:{slug:string}) {
             {product.images[0]?<img src={product.images[0]} alt={product.name} loading="lazy" className="h-full w-full object-cover"/>:<Package className="size-11 text-primary/40"/>}
           </div>
           <CardContent className="space-y-3 p-4">
-            {product.images.length>1&&<div className="flex gap-2 overflow-x-auto">{product.images.slice(1).map((url,i)=><a key={i} href={url} target="_blank" rel="noreferrer"><img src={url} alt={product.name+' gallery '+(i+1)} className="size-16 rounded-md object-cover"/></a>)}</div>
+            {product.images.length>1&&<div className="flex gap-2 overflow-x-auto">{product.images.slice(1).map((url,i)=><a key={i} href={url} target="_blank" rel="noreferrer"><img src={url} alt={product.name+' gallery '+(i+1)} className="size-16 rounded-md object-cover"/></a>)}</div>}
             <div className="flex flex-wrap items-center gap-2"><Badge variant="outline">{product.category}</Badge>{data.canManage&&<Badge variant="outline">{product.status}</Badge>}</div>
             <h3 className="line-clamp-2 text-base font-extrabold">{product.name}</h3>
             <p className="line-clamp-3 text-sm leading-relaxed text-muted-foreground">{product.description}</p>
