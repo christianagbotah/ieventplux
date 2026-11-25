@@ -25,6 +25,7 @@ import { AdminCommunicationsConfig } from '../components/AdminCommunicationsConf
 import { WorkspaceNavigation } from '../components/WorkspaceNavigation'
 import { WorkspaceMetric } from '../components/WorkspaceMetric'
 import { MarketplaceCommissionSettings } from '../components/MarketplaceCommissionSettings'
+import { ServiceProviderReviews } from '../components/ServiceProviderReviews'
 import { PaymentCertificationConsole } from '../components/PaymentCertificationConsole'
 import { kycRequirements, type KycRequirement, type IdentityEvidence } from '@/server/kyc-requirements'
 
@@ -32,6 +33,7 @@ const SECTIONS = [
   { key: 'overview', group: 'Workspace', label: 'Overview', icon: ShieldCheck },
   { key: 'orgs', group: 'Management', label: 'Organizations', icon: Building2 },
   { key: 'events', group: 'Management', label: 'Events', icon: CalendarDays },
+  { key: 'providers', group: 'Management', label: 'Service providers', icon: Wrench },
   { key: 'moderation', group: 'Management', label: 'Moderation', icon: Flag },
   { key: 'payments', group: 'Finance', label: 'Payments', icon: Wallet },
   { key: 'refunds', group: 'Finance', label: 'Refunds', icon: RotateCw },
@@ -133,6 +135,7 @@ export default function AdminConsole({ route }: { route: Route }) {
             {section === 'orgs' && <Orgs />}
             {section === 'events' && <EventsAdmin />}
             {section === 'moderation' && <Moderation />}
+            {section === 'providers' && (user.role==='SUPER_ADMIN'?<ServiceProviderReviews/>:<p>Super administrator review required.</p>)}
             {section === 'payments' && <Payments />}
             {section === 'refunds' && <Refunds />}
             {section === 'payouts' && <Payouts />}
