@@ -708,7 +708,14 @@ export type NearbyServiceProvider=PublicServiceProvider&{region:string;proximity
 export type ProviderCredentialSummary={id:string;kind:string;reviewStatus:string;uploadedAt:string}
 export type FleetVehicle={id:string;label:string;vehicleClass:string;passengerSeats:number;state:string;stationArea:ServiceArea|null}
 export type FleetClass={id:string;min:number;max:number}
+export type DriverAssignment={id:string;state:string;expiresAt:string;isExpired:boolean;role:'OWNER'|'DRIVER';vehicle:{label:string;vehicleClass:string;providerName:string};driver:{displayName:string}|null}
 export const api = {
+  driverAssignments:{
+    list:()=>request<{items:DriverAssignment[]}>('GET','/transport-driver-assignments'),
+    invite:(providerId:string,vehicleId:string)=>request<{token:string;item:{expiresAt:string}}>('POST','/service-providers/'+encodeURIComponent(providerId)+'/vehicles/'+encodeURIComponent(vehicleId)+'/driver-invitation',{}),
+    accept:(token:string)=>request<{item:{id:string;state:string}}>('POST','/transport-driver-assignments',{token,consent:true}),
+    end:(id:string)=>request<{state:string}>('PATCH','/transport-driver-assignments/'+encodeURIComponent(id),{action:'END'}),
+  },
   transportFleet:{
     list:(id:string)=>request<{items:FleetVehicle[];classes:FleetClass[]}>('GET','/service-providers/'+encodeURIComponent(id)+'/vehicles'),
     create:(id:string,body:{label:string;vehicleClass:string;passengerSeats:number;stationAreaId:string|null})=>request<{item:FleetVehicle}>('POST','/service-providers/'+encodeURIComponent(id)+'/vehicles',body),

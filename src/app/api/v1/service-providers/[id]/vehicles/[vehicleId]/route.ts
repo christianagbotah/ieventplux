@@ -14,6 +14,8 @@ export async function PATCH(req:NextRequest,ctx:Context){
    const row=await tx.transportVehicle.findFirst({where:{id:vehicleId,providerId:id,provider:{ownerId:user.id,owner:{status:'ACTIVE',deletedAt:null}}}})
    if(!row)throw errors.notFound('Vehicle unavailable.')
    if(row.state==='DRAFT'){
+    await tx.transportDriverAssignment.updateMany({where:{vehicleId,state:{in:['INVITED','ACCEPTED']}},data:{state:'ENDED',endedAt:new Date()}})
+
     await tx.transportVehicle.update({where:{id:vehicleId},data:{state}})
     await tx.auditLog.create({data:{actorUserId:user.id,actorLabel:'transport-owner',action:'transport-vehicle.archive',entityType:'ServiceProviderProfile',entityId:id,after:JSON.stringify({vehicleId,state})}})
    }
