@@ -6,9 +6,9 @@ import {DEFAULT_PREFERENCES,parsePaymentPreferences,PaymentPreferencesError,comm
 type Context={params:Promise<{slug:string}>}
 const select={mobileMoney:true,card:true,cash:true,destination:true} as const
 async function view(store:{id:string;category:string}){
- const [preferences,rules]=await Promise.all([db.marketplacePaymentPreference.findUnique({where:{storeId:store.id},select}),db.marketplaceCommissionRule.findMany({where:{key:{in:commissionKeys(store)}},select:{key:true,basisPoints:true}})])
+ const [preferences,rules,onboarding]=await Promise.all([db.marketplacePaymentPreference.findUnique({where:{storeId:store.id},select}),db.marketplaceCommissionRule.findMany({where:{key:{in:commissionKeys(store)}},select:{key:true,basisPoints:true}}),db.marketplaceSettlementOnboarding.findUnique({where:{storeId:store.id},select:{state:true,maskedAccount:true,bankName:true}})])
  const commission=effectiveCommission(rules,store)
- return {preferences:preferences??DEFAULT_PREFERENCES,commissionBps:commission?.basisPoints??null,commissionScope:commission?.key.split(':')[0]??null,settlementStatus:'NOT_CONFIGURED',checkoutEnabled:false}
+ return {preferences:preferences??DEFAULT_PREFERENCES,commissionBps:commission?.basisPoints??null,commissionScope:commission?.key.split(':')[0]??null,settlementStatus:onboarding?.state??'NOT_CONFIGURED',settlementAccount:onboarding?{maskedAccount:onboarding.maskedAccount,bankName:onboarding.bankName}:null,checkoutEnabled:false}
 }
 export async function GET(_req:NextRequest,ctx:Context){
  return handle(async()=>{const user=await requireUser();const store=await ownedStore((await ctx.params).slug,user.id);return jsonOk(await view(store))})
