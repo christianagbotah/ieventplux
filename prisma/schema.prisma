@@ -1749,3 +1749,25 @@ model MarketplaceSettlementOnboarding {
   updatedAt DateTime @updatedAt
   store MarketplaceStore @relation(fields: [storeId], references: [id], onDelete: Cascade)
 }
+
+// Immutable planned transaction; deliberately separate from historical attempts.
+model PlatformPaymentIntent {
+  id String @id @default(cuid())
+  purpose String
+  sourceId String
+  reference String @unique
+  currency String
+  totalMinor Int
+  platformGrossMinor Int
+  beneficiaryGrossMinor Int
+  beneficiaryKind String?
+  beneficiaryId String?
+  route String
+  pricingVersion String
+  snapshotHash String
+  status String @default("PLANNED")
+  createdAt DateTime @default(now())
+  @@unique([purpose, sourceId])
+  @@index([beneficiaryKind, beneficiaryId])
+  @@index([status, createdAt])
+}

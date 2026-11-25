@@ -21,3 +21,7 @@ Migration sequencing:
 5. Platform services require payment confirmation before entitlement/advertising activation. For prepaid ads, allocate budget to a named campaign only, track actual spend and refund unused budget under published terms. Never claim an unspent prepayment is already earned revenue; no general-purpose seller wallet.
 6. Migrate new orders under per-purpose feature flags only after sandbox and reconciliation tests; preserve existing flows until approved transition. Review legacy outstanding organizer payable liabilities before retiring payout functionality.
 7. Test refunds, chargebacks, duplicate callbacks, partial failure, campaign budget and recipient mismatch; prove actual provider settlement, not merely a successful checkout. No live charging in this branch.
+
+## Immutable planning record
+
+`PlatformPaymentIntent` now stores one planning snapshot per purpose/source purchase, with unique reference, exact gross shares, beneficiary, pricing-version identifier and SHA-256 equality fingerprint. The service accepts server-derived inputs only and rejects changed snapshots on replay. It does not start payment, confirm settlement, create entitlements, or replace historic PaymentAttempt rows. The additive SQL migration constrains records to PLANNED until a separately reviewed state-machine migration. Mixed-recipient souvenir purchases must be separated; event souvenirs may point to their own verified store beneficiary when authorized by the source module.

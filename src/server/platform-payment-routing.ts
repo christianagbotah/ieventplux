@@ -7,7 +7,7 @@ type ThirdParty=typeof THIRD_PARTY_PURPOSES[number]
 type Platform=typeof PLATFORM_PURPOSES[number]
 type Purpose=ThirdParty|Platform
 type Beneficiary={kind:'ORGANIZATION'|'STORE'|'CAMPAIGN';id:string}
-type Purchase={purpose:Purpose;currency:'GHS';totalMinor:number;reference:string;beneficiary?:Beneficiary;commissionMinor?:number}
+export type Purchase={purpose:Purpose;currency:'GHS';totalMinor:number;reference:string;beneficiary?:Beneficiary;commissionMinor?:number}
 export type PaymentRoutingPlan={
  purpose:Purpose;reference:string;currency:'GHS';totalMinor:number;platformGrossMinor:number;beneficiaryGrossMinor:number;
  beneficiary:Beneficiary|null;route:'FREE'|'PLATFORM_DIRECT'|'PROVIDER_SPLIT';requiresProviderCertification:boolean;executionEnabled:false
@@ -19,7 +19,7 @@ export function planPlatformPayment(input:Purchase):PaymentRoutingPlan{
  if(!platform&&!thirdParty)throw new Error('Unknown payment purpose.')
  if(platform&&(input.beneficiary!==undefined||input.commissionMinor!==undefined))throw new Error('Platform services cannot route revenue to third parties.')
  const expectedKind=input.purpose==='FUNDRAISING'?'CAMPAIGN':['MARKETPLACE_GOODS','MARKETPLACE_SERVICE','DIGITAL_PRODUCT'].includes(input.purpose)?'STORE':'ORGANIZATION'
- if(thirdParty&&(!input.beneficiary||input.beneficiary.kind!==expectedKind||typeof input.beneficiary.id!=='string'||!input.beneficiary.id.trim()||input.beneficiary.id.length>100))throw new Error('A matching beneficiary is required.')
+ if(thirdParty&&(!input.beneficiary||(input.beneficiary.kind!==expectedKind&&!(input.purpose==='EVENT_SOUVENIR'&&input.beneficiary.kind==='STORE'))||typeof input.beneficiary.id!=='string'||!input.beneficiary.id.trim()||input.beneficiary.id.length>100))throw new Error('A matching beneficiary is required.')
  const commission=platform?input.totalMinor:input.commissionMinor
  if(typeof commission!=='number'||!Number.isSafeInteger(commission)||commission<0||commission>input.totalMinor||(thirdParty&&input.totalMinor>0&&commission===input.totalMinor))throw new Error('Invalid configured commission.')
  return {purpose:input.purpose,reference:input.reference,currency:input.currency,totalMinor:input.totalMinor,platformGrossMinor:commission,beneficiaryGrossMinor:input.totalMinor-commission,beneficiary:thirdParty?{...input.beneficiary!}:null,route:input.totalMinor===0?'FREE':platform?'PLATFORM_DIRECT':'PROVIDER_SPLIT',requiresProviderCertification:input.totalMinor>0,executionEnabled:false}
