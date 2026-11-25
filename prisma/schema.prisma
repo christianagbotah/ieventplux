@@ -1768,6 +1768,7 @@ model PlatformPaymentIntent {
   snapshotHash String
   status String @default("PLANNED")
   createdAt DateTime @default(now())
+  sandboxAttempt PlatformSandboxAttempt?
   @@unique([purpose, sourceId])
   @@index([beneficiaryKind, beneficiaryId])
   @@index([status, createdAt])
@@ -1794,4 +1795,29 @@ model OrganizationSettlementOnboarding {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+}
+
+// Test-only attempt; a notification is not evidence of successful collection.
+model PlatformSandboxAttempt {
+  id String @id @default(cuid())
+  intentId String @unique
+  reference String @unique
+  expectedAmountMinor Int
+  currency String
+  recipientCode String?
+  status String @default("PREPARED")
+  providerTransactionId String? @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  intent PlatformPaymentIntent @relation(fields: [intentId], references: [id], onDelete: Restrict)
+  notifications PlatformSandboxNotification[]
+}
+
+model PlatformSandboxNotification {
+  dedupKey String @id
+  attemptId String
+  providerTransactionId String
+  createdAt DateTime @default(now())
+  attempt PlatformSandboxAttempt @relation(fields: [attemptId], references: [id], onDelete: Restrict)
+  @@index([attemptId])
 }
