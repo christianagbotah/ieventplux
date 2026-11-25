@@ -38,6 +38,7 @@ export type RootStackParamList = {
   EventCompetitions: { eventId: string; eventTitle: string }
   Services: undefined
   TransportCharterPlanner: undefined
+  TransportDriverRoster: undefined
   ServiceEnquiries: {providerId?:string;providerName?:string} | undefined
   Marketplace: undefined
   MarketplaceStore: { slug: string }

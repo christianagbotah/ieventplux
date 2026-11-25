@@ -708,6 +708,7 @@ export type NearbyServiceProvider=PublicServiceProvider&{region:string;proximity
 export type ProviderCredentialSummary={id:string;kind:string;reviewStatus:string;uploadedAt:string}
 export type FleetVehicle={id:string;label:string;vehicleClass:string;passengerSeats:number;state:string;stationArea:ServiceArea|null}
 export type FleetClass={id:string;min:number;max:number}
+export type DriverAssignment={id:string;state:string;expiresAt:string;isExpired:boolean;role:'OWNER'|'DRIVER';vehicle:{label:string;vehicleClass:string;providerName:string};driver:{displayName:string}|null}
 export type CharterPlan={id:string;title:string;origin:ServiceArea;destination:ServiceArea;departureAt:string;returnAt:string|null;passengers:number;state:string;capacityEstimate:{illustrativeSeats:number;vehicles:number}[]}
 export type CharterDraft={title:string;originAreaId:string;destinationAreaId:string;departureAt:string;returnAt:string|null;passengers:number;requestKey:string}
 export const api = {
@@ -715,6 +716,13 @@ export const api = {
     list:()=>request<{items:CharterPlan[]}>('GET','/transport-charter-plans'),
     create:(body:CharterDraft)=>request<{item:CharterPlan}>('POST','/transport-charter-plans',body),
     cancel:(id:string)=>request<{state:string}>('PATCH','/transport-charter-plans/'+encodeURIComponent(id),{action:'CANCEL'}),
+  },
+
+  driverAssignments:{
+    list:()=>request<{items:DriverAssignment[]}>('GET','/transport-driver-assignments'),
+    invite:(providerId:string,vehicleId:string)=>request<{token:string;item:{expiresAt:string}}>('POST','/service-providers/'+encodeURIComponent(providerId)+'/vehicles/'+encodeURIComponent(vehicleId)+'/driver-invitation',{}),
+    accept:(token:string)=>request<{item:{id:string;state:string}}>('POST','/transport-driver-assignments',{token,consent:true}),
+    end:(id:string)=>request<{state:string}>('PATCH','/transport-driver-assignments/'+encodeURIComponent(id),{action:'END'}),
   },
   transportFleet:{
     list:(id:string)=>request<{items:FleetVehicle[];classes:FleetClass[]}>('GET','/service-providers/'+encodeURIComponent(id)+'/vehicles'),

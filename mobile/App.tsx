@@ -43,6 +43,7 @@ import EventNetworkScreen from './src/screens/EventNetworkScreen'
 import EventCompetitionsScreen from './src/screens/EventCompetitionsScreen'
 import ServiceEnquiriesScreen from './src/screens/ServiceEnquiriesScreen'
 import TransportCharterPlannerScreen from './src/screens/TransportCharterPlannerScreen'
+import TransportDriverRosterScreen from './src/screens/TransportDriverRosterScreen'
 import ServicesScreen from './src/screens/ServicesScreen'
 import MarketplaceScreen from './src/screens/MarketplaceScreen'
 import MarketplaceStoreScreen from './src/screens/MarketplaceStoreScreen'
@@ -138,6 +139,7 @@ function AppRoutes() {
       <Stack.Screen name="EventCompetitions" component={EventCompetitionsScreen} options={{ title: 'Awards & voting' }} />
       <Stack.Screen name="ServiceEnquiries" component={ServiceEnquiriesScreen} options={{title:'Service enquiries'}}/>
       <Stack.Screen name="TransportCharterPlanner" component={TransportCharterPlannerScreen} options={{title:'Group travel'}}/>
+      <Stack.Screen name="TransportDriverRoster" component={TransportDriverRosterScreen} options={{title:'Driver assignments'}}/>
       <Stack.Screen name="Services" component={ServicesScreen} options={{ title: 'Local services' }} />
       <Stack.Screen name="Marketplace" component={MarketplaceScreen} options={{ title: 'Shop & discover' }} />
       <Stack.Screen name="MarketplaceStore" component={MarketplaceStoreScreen} options={{ title: 'Storefront' }} />

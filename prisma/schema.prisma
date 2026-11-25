@@ -44,6 +44,7 @@ model User {
   updatedAt         DateTime  @updatedAt
 
   transportCharterPlans TransportCharterPlan[]
+  transportAssignments TransportDriverAssignment[] @relation("TransportAssignedDriver")
   sessions            Session[]
   memberships         Membership[]
   ownedOrgs           Organization[]         @relation("OrgOwner")
@@ -1992,8 +1993,26 @@ model TransportVehicle {
   updatedAt DateTime @updatedAt
   provider ServiceProviderProfile @relation(fields:[providerId],references:[id],onDelete:Restrict)
   stationArea ServiceArea? @relation(fields:[stationAreaId],references:[id],onDelete:Restrict)
+  driverAssignments TransportDriverAssignment[]
   @@unique([providerId,labelKey])
   @@index([providerId,state])
+}
+
+// Private, consent-based operational roster. No commercial-driving authorization.
+model TransportDriverAssignment {
+  id String @id @default(cuid())
+  vehicleId String
+  driverId String?
+  inviteHash String @unique
+  expiresAt DateTime
+  state String @default("INVITED")
+  acceptedAt DateTime?
+  endedAt DateTime?
+  createdAt DateTime @default(now())
+  vehicle TransportVehicle @relation(fields:[vehicleId],references:[id],onDelete:Restrict)
+  driver User? @relation("TransportAssignedDriver",fields:[driverId],references:[id],onDelete:Restrict)
+  @@index([vehicleId,state])
+  @@index([driverId,state])
 }
 
 // Customer-owned journey planning; no transport operator assignment or booking.
