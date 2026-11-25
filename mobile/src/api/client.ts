@@ -705,7 +705,12 @@ export type ServiceAppointment={id:string;enquiryId:string;startsAt:string;endsA
 export type ServiceArea={id:string;name:string;region:string}
 export type ServiceAreaConsent={consentedAt:string;revokedAt:string|null;area:ServiceArea&{active:boolean}}
 export type NearbyServiceProvider=PublicServiceProvider&{region:string;proximity:string}
+export type ProviderCredentialSummary={id:string;kind:string;reviewStatus:string;uploadedAt:string}
 export const api = {
+  providerCredentials:{
+    list:(providerId:string)=>request<{items:ProviderCredentialSummary[];intakeEnabled:boolean;certificationEnabled:boolean}>('GET','/service-providers/'+encodeURIComponent(providerId)+'/credentials'),
+    withdraw:(providerId:string,documentId:string)=>request<{removed:boolean}>('DELETE','/service-providers/'+encodeURIComponent(providerId)+'/credentials/'+encodeURIComponent(documentId)),
+  },
   serviceAreas:{
     list:(region:string,q:string)=>request<{items:ServiceArea[];regions:string[]}>('GET','/service-areas?region='+encodeURIComponent(region)+'&q='+encodeURIComponent(q)),
     nearby:(areaId:string,category:string)=>request<{items:NearbyServiceProvider[]}>('GET','/service-providers/nearby?areaId='+encodeURIComponent(areaId)+'&category='+encodeURIComponent(category)),
