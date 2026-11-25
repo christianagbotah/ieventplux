@@ -2,7 +2,7 @@ import {Prisma} from '@prisma/client'
 import {db} from '@/lib/db'
 import {errors} from '@/server/api'
 import {buildMarketplaceQuote,MarketplaceQuoteError} from '@/server/marketplace-quote-policy'
-import {assertReviewedPrices,parsePurchaseRequest,parseRequestDecision,decisionAllowed} from '@/server/marketplace-request-policy'
+import {assertReviewedPrices,parsePurchaseRequest,parseRequestDecision,decisionAllowed,requestNotification} from '@/server/marketplace-request-policy'
 
 const requestSelect={id:true,status:true,totalMinor:true,currency:true,unitCount:true,items:true,createdAt:true} as const
 
@@ -49,6 +49,7 @@ export async function createPurchaseRequest(slug:string,userId:string,raw:unknow
       },select:requestSelect})
       await tx.auditLog.create({data:{actorUserId:userId,actorLabel:'marketplace-buyer',action:'marketplace.request.create',
         entityType:'MarketplacePurchaseRequest',entityId:request.id,after:JSON.stringify({storeId:store.id,totalMinor:quote.totalMinor})}})
+      await tx.notification.create({data:{userId:store.ownerId,...requestNotification('REQUESTED'),link:'#/shop/'+encodeURIComponent(slug)}})
       return {request,replayed:false}
     },{isolationLevel:Prisma.TransactionIsolationLevel.Serializable})
   }catch(e){
@@ -64,7 +65,7 @@ export async function decidePurchaseRequest(id:string,userId:string,raw:unknown)
  try{
   return await db.$transaction(async tx=>{
    const row=await tx.marketplacePurchaseRequest.findUnique({where:{id},select:{...requestSelect,buyerId:true,
-     store:{select:{ownerId:true,status:true,deletedAt:true}}}})
+     store:{select:{ownerId:true,status:true,deletedAt:true,slug:true}}}})
    if(!row)throw errors.notFound('Purchase request not found.')
    const role=row.store.ownerId===userId?'seller':row.buyerId===userId?'buyer':null
    if(!role)throw errors.notFound('Purchase request not found.')
@@ -77,6 +78,8 @@ export async function decidePurchaseRequest(id:string,userId:string,raw:unknown)
     await tx.auditLog.create({data:{actorUserId:userId,actorLabel:'marketplace-'+role,
       action:'marketplace.request.decision',entityType:'MarketplacePurchaseRequest',entityId:id,
       before:JSON.stringify({status:row.status}),after:JSON.stringify({status:next})}})
+    await tx.notification.create({data:{userId:role==='seller'?row.buyerId:row.store.ownerId,
+      ...requestNotification(next),link:'#/shop/'+encodeURIComponent(row.store.slug)}})
    }
    const request=await tx.marketplacePurchaseRequest.findUniqueOrThrow({where:{id},select:requestSelect})
    return {request,checkoutEnabled:false,inventoryReserved:false}
