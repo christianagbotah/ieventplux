@@ -1910,7 +1910,21 @@ model ServiceEnquiry {
   updatedAt DateTime @updatedAt
   provider ServiceProviderProfile @relation(fields: [providerId], references: [id], onDelete: Restrict)
   customer User @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  appointment ServiceAppointment?
   @@unique([providerId,customerId,requestKey])
   @@index([providerId,createdAt])
   @@index([customerId,createdAt])
+}
+
+// Pilot appointment coordination only; no payment or transport dispatch.
+model ServiceAppointment {
+  id String @id @default(cuid())
+  enquiryId String @unique
+  startsAt DateTime
+  endsAt DateTime
+  status String @default("REQUESTED")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  enquiry ServiceEnquiry @relation(fields: [enquiryId], references: [id], onDelete: Restrict)
+  @@index([status, startsAt, endsAt])
 }

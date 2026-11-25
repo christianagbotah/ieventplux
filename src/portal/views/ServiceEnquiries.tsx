@@ -8,6 +8,7 @@ import {Textarea} from '@/components/ui/textarea'
 import {api} from '../api'
 import {navigate,type Route} from '../router'
 import {usePortal} from '../store'
+import {ServiceAppointments} from '../components/ServiceAppointments'
 type Enquiry={id:string;providerId:string;description:string;community:string;status:string;quoteMinor:number|null;quoteNote:string|null;quoteExpiresAt:string|null;role:'CUSTOMER'|'PROVIDER';provider:{displayName:string;category:string};customer:{displayName:string}}
 const money=(n:number)=>'₵'+(n/100).toLocaleString('en-GH',{minimumFractionDigits:2,maximumFractionDigits:2})
 const amount=(s:string)=>/^\d{1,7}(\.\d{1,2})?$/.test(s)?Math.round(Number(s)*100):0
@@ -39,6 +40,6 @@ export default function ServiceEnquiries({route}:{route:Route}){
  {r.role==='PROVIDER'&&r.status==='REQUESTED'&&<>{selected===r.id?<div className="space-y-2"><Label htmlFor={'quote-'+r.id}>Quoted price (₵)</Label><Input id={'quote-'+r.id} inputMode="decimal" value={price} onChange={e=>setPrice(e.target.value)} placeholder="150.00"/><Textarea value={note} maxLength={500} onChange={e=>setNote(e.target.value)} placeholder="What this price includes"/><Button disabled={busy||amount(price)<1||amount(price)>100000000||note.trim().length<2} onClick={()=>void decide(r.id,'QUOTE')}>Send quotation</Button></div>:<div className="flex flex-wrap gap-2"><Button onClick={()=>{setSelected(r.id);setPrice('');setNote('')}} disabled={busy}>Prepare quote</Button><Button variant="outline" disabled={busy} onClick={()=>void decide(r.id,'DECLINE')}>Decline enquiry</Button></div>}</>}
  {r.role==='CUSTOMER'&&r.status==='QUOTED'&&<div className="flex flex-wrap gap-2"><Button disabled={busy||!r.quoteExpiresAt||Date.parse(r.quoteExpiresAt)<=Date.now()} onClick={()=>void decide(r.id,'ACCEPT_QUOTE')}>Accept quote (non-binding)</Button><Button variant="outline" disabled={busy} onClick={()=>void decide(r.id,'DECLINE_QUOTE')}>Decline quote</Button></div>}
  {r.role==='CUSTOMER'&&['REQUESTED','QUOTED'].includes(r.status)&&<Button variant="outline" disabled={busy} onClick={()=>void decide(r.id,'WITHDRAW')}>Withdraw enquiry</Button>}
- </CardContent></Card>)}</>}
+ </CardContent></Card>)}<ServiceAppointments key={user.id} enquiries={rows}/></>}
  </main>
 }
