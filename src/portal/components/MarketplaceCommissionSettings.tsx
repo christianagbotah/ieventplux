@@ -35,5 +35,6 @@ export function MarketplaceCommissionSettings(){
  <div className="flex flex-wrap gap-2"><Button disabled={busy||(scope!=='global'&&!target)} onClick={()=>void save()}>Save rule</Button><Button variant="outline" disabled={busy||(scope!=='global'&&!target)} onClick={()=>void save(true)}>Remove rule</Button></div>
  <div className="space-y-2">{rules.length?rules.map(r=><div className="flex justify-between gap-2 rounded-lg border p-3 text-sm" key={r.key}><span className="break-all">{r.store?.name??r.key}</span><strong>{(r.basisPoints/100).toFixed(2)}%</strong></div>):<p className="text-sm text-muted-foreground">No commission rules are configured. No default rate is assumed.</p>}</div></>}
  <MarketplaceSettlementReviews/>
+ <MarketplaceSettlementReviews kind="organization"/>
  </section>
 }

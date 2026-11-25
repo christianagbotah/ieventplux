@@ -1,4 +1,5 @@
 'use client'
+import {OrganizationSettlementSettings} from '../components/OrganizationSettlementSettings'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { connectRealtime } from '../realtime'
@@ -250,7 +251,7 @@ export default function OrganizerWorkspace({ route }: { route: Route }) {
           {section === 'live' && <LiveRoomView orgId={activeOrg.orgId} />}
           {section === 'promotions' && <PromotionsView orgId={activeOrg.orgId} />}
           {section === 'messages' && <MessagesView orgId={activeOrg.orgId} />}
-          {section === 'finance' && (canViewReports ? <FinanceView orgId={activeOrg.orgId} role={activeOrg.role} /> : <RoleRestricted />)}
+          {section === 'finance' && (canViewReports ? <div className="space-y-5">{['OWNER','ADMIN','FINANCE'].includes(activeOrg.role)&&<OrganizationSettlementSettings key={activeOrg.orgId} orgId={activeOrg.orgId}/>}<FinanceView orgId={activeOrg.orgId} role={activeOrg.role} /></div> : <RoleRestricted />)}
           {section === 'team' && <TeamView orgId={activeOrg.orgId} role={activeOrg.role} />}
           {section === 'billing' && <BillingView orgId={activeOrg.orgId} />}
           {section === 'settings' && <SettingsView orgId={activeOrg.orgId} role={activeOrg.role} />}

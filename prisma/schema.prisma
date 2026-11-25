@@ -157,6 +157,7 @@ model Organization {
   series         EventSeries[]
   events         Event[]
   marketplaceStores MarketplaceStore[]
+  settlementOnboarding OrganizationSettlementOnboarding?
   media          MediaAsset[]
   ticketTypes    TicketType[]          @relation("OrgTicketTypes")
   orders         Order[]
@@ -1770,4 +1771,27 @@ model PlatformPaymentIntent {
   @@unique([purpose, sourceId])
   @@index([beneficiaryKind, beneficiaryId])
   @@index([status, createdAt])
+}
+
+// Shared registry prevents test account reuse across commerce modules.
+model SandboxSettlementClaim {
+  code String @id
+  beneficiaryKind String
+  beneficiaryId String
+  createdAt DateTime @default(now())
+  @@unique([beneficiaryKind, beneficiaryId])
+}
+
+model OrganizationSettlementOnboarding {
+  orgId String @id
+  state String @default("REQUESTED")
+  testSubaccountCode String? @unique
+  maskedAccount String?
+  bankName String?
+  requestedBy String
+  reviewedBy String?
+  reviewedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
 }

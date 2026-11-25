@@ -23,14 +23,16 @@ export async function POST(req:NextRequest){
   if(existing?.state!=='REQUESTED'||existing.requestedBy!==store.ownerId)throw errors.conflict('Pending request required.')
   let verified
   try{verified=await verifySandboxSubaccount(input.subaccountCode)}catch(e){if(e instanceof SandboxVerificationError)throw errors.badRequest(e.message);throw e}
-  await db.$transaction(async tx=>{
+  try{await db.$transaction(async tx=>{
    const prefs=await tx.marketplacePaymentPreference.findUnique({where:{storeId:store.id}})
    if(!prefs||prefs.destination!=='BANK'||(!prefs.mobileMoney&&!prefs.card))throw errors.conflict('Bank settlement preferences changed.')
-   if(await tx.marketplaceSettlementOnboarding.findUnique({where:{testSubaccountCode:input.subaccountCode}}))throw errors.conflict('Test subaccount already linked.')
+   const fresh=await tx.marketplaceStore.findUnique({where:{id:store.id,deletedAt:null},select:{status:true,ownerId:true}})
+   if(!fresh||fresh.ownerId!==store.ownerId||fresh.status==='SUSPENDED')throw errors.conflict('Store eligibility changed.')
+   await tx.sandboxSettlementClaim.create({data:{code:input.subaccountCode,beneficiaryKind:'STORE',beneficiaryId:store.id}})
    const updated=await tx.marketplaceSettlementOnboarding.updateMany({where:{storeId:store.id,state:'REQUESTED',requestedBy:store.ownerId},data:{state:'SANDBOX_VERIFIED',testSubaccountCode:input.subaccountCode,...verified,reviewedBy:user.id,reviewedAt:new Date()}})
    if(updated.count!==1)throw errors.conflict('Request changed. Reload.')
    await tx.auditLog.create({data:{actorUserId:user.id,actorLabel:'finance-admin',action:'marketplace.settlement.sandbox_verified',entityType:'MarketplaceStore',entityId:store.id,after:JSON.stringify({state:'SANDBOX_VERIFIED'})}})
-  })
+  })}catch(e){if(e&&typeof e==='object'&&'code' in e&&e.code==='P2002')throw errors.conflict('Sandbox account or beneficiary already linked.');throw e}
   return jsonOk({settlementStatus:'SANDBOX_VERIFIED',checkoutEnabled:false})
  })
 }
