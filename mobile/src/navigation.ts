@@ -37,6 +37,7 @@ export type RootStackParamList = {
   EventNetwork: { eventId: string; eventTitle: string }
   EventCompetitions: { eventId: string; eventTitle: string }
   Services: undefined
+  ServiceEnquiries: {providerId?:string;providerName?:string} | undefined
   Marketplace: undefined
   MarketplaceStore: { slug: string }
   /** Native LiveKit client in a custom development build only; token stays in RAM. */
