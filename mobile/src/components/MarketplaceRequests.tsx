@@ -3,7 +3,7 @@ import {Pressable,StyleSheet,Text,View} from 'react-native'
 import {api,formatMinor} from '../api/client'
 import {ActionDialog} from './ActionDialog'
 import {mobileDesign} from '../ui/PremiumUI'
-import {purchaseRequestBody,purchaseRequestFingerprint,type ReviewedBasket,type PurchaseRequestHistory} from '../lib/marketplace-requests'
+import {purchaseRequestBody,purchaseRequestFingerprint,requestStatusLabel,availableRequestDecisions,decisionLabel,type RequestDecision,type ReviewedBasket,type PurchaseRequestHistory} from '../lib/marketplace-requests'
 
 export function MarketplaceRequests({slug,seller,quote,onSubmitted}:{slug:string;seller:boolean;quote:ReviewedBasket|null;onSubmitted:(submitted:ReviewedBasket)=>void}){
  const [history,setHistory]=useState<PurchaseRequestHistory|null>(null)
@@ -13,6 +13,7 @@ export function MarketplaceRequests({slug,seller,quote,onSubmitted}:{slug:string
  const [notice,setNotice]=useState('')
  const [submitting,setSubmitting]=useState(false)
  const [pending,setPending]=useState<ReviewedBasket|null>(null)
+ const [decision,setDecision]=useState<{id:string;status:RequestDecision}|null>(null)
  const locked=useRef(false)
  const active=useRef(true)
  const epoch=useRef(0)
@@ -39,6 +40,17 @@ export function MarketplaceRequests({slug,seller,quote,onSubmitted}:{slug:string
   }catch(e){if(active.current)setSubmissionError(e instanceof Error?e.message:'Could not submit. Retry with the same reviewed basket.')}
   finally{locked.current=false;if(active.current){setPending(null);setSubmitting(false)}}
  }
+ async function decide(){
+  if(!decision||locked.current)return
+  locked.current=true;setSubmitting(true);setSubmissionError('');setNotice('')
+  try{
+   const result=await api.marketplace.decidePurchaseRequest(decision.id,decision.status)
+   if(result.checkoutEnabled!==false||result.inventoryReserved!==false)throw new Error('Unexpected purchase request response.')
+   if(!active.current)return
+   setNotice(requestStatusLabel(result.request.status));await load()
+  }catch(e){if(active.current){setSubmissionError(e instanceof Error?e.message:'Could not update request.');await load()}}
+  finally{locked.current=false;if(active.current){setDecision(null);setSubmitting(false)}}
+ }
  return <View style={styles.panel}>
   <Text style={styles.eyebrow}>MARKETPLACE REQUESTS</Text>
   <Text accessibilityRole="header" style={styles.title}>{seller?'Incoming purchase requests':'Your purchase requests'}</Text>
@@ -51,12 +63,13 @@ export function MarketplaceRequests({slug,seller,quote,onSubmitted}:{slug:string
   {error?<Text accessibilityRole="alert" style={styles.error}>{error}</Text>:null}
   {history&&history.requests.length===0?<Text style={styles.muted}>No requests yet.</Text>:null}
   {history?.requests.map(row=><View key={row.id} style={styles.request}>
-   <Text style={styles.amount}>{formatMinor(row.totalMinor,row.currency)}</Text><Text style={styles.muted}>{row.status==='REQUESTED'?'Requested · not confirmed':row.status}</Text>
+   <Text style={styles.amount}>{formatMinor(row.totalMinor,row.currency)}</Text><Text style={styles.muted}>{requestStatusLabel(row.status)}</Text>
    <Text style={styles.muted}>{new Date(row.createdAt).toLocaleString()} · {row.id}</Text>
    {row.items.map(item=><View key={item.variantId} style={styles.line}><Text style={[styles.muted,{flex:1}]}>{item.productName} · {item.variantTitle} × {item.quantity}</Text><Text style={styles.secondaryText}>{formatMinor(item.lineMinor,item.currency)}</Text></View>)}
+   {availableRequestDecisions(seller,row.status).map(action=><Pressable key={action} accessibilityRole="button" disabled={submitting||loading} style={action==='ACKNOWLEDGED'?styles.primary:styles.secondary} onPress={()=>setDecision({id:row.id,status:action})}><Text style={action==='ACKNOWLEDGED'?styles.primaryText:styles.secondaryText}>{decisionLabel(action)}</Text></Pressable>)}
   </View>)}
   {history&&history.requests.length===50?<Text style={styles.muted}>Showing the latest 50 requests.</Text>:null}
-  <ActionDialog prompt={pending?{title:'Submit purchase request?',description:'Send this reviewed merchandise selection to the seller. No payment, stock reservation or confirmed order is created.',confirmLabel:'Submit request',onConfirm:()=>void submit()}:null} busy={submitting} onDismiss={()=>setPending(null)}/>
+  <ActionDialog prompt={decision?{title:decisionLabel(decision.status)+'?',description:'This changes request status only. No order confirmation, stock reservation or payment is created.',confirmLabel:decisionLabel(decision.status),onConfirm:()=>void decide()}:pending?{title:'Submit purchase request?',description:'Send this reviewed merchandise selection to the seller. No payment, stock reservation or confirmed order is created.',confirmLabel:'Submit request',onConfirm:()=>void submit()}:null} busy={submitting} onDismiss={()=>{setPending(null);setDecision(null)}}/>
  </View>
 }
 const styles=StyleSheet.create({

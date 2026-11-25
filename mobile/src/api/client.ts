@@ -1,4 +1,4 @@
-import type {PurchaseRequestHistory,PurchaseRequestResponse,purchaseRequestBody} from '../lib/marketplace-requests'
+import type {PurchaseRequestHistory,PurchaseRequestResponse,purchaseRequestBody,RequestDecision,PurchaseRequestRow} from '../lib/marketplace-requests'
 /**
  * Typed API client for the iEventPlux v1 REST surface (src/app/api/v1 on the
  * iEventPlux web deployment).
@@ -747,6 +747,7 @@ export const api = {
     store: (slug: string) => request<NativeStoreDetail>(
       'GET', '/marketplace/stores/' + encodeURIComponent(slug),
     ),
+    decidePurchaseRequest: (id:string,status:RequestDecision) => request<{request:PurchaseRequestRow;checkoutEnabled:false;inventoryReserved:false}>('PATCH','/marketplace/requests/'+encodeURIComponent(id),{status}),
     purchaseRequests: (slug:string) => request<PurchaseRequestHistory>('GET','/marketplace/stores/'+encodeURIComponent(slug)+'/requests'),
     createPurchaseRequest: (slug:string,body:ReturnType<typeof purchaseRequestBody>) => request<PurchaseRequestResponse>('POST','/marketplace/stores/'+encodeURIComponent(slug)+'/requests',body),
     changePrice: (id:string,priceMinor:number,expectedPriceMinor:number) => request<{variant:{id:string;priceMinor:number}}>(
