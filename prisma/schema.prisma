@@ -78,8 +78,7 @@ model User {
   livePollVotes       LivePollVote[]
   competitionVotes    CompetitionVote[]
   marketplacePurchaseRequests MarketplacePurchaseRequest[] @relation("MarketplaceRequestBuyer")
-  marketplaceStores MarketplaceStore[]
-  settlementOnboarding OrganizationSettlementOnboarding? @relation("MarketplaceStoreOwner")
+  marketplaceStores MarketplaceStore[] @relation("MarketplaceStoreOwner")
   marketplaceStockChanges MarketplaceStockMovement[] @relation("MarketplaceStockActor")
   questionsAsked      AudienceQuestion[]      @relation("QuestionAuthor")
   answersGiven        AudienceQuestion[]      @relation("QuestionAnswerer")
