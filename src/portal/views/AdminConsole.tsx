@@ -25,6 +25,7 @@ import { AdminCommunicationsConfig } from '../components/AdminCommunicationsConf
 import { WorkspaceNavigation } from '../components/WorkspaceNavigation'
 import { WorkspaceMetric } from '../components/WorkspaceMetric'
 import { MarketplaceCommissionSettings } from '../components/MarketplaceCommissionSettings'
+import { PaymentCertificationConsole } from '../components/PaymentCertificationConsole'
 import { kycRequirements, type KycRequirement, type IdentityEvidence } from '@/server/kyc-requirements'
 
 const SECTIONS = [
@@ -135,7 +136,7 @@ export default function AdminConsole({ route }: { route: Route }) {
             {section === 'payments' && <Payments />}
             {section === 'refunds' && <Refunds />}
             {section === 'payouts' && <Payouts />}
-            {section === 'fees' && <><FeesPlans />{['FINANCE_ADMIN','SUPER_ADMIN'].includes(user.role)&&<MarketplaceCommissionSettings/>}</>}
+            {section === 'fees' && <><FeesPlans />{['FINANCE_ADMIN','SUPER_ADMIN'].includes(user.role)&&<><MarketplaceCommissionSettings/><PaymentCertificationConsole/></>}</>}
             {section === 'integrations' && <Integrations />}
             {section === 'sms' && <SmsLog />}
             {section === 'audit' && <AuditLog />}
