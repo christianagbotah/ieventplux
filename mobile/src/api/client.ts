@@ -696,7 +696,13 @@ async function request<T>(
 
 // ────────────────────────────────────────────────── endpoint surface used ──
 
+export type SouvenirRequestItem={id:string;productName:string;productSku:string;quantity:number;totalMinor:number;status:string}
 export const api = {
+  souvenirs: {
+    requests:(eventId:string)=>request<{items:SouvenirRequestItem[];manager:boolean}>('GET','/events/'+encodeURIComponent(eventId)+'/souvenir-requests'),
+    create:(eventId:string,body:{productId:string;quantity:number;expectedUnitPriceMinor:number;requestKey:string})=>request<{request:SouvenirRequestItem}>('POST','/events/'+encodeURIComponent(eventId)+'/souvenir-requests',body),
+    decide:(eventId:string,id:string,status:string)=>request<{status:string}>('PATCH','/events/'+encodeURIComponent(eventId)+'/souvenir-requests/'+encodeURIComponent(id),{status}),
+  },
   auth: {
     login: (email: string, password: string) =>
       request<LoginResponse>('POST', '/auth/login', { email, password }),

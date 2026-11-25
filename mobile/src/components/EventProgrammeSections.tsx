@@ -9,6 +9,7 @@ import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import { absoluteUrl, formatMinor, type EventDetail } from '../api/client'
 import { availableSouvenirStock, eventTimeLabel, personRoleLabel, programmeDocumentPath, sortedAgenda, isPhotoGalleryUrl } from '../lib/event-programme'
 import { theme } from '../theme'
+import { SouvenirRequests } from './SouvenirRequests'
 
 function Section({ title, subtitle, count, children }: {
   title: string; subtitle?: string; count?: number; children: ReactNode
@@ -99,9 +100,9 @@ export function EventProgrammeSections({ event, onOpenProgramme }: {
         </View>
         {product.description ? <Text style={styles.body}>{product.description}</Text> : null}
         <Text style={styles.secondary}>{availableSouvenirStock(product.available)} · Product code: {product.sku}</Text>
-        <Text style={styles.hint}>Catalogue only — this screen does not collect merchandise payments.</Text>
+        <Text style={styles.hint}>Purchase requests are not paid orders.</Text>
       </View>)}
-    </Section> : null}
+    <SouvenirRequests key={event.id} event={event}/></Section> : null}
 
     {agenda.length ? <Section title="Full event agenda" count={agenda.length}
       subtitle={`Speakers, performances and sessions · Times in ${event.timezone.replace(/_/g,' ')}`}>

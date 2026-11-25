@@ -14,6 +14,7 @@ import { useToast } from '@/hooks/use-toast'
 import { api, ApiClientError, qs } from '../api'
 import { navigate } from '../router'
 import { usePortal } from '../store'
+import { SouvenirRequests } from '../components/SouvenirRequests'
 import { money, dateLong, timeRange, humanize } from '../format'
 import { EmptyState } from '../components/EventCard'
 import { quoteTicketSelection, ticketCheckoutSupported, ticketAvailability, hasPaidAdmissionSelection } from '../lib/ticket-selection'
@@ -647,7 +648,7 @@ export default function EventDetail({ slug }: { slug: string }) {
                 <Card className="rounded-2xl" id="event-souvenirs">
                   <CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-base"><ShoppingBag className="size-4 text-primary" /> Event souvenirs & merchandise</CardTitle></CardHeader>
                   <CardContent className="space-y-3">
-                    <p className="text-xs leading-relaxed text-muted-foreground">The organizer's current product catalogue is displayed below. Online merchandise ordering and collection QR codes are not yet active, so no payment is collected for these items through this page.</p>
+                    <p className="text-xs leading-relaxed text-muted-foreground">The organizer's current product catalogue is displayed below. You can submit a non-binding purchase request when signed in. Payment and collection QR codes are not yet active.</p>
                     <div className="grid gap-3 sm:grid-cols-2">
                       {event.souvenirs.map((product) => (
                         <article key={product.id} className="grid grid-cols-[64px_minmax(0,1fr)] items-center gap-x-3 gap-y-2 rounded-xl border border-border/70 p-3">
@@ -658,7 +659,7 @@ export default function EventDetail({ slug }: { slug: string }) {
                         </article>
                       ))}
                     </div>
-                  </CardContent>
+                  {user&&<SouvenirRequests key={event.id} eventId={event.id} products={event.souvenirs} allowCreate={['PUBLISHED','LIVE','POSTPONED'].includes(event.status)}/>}</CardContent>
                 </Card>
               )}
 
