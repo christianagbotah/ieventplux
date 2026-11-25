@@ -1889,6 +1889,7 @@ model ServiceProviderProfile {
   updatedAt DateTime @updatedAt
   owner User @relation(fields: [ownerId], references: [id], onDelete: Restrict)
   enquiries ServiceEnquiry[]
+  areaConsent ProviderServiceAreaConsent?
   @@unique([ownerId, category, country])
   @@index([country, category, published, reviewStatus])
   @@index([ownerId, createdAt])
@@ -1927,4 +1928,30 @@ model ServiceAppointment {
   updatedAt DateTime @updatedAt
   enquiry ServiceEnquiry @relation(fields: [enquiryId], references: [id], onDelete: Restrict)
   @@index([status, startsAt, endsAt])
+}
+
+// Public community catalogue; coordinates represent a reviewed community anchor,
+// never a person's home, device or current vehicle position.
+model ServiceArea {
+  id String @id @default(cuid())
+  country String
+  region String
+  name String
+  latitude Float
+  longitude Float
+  active Boolean @default(true)
+  createdAt DateTime @default(now())
+  createdBy String
+  consents ProviderServiceAreaConsent[]
+  @@unique([country,region,name])
+  @@index([country,active,region,name])
+}
+model ProviderServiceAreaConsent {
+  providerId String @id
+  areaId String
+  consentedAt DateTime
+  revokedAt DateTime?
+  provider ServiceProviderProfile @relation(fields: [providerId], references: [id], onDelete: Restrict)
+  area ServiceArea @relation(fields: [areaId], references: [id], onDelete: Restrict)
+  @@index([areaId,revokedAt])
 }
