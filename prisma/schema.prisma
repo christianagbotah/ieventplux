@@ -1607,6 +1607,7 @@ model MarketplaceStore {
   coverUrl          String?
   website           String?
   country           String   @default("GH")
+  region            String?
   city              String?
   pickupAddress     String?
   currency          String   @default("GHS")

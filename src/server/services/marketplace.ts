@@ -70,7 +70,8 @@ export async function getStoreCatalogue(slug: string, viewerId: string | null) {
     store: {
       id:store.id, slug:store.slug, name:store.name, category:store.category,
       tagline:store.tagline, description:store.description,
-      country:store.country, city:store.city, website:store.website,
+      country:store.country, region:store.region, city:store.city, website:store.website,
+      ...(owner?{pickupAddress:store.pickupAddress}:{}),
       logoUrl:store.logoUrl, coverUrl:store.coverUrl,
       status:store.status, currency:store.currency,
       verificationState:store.verificationState,
@@ -103,7 +104,7 @@ export async function createStore(userId: string, raw: unknown) {
   if (existing >= 8) throw errors.conflict('An account can manage up to eight stores.')
   try {
     const store = await db.marketplaceStore.create({ data:{
-      ...body, ownerId:userId, country:'GH', currency:'GHS',
+      ...body, ownerId:userId, currency:'GHS',
       status:'DRAFT', verificationState:'UNVERIFIED',
     }, select:{ id:true, slug:true, status:true, name:true } })
     await audit({ actorUserId:userId, actorLabel:'store-owner', action:'marketplace.store.create',

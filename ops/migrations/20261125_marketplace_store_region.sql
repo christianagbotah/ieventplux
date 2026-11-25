@@ -1,0 +1,1 @@
+ALTER TABLE "MarketplaceStore" ADD COLUMN IF NOT EXISTS "region" TEXT;
