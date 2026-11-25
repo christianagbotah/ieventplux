@@ -44,6 +44,8 @@ export async function recordSandboxNotification(raw:Uint8Array,header:string,key
   if(attempt.providerTransactionId&&attempt.providerTransactionId!==event.providerTransactionId)throw new Error('Conflicting provider transaction.')
   const updated=await tx.platformSandboxAttempt.updateMany({where:{id:attempt.id,OR:[{providerTransactionId:null},{providerTransactionId:event.providerTransactionId}]},data:{providerTransactionId:event.providerTransactionId,status:'NOTIFICATION_RECEIVED'}})
   if(updated.count!==1)throw new Error('Conflicting provider transaction.')
+  const evidence=await tx.platformSandboxCollectionEvidence.findUnique({where:{attemptId:attempt.id}})
+  if(evidence&&evidence.providerTransactionId!==event.providerTransactionId)throw new Error('Notification conflicts with independent collection evidence.')
   await tx.platformSandboxNotification.upsert({where:{dedupKey:event.dedupKey},create:{dedupKey:event.dedupKey,attemptId:attempt.id,providerTransactionId:event.providerTransactionId},update:{}})
   return {status:'NOTIFICATION_RECEIVED' as const,fulfillmentEnabled:false as const}
  })

@@ -1811,6 +1811,8 @@ model PlatformSandboxAttempt {
   updatedAt DateTime @updatedAt
   intent PlatformPaymentIntent @relation(fields: [intentId], references: [id], onDelete: Restrict)
   notifications PlatformSandboxNotification[]
+  checkout PlatformSandboxCheckout?
+  collectionEvidence PlatformSandboxCollectionEvidence?
 }
 
 model PlatformSandboxNotification {
@@ -1820,4 +1822,25 @@ model PlatformSandboxNotification {
   createdAt DateTime @default(now())
   attempt PlatformSandboxAttempt @relation(fields: [attemptId], references: [id], onDelete: Restrict)
   @@index([attemptId])
+}
+
+// Test transport only; ambiguous initialization requires manual reconciliation.
+model PlatformSandboxCheckout {
+  attemptId String @id
+  requestHash String
+  status String @default("INITIALIZING")
+  checkoutUrl String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  attempt PlatformSandboxAttempt @relation(fields: [attemptId], references: [id], onDelete: Restrict)
+}
+model PlatformSandboxCollectionEvidence {
+  attemptId String @id
+  providerTransactionId String @unique
+  amountMinor Int
+  currency String
+  recipientCode String?
+  allocation String
+  verifiedAt DateTime @default(now())
+  attempt PlatformSandboxAttempt @relation(fields: [attemptId], references: [id], onDelete: Restrict)
 }
