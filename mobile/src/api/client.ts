@@ -708,7 +708,14 @@ export type NearbyServiceProvider=PublicServiceProvider&{region:string;proximity
 export type ProviderCredentialSummary={id:string;kind:string;reviewStatus:string;uploadedAt:string}
 export type FleetVehicle={id:string;label:string;vehicleClass:string;passengerSeats:number;state:string;stationArea:ServiceArea|null}
 export type FleetClass={id:string;min:number;max:number}
+export type CharterPlan={id:string;title:string;origin:ServiceArea;destination:ServiceArea;departureAt:string;returnAt:string|null;passengers:number;state:string;capacityEstimate:{illustrativeSeats:number;vehicles:number}[]}
+export type CharterDraft={title:string;originAreaId:string;destinationAreaId:string;departureAt:string;returnAt:string|null;passengers:number;requestKey:string}
 export const api = {
+  charterPlans:{
+    list:()=>request<{items:CharterPlan[]}>('GET','/transport-charter-plans'),
+    create:(body:CharterDraft)=>request<{item:CharterPlan}>('POST','/transport-charter-plans',body),
+    cancel:(id:string)=>request<{state:string}>('PATCH','/transport-charter-plans/'+encodeURIComponent(id),{action:'CANCEL'}),
+  },
   transportFleet:{
     list:(id:string)=>request<{items:FleetVehicle[];classes:FleetClass[]}>('GET','/service-providers/'+encodeURIComponent(id)+'/vehicles'),
     create:(id:string,body:{label:string;vehicleClass:string;passengerSeats:number;stationAreaId:string|null})=>request<{item:FleetVehicle}>('POST','/service-providers/'+encodeURIComponent(id)+'/vehicles',body),
