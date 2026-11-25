@@ -1891,6 +1891,7 @@ model ServiceProviderProfile {
   enquiries ServiceEnquiry[]
   areaConsent ProviderServiceAreaConsent?
   credentialDocuments ProviderCredentialDocument[]
+  vehicles TransportVehicle[]
   @@unique([ownerId, category, country])
   @@index([country, category, published, reviewStatus])
   @@index([ownerId, createdAt])
@@ -1944,6 +1945,7 @@ model ServiceArea {
   createdAt DateTime @default(now())
   createdBy String
   consents ProviderServiceAreaConsent[]
+  vehicles TransportVehicle[]
   @@unique([country,region,name])
   @@index([country,active,region,name])
 }
@@ -1971,4 +1973,22 @@ model ProviderCredentialDocument {
   provider ServiceProviderProfile @relation(fields: [providerId], references: [id], onDelete: Restrict)
   @@index([providerId, uploadedAt])
   @@index([reviewStatus, uploadedAt])
+}
+
+// Private fleet inventory only. No vehicle is certified or dispatchable.
+model TransportVehicle {
+  id String @id @default(cuid())
+  providerId String
+  label String
+  labelKey String
+  vehicleClass String
+  passengerSeats Int
+  stationAreaId String?
+  state String @default("DRAFT")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  provider ServiceProviderProfile @relation(fields:[providerId],references:[id],onDelete:Restrict)
+  stationArea ServiceArea? @relation(fields:[stationAreaId],references:[id],onDelete:Restrict)
+  @@unique([providerId,labelKey])
+  @@index([providerId,state])
 }
