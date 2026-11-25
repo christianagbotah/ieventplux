@@ -33,8 +33,9 @@ export async function reconcilePreparedSandboxCollection(intentId:string,email:s
  if(!checkout||checkout.requestHash!==createHash('sha256').update(JSON.stringify(plan)).digest('hex'))throw new Error('Matching initialized request required.')
  const verified=await verifyTestCollection(plan,key)
  return db.$transaction(async tx=>{
-  const attempt=await tx.platformSandboxAttempt.findUniqueOrThrow({where:{id:attemptId}})
-  if(attempt.providerTransactionId&&attempt.providerTransactionId!==verified.providerTransactionId)throw new Error('Notification and verification identity mismatch.')
+  // Acquire the same attempt row lock used by notification intake before reading/writing evidence.
+  const locked=await tx.platformSandboxAttempt.updateMany({where:{id:attemptId,OR:[{providerTransactionId:null},{providerTransactionId:verified.providerTransactionId}]},data:{updatedAt:new Date()}})
+  if(locked.count!==1)throw new Error('Notification and verification identity mismatch.')
   const data={attemptId,providerTransactionId:verified.providerTransactionId,amountMinor:verified.amountMinor,currency:verified.currency,recipientCode:plan.subaccount??null,allocation:verified.allocation}
   const existing=await tx.platformSandboxCollectionEvidence.upsert({where:{attemptId},create:data,update:{}})
   if(existing.providerTransactionId!==data.providerTransactionId||existing.amountMinor!==data.amountMinor||existing.currency!==data.currency||existing.recipientCode!==data.recipientCode||existing.allocation!==data.allocation)throw new Error('Conflicting collection evidence.')
