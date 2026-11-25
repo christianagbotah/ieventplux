@@ -77,6 +77,7 @@ model User {
   identityProviderJobs KycProviderJob[]
   livePollVotes       LivePollVote[]
   competitionVotes    CompetitionVote[]
+  marketplacePurchaseRequests MarketplacePurchaseRequest[] @relation("MarketplaceRequestBuyer")
   marketplaceStores MarketplaceStore[] @relation("MarketplaceStoreOwner")
   marketplaceStockChanges MarketplaceStockMovement[] @relation("MarketplaceStockActor")
   questionsAsked      AudienceQuestion[]      @relation("QuestionAuthor")
@@ -1617,6 +1618,7 @@ model MarketplaceStore {
 
   owner             User           @relation("MarketplaceStoreOwner", fields: [ownerId], references: [id])
   organization      Organization?  @relation(fields: [orgId], references: [id])
+  purchaseRequests  MarketplacePurchaseRequest[]
   products          MarketplaceProduct[]
   variants          MarketplaceVariant[]
 
@@ -1689,4 +1691,24 @@ model MarketplaceStockMovement {
 
   @@unique([variantId, requestKey])
   @@index([variantId, createdAt])
+}
+
+// Non-binding buyer request; no reservation, payment or fulfilment implied.
+model MarketplacePurchaseRequest {
+  id           String   @id @default(cuid())
+  storeId      String
+  buyerId      String
+  requestKey   String
+  fingerprint  String
+  currency     String
+  totalMinor   Int
+  unitCount    Int
+  items        Json
+  status       String   @default("REQUESTED")
+  createdAt    DateTime @default(now())
+  store        MarketplaceStore @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  buyer        User @relation("MarketplaceRequestBuyer", fields: [buyerId], references: [id], onDelete: Restrict)
+  @@unique([buyerId, storeId, requestKey])
+  @@index([storeId, createdAt])
+  @@index([buyerId, createdAt])
 }

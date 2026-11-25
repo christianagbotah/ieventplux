@@ -96,9 +96,31 @@ try{
  assert(!JSON.stringify(publicData.data).includes('ownerId')&&
    !JSON.stringify(publicData.data).includes('stockReserved'),
    'public storefront never exposes private owner and inventory reservation fields')
+ const third=await signIn('kojo@example.dev')
+ const requestPath='/marketplace/stores/'+slug+'/requests'
+ const orderBody={requestKey:'purchase-request-'+unique,expectedTotalMinor:70000,
+   items:[{variantId,quantity:2,expectedUnitPriceMinor:35000}]}
+ assert((await send('POST',requestPath,undefined,orderBody)).status===401,'anonymous purchase request denied')
+ assert((await send('POST',requestPath,owner,orderBody)).status===403,'seller cannot request own products')
+ const submitted=await send('POST',requestPath,stranger,orderBody)
+ assert(submitted.status===201&&submitted.data.request.status==='REQUESTED'&&submitted.data.checkoutEnabled===false&&submitted.data.inventoryReserved===false,
+   'buyer persists an explicitly non-binding purchase request')
+ const duplicate=await send('POST',requestPath,stranger,orderBody)
+ assert(duplicate.status===200&&duplicate.data.replayed===true&&duplicate.data.request.id===submitted.data.request.id,'duplicate purchase request is idempotent')
+ const changed={...orderBody,expectedTotalMinor:35000,items:[{variantId,quantity:1,expectedUnitPriceMinor:35000}]}
+ assert((await send('POST',requestPath,stranger,changed)).status===409,'request key cannot be reused with different selection')
+ const stale={...orderBody,requestKey:'stale-purchase-'+unique,expectedTotalMinor:60000,items:[{variantId,quantity:2,expectedUnitPriceMinor:30000}]}
+ assert((await send('POST',requestPath,stranger,stale)).status===409,'stale reviewed price cannot create a request')
+ assert((await send('GET',requestPath,owner)).data.requests.length===1,'seller views incoming purchase request')
+ assert((await send('GET',requestPath,stranger)).data.requests.length===1,'buyer views their purchase request')
+ assert((await send('GET',requestPath,third)).data.requests.length===0,'other buyer cannot see private requests')
+ assert((await send('GET',requestPath)).status===401,'anonymous purchase history denied')
+ const unchanged=await send('GET','/marketplace/stores/'+slug)
+ assert(unchanged.data.products[0].variants[0].available===12,'non-binding request does not reserve inventory')
  console.log('MARKETPLACE_FOUNDATION_SMOKE_PASS')
 }finally{
  if(storeId){
+   await db.marketplacePurchaseRequest.deleteMany({where:{storeId}})
    await db.marketplaceStore.delete({where:{id:storeId}})
    console.log('Synthetic seller and stock ledger deleted from disposable CI DB.')
  }

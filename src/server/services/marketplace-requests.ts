@@ -1,0 +1,59 @@
+import {Prisma} from '@prisma/client'
+import {db} from '@/lib/db'
+import {errors} from '@/server/api'
+import {buildMarketplaceQuote,MarketplaceQuoteError} from '@/server/marketplace-quote-policy'
+import {assertReviewedPrices,parsePurchaseRequest} from '@/server/marketplace-request-policy'
+
+const requestSelect={id:true,status:true,totalMinor:true,currency:true,unitCount:true,items:true,createdAt:true} as const
+
+export async function listPurchaseRequests(slug:string,userId:string){
+  const store=await db.marketplaceStore.findUnique({where:{slug},select:{id:true,ownerId:true}})
+  if(!store)throw errors.notFound('Store not found.')
+  const seller=store.ownerId===userId
+  const requests=await db.marketplacePurchaseRequest.findMany({
+    where:{storeId:store.id,...(seller?{}:{buyerId:userId})},
+    select:requestSelect,orderBy:[{createdAt:'desc'},{id:'desc'}],take:50,
+  })
+  return {requests,seller,checkoutEnabled:false,inventoryReserved:false}
+}
+
+export async function createPurchaseRequest(slug:string,userId:string,raw:unknown){
+  const input=parsePurchaseRequest(raw)
+  try{
+    return await db.$transaction(async tx=>{
+      const store=await tx.marketplaceStore.findUnique({where:{slug},select:{id:true,status:true,deletedAt:true,ownerId:true,currency:true}})
+      if(!store)throw errors.notFound('Store not found.')
+      if(store.ownerId===userId)throw errors.forbidden('Sellers cannot submit requests to their own store.')
+      const key={buyerId:userId,storeId:store.id,requestKey:input.requestKey}
+      const prior=await tx.marketplacePurchaseRequest.findUnique({where:{buyerId_storeId_requestKey:key},select:{...requestSelect,fingerprint:true}})
+      if(prior){
+        if(prior.fingerprint!==input.fingerprint)throw errors.conflict('This request key was used with different items.')
+        const {fingerprint:_fingerprint,...request}=prior
+        void _fingerprint
+        return {request,replayed:true}
+      }
+      if(store.deletedAt||store.status!=='ACTIVE')throw errors.notFound('Store is unavailable.')
+      const variants=await tx.marketplaceVariant.findMany({
+        where:{storeId:store.id,id:{in:input.items.map(i=>i.variantId)},active:true,
+          product:{status:'ACTIVE',deletedAt:null,productKind:'GOODS'}},
+        select:{id:true,sku:true,title:true,priceMinor:true,currency:true,stockOnHand:true,stockReserved:true,
+          product:{select:{id:true,name:true,status:true,productKind:true,deletedAt:true}}},
+      })
+      let quote
+      try{quote=buildMarketplaceQuote(input.items,variants,store.currency);assertReviewedPrices(input,quote)}
+      catch(e){if(e instanceof MarketplaceQuoteError)throw errors.conflict(e.message);throw e}
+      const request=await tx.marketplacePurchaseRequest.create({data:{
+        ...key,fingerprint:input.fingerprint,currency:quote.currency,totalMinor:quote.totalMinor,unitCount:quote.unitCount,
+        items:quote.items.map(({variantId,sku,variantTitle,productId,productName,quantity,unitPriceMinor,lineMinor,currency})=>
+          ({variantId,sku,variantTitle,productId,productName,quantity,unitPriceMinor,lineMinor,currency})),
+      },select:requestSelect})
+      await tx.auditLog.create({data:{actorUserId:userId,actorLabel:'marketplace-buyer',action:'marketplace.request.create',
+        entityType:'MarketplacePurchaseRequest',entityId:request.id,after:JSON.stringify({storeId:store.id,totalMinor:quote.totalMinor})}})
+      return {request,replayed:false}
+    },{isolationLevel:Prisma.TransactionIsolationLevel.Serializable})
+  }catch(e){
+    if(e&&typeof e==='object'&&'code' in e&&(e.code==='P2002'||e.code==='P2034'))
+      throw errors.conflict('Request conflicted. Retry using the same request key.')
+    throw e
+  }
+}
