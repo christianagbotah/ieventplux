@@ -12,8 +12,9 @@ export async function PATCH(req:NextRequest,ctx:Context){
    const where={id:routeId,providerId:id,provider:{ownerId:user.id,owner:{status:'ACTIVE' as const,deletedAt:null}}}
    if(!await tx.transportRouteDraft.findFirst({where,select:{id:true}}))throw errors.notFound('Route unavailable.')
    const result=await tx.transportRouteDraft.updateMany({where:{...where,state:'DRAFT'},data:{state:'ARCHIVED'}})
+   if(result.count)await tx.transportDepartureDraft.updateMany({where:{routeId,state:'DRAFT'},data:{state:'CANCELLED'}})
    if(result.count)await tx.auditLog.create({data:{actorUserId:user.id,actorLabel:'transport-owner',action:'transport-route.archive',entityType:'ServiceProviderProfile',entityId:id,after:JSON.stringify({routeId})}})
    return jsonOk({id:routeId,state:'ARCHIVED',publicationEnabled:false})
-  })
+  },{isolationLevel:'Serializable'})
  })
 }
