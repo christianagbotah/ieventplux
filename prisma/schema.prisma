@@ -43,6 +43,7 @@ model User {
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
+  transportCharterPlans TransportCharterPlan[]
   sessions            Session[]
   memberships         Membership[]
   ownedOrgs           Organization[]         @relation("OrgOwner")
@@ -1946,6 +1947,8 @@ model ServiceArea {
   createdBy String
   consents ProviderServiceAreaConsent[]
   vehicles TransportVehicle[]
+  charterOrigins TransportCharterPlan[] @relation("CharterOrigin")
+  charterDestinations TransportCharterPlan[] @relation("CharterDestination")
   @@unique([country,region,name])
   @@index([country,active,region,name])
 }
@@ -1991,4 +1994,25 @@ model TransportVehicle {
   stationArea ServiceArea? @relation(fields:[stationAreaId],references:[id],onDelete:Restrict)
   @@unique([providerId,labelKey])
   @@index([providerId,state])
+}
+
+// Customer-owned journey planning; no transport operator assignment or booking.
+model TransportCharterPlan {
+  id String @id @default(cuid())
+  customerId String
+  requestKey String
+  title String
+  originAreaId String
+  destinationAreaId String
+  departureAt DateTime
+  returnAt DateTime?
+  passengers Int
+  state String @default("DRAFT")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  customer User @relation(fields:[customerId],references:[id],onDelete:Restrict)
+  origin ServiceArea @relation("CharterOrigin",fields:[originAreaId],references:[id],onDelete:Restrict)
+  destination ServiceArea @relation("CharterDestination",fields:[destinationAreaId],references:[id],onDelete:Restrict)
+  @@unique([customerId,requestKey])
+  @@index([customerId,createdAt])
 }
