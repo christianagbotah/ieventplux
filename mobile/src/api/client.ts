@@ -711,7 +711,13 @@ export type FleetClass={id:string;min:number;max:number}
 export type DriverAssignment={id:string;state:string;expiresAt:string;isExpired:boolean;role:'OWNER'|'DRIVER';vehicle:{label:string;vehicleClass:string;providerName:string};driver:{displayName:string}|null}
 export type CharterPlan={id:string;title:string;origin:ServiceArea;destination:ServiceArea;departureAt:string;returnAt:string|null;passengers:number;state:string;capacityEstimate:{illustrativeSeats:number;vehicles:number}[]}
 export type CharterDraft={title:string;originAreaId:string;destinationAreaId:string;departureAt:string;returnAt:string|null;passengers:number;requestKey:string}
+export type TransportRouteDraft={id:string;label:string;origin:ServiceArea;destination:ServiceArea;departureMinute:number;operatingDays:number[];estimatedMinutes:number;state:string}
 export const api = {
+  transportRoutes:{
+    list:(id:string)=>request<{items:TransportRouteDraft[]}>('GET','/service-providers/'+encodeURIComponent(id)+'/transport-routes'),
+    create:(id:string,body:{label:string;originAreaId:string;destinationAreaId:string;departureTime:string;operatingDays:number[];estimatedMinutes:number})=>request<{item:TransportRouteDraft}>('POST','/service-providers/'+encodeURIComponent(id)+'/transport-routes',body),
+    archive:(id:string,routeId:string)=>request<{state:string}>('PATCH','/service-providers/'+encodeURIComponent(id)+'/transport-routes/'+encodeURIComponent(routeId),{action:'ARCHIVE'}),
+  },
   charterPlans:{
     list:()=>request<{items:CharterPlan[]}>('GET','/transport-charter-plans'),
     create:(body:CharterDraft)=>request<{item:CharterPlan}>('POST','/transport-charter-plans',body),

@@ -1894,6 +1894,7 @@ model ServiceProviderProfile {
   areaConsent ProviderServiceAreaConsent?
   credentialDocuments ProviderCredentialDocument[]
   vehicles TransportVehicle[]
+  transportRoutes TransportRouteDraft[]
   @@unique([ownerId, category, country])
   @@index([country, category, published, reviewStatus])
   @@index([ownerId, createdAt])
@@ -1950,6 +1951,8 @@ model ServiceArea {
   vehicles TransportVehicle[]
   charterOrigins TransportCharterPlan[] @relation("CharterOrigin")
   charterDestinations TransportCharterPlan[] @relation("CharterDestination")
+  routeOrigins TransportRouteDraft[] @relation("TransportRouteOrigin")
+  routeDestinations TransportRouteDraft[] @relation("TransportRouteDestination")
   @@unique([country,region,name])
   @@index([country,active,region,name])
 }
@@ -2034,4 +2037,25 @@ model TransportCharterPlan {
   destination ServiceArea @relation("CharterDestination",fields:[destinationAreaId],references:[id],onDelete:Restrict)
   @@unique([customerId,requestKey])
   @@index([customerId,createdAt])
+}
+
+// Private operator route and departure planning; not a published timetable.
+model TransportRouteDraft {
+  id String @id @default(cuid())
+  providerId String
+  label String
+  labelKey String
+  originAreaId String
+  destinationAreaId String
+  departureMinute Int
+  operatingDays Int[]
+  estimatedMinutes Int
+  state String @default("DRAFT")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  provider ServiceProviderProfile @relation(fields:[providerId],references:[id],onDelete:Restrict)
+  origin ServiceArea @relation("TransportRouteOrigin",fields:[originAreaId],references:[id],onDelete:Restrict)
+  destination ServiceArea @relation("TransportRouteDestination",fields:[destinationAreaId],references:[id],onDelete:Restrict)
+  @@unique([providerId,labelKey])
+  @@index([providerId,state])
 }
