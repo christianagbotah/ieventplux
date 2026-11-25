@@ -12,7 +12,7 @@ import { useConfirm } from '@/components/ui/confirm-dialog-provider'
 import { useToast } from '@/hooks/use-toast'
 import { api, ApiClientError } from '../api'
 import { navigate } from '../router'
-import {basketSelection,type StoreQuote} from '../lib/marketplace-basket'
+import {basketSelection,canAddBasketUnit,type StoreQuote} from '../lib/marketplace-basket'
 import { usePortal } from '../store'
 
 type Variant = {id:string;sku:string;title:string;priceMinor:number;available:number;currency:string;stockOnHand?:number;reserved?:number;active:boolean}
@@ -54,13 +54,14 @@ export default function MarketplaceStorefront({slug}:{slug:string}) {
  const quoteEpoch=useRef(0)
  const catalogueEpoch=useRef(0)
  const lines=basketSelection(basket)
+ const unavailableLines=lines.filter(line=>!data?.products.some(p=>p.variants.some(v=>v.id===line.variantId&&v.available>=line.quantity)))
  const selectQty=(variantId:string,next:number,available:number)=>{
    if(!Number.isSafeInteger(next)||next<0||next>20||quoteLoading||loading||((basket[variantId]??0)<next&&next>available))return
-   setBasket(prev=>{const output={...prev};if(next===0)delete output[variantId];else output[variantId]=next;return output})
+   setBasket(prev=>{if(next>(prev[variantId]??0)&&!canAddBasketUnit(prev,variantId,available))return prev;const output={...prev};if(next===0)delete output[variantId];else output[variantId]=next;return output})
    quoteEpoch.current++;setQuote(null);setQuoteError('')
  }
  async function reviewBasket(){
-   if(!lines.length||quoteLoading||loading)return
+   if(!lines.length||unavailableLines.length||quoteLoading||loading)return
    const request=++quoteEpoch.current
    setQuoteLoading(true);setQuoteError('');setQuote(null)
    try{
@@ -241,7 +242,7 @@ export default function MarketplaceStorefront({slug}:{slug:string}) {
                       onClick={()=>selectQty(v.id,(basket[v.id]??0)-1,v.available)} aria-label={`Remove one ${v.title}`}>−</Button>
                     <span className="w-6 text-center text-sm font-bold tabular-nums" aria-live="polite">{basket[v.id]??0}</span>
                     <Button type="button" size="sm" variant="outline" className="size-9 p-0"
-                      disabled={v.available<=0||(basket[v.id]??0)>=Math.min(v.available,20)||quoteLoading||loading}
+                      disabled={!canAddBasketUnit(basket,v.id,v.available)||quoteLoading||loading}
                       onClick={()=>selectQty(v.id,(basket[v.id]??0)+1,v.available)} aria-label={`Add one ${v.title}`}>+</Button>
                   </div>
                 </div>}
@@ -259,12 +260,17 @@ export default function MarketplaceStorefront({slug}:{slug:string}) {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div><h2 className="text-lg font-extrabold">Review selected items</h2>
           <p className="mt-1 text-xs text-muted-foreground">{lines.reduce((n,line)=>n+line.quantity,0)} units across {lines.length} options · Stock and prices checked on the server</p></div>
-        <Button disabled={!lines.length||quoteLoading||loading} onClick={()=>void reviewBasket()}>
+        <Button disabled={!lines.length||unavailableLines.length>0||quoteLoading||loading} onClick={()=>void reviewBasket()}>
           {quoteLoading?<Loader2 className="mr-2 size-4 animate-spin"/>:<CheckCircle2 className="mr-2 size-4"/>}
           {quoteLoading?'Checking catalogue…':'Check prices & stock'}
         </Button>
       </div>
-      {quoteError&&<div role="alert" className="mt-3 rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{quoteError}</div>}
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs text-muted-foreground">Up to 15 options and 50 units per review.</p>
+        {lines.length>0&&<Button variant="outline" size="sm" disabled={loading||quoteLoading} onClick={()=>{quoteEpoch.current++;setBasket({});setQuote(null);setQuoteError('')}}>Clear selection</Button>}
+      </div>
+      {unavailableLines.length>0&&!loading&&<p role="alert" className="mt-3 rounded-xl border p-3 text-sm">Some selected items are no longer available in the chosen quantity. Reduce their quantities or clear the selection to start again.</p>}
+      {quoteError&&<div role="alert"  className="mt-3 rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{quoteError}</div>}
       {quote&&<div className="mt-4 space-y-3 rounded-xl border bg-card p-4" role="status">
         {quote.items.map(item=><div key={item.variantId} className="flex flex-wrap justify-between gap-3 border-b pb-2 text-sm">
           <div><span className="font-semibold">{item.productName}</span> <span className="text-muted-foreground">{item.variantTitle} × {item.quantity}</span></div>

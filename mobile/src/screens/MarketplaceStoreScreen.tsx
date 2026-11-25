@@ -2,7 +2,7 @@
 import {useCallback,useEffect,useRef,useState} from 'react'
 import {ActivityIndicator,Image,Pressable,ScrollView,StyleSheet,Text,View} from 'react-native'
 import {absoluteUrl,api,ApiClientError,formatMinor,type NativeStoreDetail,type NativeMarketplaceProduct,type NativeMarketplaceQuote} from '../api/client'
-import {marketplaceBasketSelection} from '../lib/marketplace-basket'
+import {marketplaceBasketSelection,canAddBasketUnit} from '../lib/marketplace-basket'
 import {theme} from '../theme'
 import {LabelPill,PremiumBackdrop,SectionHeading,TileGlyph,mobileDesign} from '../ui/PremiumUI'
 import type {MarketplaceStoreScreenProps} from '../navigation'
@@ -19,13 +19,14 @@ export default function MarketplaceStoreScreen({route}:MarketplaceStoreScreenPro
   const quoteEpoch=useRef(0)
   const catalogueEpoch=useRef(0)
   const selected=marketplaceBasketSelection(basket)
+  const unavailableLines=selected.filter(line=>!detail?.products.some(p=>p.variants.some(v=>v.id===line.variantId&&v.available>=line.quantity)))
   const changeQuantity=(variantId:string,next:number,available:number)=>{
     if(!Number.isSafeInteger(next)||next<0||next>20||quoteLoading||loading||((basket[variantId]??0)<next&&next>available))return
-    setBasket(previous=>{const out={...previous};if(next===0)delete out[variantId];else out[variantId]=next;return out})
+    setBasket(previous=>{if(next>(previous[variantId]??0)&&!canAddBasketUnit(previous,variantId,available))return previous;const out={...previous};if(next===0)delete out[variantId];else out[variantId]=next;return out})
     quoteEpoch.current++;setQuote(null);setQuoteError('')
   }
   const reviewBasket=async()=>{
-    if(!selected.length||quoteLoading||loading)return
+    if(!selected.length||unavailableLines.length||quoteLoading||loading)return
     const request=++quoteEpoch.current
     setQuoteLoading(true);setQuoteError('');setQuote(null)
     try{
@@ -82,10 +83,13 @@ export default function MarketplaceStoreScreen({route}:MarketplaceStoreScreenPro
       <Text style={styles.basketKicker}>YOUR SHOPPING SELECTION</Text>
       <Text style={styles.basketTitle}>Review product prices & stock</Text>
       <Text style={styles.basketInfo}>{selected.reduce((sum,line)=>sum+line.quantity,0)} units · {selected.length} selected options. No stock is held.</Text>
-      <Pressable accessibilityRole="button" disabled={!selected.length||quoteLoading||loading} onPress={()=>void reviewBasket()}
-        style={[styles.quoteButton,(!selected.length||quoteLoading||loading)&&styles.quoteDisabled]}>
+      <Pressable accessibilityRole="button" disabled={!selected.length||unavailableLines.length>0||quoteLoading||loading} onPress={()=>void reviewBasket()}
+        style={[styles.quoteButton,(!selected.length||unavailableLines.length>0||quoteLoading||loading)&&styles.quoteDisabled]}>
         <Text style={styles.quoteButtonText}>{quoteLoading?'Checking live catalogue…':'Check current prices & stock'}</Text>
       </Pressable>
+      <Text style={styles.basketInfo}>Up to 15 options and 50 units per review.</Text>
+      {selected.length>0?<Pressable accessibilityRole="button" disabled={loading||quoteLoading} style={[styles.reload,(loading||quoteLoading)&&styles.quoteDisabled]} onPress={()=>{quoteEpoch.current++;setBasket({});setQuote(null);setQuoteError('')}}><Text style={styles.reloadText}>Clear selection</Text></Pressable>:null}
+      {unavailableLines.length>0&&!loading?<Text style={styles.quoteError} accessibilityRole="alert">Some selected items are no longer available in the chosen quantity. Reduce their quantities or clear the selection to start again.</Text>:null}
       {quoteError?<Text style={styles.quoteError} accessibilityRole="alert">{quoteError}</Text>:null}
       {quote?<View style={styles.quoteResult}>
         {quote.items.map(line=><View key={line.variantId} style={styles.quoteRow}>
@@ -132,8 +136,8 @@ function ProductCard({item,basket,onChangeQty,canSelect,selectionLocked}:{item:N
               onPress={()=>onChangeQty(variant.id,(basket[variant.id]??0)-1,variant.available)}><Text style={styles.qtyGlyph}>−</Text></Pressable>
             <Text style={styles.qtyText}>{basket[variant.id]??0}</Text>
             <Pressable accessibilityRole="button" accessibilityLabel={'Add one '+variant.title}
-              disabled={selectionLocked||variant.available<=0||(basket[variant.id]??0)>=Math.min(variant.available,20)}
-              style={[styles.qtyButton,(selectionLocked||variant.available<=0||(basket[variant.id]??0)>=Math.min(variant.available,20))&&styles.qtyDisabled]}
+              disabled={selectionLocked||!canAddBasketUnit(basket,variant.id,variant.available)}
+              style={[styles.qtyButton,(selectionLocked||!canAddBasketUnit(basket,variant.id,variant.available))&&styles.qtyDisabled]}
               onPress={()=>onChangeQty(variant.id,(basket[variant.id]??0)+1,variant.available)}><Text style={styles.qtyGlyph}>+</Text></Pressable>
           </View>:null}
         </View>)}
