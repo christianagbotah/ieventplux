@@ -15,6 +15,7 @@ import { CalendarClock, CheckCircle2, ChevronDown, FileText, ImagePlus, Package,
 import { api, ApiClientError } from '../api'
 import { OrganizerEventCover } from './OrganizerEventCover'
 import { EventAgendaEditor } from './EventAgendaEditor'
+import { SouvenirRequests } from './SouvenirRequests'
 import { money, dateLong } from '../format'
 import { personFormError, souvenirFormError, souvenirPriceMinor, programmePdfError, eventImageError } from '../lib/event-programme-form'
 
@@ -208,6 +209,7 @@ export function EventOperationsEditor({ eventId }: { eventId: string }) {
         </div>
       </header>
       <EventAgendaEditor eventId={eventId} />
+      <SouvenirRequests key={eventId} eventId={eventId}/>
       {loadError && <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-destructive/20 bg-destructive/5 p-4 text-sm text-destructive">
         <span>{loadError}</span>
         <Button type="button" variant="outline" size="sm" onClick={() => void load().catch(() => setLoadError('Could not load programme information. Try again.'))}>
