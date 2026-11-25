@@ -113,7 +113,9 @@ jobs:
           sha="${CANDIDATE_SOURCE_SHA}"
           printf '%s\n' "$sha" > dist-artifact/SOURCE_SHA
           printf '%s\n' "${GITHUB_RUN_ID}" > dist-artifact/CI_RUN_ID
-          tar -C .next/standalone -czf "dist-artifact/ieventplux-${sha}.tar.gz" .
+          # Explicit runtime allowlist: never archive the complete tracing root.
+          tar --exclude='.next/cache' -C .next/standalone -czf "dist-artifact/ieventplux-${sha}.tar.gz" server.js package.json node_modules .next public
+          python3 scripts/verify-runtime-package.py "dist-artifact/ieventplux-${sha}.tar.gz"
           cd dist-artifact
           sha256sum "ieventplux-${sha}.tar.gz" > SHA256SUMS
           sha256sum --check SHA256SUMS
