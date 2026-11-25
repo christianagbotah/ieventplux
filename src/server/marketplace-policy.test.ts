@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { availableStock, parseProductDraft, parseStockAdjustment, parseStoreDraft, stockChangeAllowed } from './marketplace-policy'
+import { availableStock, parseProductDraft, parseVariantPriceChange, parseStockAdjustment, parseStoreDraft, stockChangeAllowed } from './marketplace-policy'
 
 const goodStore = { name:'Kente & Culture Ghana', slug:'kente-culture-gh', category:'Fashion and crafts' }
 const goodProduct = {
@@ -44,4 +44,11 @@ test('stock cannot fall below quantity reserved for buyers',()=>{
  expect(stockChangeAllowed(20,5,-15)).toBe(true)
  expect(stockChangeAllowed(20,5,-16)).toBe(false)
  expect(stockChangeAllowed(0,0,-1)).toBe(false)
+})
+
+test('variant price updates reject stock, identity and noninteger price changes',()=>{
+  expect(parseVariantPriceChange({priceMinor:1250,expectedPriceMinor:1000})).toEqual({priceMinor:1250,expectedPriceMinor:1000})
+  for(const raw of [{priceMinor:0,expectedPriceMinor:1000},{priceMinor:12.5,expectedPriceMinor:1000},
+    {priceMinor:1250},{priceMinor:1250,expectedPriceMinor:1000,stockOnHand:999},
+    {priceMinor:1250,expectedPriceMinor:1000,ownerId:'other'}])expect(()=>parseVariantPriceChange(raw)).toThrow()
 })

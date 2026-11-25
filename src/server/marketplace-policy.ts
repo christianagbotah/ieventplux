@@ -126,3 +126,15 @@ export function stockChangeAllowed(onHand: number, reserved: number, delta: numb
   return Number.isSafeInteger(onHand) && Number.isSafeInteger(reserved) && Number.isSafeInteger(delta)
     && onHand + delta >= reserved && onHand + delta >= 0
 }
+
+/** Compare-and-set pricing; only integer minor units may be changed. */
+export function parseVariantPriceChange(raw:unknown){
+  if(!raw||typeof raw!=='object'||Array.isArray(raw))throw new MarketplacePolicyError('Price change is required.')
+  const x=raw as Record<string,unknown>
+  if(Object.keys(x).some(k=>k!=='priceMinor'&&k!=='expectedPriceMinor'))throw new MarketplacePolicyError('Only price fields are accepted.')
+  const price=x.priceMinor,expected=x.expectedPriceMinor
+  if(typeof price!=='number'||!Number.isSafeInteger(price)||price<1||price>100_000_000||
+     typeof expected!=='number'||!Number.isSafeInteger(expected)||expected<1||expected>100_000_000)
+    throw new MarketplacePolicyError('Enter a valid positive price in minor currency units.')
+  return {priceMinor:price,expectedPriceMinor:expected}
+}

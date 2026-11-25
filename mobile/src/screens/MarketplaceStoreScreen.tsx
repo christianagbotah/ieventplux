@@ -1,6 +1,6 @@
 /** Real seller catalogue; no checkout until certified provider settlement. */
 import {useCallback,useEffect,useRef,useState} from 'react'
-import {ActivityIndicator,Image,Pressable,ScrollView,StyleSheet,Text,View} from 'react-native'
+import {ActivityIndicator,Image,Modal,TextInput,Pressable,ScrollView,StyleSheet,Text,View} from 'react-native'
 import {absoluteUrl,api,ApiClientError,formatMinor,type NativeStoreDetail,type NativeMarketplaceProduct,type NativeMarketplaceQuote} from '../api/client'
 import {marketplaceBasketSelection,canAddBasketUnit} from '../lib/marketplace-basket'
 import {theme} from '../theme'
@@ -12,6 +12,10 @@ export default function MarketplaceStoreScreen({route}:MarketplaceStoreScreenPro
   const [detail,setDetail]=useState<NativeStoreDetail|null>(null)
   const [loading,setLoading]=useState(true)
   const [error,setError]=useState('')
+  const [priceVariant,setPriceVariant]=useState<NativeMarketplaceProduct['variants'][number]|null>(null)
+  const [priceText,setPriceText]=useState('')
+  const [priceBusy,setPriceBusy]=useState(false)
+  const [priceError,setPriceError]=useState('')
   const [basket,setBasket]=useState<Record<string,number>>({})
   const [quote,setQuote]=useState<NativeMarketplaceQuote|null>(null)
   const [quoteLoading,setQuoteLoading]=useState(false)
@@ -47,10 +51,23 @@ export default function MarketplaceStoreScreen({route}:MarketplaceStoreScreenPro
     finally{if(request===catalogueEpoch.current)setLoading(false)}
   },[slug])
   useEffect(()=>{setDetail(null);setBasket({});setQuote(null);setQuoteError('');void load();return()=>{quoteEpoch.current++;catalogueEpoch.current++}},[load])
+  async function savePrice(){
+    if(!priceVariant||priceBusy)return
+    const match=/^(\d{1,7})(?:\.(\d{1,2}))?$/.exec(priceText.trim())
+    if(!match){setPriceError('Enter a positive price with up to two decimal places.');return}
+    const minor=Number(match[1])*100+Number((match[2]??'').padEnd(2,'0'))
+    if(minor<1||minor>100_000_000){setPriceError('Price is out of range.');return}
+    setPriceBusy(true);setPriceError('')
+    try{
+      await api.marketplace.changePrice(priceVariant.id,minor,priceVariant.priceMinor)
+      setPriceVariant(null);await load()
+    }catch(e){setPriceError(e instanceof Error?e.message:'Could not update price.')}
+    finally{setPriceBusy(false)}
+  }
   const store=detail?.store
   const cover=store?.coverUrl?absoluteUrl(store.coverUrl):null
   const logo=store?.logoUrl?absoluteUrl(store.logoUrl):null
-  return <ScrollView style={styles.screen} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+  return <><ScrollView style={styles.screen} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
     {loading&&!detail?<ActivityIndicator size="large" color={theme.colors.primary} style={styles.loader}/>:null}
     {error?<View style={styles.errorBox}><Text style={styles.error} accessibilityRole="alert">{error}</Text>
       <Pressable accessibilityRole="button" onPress={()=>void load()} style={styles.retry}><Text style={styles.retryText}>Try again  ↗</Text></Pressable></View>:null}
@@ -77,7 +94,7 @@ export default function MarketplaceStoreScreen({route}:MarketplaceStoreScreenPro
       <SectionHeading eyebrow="DISCOVER WHAT'S AVAILABLE" title="Products & inventory" subtitle={`${detail.products.length} published products at this storefront`}/>
       {detail.products.length===0?<View style={styles.empty}><TileGlyph kind="store" size={70}/><Text style={styles.emptyTitle}>More products are on the way.</Text>
         <Text style={styles.emptyBody}>This store has no published products yet. Check back as the seller adds new items.</Text></View>:
-        detail.products.map(item=><ProductCard key={item.id} item={item} basket={basket} onChangeQty={changeQuantity} canSelect={!detail.canManage} selectionLocked={quoteLoading||loading}/>)}
+        detail.products.map(item=><ProductCard key={item.id} item={item} basket={basket} onChangeQty={changeQuantity} canSelect={!detail.canManage} selectionLocked={quoteLoading||loading} onEditPrice={detail.canManage&&store.status!=='SUSPENDED'&&item.status!=='ARCHIVED'?(v)=>{setPriceVariant(v);setPriceText((v.priceMinor/100).toFixed(2));setPriceError('')}:undefined}/>)}
     </>:null}
     {detail&&!detail.canManage?<View style={styles.basketPanel}>
       <Text style={styles.basketKicker}>YOUR SHOPPING SELECTION</Text>
@@ -104,8 +121,20 @@ export default function MarketplaceStoreScreen({route}:MarketplaceStoreScreenPro
     </View>:null}
     {detail?<Pressable onPress={()=>void load()} style={styles.reload} accessibilityRole="button"><Text style={styles.reloadText}>Refresh catalogue  ↻</Text></Pressable>:null}
   </ScrollView>
+    <Modal transparent animationType="fade" visible={priceVariant!==null} onRequestClose={()=>{if(!priceBusy)setPriceVariant(null)}} accessibilityViewIsModal>
+      <View style={styles.priceBackdrop}><View style={styles.priceDialog}>
+        <Text style={styles.basketTitle}>Edit product price</Text>
+        <Text style={styles.basketInfo}>{priceVariant?.title} · {priceVariant?.sku}. Inventory is unchanged.</Text>
+        <Text style={styles.variantName}>New price (₵)</Text>
+        <TextInput accessibilityLabel="New price in Ghana cedis" keyboardType="decimal-pad" editable={!priceBusy} value={priceText} onChangeText={setPriceText} style={styles.priceInput}/>
+        {priceError?<Text accessibilityRole="alert" style={styles.quoteError}>{priceError}</Text>:null}
+        <Pressable accessibilityRole="button" disabled={priceBusy} onPress={()=>void savePrice()} style={styles.quoteButton}><Text style={styles.quoteButtonText}>{priceBusy?'Saving…':'Save price'}</Text></Pressable>
+        <Pressable accessibilityRole="button" disabled={priceBusy} onPress={()=>setPriceVariant(null)} style={styles.reload}><Text style={styles.reloadText}>Cancel</Text></Pressable>
+      </View></View>
+    </Modal>
+  </>
 }
-function ProductCard({item,basket,onChangeQty,canSelect,selectionLocked}:{item:NativeMarketplaceProduct;basket:Record<string,number>;onChangeQty:(id:string,next:number,available:number)=>void;canSelect:boolean;selectionLocked:boolean}){
+function ProductCard({item,basket,onChangeQty,canSelect,selectionLocked,onEditPrice}:{item:NativeMarketplaceProduct;basket:Record<string,number>;onChangeQty:(id:string,next:number,available:number)=>void;canSelect:boolean;selectionLocked:boolean;onEditPrice?: (variant:NativeMarketplaceProduct['variants'][number])=>void}){
   const photo=item.images[0]?absoluteUrl(item.images[0]):null
   const priced=item.variants.filter(variant=>variant.priceMinor>=0)
   const from=priced.length?priced.reduce((min,v)=>v.priceMinor<min.priceMinor?v:min,priced[0]!):null
@@ -130,6 +159,7 @@ function ProductCard({item,basket,onChangeQty,canSelect,selectionLocked}:{item:N
           <View style={styles.variantRight}><Text style={styles.variantPrice}>{formatMinor(variant.priceMinor,variant.currency)}</Text>
             <Text style={[styles.variantStock,variant.available===0&&styles.variantOut]}>{variant.available>0?`${variant.available} in stock`:'Out of stock'}</Text>
           </View></View>
+          {onEditPrice&&variant.active?<Pressable accessibilityRole="button" onPress={()=>onEditPrice(variant)} style={styles.reload}><Text style={styles.reloadText}>Edit price</Text></Pressable>:null}
           {canSelect?<View style={styles.qtyGroup}>
             <Pressable accessibilityRole="button" accessibilityLabel={'Remove one '+variant.title}
               disabled={selectionLocked||!(basket[variant.id]??0)} style={[styles.qtyButton,(selectionLocked||!(basket[variant.id]??0))&&styles.qtyDisabled]}
@@ -147,6 +177,7 @@ function ProductCard({item,basket,onChangeQty,canSelect,selectionLocked}:{item:N
   </View>
 }
 const styles=StyleSheet.create({
+  priceBackdrop:{flex:1,justifyContent:"center",padding:20,backgroundColor:"rgba(9,21,33,.70)"},priceDialog:{backgroundColor:"#fff",borderRadius:24,padding:22,gap:12},priceInput:{borderWidth:1,borderColor:mobileDesign.border,borderRadius:12,padding:13,fontSize:17,color:mobileDesign.ink},
   screen:{flex:1,backgroundColor:mobileDesign.canvas},content:{padding:18,paddingBottom:42,gap:18},loader:{margin:22},
   hero:{backgroundColor:mobileDesign.forestDeep,borderRadius:28,overflow:'hidden',padding:21,minHeight:315,
     shadowColor:mobileDesign.forestDeep,shadowOpacity:.22,shadowRadius:20,shadowOffset:{width:0,height:12},elevation:5},
