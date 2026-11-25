@@ -5,6 +5,7 @@ import { activeFeeVersion, computePlatformFee } from '../fees'
 import { getSetting } from '../settings'
 import { checkoutLinePrice, normalizeCheckoutLines } from '../checkout-policy'
 import { supportedTicketCheckoutCurrency } from '../paid-currency-policy'
+import { ticketOrderShadowIntent } from '../ticket-payment-intent'
 
 /**
  * Order creation with database-enforced inventory reservations.
@@ -178,6 +179,10 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
         data: { orderId: created.id, ticketTypeId: item.ticketTypeId, qty: item.qty, status: 'ACTIVE', expiresAt },
       })
     }
+    // Persist the allocation in the same transaction as the order/reservations.
+    // Existing Hubtel/simulator fulfilment remains the sole execution path.
+    const shadow = ticketOrderShadowIntent(created)
+    if (shadow) await tx.platformPaymentIntent.create({ data: shadow })
     return created
   })
 
