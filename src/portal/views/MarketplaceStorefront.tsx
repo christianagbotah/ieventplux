@@ -44,6 +44,8 @@ export default function MarketplaceStorefront({slug}:{slug:string}) {
  const [specs,setSpecs]=useState('')
  const [images,setImages]=useState('')
  const [variantLines,setVariantLines]=useState('Standard | SKU-001 | 10.00')
+ const [priceVariant,setPriceVariant]=useState<Variant|null>(null)
+ const [newPrice,setNewPrice]=useState('')
  const [stockVariant,setStockVariant]=useState<Variant|null>(null)
  const [delta,setDelta]=useState('10')
  const [reason,setReason]=useState('New stock received from supplier')
@@ -155,6 +157,18 @@ export default function MarketplaceStorefront({slug}:{slug:string}) {
    }finally{setBusy(false)}
  }
 
+ async function savePrice(){
+   if(!priceVariant||busy)return
+   setBusy(true)
+   try{
+     await api.patch('/marketplace/variants/'+encodeURIComponent(priceVariant.id)+'/price',{priceMinor:toMinor(newPrice),expectedPriceMinor:priceVariant.priceMinor})
+     setPriceVariant(null)
+     await load()
+     toast({title:'Product price updated'})
+   }catch(e){toast({title:'Price not updated',description:e instanceof Error?e.message:'Try again.',variant:'destructive'})}
+   finally{setBusy(false)}
+ }
+
  async function adjustStock(){
    if(!stockVariant||busy)return
    const amount=Number(delta)
@@ -246,6 +260,7 @@ export default function MarketplaceStorefront({slug}:{slug:string}) {
                       onClick={()=>selectQty(v.id,(basket[v.id]??0)+1,v.available)} aria-label={`Add one ${v.title}`}>+</Button>
                   </div>
                 </div>}
+                {data.canManage&&v.active&&product.status!=='ARCHIVED'&&data.store.status!=='SUSPENDED'&&<Button size="sm" variant="outline" className="mt-2 w-full" disabled={busy} onClick={()=>{setPriceVariant(v);setNewPrice((v.priceMinor/100).toFixed(2))}}>Edit price</Button>}
                 {data.canManage&&<Button size="sm" variant="outline" className="mt-2 w-full" onClick={()=>{setStockVariant(v);setDelta('10');setReason('New stock received from supplier')}}>Adjust inventory</Button>}
               </div>)}
             </div>
@@ -299,6 +314,14 @@ export default function MarketplaceStorefront({slug}:{slug:string}) {
         <p className="text-xs text-muted-foreground">Prices are stored in integer minor units, not floating-point currency. Inventory starts at zero and must be received separately.</p>
       </div>
       <DialogFooter><Button variant="outline" onClick={()=>setProductOpen(false)} disabled={busy}>Cancel</Button><Button disabled={busy||name.trim().length<3||description.trim().length<15} onClick={()=>void submitProduct()}>{busy&&<Loader2 className="mr-1 size-4 animate-spin"/>}Create draft</Button></DialogFooter>
+    </DialogContent>
+  </Dialog>
+  <Dialog open={priceVariant!==null} onOpenChange={open=>{if(!open&&!busy)setPriceVariant(null)}}>
+    <DialogContent className="rounded-2xl">
+      <DialogHeader><DialogTitle>Edit product price</DialogTitle></DialogHeader>
+      <p className="text-sm text-muted-foreground">{priceVariant?.title} · SKU {priceVariant?.sku}. Stock quantities are not changed.</p>
+      <div><Label htmlFor="variant-price">New price (₵)</Label><Input id="variant-price" inputMode="decimal" value={newPrice} onChange={e=>setNewPrice(e.target.value)} disabled={busy}/></div>
+      <DialogFooter><Button variant="outline" disabled={busy} onClick={()=>setPriceVariant(null)}>Cancel</Button><Button disabled={busy||!newPrice.trim()} onClick={()=>void savePrice()}>{busy?'Saving…':'Save price'}</Button></DialogFooter>
     </DialogContent>
   </Dialog>
   <Dialog open={stockVariant!==null} onOpenChange={open=>{if(!open)setStockVariant(null)}}>

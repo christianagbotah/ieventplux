@@ -3,7 +3,7 @@ import { db } from '@/lib/db'
 import { errors } from '@/server/api'
 import {
   availableStock, parseProductDraft, parseStockAdjustment, parseStoreDraft,
-  stockChangeAllowed,
+  stockChangeAllowed, parseVariantPriceChange,
 } from '@/server/marketplace-policy'
 import { audit } from '@/server/audit'
 
@@ -234,4 +234,32 @@ export async function variantStockHistory(id:string,userId:string){
     orderBy:{createdAt:'desc'},take:50,
     select:{id:true,reason:true,qtyDelta:true,balanceAfter:true,createdAt:true},
   })
+}
+
+export async function changeVariantPrice(id:string,userId:string,raw:unknown){
+  const input=parseVariantPriceChange(raw)
+  try{
+    return await db.$transaction(async tx=>{
+      const variant=await tx.marketplaceVariant.findUnique({where:{id},include:{
+        store:{select:{ownerId:true,status:true,deletedAt:true}},
+        product:{select:{status:true,deletedAt:true}},
+      }})
+      if(!variant||variant.store.deletedAt||variant.product.deletedAt)throw errors.notFound('Product variant not found.')
+      if(variant.store.ownerId!==userId)throw errors.forbidden('Seller permission required.')
+      if(variant.store.status==='SUSPENDED'||variant.product.status==='ARCHIVED'||!variant.active)
+        throw errors.conflict('This variant cannot be edited.')
+      if(variant.currency!=='GHS')throw errors.conflict('Unsupported currency.')
+      if(variant.priceMinor!==input.expectedPriceMinor)throw errors.conflict('Price changed elsewhere. Refresh the catalogue and try again.')
+      if(variant.priceMinor===input.priceMinor)return {id,priceMinor:variant.priceMinor}
+      const result=await tx.marketplaceVariant.updateMany({where:{id,priceMinor:input.expectedPriceMinor},data:{priceMinor:input.priceMinor}})
+      if(result.count!==1)throw errors.conflict('Price changed elsewhere. Refresh and try again.')
+      await tx.auditLog.create({data:{actorUserId:userId,actorLabel:'store-owner',action:'marketplace.variant.price',
+        entityType:'MarketplaceVariant',entityId:id,before:JSON.stringify({priceMinor:variant.priceMinor}),
+        after:JSON.stringify({priceMinor:input.priceMinor})}})
+      return {id,priceMinor:input.priceMinor}
+    },{isolationLevel:Prisma.TransactionIsolationLevel.Serializable})
+  }catch(error){
+    if(serialConflict(error))throw errors.conflict('Price changed elsewhere. Refresh and try again.')
+    throw error
+  }
 }

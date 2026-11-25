@@ -190,8 +190,10 @@ export interface NativeMarketplaceVariant {
   priceMinor: number
   currency: string
   available: number
+  active: boolean
 }
 export interface NativeMarketplaceProduct {
+  status: string
   id: string
   name: string
   description: string
@@ -743,6 +745,9 @@ export const api = {
     ),
     store: (slug: string) => request<NativeStoreDetail>(
       'GET', '/marketplace/stores/' + encodeURIComponent(slug),
+    ),
+    changePrice: (id:string,priceMinor:number,expectedPriceMinor:number) => request<{variant:{id:string;priceMinor:number}}>(
+      'PATCH','/marketplace/variants/'+encodeURIComponent(id)+'/price',{priceMinor,expectedPriceMinor},
     ),
     quote: (slug: string, items: Array<{variantId:string;quantity:number}>) => request<NativeMarketplaceQuote>(
       'POST','/marketplace/stores/' + encodeURIComponent(slug) + '/quote', {items},
