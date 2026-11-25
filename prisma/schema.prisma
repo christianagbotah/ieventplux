@@ -1890,6 +1890,7 @@ model ServiceProviderProfile {
   owner User @relation(fields: [ownerId], references: [id], onDelete: Restrict)
   enquiries ServiceEnquiry[]
   areaConsent ProviderServiceAreaConsent?
+  credentialDocuments ProviderCredentialDocument[]
   @@unique([ownerId, category, country])
   @@index([country, category, published, reviewStatus])
   @@index([ownerId, createdAt])
@@ -1954,4 +1955,20 @@ model ProviderServiceAreaConsent {
   provider ServiceProviderProfile @relation(fields: [providerId], references: [id], onDelete: Restrict)
   area ServiceArea @relation(fields: [areaId], references: [id], onDelete: Restrict)
   @@index([areaId,revokedAt])
+}
+
+// Private evidence intake; screening is not certification or activation.
+model ProviderCredentialDocument {
+  id String @id
+  providerId String
+  kind String
+  mime String
+  size Int
+  uploadedAt DateTime @default(now())
+  reviewStatus String @default("PENDING")
+  reviewerId String?
+  reviewedAt DateTime?
+  provider ServiceProviderProfile @relation(fields: [providerId], references: [id], onDelete: Restrict)
+  @@index([providerId, uploadedAt])
+  @@index([reviewStatus, uploadedAt])
 }
