@@ -1,0 +1,22 @@
+'use client'
+import {useCallback,useEffect,useState} from 'react'
+import {Button} from '@/components/ui/button'
+import {Input} from '@/components/ui/input'
+import {Card,CardContent} from '@/components/ui/card'
+import {api} from '../api'
+import {navigate} from '../router'
+import {usePortal} from '../store'
+type Assignment={id:string;state:string;expiresAt:string;isExpired:boolean;role:'OWNER'|'DRIVER';vehicle:{label:string;vehicleClass:string;providerName:string};driver:{displayName:string}|null}
+export default function TransportDriverRoster(){
+ const {user,booted}=usePortal()
+ const [items,setItems]=useState<Assignment[]>([]),[token,setToken]=useState(''),[consent,setConsent]=useState(false),[busy,setBusy]=useState(false),[notice,setNotice]=useState(''),[confirm,setConfirm]=useState('')
+ const load=useCallback(async()=>{try{setItems((await api.get<{items:Assignment[]}>('/transport-driver-assignments')).items)}catch(e){setItems([]);setNotice(e instanceof Error?e.message:'Roster unavailable.')}},[])
+ useEffect(()=>{setItems([]);setToken('');setConsent(false);if(booted&&user)void load()},[booted,user?.id,load])
+ async function accept(){setBusy(true);setNotice('');try{await api.post('/transport-driver-assignments',{token:token.trim(),consent:true});setToken('');setConsent(false);await load();setNotice('Private vehicle assignment accepted. No driving authorization has been granted.')}catch(e){setNotice(e instanceof Error?e.message:'Invitation unavailable.')}finally{setBusy(false)}}
+ async function end(id:string){setBusy(true);try{await api.patch('/transport-driver-assignments/'+encodeURIComponent(id),{action:'END'});setConfirm('');await load();setNotice('Assignment or invitation ended.')}catch(e){setNotice(e instanceof Error?e.message:'Could not end assignment.')}finally{setBusy(false)}}
+ return <main className="mx-auto max-w-4xl space-y-5 px-4 py-8 pb-24"><section className="rounded-3xl bg-emerald-950 p-7 text-white"><p className="text-xs font-bold tracking-widest text-emerald-200">PLUXMOVE · PRIVATE ROSTER</p><h1 className="mt-2 text-3xl font-bold">Driver assignments</h1><p className="mt-3 text-sm text-emerald-100">Manage private fleet invitations and your consented vehicle assignments. Commercial transport and dispatch are not enabled.</p><Button className="mt-4" variant="secondary" onClick={()=>navigate('/services/manage')}>My provider profiles</Button></section>
+ {notice&&<p role="status" className="rounded-xl border p-4 text-sm">{notice}</p>}
+ {!booted?<p>Checking session…</p>:!user?<Button onClick={()=>navigate('/signin')}>Sign in</Button>:<><Card className="rounded-2xl"><CardContent className="space-y-3 p-5"><h2 className="font-bold">Accept a driver invitation</h2><p className="text-sm text-muted-foreground">Accept only a code personally shared by your fleet owner. Your display name will be visible to that owner, not the public. Ask the owner about the assigned vehicle before accepting.</p><Input type="password" autoComplete="off" aria-label="Private driver invitation code" value={token} onChange={e=>setToken(e.target.value)} maxLength={64} placeholder="Invitation code"/><label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={consent} onChange={e=>setConsent(e.target.checked)}/>I consent to this private roster assignment and understand that it is not a licence or dispatch authorization.</label><Button disabled={busy||!consent||! /^[A-Za-z0-9_-]{32}$/.test(token.trim())} onClick={()=>void accept()}>Accept invitation</Button></CardContent></Card>
+ <h2 className="font-bold text-xl">Private assignment history</h2><Button variant="outline" onClick={()=>void load()} disabled={busy}>Refresh</Button>{!items.length&&<p className="text-sm text-muted-foreground">No assignments yet.</p>}{items.map(r=><Card key={r.id} className="rounded-2xl"><CardContent className="space-y-2 p-4"><h3 className="font-bold">{r.vehicle.label}</h3><p className="text-sm">{r.vehicle.providerName} · {r.role.toLowerCase()} · {r.isExpired?'expired invitation':r.state.toLowerCase()}</p>{r.driver&&<p className="text-sm">Driver: {r.driver.displayName}</p>}{r.state!=='ENDED'&&(confirm===r.id?<div className="flex gap-2"><Button variant="destructive" disabled={busy} onClick={()=>void end(r.id)}>Confirm end</Button><Button variant="outline" onClick={()=>setConfirm('')}>Cancel</Button></div>:<Button variant="outline" disabled={busy} onClick={()=>setConfirm(r.id)}>End assignment or invitation</Button>)}</CardContent></Card>)}</>}
+ </main>
+}
