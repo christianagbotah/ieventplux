@@ -697,7 +697,16 @@ async function request<T>(
 // ────────────────────────────────────────────────── endpoint surface used ──
 
 export type SouvenirRequestItem={id:string;productName:string;productSku:string;quantity:number;totalMinor:number;status:string}
+export type ServiceProviderCategory={id:string;division:string;regulated:boolean}
+export type PublicServiceProvider={id:string;displayName:string;category:string;community:string;availability:string;lastConfirmedAt:string|null}
+export type OwnedServiceProvider={id:string;displayName:string;category:string;community:string;reviewStatus:string;published:boolean;availabilityState:string;availableUntil:string|null}
 export const api = {
+  serviceProviders: {
+    discover:(category:string,community:string)=>request<{items:PublicServiceProvider[];categories:ServiceProviderCategory[]}>('GET','/service-providers/discover?country=GH&category='+encodeURIComponent(category)+'&community='+encodeURIComponent(community)),
+    mine:()=>request<{items:OwnedServiceProvider[]}>('GET','/service-providers'),
+    enroll:(body:{category:string;country:string;community:string;displayName:string;serviceDescription:string})=>request<{item:OwnedServiceProvider}>('POST','/service-providers',body),
+    action:(id:string,action:string)=>request<{item:OwnedServiceProvider}>('PATCH','/service-providers/'+encodeURIComponent(id),{action}),
+  },
   souvenirs: {
     requests:(eventId:string)=>request<{items:SouvenirRequestItem[];manager:boolean}>('GET','/events/'+encodeURIComponent(eventId)+'/souvenir-requests'),
     create:(eventId:string,body:{productId:string;quantity:number;expectedUnitPriceMinor:number;requestKey:string})=>request<{request:SouvenirRequestItem}>('POST','/events/'+encodeURIComponent(eventId)+'/souvenir-requests',body),

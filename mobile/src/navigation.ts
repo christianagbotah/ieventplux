@@ -36,6 +36,7 @@ export type RootStackParamList = {
   /** Private-by-default and consented native event attendee networking. */
   EventNetwork: { eventId: string; eventTitle: string }
   EventCompetitions: { eventId: string; eventTitle: string }
+  Services: undefined
   Marketplace: undefined
   MarketplaceStore: { slug: string }
   /** Native LiveKit client in a custom development build only; token stays in RAM. */
