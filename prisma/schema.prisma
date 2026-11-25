@@ -409,6 +409,8 @@ model EventSouvenirProduct {
 
   event          Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
+  purchaseRequests EventSouvenirRequest[]
+
   @@unique([eventId, sku])
   @@index([eventId, active])
 }
@@ -1843,4 +1845,23 @@ model PlatformSandboxCollectionEvidence {
   allocation String
   verifiedAt DateTime @default(now())
   attempt PlatformSandboxAttempt @relation(fields: [attemptId], references: [id], onDelete: Restrict)
+}
+
+// Non-binding merchandise requests; no inventory reservation or payment.
+model EventSouvenirRequest {
+  id String @id @default(cuid())
+  productId String
+  buyerId String
+  requestKey String
+  quantity Int
+  unitPriceMinor Int
+  totalMinor Int
+  currency String
+  productName String
+  productSku String
+  status String @default("REQUESTED")
+  createdAt DateTime @default(now())
+  product EventSouvenirProduct @relation(fields: [productId], references: [id], onDelete: Restrict)
+  @@unique([productId, buyerId, requestKey])
+  @@index([buyerId, createdAt])
 }
