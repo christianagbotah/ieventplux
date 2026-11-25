@@ -90,6 +90,9 @@ jobs:
       - name: Marketplace seller/product/stock validation and security tests
         run: bun test src/server/organization-settlement-policy.test.ts src/server/platform-payment-intent.test.ts src/server/platform-payment-routing.test.ts src/server/marketplace-paystack-sandbox.test.ts src/lib/marketplace-payment-preferences.test.ts src/server/marketplace-settlement-policy.test.ts src/server/marketplace-policy.test.ts src/server/marketplace-request-policy.test.ts src/portal/lib/marketplace-requests.test.ts mobile/src/lib/marketplace-requests.test.ts
 
+      - name: Shared provider directory privacy and availability policy
+        run: bun test src/server/service-directory-policy.test.ts
+
       - name: Platform Paystack sandbox checkout and verification contracts
         run: bun test src/server/souvenir-request-policy.test.ts src/server/ticket-payment-intent.test.ts src/server/payment-certification-policy.test.ts src/server/platform-paystack-transport.test.ts src/server/platform-paystack-webhook.test.ts src/server/platform-paystack-adapter.test.ts
 
