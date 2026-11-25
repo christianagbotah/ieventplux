@@ -4,6 +4,7 @@
  */
 import { randomUUID } from 'node:crypto'
 import { db } from '../src/lib/db'
+import { recordPlannedPaymentIntent } from '../src/server/services/platform-payment-intents'
 
 if(process.env.CI!=='true' || process.env.NODE_ENV==='production' ||
    process.env.IEVENTPLUX_ISOLATED_DB_TEST!=='yes' ||
@@ -32,6 +33,7 @@ async function send(method:string,path:string,cookie?:string,body?:unknown){
 }
 
 let storeId:string|undefined
+let intentSource:string|undefined
 try{
  const owner=await signIn('pastor@lightworld.dev')
  const stranger=await signIn('ama@example.dev')
@@ -47,6 +49,38 @@ try{
  assert((await send('PATCH','/marketplace/stores/'+slug,stranger,{status:'ACTIVE'})).status===403,'another user cannot publish store')
  const activate=await send('PATCH','/marketplace/stores/'+slug,owner,{status:'ACTIVE'})
  assert(activate.status===200,'verified seeded seller publishes store')
+ const settingsPath='/marketplace/stores/'+slug+'/payment-settings'
+ const onboardingPath='/marketplace/stores/'+slug+'/settlement-onboarding'
+ const pref={mobileMoney:true,card:true,cash:true,destination:'BANK'}
+ assert((await send('GET',settingsPath)).status===401,'anonymous cannot read seller payment settings')
+ assert((await send('GET',settingsPath,stranger)).status===403,'unrelated buyer cannot read seller payment preferences')
+ const initialSettings=await send('GET',settingsPath,owner)
+ assert(initialSettings.status===200&&initialSettings.data.checkoutEnabled===false&&initialSettings.data.settlementStatus==='NOT_CONFIGURED'&&initialSettings.data.preferences.mobileMoney===false,'new store has no activated payment or settlement credentials')
+ assert((await send('POST',onboardingPath,owner,{})).status===400,'settlement request requires saved online methods and bank preference')
+ assert((await send('PATCH',settingsPath,stranger,pref)).status===403,'buyer cannot change merchant payment preferences')
+ assert((await send('PATCH',settingsPath,owner,{...pref,verified:true})).status===400,'merchant cannot forge settlement verification')
+ assert((await send('PATCH',settingsPath,owner,{...pref,subaccountCode:'ACCT_invalid'})).status===400,'merchant cannot inject recipient account')
+ const saved=await send('PATCH',settingsPath,owner,pref)
+ assert(saved.status===200&&saved.data.preferences.mobileMoney===true&&saved.data.checkoutEnabled===false,'seller preferences persist without enabling checkout')
+ assert((await send('POST',onboardingPath,stranger,{})).status===403,'unrelated user cannot request onboarding')
+ const requested=await send('POST',onboardingPath,owner,{})
+ assert(requested.status===201&&requested.data.settlementStatus==='REQUESTED'&&requested.data.checkoutEnabled===false,'seller requests sandbox onboarding only')
+ assert((await send('POST',onboardingPath,owner,{})).status===409,'duplicate onboarding is rejected')
+ const afterRequest=await send('GET',settingsPath,owner)
+ assert(afterRequest.data.settlementStatus==='REQUESTED'&&afterRequest.data.settlementAccount?.maskedAccount===null,'onboarding request contains no approved recipient')
+ assert((await send('GET','/marketplace/commission-settings',owner)).status===403,'seller cannot access finance commission administration')
+ assert((await send('POST','/marketplace/settlement-reviews',owner,{storeSlug:slug,subaccountCode:'ACCT_invalid',ownerReviewed:true})).status===403,'seller cannot call finance settlement verification')
+ const safePublic=await send('GET','/marketplace/stores/'+slug)
+ assert(safePublic.status===200&&!JSON.stringify(safePublic.data).includes('settlementAccount')&&!JSON.stringify(safePublic.data).includes('preferences'),'public catalogue never exposes private payment onboarding')
+ intentSource='ci-intent-'+unique
+ const intentInput={purpose:'MARKETPLACE_GOODS' as const,sourceId:intentSource,reference:'CI-PAY-'+unique,currency:'GHS' as const,totalMinor:10000,commissionMinor:1000,beneficiary:{kind:'STORE' as const,id:storeId!},pricingVersion:'ci-rate-v1'}
+ const intents=await Promise.all([recordPlannedPaymentIntent(intentInput),recordPlannedPaymentIntent(intentInput)])
+ assert(intents[0].id===intents[1].id&&intents[0].status==='PLANNED'&&intents[0].beneficiaryGrossMinor===9000,'concurrent identical purchase snapshots persist once without charging')
+ let changedRejected=false
+ try{await recordPlannedPaymentIntent({...intentInput,commissionMinor:500})}catch{changedRejected=true}
+ assert(changedRejected,'persisted transaction commission cannot change on replay')
+ assert(await db.platformPaymentIntent.count({where:{sourceId:intentSource}})===1,'only one durable payment intent exists')
+
  const product={
    name:'Handwoven Ghanaian Kente Cloth',slug:'handwoven-kente-ci',
    category:'Textiles',description:'Synthetic locally-made ceremonial fabric with documented material, size and origin.',
@@ -129,6 +163,7 @@ try{
  assert(unchanged.data.products[0].variants[0].available===12,'non-binding request does not reserve inventory')
  console.log('MARKETPLACE_FOUNDATION_SMOKE_PASS')
 }finally{
+ if(intentSource)await db.platformPaymentIntent.deleteMany({where:{sourceId:intentSource,purpose:'MARKETPLACE_GOODS'}})
  if(storeId){
    await db.marketplacePurchaseRequest.deleteMany({where:{storeId}})
    await db.marketplaceStore.delete({where:{id:storeId}})
