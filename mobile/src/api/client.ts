@@ -700,7 +700,13 @@ export type SouvenirRequestItem={id:string;productName:string;productSku:string;
 export type ServiceProviderCategory={id:string;division:string;regulated:boolean}
 export type PublicServiceProvider={id:string;displayName:string;category:string;community:string;availability:string;lastConfirmedAt:string|null}
 export type OwnedServiceProvider={id:string;displayName:string;category:string;community:string;reviewStatus:string;published:boolean;availabilityState:string;availableUntil:string|null}
+export type ServiceEnquiry={id:string;providerId:string;description:string;community:string;status:string;quoteMinor:number|null;quoteNote:string|null;quoteExpiresAt:string|null;role:'CUSTOMER'|'PROVIDER';provider:{displayName:string;category:string};customer:{displayName:string}}
 export const api = {
+  serviceEnquiries:{
+    list:()=>request<{items:ServiceEnquiry[]}>('GET','/service-enquiries'),
+    create:(body:{providerId:string;requestKey:string;description:string;community:string})=>request<{id:string;status:string}>('POST','/service-enquiries',body),
+    decide:(id:string,body:{action:string;quoteMinor?:number;quoteNote?:string})=>request<{item:{id:string;status:string}}>('PATCH','/service-enquiries/'+encodeURIComponent(id),body),
+  },
   serviceProviders: {
     discover:(category:string,community:string)=>request<{items:PublicServiceProvider[];categories:ServiceProviderCategory[]}>('GET','/service-providers/discover?country=GH&category='+encodeURIComponent(category)+'&community='+encodeURIComponent(community)),
     mine:()=>request<{items:OwnedServiceProvider[]}>('GET','/service-providers'),

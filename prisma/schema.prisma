@@ -80,6 +80,7 @@ model User {
   marketplacePurchaseRequests MarketplacePurchaseRequest[] @relation("MarketplaceRequestBuyer")
   marketplaceStores MarketplaceStore[] @relation("MarketplaceStoreOwner")
   serviceProviderProfiles ServiceProviderProfile[]
+  serviceEnquiries ServiceEnquiry[]
   marketplaceStockChanges MarketplaceStockMovement[] @relation("MarketplaceStockActor")
   questionsAsked      AudienceQuestion[]      @relation("QuestionAuthor")
   answersGiven        AudienceQuestion[]      @relation("QuestionAnswerer")
@@ -1887,7 +1888,29 @@ model ServiceProviderProfile {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   owner User @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  enquiries ServiceEnquiry[]
   @@unique([ownerId, category, country])
   @@index([country, category, published, reviewStatus])
   @@index([ownerId, createdAt])
+}
+
+// A non-binding enquiry and one immutable provider quotation; no booking or payment.
+model ServiceEnquiry {
+  id String @id @default(cuid())
+  providerId String
+  customerId String
+  requestKey String
+  description String
+  community String
+  status String @default("REQUESTED")
+  quoteMinor Int?
+  quoteNote String?
+  quoteExpiresAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  provider ServiceProviderProfile @relation(fields: [providerId], references: [id], onDelete: Restrict)
+  customer User @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  @@unique([providerId,customerId,requestKey])
+  @@index([providerId,createdAt])
+  @@index([customerId,createdAt])
 }
