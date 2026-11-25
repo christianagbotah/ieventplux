@@ -88,7 +88,7 @@ jobs:
         run: bun test src/server/competition-policy.test.ts
 
       - name: Marketplace seller/product/stock validation and security tests
-        run: bun test src/server/platform-payment-intent.test.ts src/server/platform-payment-routing.test.ts src/server/marketplace-paystack-sandbox.test.ts src/lib/marketplace-payment-preferences.test.ts src/server/marketplace-settlement-policy.test.ts src/server/marketplace-policy.test.ts src/server/marketplace-request-policy.test.ts src/portal/lib/marketplace-requests.test.ts mobile/src/lib/marketplace-requests.test.ts
+        run: bun test src/server/organization-settlement-policy.test.ts src/server/platform-payment-intent.test.ts src/server/platform-payment-routing.test.ts src/server/marketplace-paystack-sandbox.test.ts src/lib/marketplace-payment-preferences.test.ts src/server/marketplace-settlement-policy.test.ts src/server/marketplace-policy.test.ts src/server/marketplace-request-policy.test.ts src/portal/lib/marketplace-requests.test.ts mobile/src/lib/marketplace-requests.test.ts
 
       - name: Shared marketplace basket quote pricing, stock, permissions and web/native parity
         run: bun test src/server/marketplace-quote-policy.test.ts src/server/marketplace-quote-surface.test.ts src/portal/lib/marketplace-basket.test.ts mobile/src/lib/marketplace-basket.test.ts
