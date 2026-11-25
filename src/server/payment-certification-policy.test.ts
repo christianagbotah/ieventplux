@@ -13,3 +13,16 @@ test('test case is owner scoped with fixed amount and separate reference namespa
  expect(a.totalMinor).toBe(100)
  expect(a.pricingVersion).toBe('certification-direct-v1')
 })
+
+import {splitCertificationIdentity} from './payment-certification-policy'
+test('split creation requires matching mode and beneficiary; verification never accepts a replacement',()=>{
+ const request={action:'INITIALIZE',caseId,confirmTestOnly:true,mode:'STORE',beneficiaryId:'store-1'}
+ expect(parseCertificationAction(request).beneficiaryId).toBe('store-1')
+ expect(()=>parseCertificationAction({...request,beneficiaryId:undefined})).toThrow()
+ expect(()=>parseCertificationAction({...request,action:'VERIFY'})).toThrow()
+ expect(()=>parseCertificationAction({...request,mode:'DIRECT'})).toThrow()
+ const split=splitCertificationIdentity('finance-a',caseId,'STORE','store-1')
+ expect(split.totalMinor).toBe(10000);expect(split.commissionMinor).toBe(1000)
+ expect(split.beneficiary).toEqual({kind:'STORE',id:'store-1'})
+ expect(split.reference.startsWith('TEST-STORE-')).toBe(true)
+})
