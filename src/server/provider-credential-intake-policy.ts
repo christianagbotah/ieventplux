@@ -15,6 +15,6 @@ export function parseDocumentKind(category:string,kind:unknown,consent:unknown):
 export function screeningDecision(raw:unknown,ownerId:string,reviewerId:string,status:string){
  if(!ownerId||!reviewerId||ownerId===reviewerId||status!=='PENDING'||!raw||typeof raw!=='object'||Array.isArray(raw))throw new Error('Independent pending review required')
  const x=raw as Record<string,unknown>
- if(Object.keys(x).length!==2||x.attested!==true||!['SCREENED','REJECTED'].includes(String(x.decision)))throw new Error('Confirm screening decision')
+ if(Object.keys(x).length!==2||x.attested!==true||typeof x.decision!=='string'||!['SCREENED','REJECTED'].includes(x.decision))throw new Error('Confirm screening decision')
  return x.decision as 'SCREENED'|'REJECTED'
 }

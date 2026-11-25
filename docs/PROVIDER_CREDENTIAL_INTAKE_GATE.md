@@ -1,0 +1,7 @@
+# Provider credential intake (pilot, disabled by default)
+
+The evidence types are platform intake categories, not statutory Ghanaian licensing requirements. A document that is SCREENED has been inspected for intake only; this is not certification. No route in this increment sets a provider as approved, published or jurisdiction-authorized.
+
+Do not set IEVENTPLUX_PROVIDER_DOCUMENT_INTAKE_ENABLED=yes until independent approval of the privacy notice, purpose limitation, evidence families, lawful basis, retention/deletion, encrypted backup and restore, reviewer training and jurisdiction-specific rules. Use synthetic images and an isolated database and storage directory for testing. Production files and signing secrets must never enter GitHub. Secure native image selection and upload remain separate work. The mobile status interface supports history and withdrawal only.
+
+Storage uses the existing private encrypted KYC mechanism with a provider-specific namespace; a deployment must verify the configured directory is outside public runtime and included in encrypted recovery, and assess key lifecycle. Owner withdrawal removes active pending metadata then bytes. Reviewed records require a documented privacy-support process; protected backups must expire under approved policy. Reconcile orphaned files and test authorization and concurrent review before enabling intake. Do not upload actual documents as part of staging smoke tests.

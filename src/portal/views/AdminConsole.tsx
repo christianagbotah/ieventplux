@@ -25,6 +25,7 @@ import { AdminCommunicationsConfig } from '../components/AdminCommunicationsConf
 import { WorkspaceNavigation } from '../components/WorkspaceNavigation'
 import { WorkspaceMetric } from '../components/WorkspaceMetric'
 import { MarketplaceCommissionSettings } from '../components/MarketplaceCommissionSettings'
+import { ProviderCredentialReviews } from '../components/ProviderCredentialReviews'
 import { ServiceAreaAdmin } from '../components/ServiceAreaAdmin'
 import { ServiceProviderReviews } from '../components/ServiceProviderReviews'
 import { PaymentCertificationConsole } from '../components/PaymentCertificationConsole'
@@ -136,7 +137,7 @@ export default function AdminConsole({ route }: { route: Route }) {
             {section === 'orgs' && <Orgs />}
             {section === 'events' && <EventsAdmin />}
             {section === 'moderation' && <Moderation />}
-            {section === 'providers' && (user.role==='SUPER_ADMIN'?<><ServiceAreaAdmin/><ServiceProviderReviews/></>:<p>Super administrator review required.</p>)}
+            {section === 'providers' && (user.role==='SUPER_ADMIN'?<><ServiceAreaAdmin/><ServiceProviderReviews/><ProviderCredentialReviews/></>:<p>Super administrator review required.</p>)}
             {section === 'payments' && <Payments />}
             {section === 'refunds' && <Refunds />}
             {section === 'payouts' && <Payouts />}

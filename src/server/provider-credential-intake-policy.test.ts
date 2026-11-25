@@ -11,6 +11,6 @@ test('only applicable regulated credential family and express consent',()=>{
 })
 test('screening never equals certification and cannot be self-approved',()=>{
  expect(screeningDecision({decision:'SCREENED',attested:true},'owner','reviewer','PENDING')).toBe('SCREENED')
- for(const x of [{decision:'VERIFIED',attested:true},{decision:'APPROVED',attested:true},{decision:'SCREENED',attested:false},{decision:'SCREENED',attested:true,validUntil:'2027-01-01'}])expect(()=>screeningDecision(x,'owner','reviewer','PENDING')).toThrow()
+ for(const x of [{decision:['SCREENED'],attested:true},{decision:'VERIFIED',attested:true},{decision:'APPROVED',attested:true},{decision:'SCREENED',attested:false},{decision:'SCREENED',attested:true,validUntil:'2027-01-01'}])expect(()=>screeningDecision(x,'owner','reviewer','PENDING')).toThrow()
  expect(()=>screeningDecision({decision:'SCREENED',attested:true},'owner','owner','PENDING')).toThrow()
 })
