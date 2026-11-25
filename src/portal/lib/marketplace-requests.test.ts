@@ -10,3 +10,13 @@ test('purchase request submits reviewed prices only and canonical item ordering'
  expect(purchaseRequestFingerprint(quote)).toBe(purchaseRequestFingerprint({...quote,items:[b,a]}))
  expect(purchaseRequestFingerprint(quote)).not.toBe(purchaseRequestFingerprint({...quote,items:[{...a,unitPriceMinor:1100},{...b,unitPriceMinor:300}]}))
 })
+
+test('request actions respect seller and buyer roles and terminal states',async()=>{
+ const {availableRequestDecisions,requestStatusLabel}=await import('./marketplace-requests')
+ expect(availableRequestDecisions(true,'REQUESTED')).toEqual(['ACKNOWLEDGED','DECLINED'])
+ expect(availableRequestDecisions(false,'REQUESTED')).toEqual(['WITHDRAWN'])
+ expect(availableRequestDecisions(true,'ACKNOWLEDGED')).toEqual(['DECLINED'])
+ expect(availableRequestDecisions(false,'WITHDRAWN')).toEqual([])
+ expect(availableRequestDecisions(true,'DECLINED')).toEqual([])
+ expect(requestStatusLabel('ACKNOWLEDGED')).toContain('not confirmed')
+})

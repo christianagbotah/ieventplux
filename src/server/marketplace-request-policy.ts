@@ -32,3 +32,19 @@ export function assertReviewedPrices(input:ReturnType<typeof parsePurchaseReques
   if(quote.totalMinor!==input.expectedTotalMinor||input.items.some(i=>quote.items.find(q=>q.variantId===i.variantId)?.unitPriceMinor!==i.expectedUnitPriceMinor))
     throw new MarketplaceQuoteError('Prices changed. Review the basket again before submitting.')
 }
+
+export type PurchaseRequestDecision='ACKNOWLEDGED'|'DECLINED'|'WITHDRAWN'
+export function parseRequestDecision(raw:unknown):PurchaseRequestDecision{
+ if(!raw||typeof raw!=='object'||Array.isArray(raw))throw new MarketplaceQuoteError('A request decision is required.')
+ const input=raw as Record<string,unknown>
+ if(Object.keys(input).length!==1||!['ACKNOWLEDGED','DECLINED','WITHDRAWN'].includes(String(input.status)))
+   throw new MarketplaceQuoteError('Choose a valid purchase request decision.')
+ if(input.status!=='ACKNOWLEDGED'&&input.status!=='DECLINED'&&input.status!=='WITHDRAWN')throw new MarketplaceQuoteError('Invalid decision.')
+ return input.status
+}
+export function decisionAllowed(role:'seller'|'buyer',current:string,next:PurchaseRequestDecision){
+ if(role==='seller'&&next!=='ACKNOWLEDGED'&&next!=='DECLINED')return false
+ if(role==='buyer'&&next!=='WITHDRAWN')return false
+ if(current===next)return true
+ return current==='REQUESTED'||(current==='ACKNOWLEDGED'&&(next==='DECLINED'||next==='WITHDRAWN'))
+}

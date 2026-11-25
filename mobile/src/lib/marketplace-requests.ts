@@ -12,3 +12,22 @@ export function purchaseRequestFingerprint(quote:ReviewedBasket){
   return JSON.stringify(purchaseRequestBody(quote,''))
 }
 export type PurchaseRequestResponse={request:PurchaseRequestRow;replayed:boolean;checkoutEnabled:false;inventoryReserved:false}
+
+export type RequestDecision='ACKNOWLEDGED'|'DECLINED'|'WITHDRAWN'
+export function requestStatusLabel(status:string){
+ switch(status){
+ case 'REQUESTED':return 'Requested · not confirmed'
+ case 'ACKNOWLEDGED':return 'Seller acknowledged · not confirmed'
+ case 'DECLINED':return 'Declined by seller'
+ case 'WITHDRAWN':return 'Withdrawn by buyer'
+ default:return 'Unknown status'
+ }
+}
+export function availableRequestDecisions(seller:boolean,status:string):RequestDecision[]{
+ if(status==='REQUESTED')return seller?['ACKNOWLEDGED','DECLINED']:['WITHDRAWN']
+ if(status==='ACKNOWLEDGED')return seller?['DECLINED']:['WITHDRAWN']
+ return []
+}
+export function decisionLabel(decision:RequestDecision){
+ return decision==='ACKNOWLEDGED'?'Acknowledge request':decision==='DECLINED'?'Decline request':'Withdraw request'
+}

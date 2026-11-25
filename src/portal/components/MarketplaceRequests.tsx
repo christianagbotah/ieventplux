@@ -3,7 +3,7 @@ import {useCallback,useEffect,useRef,useState} from 'react'
 import {Button} from '@/components/ui/button'
 import {useConfirm} from '@/components/ui/confirm-dialog-provider'
 import {api} from '../api'
-import {purchaseRequestBody,purchaseRequestFingerprint,type ReviewedBasket,type PurchaseRequestHistory,type PurchaseRequestResponse} from '../lib/marketplace-requests'
+import {purchaseRequestBody,purchaseRequestFingerprint,requestStatusLabel,availableRequestDecisions,decisionLabel,type RequestDecision,type PurchaseRequestRow,type ReviewedBasket,type PurchaseRequestHistory,type PurchaseRequestResponse} from '../lib/marketplace-requests'
 const price=(n:number)=>'₵'+(n/100).toLocaleString('en-GH',{minimumFractionDigits:2,maximumFractionDigits:2})
 export function MarketplaceRequests({slug,seller,quote,onSubmitted}:{slug:string;seller:boolean;quote:ReviewedBasket|null;onSubmitted:(submitted:ReviewedBasket)=>void}){
  const confirm=useConfirm()
@@ -13,6 +13,7 @@ export function MarketplaceRequests({slug,seller,quote,onSubmitted}:{slug:string
  const [submissionError,setSubmissionError]=useState('')
  const [notice,setNotice]=useState('')
  const [submitting,setSubmitting]=useState(false)
+ const [decisionBusy,setDecisionBusy]=useState(false)
  const locked=useRef(false)
  const active=useRef(true)
  const epoch=useRef(0)
@@ -42,19 +43,33 @@ export function MarketplaceRequests({slug,seller,quote,onSubmitted}:{slug:string
   }catch(e){if(active.current)setSubmissionError(e instanceof Error?e.message:'Could not submit. Retry with the same reviewed basket.')}
   finally{locked.current=false;if(active.current)setSubmitting(false)}
  }
+ async function decide(id:string,status:RequestDecision){
+  if(locked.current)return
+  locked.current=true;setDecisionBusy(true);setSubmissionError('');setNotice('')
+  try{
+   const approved=await confirm({title:decisionLabel(status)+'?',description:'This changes the purchase request status only. It does not confirm an order, reserve stock or collect payment.',confirmLabel:decisionLabel(status)})
+   if(!approved||!active.current)return
+   const result=await api.patch<{request:PurchaseRequestRow;checkoutEnabled:false;inventoryReserved:false}>('/marketplace/requests/'+encodeURIComponent(id),{status})
+   if(result.checkoutEnabled!==false||result.inventoryReserved!==false)throw new Error('Unexpected purchase request response.')
+   if(!active.current)return
+   setNotice(requestStatusLabel(result.request.status));await load()
+  }catch(e){if(active.current){setSubmissionError(e instanceof Error?e.message:'Could not update request.');await load()}}
+  finally{locked.current=false;if(active.current)setDecisionBusy(false)}
+ }
  return <section className="space-y-3 rounded-2xl border bg-card p-4 sm:p-6" aria-label="Purchase requests">
   <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-extrabold">{seller?'Incoming purchase requests':'Your purchase requests'}</h2><p className="text-xs text-muted-foreground">Non-binding requests only. No payment or inventory is reserved.</p></div>
    <Button variant="outline" size="sm" disabled={loading} onClick={()=>void load()}>{loading?'Refreshing…':'Refresh requests'}</Button></div>
-  {!seller&&quote&&<Button disabled={submitting} onClick={()=>void submit()}>{submitting?'Submitting…':'Submit purchase request · '+price(quote.totalMinor)}</Button>}
+  {!seller&&quote&&<Button disabled={submitting||decisionBusy} onClick={()=>void submit()}>{submitting?'Submitting…':'Submit purchase request · '+price(quote.totalMinor)}</Button>}
   {!seller&&!quote&&<p className="text-xs text-muted-foreground">Review your basket to submit a new request.</p>}
   {submissionError&&<p role="alert" className="text-sm text-destructive">{submissionError}</p>}
   {notice&&<p role="status" className="break-all text-sm text-primary">{notice}</p>}
   {error&&<p role="alert" className="text-sm text-destructive">{error}</p>}
   {history&&history.requests.length===0&&<p className="rounded-xl bg-muted/40 p-4 text-sm text-muted-foreground">No requests yet.</p>}
   {history?.requests.map(row=><article key={row.id} className="space-y-2 rounded-xl border p-4">
-   <div className="flex justify-between gap-2"><strong>{price(row.totalMinor)}</strong><span className="text-xs font-semibold">{row.status==='REQUESTED'?'Requested · not confirmed':row.status}</span></div>
+   <div className="flex justify-between gap-2"><strong>{price(row.totalMinor)}</strong><span className="text-xs font-semibold">{requestStatusLabel(row.status)}</span></div>
    <p className="break-all text-xs text-muted-foreground">{new Date(row.createdAt).toLocaleString()} · {row.id}</p>
    {row.items.map(item=><div key={item.variantId} className="flex justify-between gap-3 text-sm"><span>{item.productName} · {item.variantTitle} × {item.quantity}</span><span className="shrink-0">{price(item.lineMinor)}</span></div>)}
+   <div className="flex flex-wrap gap-2">{availableRequestDecisions(seller,row.status).map(action=><Button key={action} size="sm" variant={action==='ACKNOWLEDGED'?'default':'outline'} disabled={decisionBusy||submitting||loading} onClick={()=>void decide(row.id,action)}>{decisionLabel(action)}</Button>)}</div>
   </article>)}
   {history&&history.requests.length===50&&<p className="text-xs text-muted-foreground">Showing the latest 50 requests.</p>}
  </section>

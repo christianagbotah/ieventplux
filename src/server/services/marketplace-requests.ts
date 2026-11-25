@@ -2,7 +2,7 @@ import {Prisma} from '@prisma/client'
 import {db} from '@/lib/db'
 import {errors} from '@/server/api'
 import {buildMarketplaceQuote,MarketplaceQuoteError} from '@/server/marketplace-quote-policy'
-import {assertReviewedPrices,parsePurchaseRequest} from '@/server/marketplace-request-policy'
+import {assertReviewedPrices,parsePurchaseRequest,parseRequestDecision,decisionAllowed} from '@/server/marketplace-request-policy'
 
 const requestSelect={id:true,status:true,totalMinor:true,currency:true,unitCount:true,items:true,createdAt:true} as const
 
@@ -56,4 +56,33 @@ export async function createPurchaseRequest(slug:string,userId:string,raw:unknow
       throw errors.conflict('Request conflicted. Retry using the same request key.')
     throw e
   }
+}
+
+/** Acknowledgement is not order confirmation; no inventory or financial mutation. */
+export async function decidePurchaseRequest(id:string,userId:string,raw:unknown){
+ const next=parseRequestDecision(raw)
+ try{
+  return await db.$transaction(async tx=>{
+   const row=await tx.marketplacePurchaseRequest.findUnique({where:{id},select:{...requestSelect,buyerId:true,
+     store:{select:{ownerId:true,status:true,deletedAt:true}}}})
+   if(!row)throw errors.notFound('Purchase request not found.')
+   const role=row.store.ownerId===userId?'seller':row.buyerId===userId?'buyer':null
+   if(!role)throw errors.notFound('Purchase request not found.')
+   if((role==='seller'&&next==='WITHDRAWN')||(role==='buyer'&&next!=='WITHDRAWN'))throw errors.forbidden('This decision is not available to your role.')
+   if(role==='seller'&&(row.store.deletedAt||row.store.status==='SUSPENDED'))throw errors.conflict('This store cannot respond to requests.')
+   if(!decisionAllowed(role,row.status,next))throw errors.conflict('This request has already been resolved. Refresh the request list.')
+   if(row.status!==next){
+    const changed=await tx.marketplacePurchaseRequest.updateMany({where:{id,status:row.status},data:{status:next}})
+    if(changed.count!==1)throw errors.conflict('Request changed elsewhere. Refresh and try again.')
+    await tx.auditLog.create({data:{actorUserId:userId,actorLabel:'marketplace-'+role,
+      action:'marketplace.request.decision',entityType:'MarketplacePurchaseRequest',entityId:id,
+      before:JSON.stringify({status:row.status}),after:JSON.stringify({status:next})}})
+   }
+   const request=await tx.marketplacePurchaseRequest.findUniqueOrThrow({where:{id},select:requestSelect})
+   return {request,checkoutEnabled:false,inventoryReserved:false}
+  },{isolationLevel:Prisma.TransactionIsolationLevel.Serializable})
+ }catch(e){
+  if(e&&typeof e==='object'&&'code' in e&&e.code==='P2034')throw errors.conflict('Request changed elsewhere. Refresh and try again.')
+  throw e
+ }
 }
