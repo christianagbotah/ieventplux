@@ -41,6 +41,7 @@ import MeetingAccessScreen from './src/screens/MeetingAccessScreen'
 import EventCommunityScreen from './src/screens/EventCommunityScreen'
 import EventNetworkScreen from './src/screens/EventNetworkScreen'
 import EventCompetitionsScreen from './src/screens/EventCompetitionsScreen'
+import ServicesScreen from './src/screens/ServicesScreen'
 import MarketplaceScreen from './src/screens/MarketplaceScreen'
 import MarketplaceStoreScreen from './src/screens/MarketplaceStoreScreen'
 import { AndroidUpdateNotice } from './src/components/AndroidUpdateNotice'
@@ -133,6 +134,7 @@ function AppRoutes() {
       <Stack.Screen name="EventCommunity" component={EventCommunityScreen} options={{ title: 'Event conversations' }} />
       <Stack.Screen name="EventNetwork" component={EventNetworkScreen} options={{ title: 'Meet attendees' }} />
       <Stack.Screen name="EventCompetitions" component={EventCompetitionsScreen} options={{ title: 'Awards & voting' }} />
+      <Stack.Screen name="Services" component={ServicesScreen} options={{ title: 'Local services' }} />
       <Stack.Screen name="Marketplace" component={MarketplaceScreen} options={{ title: 'Shop & discover' }} />
       <Stack.Screen name="MarketplaceStore" component={MarketplaceStoreScreen} options={{ title: 'Storefront' }} />
       <Stack.Screen name="NativeMeeting" component={NativeMeetingLoader} options={{ headerShown: false, gestureEnabled: false }} />

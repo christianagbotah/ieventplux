@@ -3,7 +3,7 @@ import {Prisma} from '@prisma/client'
 import {db} from '@/lib/db'
 import {handle,jsonOk,requireUser,readJson,rateLimit,errors} from '@/server/api'
 import {parseServiceProviderEnrollment} from '@/server/service-provider-enrollment'
-const fields={id:true,category:true,country:true,community:true,displayName:true,serviceDescription:true,reviewStatus:true,published:true,availabilityState:true,createdAt:true} as const
+const fields={id:true,category:true,country:true,community:true,displayName:true,serviceDescription:true,reviewStatus:true,published:true,availabilityState:true,availableUntil:true,lastConfirmedAt:true,createdAt:true} as const
 export async function GET(){
  return handle(async()=>{
   const user=await requireUser()

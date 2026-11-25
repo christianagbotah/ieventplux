@@ -27,6 +27,7 @@ const EventCompareView = lazy(() => import('./views/EventCompareView'))
 const LiveNow = lazy(() => import('./views/LiveNow'))
 const Reels = lazy(() => import('./views/Reels'))
 const FollowingFeed = lazy(() => import('./views/FollowingFeed'))
+const ServiceDirectory = lazy(() => import('./views/ServiceDirectory'))
 const MarketplaceExplore = lazy(() => import('./views/MarketplaceExplore'))
 const MarketplaceStorefront = lazy(() => import('./views/MarketplaceStorefront'))
 const MarketplaceSellerStudio = lazy(() => import('./views/MarketplaceSellerStudio'))
@@ -60,6 +61,7 @@ const NAV = [
   { path: '/live', label: 'Live Now', icon: Radio },
   { path: '/reels', label: 'Reels', icon: Film },
   { path: '/shop', label: 'Shop', icon: ShoppingBag },
+  { path: '/services', label: 'Services', icon: Compass },
 ]
 
 const MOBILE_NAV = [
@@ -176,6 +178,8 @@ export default function AppPortal() {
         return <FollowingFeed />
       case 'shop':
         return param ? <MarketplaceStorefront key={param} slug={param} /> : <MarketplaceExplore />
+      case 'services':
+        return <ServiceDirectory key={param||'discover'} manage={param==='manage'}/>
       case 'seller':
         return <MarketplaceSellerStudio />
       case 'effects':
@@ -375,6 +379,9 @@ export default function AppPortal() {
                         <ShieldCheck className="h-4 w-4" /> Platform Admin
                       </DropdownMenuItem>
                     )}
+                    <DropdownMenuItem onClick={() => navigate('/services/manage')}>
+                      <Compass className="h-4 w-4" /> My service profiles
+                    </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={() => void doLogout()} variant="destructive">
                       <LogOut className="h-4 w-4" /> Sign out

@@ -44,6 +44,7 @@ export default function MarketplaceScreen({navigation}:MarketplaceScreenProps){
       </View>
     </View>
     <View style={styles.advisory}><Text style={styles.advisoryIcon}>ⓘ</Text><Text style={styles.advisoryText}>Independent storefront discovery is available. Online checkout and delivery are not yet enabled for these stores.</Text></View>
+    <Pressable accessibilityRole="button" onPress={()=>navigation.navigate('Services')} style={styles.advisory}><Text style={styles.advisoryText}>Find local services or register as a service provider  →</Text></Pressable>
     <SectionHeading eyebrow="OUR COMMUNITY OF SELLERS" title="Explore storefronts"
       subtitle={loading?'Finding published sellers…':`${stores.length} ${stores.length===1?'store':'stores'} in this view`}/>
     {loading?<ActivityIndicator color={theme.colors.primary} style={styles.loader}/>:null}
