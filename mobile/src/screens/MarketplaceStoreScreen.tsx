@@ -4,11 +4,14 @@ import {ActivityIndicator,Image,Modal,TextInput,Pressable,ScrollView,StyleSheet,
 import {absoluteUrl,api,ApiClientError,formatMinor,type NativeStoreDetail,type NativeMarketplaceProduct,type NativeMarketplaceQuote} from '../api/client'
 import {marketplaceBasketSelection,canAddBasketUnit} from '../lib/marketplace-basket'
 import {theme} from '../theme'
+import {useSession} from '../store/session'
+import {MarketplaceRequests} from '../components/MarketplaceRequests'
 import {LabelPill,PremiumBackdrop,SectionHeading,TileGlyph,mobileDesign} from '../ui/PremiumUI'
 import type {MarketplaceStoreScreenProps} from '../navigation'
 
 export default function MarketplaceStoreScreen({route}:MarketplaceStoreScreenProps){
   const {slug}=route.params
+  const {user}=useSession()
   const [detail,setDetail]=useState<NativeStoreDetail|null>(null)
   const [loading,setLoading]=useState(true)
   const [error,setError]=useState('')
@@ -49,7 +52,7 @@ export default function MarketplaceStoreScreen({route}:MarketplaceStoreScreenPro
       if(request===catalogueEpoch.current){setDetail(result);setError('')}
     }catch(cause){if(request===catalogueEpoch.current){setDetail(null);setError(cause instanceof ApiClientError?cause.message:'Cannot load storefront.')}}
     finally{if(request===catalogueEpoch.current)setLoading(false)}
-  },[slug])
+  },[slug,user?.id])
   useEffect(()=>{setDetail(null);setBasket({});setQuote(null);setQuoteError('');void load();return()=>{quoteEpoch.current++;catalogueEpoch.current++}},[load])
   async function savePrice(){
     if(!priceVariant||priceBusy)return
@@ -89,7 +92,7 @@ export default function MarketplaceStoreScreen({route}:MarketplaceStoreScreenPro
       </View>
       {store.description?<View style={styles.about}><Text style={styles.aboutTitle}>About this store</Text><Text style={styles.aboutText}>{store.description}</Text></View>:null}
       <View style={styles.notice}><Text style={styles.noticeIcon}>ⓘ</Text><View style={styles.noticeBody}>
-        <Text style={styles.noticeTitle}>Product discovery only</Text><Text style={styles.noticeText}>Prices, stock and options come from the seller's published catalogue. Online checkout and delivery are not yet available.</Text>
+        <Text style={styles.noticeTitle}>Product discovery & purchase requests</Text><Text style={styles.noticeText}>Prices, stock and options come from the seller's published catalogue. Online checkout and delivery are not yet available.</Text>
       </View></View>
       <SectionHeading eyebrow="DISCOVER WHAT'S AVAILABLE" title="Products & inventory" subtitle={`${detail.products.length} published products at this storefront`}/>
       {detail.products.length===0?<View style={styles.empty}><TileGlyph kind="store" size={70}/><Text style={styles.emptyTitle}>More products are on the way.</Text>
@@ -119,6 +122,8 @@ export default function MarketplaceStoreScreen({route}:MarketplaceStoreScreenPro
       </View>:null}
       {!quote?<Text style={styles.basketInfo}>Select product quantities above. This is an estimate, not an order or checkout.</Text>:null}
     </View>:null}
+    {detail&&user?<MarketplaceRequests key={user.id+':'+slug+':'+detail.canManage} slug={slug} seller={detail.canManage} quote={quote} onSubmitted={submitted=>setQuote(current=>current===submitted?null:current)}/>:null}
+    {detail&&!user?<Text style={styles.basketInfo}>Sign in to submit purchase requests.</Text>:null}
     {detail?<Pressable onPress={()=>void load()} style={styles.reload} accessibilityRole="button"><Text style={styles.reloadText}>Refresh catalogue  ↻</Text></Pressable>:null}
   </ScrollView>
     <Modal transparent animationType="fade" visible={priceVariant!==null} onRequestClose={()=>{if(!priceBusy)setPriceVariant(null)}} accessibilityViewIsModal>

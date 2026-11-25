@@ -14,6 +14,7 @@ import { api, ApiClientError } from '../api'
 import { navigate } from '../router'
 import {basketSelection,canAddBasketUnit,type StoreQuote} from '../lib/marketplace-basket'
 import { usePortal } from '../store'
+import {MarketplaceRequests} from '../components/MarketplaceRequests'
 
 type Variant = {id:string;sku:string;title:string;priceMinor:number;available:number;currency:string;stockOnHand?:number;reserved?:number;active:boolean}
 type Product = {id:string;slug:string;name:string;shortDesc:string|null;description:string;brand:string|null;category:string;productKind:string;specifications:Record<string,string>;images:string[];status:string;variants:Variant[]}
@@ -296,6 +297,8 @@ export default function MarketplaceStorefront({slug}:{slug:string}) {
       </div>}
       {!quote&&<p className="mt-3 text-xs text-muted-foreground">Select available variants above, then check the live catalogue. No inventory is held and no order or payment will be created.</p>}
     </section>}
+    {user&&<MarketplaceRequests key={user.id+':'+slug+':'+data.canManage} slug={slug} seller={data.canManage} quote={quote} onSubmitted={submitted=>setQuote(current=>current===submitted?null:current)}/>}
+    {!user&&!data.canManage&&<Button variant="outline" onClick={()=>navigate('/signin')}>Sign in to submit purchase requests</Button>}
     <p className="rounded-xl border bg-muted/30 p-4 text-xs leading-6 text-muted-foreground">
       <CheckCircle2 className="mr-1 inline size-4 text-primary"/> Product listings show seller-provided descriptions and inventory. Platform checkout, order delivery and refunds are not yet enabled for independent stores. Unverified sellers are not represented as verified.
     </p>
