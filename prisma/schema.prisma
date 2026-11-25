@@ -79,6 +79,7 @@ model User {
   competitionVotes    CompetitionVote[]
   marketplacePurchaseRequests MarketplacePurchaseRequest[] @relation("MarketplaceRequestBuyer")
   marketplaceStores MarketplaceStore[] @relation("MarketplaceStoreOwner")
+  serviceProviderProfiles ServiceProviderProfile[]
   marketplaceStockChanges MarketplaceStockMovement[] @relation("MarketplaceStockActor")
   questionsAsked      AudienceQuestion[]      @relation("QuestionAuthor")
   answersGiven        AudienceQuestion[]      @relation("QuestionAnswerer")
@@ -1864,4 +1865,29 @@ model EventSouvenirRequest {
   product EventSouvenirProduct @relation(fields: [productId], references: [id], onDelete: Restrict)
   @@unique([productId, buyerId, requestKey])
   @@index([buyerId, createdAt])
+}
+
+
+// Wave 1: private provider enrollment. No dispatch or public listing until approval.
+model ServiceProviderProfile {
+  id String @id @default(cuid())
+  ownerId String
+  category String
+  country String
+  community String
+  displayName String
+  serviceDescription String
+  reviewStatus String @default("PENDING")
+  published Boolean @default(false)
+  jurisdictionApproved Boolean @default(false)
+  credentialValidUntil DateTime?
+  availabilityState String @default("OFFLINE")
+  availableUntil DateTime?
+  lastConfirmedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  @@unique([ownerId, category, country])
+  @@index([country, category, published, reviewStatus])
+  @@index([ownerId, createdAt])
 }
