@@ -7,13 +7,13 @@ import { cn } from "@/lib/utils"
 
 /**
  * iEventPlux button contract:
- * - consistent 44px default hit target across public / organizer / admin
+ * - consistent 48px default hit target across public / organizer / admin
  * - focused keyboard actions are always discoverable
  * - async buttons expose a busy state and cannot submit twice
  * - asChild remains a single Radix Slot child (never adds a spinner sibling)
  */
 const buttonVariants = cva(
-  "inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm font-semibold tracking-[-0.01em] outline-none transition-[background-color,border-color,color,box-shadow,transform] duration-200 ease-out motion-reduce:transform-none motion-reduce:transition-none focus-visible:ring-[3px] focus-visible:ring-ring/35 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-px disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/30 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "inline-flex shrink-0 items-center justify-center gap-2 whitespace-normal text-center rounded-xl text-base font-semibold tracking-[-0.01em] outline-none transition-[background-color,border-color,color,box-shadow,transform] duration-200 ease-out motion-reduce:transform-none motion-reduce:transition-none focus-visible:ring-[3px] focus-visible:ring-ring/35 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-px disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/30 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
@@ -27,10 +27,10 @@ const buttonVariants = cva(
         link: "h-auto rounded-md px-1 text-primary underline-offset-4 shadow-none hover:underline",
       },
       size: {
-        default: "h-11 min-h-11 px-4 has-[>svg]:px-3.5",
+        default: "min-h-12 h-auto py-2.5 px-4 has-[>svg]:px-3.5",
         sm: "h-9 min-h-9 gap-1.5 rounded-lg px-3 text-xs sm:text-sm has-[>svg]:px-2.5",
-        lg: "h-12 min-h-12 rounded-xl px-6 text-base has-[>svg]:px-5",
-        icon: "size-11",
+        lg: "min-h-12 h-auto py-3 rounded-xl px-6 text-base has-[>svg]:px-5",
+        icon: "size-12",
         "icon-sm": "size-9 rounded-lg",
         "icon-lg": "size-12 rounded-xl",
       },
