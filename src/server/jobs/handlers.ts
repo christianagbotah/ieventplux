@@ -1,3 +1,5 @@
+import { hasCurrentDemandEntitlement } from '../event-demand-access'
+import { reminderNotice } from '../event-demand-policy'
 import { db } from '../../lib/db'
 import { env } from '../env'
 import { sendSms, checkSmsDelivery } from '../hubtel/sms'
@@ -170,7 +172,7 @@ async function handleReminders(): Promise<string> {
   const soon = new Date(now.getTime() + 24 * 3600_000)
   const events = await db.event.findMany({
     where: { status: 'PUBLISHED', startsAt: { gte: now, lte: soon }, deletedAt: null },
-    select: { id: true, title: true, startsAt: true, slug: true },
+    select: { id: true, title: true, startsAt: true, slug: true, visibility: true },
   })
   let sent = 0
   let optins = 0
@@ -181,8 +183,8 @@ async function handleReminders(): Promise<string> {
     const tickets = await db.ticket.findMany({ where: { eventId: event.id, status: 'VALID' }, select: { userId: true }, distinct: ['userId'] })
     for (const t of tickets.slice(0, 2000)) {
       if (!t.userId) continue
-      await notifyUser({ userId: t.userId, type: 'REMINDER', title: `Coming up: ${event.title}`, body: 'Your event starts within 24 hours.', link: '#/me?tab=tickets' }).catch(() => {})
-      sent += 1
+      const notice = reminderNotice(event.visibility, event.title, true)
+      if (await notifyUser({ userId: t.userId, type: 'REMINDER', ...notice, link: '#/me?tab=tickets' }).catch(() => null)) sent += 1
     }
     // Round 15: explicit "Remind me" opt-ins who do NOT hold a ticket for this
     // event. Ticket holders were just notified above, so they are excluded here.
@@ -190,14 +192,15 @@ async function handleReminders(): Promise<string> {
     const optInRows = await db.eventReminder.findMany({ where: { eventId: event.id }, select: { userId: true }, take: 2000 })
     for (const row of optInRows) {
       if (holderIds.has(row.userId)) continue
-      await notifyUser({
+      if (!await hasCurrentDemandEntitlement(event.id, event.visibility, row.userId)) continue
+      const notice = reminderNotice(event.visibility, event.title, false)
+      const notified = await notifyUser({
         userId: row.userId,
         type: 'REMINDER',
-        title: `Starting soon: ${event.title}`,
-        body: 'This event starts within 24 hours — grab a ticket while some are left.',
-        link: `#/event/${event.slug}`,
-      }).catch(() => {})
-      optins += 1
+        ...notice,
+        link: `#/event/${event.visibility === 'INVITE_ONLY' ? event.id : event.slug}`,
+      }).catch(() => null)
+      if (notified) optins += 1
     }
     await db.platformSetting.create({ data: { key: `reminder:${key}`, value: '1' } }).catch(() => {})
   }

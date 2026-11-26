@@ -10,6 +10,8 @@ on:
       - 'public/**'
       - 'next.config.*'
       - 'src/**'
+      - 'mini-services/worker/**'
+      - 'scripts/verify-worker-package.py'
       - 'prisma/**'
       - 'package.json'
       - 'bun.lock'
@@ -17,6 +19,8 @@ on:
     branches: [main]
     paths:
       - 'src/**'
+      - 'mini-services/worker/**'
+      - 'scripts/verify-worker-package.py'
       - 'prisma/**'
       - 'public/**'
       - 'next.config.*'
@@ -125,5 +129,112 @@ jobs:
         with:
           name: ieventplux-candidate-${{ env.CANDIDATE_SOURCE_SHA }}
           path: dist-artifact/
+          retention-days: 7
+          if-no-files-found: error
+
+  build-worker-artifact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ieventplux_worker_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ieventplux_worker_ci
+      APP_URL: http://127.0.0.1:3100
+      NODE_ENV: production
+      PAYMENTS_SIMULATOR: auto
+      SMS_SIMULATOR: auto
+      WORKER_PORT: '3101'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SOURCE_SHA }}
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.14'
+      - name: Verify revision and initialize disposable schema
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SOURCE_SHA"
+          for key in APP_SECRET WORKER_SECRET REALTIME_SECRET; do
+            value="$(openssl rand -hex 48)"
+            echo "::add-mask::$value"
+            printf '%s=%s\n' "$key" "$value" >> "$GITHUB_ENV"
+          done
+          bun install --frozen-lockfile
+          bunx prisma generate
+          bunx prisma db push
+      - name: Bundle worker with runtime-only Prisma files
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p worker-runtime/node_modules/@prisma worker-runtime/node_modules/.prisma
+          bun build mini-services/worker/index.ts --target=bun --format=esm --external '@prisma/client' --external '@prisma/client/*' --outfile worker-runtime/worker.mjs
+          cp -aL node_modules/@prisma/client worker-runtime/node_modules/@prisma/client
+          cp -aL node_modules/.prisma/client worker-runtime/node_modules/.prisma/client
+          for secret in "$APP_SECRET" "$WORKER_SECRET" "$REALTIME_SECRET"; do
+            if grep -R -q -F -- "$secret" worker-runtime; then
+              echo "HOLD: CI secret embedded in worker runtime" >&2
+              exit 1
+            fi
+          done
+          mkdir -p dist-worker
+          printf '%s\n' "$CANDIDATE_SOURCE_SHA" > dist-worker/SOURCE_SHA
+          printf '%s\n' "$GITHUB_RUN_ID" > dist-worker/CI_RUN_ID
+          tar -C worker-runtime -czf "dist-worker/ieventplux-worker-$CANDIDATE_SOURCE_SHA.tar.gz" worker.mjs node_modules
+          python3 scripts/verify-worker-package.py "dist-worker/ieventplux-worker-$CANDIDATE_SOURCE_SHA.tar.gz"
+          (cd dist-worker && sha256sum "ieventplux-worker-$CANDIDATE_SOURCE_SHA.tar.gz" > SHA256SUMS && sha256sum -c SHA256SUMS)
+      - name: Boot extracted runtime and exercise real job queue
+        shell: bash
+        run: |
+          set -euo pipefail
+          scratch="$(mktemp -d)"
+          tar -xzf "dist-worker/ieventplux-worker-$CANDIDATE_SOURCE_SHA.tar.gz" -C "$scratch"
+          (
+            cd "$scratch"
+            exec bun worker.mjs
+          ) > worker-artifact.log 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true; rm -rf -- "$scratch"' EXIT
+          for i in $(seq 1 30); do
+            if curl -fsS --max-time 2 http://127.0.0.1:3101/health > /dev/null 2>&1; then break; fi
+            kill -0 "$pid"
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:3101/health | python3 -c 'import json,sys; x=json.load(sys.stdin); assert x["status"]=="healthy" and x["service"]=="ieventplux-worker"'
+          for i in $(seq 1 30); do
+            count="$(psql "$DATABASE_URL" -Atc "SELECT count(DISTINCT type) FROM \"OutboxJob\" WHERE status='DONE' AND type IN ('REMINDER_SWEEP','WAITLIST_SWEEP');")"
+            if [ "$count" = 2 ]; then break; fi
+            kill -0 "$pid"
+            sleep 1
+          done
+          test "$count" = 2
+          echo WORKER_RUNTIME_QUEUE_SMOKE_PASSED
+      - name: Upload worker diagnostic logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: worker-artifact-diagnostics
+          path: worker-artifact.log
+          retention-days: 3
+          if-no-files-found: ignore
+      - name: Publish checksum-verified worker runtime
+        uses: actions/upload-artifact@v4
+        with:
+          name: ieventplux-worker-candidate-${{ env.CANDIDATE_SOURCE_SHA }}
+          path: dist-worker/
           retention-days: 7
           if-no-files-found: error

@@ -2,6 +2,8 @@ import { db } from '../../lib/db'
 import { errors } from '../api'
 import { enqueue } from '../outbox'
 import { notifyUser, queueMessage } from './notify'
+import { hasCurrentDemandEntitlement, requireOpenDemand } from '../event-demand-access'
+import { demandIsOpen, waitlistNotice } from '../event-demand-policy'
 
 /**
  * Waitlist for sold-out inventory (real demand capture, honest fulfilment).
@@ -43,8 +45,7 @@ export function remainingFor(tt: { quota: number; soldCount: number; reservedCou
 export async function joinWaitlist(input: WaitlistJoinInput) {
   const event = await db.event.findUnique({ where: { id: input.eventId }, include: { ticketTypes: true } })
   if (!event || event.deletedAt) throw errors.notFound('Event not found.')
-  if (['CANCELLED', 'ENDED', 'POSTPONED'].includes(event.status)) throw errors.conflict('This event is not open for the waitlist.')
-  if (event.startsAt.getTime() < Date.now()) throw errors.conflict('This event has already started.')
+  await requireOpenDemand(event, input.userId)
 
   const activeTypes = event.ticketTypes.filter((tt) => tt.active)
   const soldOut = activeTypes.length > 0 && activeTypes.every((tt) => remainingFor(tt) === 0)
@@ -59,19 +60,28 @@ export async function joinWaitlist(input: WaitlistJoinInput) {
     ticketTypeId = tt.id
   }
 
-  const contact = normalizeContact(input.contact)
+  let contact = normalizeContact(input.contact)
+  if (event.visibility === 'INVITE_ONLY') {
+    const account = input.userId ? await db.user.findUnique({ where: { id: input.userId }, select: { email: true, emailVerifiedAt: true, phone: true, phoneVerifiedAt: true, status: true, deletedAt: true } }) : null
+    if (!account || account.deletedAt || account.status !== 'ACTIVE') throw errors.forbidden('An active account is required.')
+    const verifiedContacts = [account.emailVerifiedAt ? account.email : null, account.phoneVerifiedAt ? account.phone : null].filter((v): v is string => Boolean(v)).map(normalizeContact)
+    if (!verifiedContacts.includes(contact)) throw errors.forbidden('Use a verified contact on your own account.')
+    contact = normalizeContact(account.emailVerifiedAt ? account.email : account.phone!)
+  }
   const name = input.name.trim().slice(0, 80)
   if (name.length < 2) throw errors.badRequest('Tell us your name (at least 2 characters).')
   const partySize = Math.max(1, Math.min(10, Math.round(Number(input.partySize) || 1)))
 
   const existing = await db.waitlistEntry.findUnique({ where: { eventId_contact: { eventId: event.id, contact } } })
+  if (existing?.userId && existing.userId !== input.userId) throw errors.forbidden('This waitlist entry belongs to another account.')
+  if (existing && event.visibility === 'INVITE_ONLY' && existing.userId !== input.userId) throw errors.conflict('Contact already has a waitlist entry; contact the organizer.')
   if (existing && existing.status === 'WAITING') {
     const position = await positionOf(event.id, existing.createdAt)
     return { entry: existing, position, reactivated: false }
   }
 
   const entry = existing
-    ? await db.waitlistEntry.update({ where: { id: existing.id }, data: { status: 'WAITING', name, partySize, ticketTypeId, userId: input.userId ?? existing.userId, notifiedAt: null } })
+    ? await db.waitlistEntry.update({ where: { id: existing.id }, data: { status: 'WAITING', name, partySize, ticketTypeId, userId: input.userId ?? existing.userId, notifiedAt: null, createdAt: new Date() } })
     : await db.waitlistEntry.create({
         data: {
           eventId: event.id,
@@ -93,8 +103,11 @@ async function positionOf(eventId: string, createdAt: Date): Promise<number> {
 }
 
 export async function leaveWaitlist(eventId: string, opts: { userId?: string | null; contact?: string }) {
+  const event = await db.event.findUnique({ where: { id: eventId }, select: { visibility: true, deletedAt: true } })
+  if (!event || event.deletedAt) throw errors.notFound('Event not found.')
+  if (event.visibility === 'INVITE_ONLY' && !opts.userId) throw errors.unauthorized()
   const entry = await db.waitlistEntry.findFirst({
-    where: { eventId, ...(opts.userId ? { userId: opts.userId } : { contact: normalizeContact(opts.contact ?? '') }) },
+    where: { eventId, ...(opts.userId ? { userId: opts.userId } : { userId: null, contact: normalizeContact(opts.contact ?? '') }) },
     orderBy: { createdAt: 'desc' },
   })
   if (!entry) throw errors.notFound('No waitlist entry found for this contact on this event.')
@@ -143,7 +156,7 @@ export async function waitlistOrganizerView(eventId: string) {
 export async function promoteWaitlist(eventId: string, opts: { maxNotify?: number } = {}) {
   const maxNotify = Math.max(1, Math.min(20, opts.maxNotify ?? 10))
   const event = await db.event.findUnique({ where: { id: eventId }, include: { ticketTypes: true } })
-  if (!event || ['CANCELLED', 'ENDED'].includes(event.status)) return { notified: 0, capacity: 0 }
+  if (!event || !demandIsOpen(event, new Date())) return { notified: 0, capacity: 0 }
 
   const availableTypes = event.ticketTypes.filter((tt) => tt.active && remainingFor(tt) > 0)
   const capacity = availableTypes.reduce((sum, tt) => sum + (Number.isFinite(remainingFor(tt)) ? remainingFor(tt) : 99), 0)
@@ -159,14 +172,19 @@ export async function promoteWaitlist(eventId: string, opts: { maxNotify?: numbe
   const when = event.startsAt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: event.timezone || 'Africa/Accra' })
   for (const entry of waiting) {
     if (notified >= maxNotify || notified >= capacity) break
-    const link = `#/event/${event.slug}`
-    const title = 'Tickets just opened up'
-    const body = `${event.title} (${when}) has tickets available again. First come, first served — nothing is held for you, so book soon.`
+    if (!await hasCurrentDemandEntitlement(event.id, event.visibility, entry.userId)) continue
+    const privateEvent = event.visibility === 'INVITE_ONLY'
+    const link = `#/event/${privateEvent ? event.id : event.slug}`
+    const { title, body } = waitlistNotice(event.visibility, event.title, when)
+    let delivered = false
     if (entry.userId) {
-      await notifyUser({ userId: entry.userId, type: 'WAITLIST_PROMOTED', title, body, link }).catch(() => {})
+      delivered = Boolean(await notifyUser({ userId: entry.userId, type: 'WAITLIST_PROMOTED', title, body, link }).catch(() => null))
     }
-    await queueMessage({
-      channel: 'SMS',
+    // Private notices are in-app only; a waitlist contact is not proof of external delivery entitlement.
+    if (!privateEvent) {
+    const queued = await queueMessage({
+      channel: entry.contact.includes('@') ? 'EMAIL' : 'SMS',
+      subject: title,
       target: entry.contact,
       userId: entry.userId ?? null,
       orgId: event.orgId,
@@ -176,6 +194,9 @@ export async function promoteWaitlist(eventId: string, opts: { maxNotify?: numbe
       dedupKey: `wl-promote:${entry.id}:${entry.notifiedAt?.getTime() ?? 0}`,
       eventId: event.id,
     }).catch(() => null)
+    delivered = delivered || Boolean(queued)
+    }
+    if (!delivered) continue
     await db.waitlistEntry.update({ where: { id: entry.id }, data: { status: 'NOTIFIED', notifiedAt: new Date() } })
     notified += 1
   }
