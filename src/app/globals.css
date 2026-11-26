@@ -1565,3 +1565,9 @@ body {
   .ievx-settlement-options { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); }
   .ievx-settlement-options .ievx-payment-option { width: auto; padding: .5rem; }
 }
+
+/* Workspace gets a larger shared frame for its sidebar and independent panes.
+   Preserve content height/scrolling and use breathing room outside the panels. */
+@media (min-width: 1024px) {
+  .ievx-workspace-shell { width: calc(100% - 48px); max-width: 90rem; }
+}
