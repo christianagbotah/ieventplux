@@ -614,7 +614,7 @@ export default function Discover({ route }: { route: Route }) {
 
                   <div className="ievx-hero-cta flex flex-wrap items-center gap-2 lg:hidden">
                     {heroIndex === 0 && primaryEvent ? (
-                      <button type="button" className="ievx-hero-action" onClick={() => navigate('/event/' + primaryEvent.slug)} aria-label={'See featured event ' + primaryEvent.title}>Featured event <ArrowRight className="size-4" aria-hidden /></button>
+                      <button type="button" className="ievx-hero-action" onClick={() => navigate('/event/' + primaryEvent.slug)} aria-label={'See featured event ' + primaryEvent.title}>View event <ArrowRight className="size-4" aria-hidden /></button>
                     ) : heroIndex === 1 ? (
                       <button type="button" className="ievx-hero-action" onClick={() => { setBrowseAll(true); applyFilter('mode', 'ONLINE') }}>Explore online <ArrowRight className="size-4" aria-hidden /></button>
                     ) : heroIndex === 2 ? (
