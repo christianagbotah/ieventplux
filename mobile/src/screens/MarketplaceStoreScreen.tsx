@@ -1,6 +1,6 @@
 /** Real seller catalogue; no checkout until certified provider settlement. */
 import {useCallback,useEffect,useRef,useState} from 'react'
-import {ActivityIndicator,Image,Modal,TextInput,Pressable,ScrollView,StyleSheet,Text,View} from 'react-native'
+import {ActivityIndicator,Alert,Image,Modal,TextInput,Pressable,ScrollView,StyleSheet,Text,View} from 'react-native'
 import {absoluteUrl,api,ApiClientError,formatMinor,type NativeStoreDetail,type NativeMarketplaceProduct,type NativeMarketplaceQuote} from '../api/client'
 import {marketplaceBasketSelection,canAddBasketUnit} from '../lib/marketplace-basket'
 import {theme} from '../theme'
@@ -57,14 +57,14 @@ export default function MarketplaceStoreScreen({route}:MarketplaceStoreScreenPro
   async function savePrice(){
     if(!priceVariant||priceBusy)return
     const match=/^(\d{1,7})(?:\.(\d{1,2}))?$/.exec(priceText.trim())
-    if(!match){setPriceError('Enter a positive price with up to two decimal places.');return}
+    if(!match){setPriceError('Enter a positive price with up to two decimal places.');Alert.alert('Invalid price','Enter a positive price with up to two decimal places.');return}
     const minor=Number(match[1])*100+Number((match[2]??'').padEnd(2,'0'))
-    if(minor<1||minor>100_000_000){setPriceError('Price is out of range.');return}
+    if(minor<1||minor>100_000_000){setPriceError('Price is out of range.');Alert.alert('Invalid price','Price is out of range.');return}
     setPriceBusy(true);setPriceError('')
     try{
       await api.marketplace.changePrice(priceVariant.id,minor,priceVariant.priceMinor)
-      setPriceVariant(null);await load()
-    }catch(e){setPriceError(e instanceof Error?e.message:'Could not update price.')}
+      setPriceVariant(null);Alert.alert('Price updated','The new price has been saved.');await load()
+    }catch(e){const message=e instanceof Error?e.message:'Could not update price.';setPriceError(message);Alert.alert('Price not updated',message)}
     finally{setPriceBusy(false)}
   }
   const store=detail?.store
