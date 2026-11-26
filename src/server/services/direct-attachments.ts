@@ -2,8 +2,8 @@ import sharp from 'sharp'
 import {db} from '../../lib/db'
 import {ApiError,errors} from '../api'
 import {isSupportedImage} from '../media-storage'
-import {MAX_DIRECT_FILE,MAX_DIRECT_MULTIPART,attachmentKey,attachmentsEnabled,safeAttachmentName,pdfSignature,digestAttachment,decryptAttachment} from '../direct-attachment-policy'
-export type PreparedAttachment={filename:string;mime:'image/webp'|'application/pdf';size:number;digest:string;bytes:Buffer}
+import {MAX_DIRECT_FILE,MAX_DIRECT_MULTIPART,attachmentKey,attachmentsEnabled,safeAttachmentName,pdfSignature,digestAttachment,decryptAttachment,voiceMime,voiceSignature} from '../direct-attachment-policy'
+export type PreparedAttachment={filename:string;mime:'image/webp'|'application/pdf'|'audio/mp4'|'audio/webm';size:number;digest:string;bytes:Buffer}
 export const attachmentMetadata={filename:true,mime:true,size:true} as const
 export function requireAttachmentKey(write=false){
  const key=attachmentKey(process.env)
@@ -35,11 +35,15 @@ export async function prepareDirectAttachment(file:File):Promise<PreparedAttachm
  if(file.size<1||file.size>MAX_DIRECT_FILE)throw errors.badRequest('Choose a file no larger than 2 MB.')
  const raw=Buffer.from(await file.arrayBuffer())
  let bytes:Buffer,mime:PreparedAttachment['mime']
- if(file.type==='application/pdf'){
+ const audio=voiceMime(file.type)
+ if(audio){
+  if(!voiceSignature(raw,audio))throw errors.badRequest('Invalid or unsupported voice recording.')
+  bytes=raw;mime=audio
+ }else if(file.type==='application/pdf'){
   if(!pdfSignature(raw))throw errors.badRequest('Invalid PDF document.')
   bytes=raw;mime='application/pdf'
  }else{
-  if(!isSupportedImage(raw,file.type))throw errors.badRequest('Only JPEG, PNG, WebP and PDF are supported.')
+  if(!isSupportedImage(raw,file.type))throw errors.badRequest('Only supported images, PDF and voice recordings are accepted.')
   try{
    bytes=await sharp(raw,{limitInputPixels:12_000_000,failOn:'error'}).rotate().resize({width:1600,height:1600,fit:'inside',withoutEnlargement:true}).webp({quality:82}).toBuffer()
   }catch{throw errors.badRequest('Invalid or unreadable image.')}

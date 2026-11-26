@@ -1,7 +1,7 @@
 import {NextRequest} from 'next/server'
 import {errors,handle,jsonOk,rateLimit,requireUser} from '@/server/api'
 import {validDirectId,parseDirectMessage} from '@/server/direct-message-policy'
-import {attachmentsEnabled} from '@/server/direct-attachment-policy'
+import {attachmentsEnabled,voiceMime} from '@/server/direct-attachment-policy'
 import {boundedMultipart,prepareDirectAttachment,readDirectAttachment,requireAttachmentKey} from '@/server/services/direct-attachments'
 import {assertAttachmentContact,sendDirectMessage} from '@/server/services/direct-messages'
 const headers={'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff','Cross-Origin-Resource-Policy':'same-origin'}
@@ -27,7 +27,7 @@ export async function POST(req:NextRequest){
   const id=form.get('id'),file=form.get('file'),caption=form.get('caption')
   if(form.get('expectedUserId')!==user.id)throw errors.conflict('The signed-in account changed.')
   if(!validDirectId(id)||!(file instanceof File)||typeof caption!=='string'||form.getAll('file').length!==1)throw errors.badRequest('Invalid private attachment.')
-  const input=parseDirectMessage({body:caption.trim()||(file.type==='application/pdf'?'PDF attachment':'Image attachment'),clientKey:form.get('clientKey')})
+  const input=parseDirectMessage({body:caption.trim()||(voiceMime(file.type)?'Voice message':file.type==='application/pdf'?'PDF attachment':'Image attachment'),clientKey:form.get('clientKey')})
   if(!input)throw errors.badRequest('Invalid caption or message key.')
   await assertAttachmentContact(id,user.id)
   const prepared=await prepareDirectAttachment(file)

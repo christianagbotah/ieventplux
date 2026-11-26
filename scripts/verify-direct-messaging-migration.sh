@@ -14,12 +14,15 @@ CREATE TABLE "Session" ("id" TEXT PRIMARY KEY);
 INSERT INTO "Session" VALUES ('session-a');
 INSERT INTO "User" VALUES ('a'),('b'),('c');
 SQL
-for attempt in 1 2; do sql -f ops/migrations/20261126_direct_messaging.sql; sql -f ops/migrations/20261126_direct_activity.sql; sql -f ops/migrations/20261126_direct_message_moderation.sql; sql -f ops/migrations/20261126_direct_attachments.sql; done
+for attempt in 1 2; do sql -f ops/migrations/20261126_direct_messaging.sql; sql -f ops/migrations/20261126_direct_activity.sql; sql -f ops/migrations/20261126_direct_message_moderation.sql; sql -f ops/migrations/20261126_direct_attachments.sql; sql -f ops/migrations/20261126_direct_voice.sql; done
 sql <<'SQL'
 INSERT INTO "DirectConversation" ("id","participantLowId","participantHighId","requesterId","updatedAt") VALUES ('d','a','b','a',CURRENT_TIMESTAMP);
 INSERT INTO "DirectMessage" ("id","conversationId","senderId","clientKey","body") VALUES ('m','d','a','abcdefghijklmnop','Hello');
 INSERT INTO "DirectAttachment" ("messageId","filename","mime","size","digest","payload") VALUES ('m','synthetic.webp','image/webp',1,repeat('a',64),decode(repeat('00',29),'hex'));
 INSERT INTO "DirectActivity" ("conversationId","sessionId","activeUntil","typingUntil") VALUES ('d','session-a',CURRENT_TIMESTAMP+INTERVAL '20 seconds',CURRENT_TIMESTAMP+INTERVAL '8 seconds');
+UPDATE "DirectAttachment" SET "mime"='audio/mp4' WHERE "messageId"='m';
+UPDATE "DirectAttachment" SET "mime"='audio/webm' WHERE "messageId"='m';
+UPDATE "DirectAttachment" SET "mime"='image/webp' WHERE "messageId"='m';
 DO $$ BEGIN
  BEGIN
   UPDATE "DirectAttachment" SET "size"=2097153;

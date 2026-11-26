@@ -43,7 +43,13 @@
         }
       ],
       "@config-plugins/react-native-webrtc",
-      "expo-notifications"
+      "expo-notifications",
+      [
+        "expo-av",
+        {
+          "microphonePermission": "Allow iEventPlux to use your microphone when you choose to record a voice message."
+        }
+      ]
     ],
     "extra": {
       "apiBaseUrl": "https://ieventplux.lightworldtech.com"
