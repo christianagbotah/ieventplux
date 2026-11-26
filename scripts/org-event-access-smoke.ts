@@ -246,6 +246,10 @@ async function main() {
     assert(organizerDraft.status === 200, 'accepted organizer can preview an unpublished event')
     const guestAgenda = await fetch(base + '/events/' + draft.id + '/agenda')
     assert(guestAgenda.status === 404, 'anonymous cannot read unpublished agendas')
+    const draftReminder = await fetch(base + '/events/' + draft.id + '/reminder', { method: 'POST', headers: { Cookie: attendee, 'Content-Type': 'application/json' }, body: '{}' })
+    assert(draftReminder.status===404,'unpublished event rejects reminder creation')
+    const draftWaitlist = await fetch(base + '/events/' + draft.id + '/waitlist', { method: 'POST', headers: { Cookie: attendee, 'Content-Type': 'application/json' }, body: '{}' })
+    assert(draftWaitlist.status===404,'unpublished event rejects waitlist creation')
     const guestDraftCalendar = await fetch(base + '/events/' + draft.id + '/ics')
     assert(guestDraftCalendar.status === 404, 'anonymous cannot export unpublished event calendar')
     const guestSeries = await fetch(base + '/events/' + seriesParent.id + '/series').then((response) => response.json())
@@ -264,7 +268,7 @@ async function main() {
       orgId: chapel.id, seriesId: seriesParent.seriesId, title: 'CI invitation-only landing',
       slug: 'ci-private-content-' + Date.now(), description: 'Public invitation landing fixture.',
       categorySlug: 'community', status: 'PUBLISHED', visibility: 'INVITE_ONLY',
-      startsAt: new Date(Date.now()+86400000), endsAt: new Date(Date.now()+90000000),
+      startsAt: new Date(Date.now()+172800000), endsAt: new Date(Date.now()+176400000),
     } })
     try {
       await db.agendaItem.create({ data: { eventId: fixture.id, title: secret, startsAt: fixture.startsAt } })
@@ -273,6 +277,7 @@ async function main() {
       await db.mediaAsset.create({ data: { eventId: fixture.id, linksToEventId: fixture.id, orgId: chapel.id, kind: 'GALLERY', url: '/ci-synthetic.png', caption: secret } })
       const fixturePath = base + '/events/' + fixture.id
       const read = (action: string, cookie?: string) => fetch(fixturePath+action,{headers:cookie?{Cookie:cookie}:{}})
+      const post = (action: string, cookie?: string) => fetch(fixturePath+action,{method:'POST',headers:{...(cookie?{Cookie:cookie}:{}),'Content-Type':'application/json'},body:'{}'})
       for (const cookie of [undefined, attendee]) {
         const response = await read('',cookie)
         const payload = await response.json()
@@ -282,9 +287,11 @@ async function main() {
           payload.event.series===null && payload.event.seriesId===null &&
           response.headers.get('cache-control')?.includes('no-store'),
           'unapproved invitation landing redacts protected relations and forbids caching')
-        for (const action of ['/agenda','/series','/media','/updates','/review-digest']) {
+        for (const action of ['/agenda','/series','/media','/updates','/review-digest','/waitlist','/reminder']) {
           assert((await read(action,cookie)).status===403,'unapproved viewer denied '+action)
         }
+        assert((await post('/waitlist',cookie)).status===403,'unapproved viewer cannot join private waitlist')
+        assert((await post('/reminder',cookie)).status===(cookie?403:401),'unapproved viewer cannot subscribe to private reminder')
       }
       const hostDetail = await read('',pastor).then(r=>r.json())
       assert(JSON.stringify(hostDetail).includes(secret),'accepted organizer sees private content')
@@ -294,10 +301,15 @@ async function main() {
       const approved = await read('',attendee).then(r=>r.json())
       assert(JSON.stringify(approved.event.agenda).includes(secret) &&
         JSON.stringify(approved.event.updates).includes(secret),'approved RSVP unlocks private content')
-      for(const action of ['/agenda','/series','/media','/updates']) {
+      for(const action of ['/agenda','/series','/media','/updates','/waitlist','/reminder']) {
         assert((await read(action,attendee)).status===200,'approved guest can read '+action)
       }
+      assert((await post('/reminder',attendee)).status===200,'approved guest can subscribe to private reminder')
+      const reminder = await read('/reminder',attendee)
+      assert(reminder.status===200 && (await reminder.json()).active===true && reminder.headers.get('cache-control')?.includes('no-store'),'private reminder state is personalized and non-cacheable')
       await db.rsvp.update({where:{id:rsvp.id},data:{status:'DECLINED'}})
+      assert((await post('/reminder',attendee)).status===403,'revoked approval prevents reminder subscription')
+      assert((await post('/reminder-cancel',attendee)).status===200,'revoked guest can cancel their own reminder')
       assert((await read('/updates',attendee)).status===403,'revoked approval removes private content access')
     } finally {
       await db.mediaAsset.deleteMany({where:{eventId:fixture.id}})
