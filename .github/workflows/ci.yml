@@ -188,7 +188,9 @@ jobs:
           echo
           curl -sf http://localhost:3001/health | head -c 200
 
-      - name: Realtime access smoke (public event, private notification and broadcast)
+      - name: Realtime access and revocation smoke (isolated database)
+        env:
+          IEVENTPLUX_ISOLATED_DB_TEST: "yes"
         run: bun run scripts/realtime-smoke.ts
 
       - name: Authenticated meeting lifecycle, group chat and WebRTC signaling smoke

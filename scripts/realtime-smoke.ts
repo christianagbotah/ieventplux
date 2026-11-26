@@ -7,6 +7,7 @@
  * - a public event room remains available to anonymous visitors.
  */
 import { io, type Socket } from 'socket.io-client'
+import { createHash } from 'node:crypto'
 import { db } from '../src/lib/db'
 
 const SOCKET_URL = process.env.REALTIME_SMOKE_URL ?? 'http://127.0.0.1:3003'
@@ -85,6 +86,50 @@ async function main() {
   } finally {
     authorized.disconnect()
   }
+  if (process.env.CI === 'true' && process.env.IEVENTPLUX_ISOLATED_DB_TEST === 'yes') {
+    const target = new URL(process.env.DATABASE_URL ?? 'postgresql://invalid/invalid')
+    if (!['localhost','127.0.0.1'].includes(target.hostname) || target.port !== '5432' || target.pathname !== '/ieventplux') throw new Error('Disposable realtime fixture DB required.')
+    const org = await db.organization.findFirstOrThrow({where:{status:'ACTIVE',deletedAt:null,ownerId:{not:admin.id},memberships:{none:{userId:admin.id,acceptedAt:{not:null}}}},select:{id:true}})
+    const fixture = await db.event.create({data:{orgId:org.id,title:'CI realtime admission fixture',slug:'ci-realtime-admission-'+Date.now(),description:'Synthetic CI fixture.',categorySlug:'community',status:'PUBLISHED',visibility:'INVITE_ONLY',startsAt:new Date(Date.now()+86400000),endsAt:new Date(Date.now()+90000000)}})
+    const expectEvicted = (socket:Socket) => new Promise<void>((resolve,reject)=>{
+      const timeout=setTimeout(()=>reject(new Error('Realtime eviction timeout')),8000)
+      socket.once('disconnect',()=>{clearTimeout(timeout);resolve()})
+    })
+    const guest = await connect(cookie)
+    let publicSocket:Socket|undefined
+    let ownSocket:Socket|undefined
+    try {
+      assertVerdict(await roomVerdict(guest,'event:'+fixture.id),'denied','unapproved invite-only room denied')
+      const rsvp=await db.rsvp.create({data:{eventId:fixture.id,userId:admin.id,name:'CI synthetic',status:'APPROVED'}})
+      assertVerdict(await roomVerdict(guest,'event:'+fixture.id),'joined','approved invite-only room allowed')
+      const revoked=expectEvicted(guest)
+      await db.rsvp.update({where:{id:rsvp.id},data:{status:'DECLINED'}})
+      await revoked
+      console.log('PASS revoked invitation disconnects existing event socket')
+      await db.event.update({where:{id:fixture.id},data:{visibility:'PUBLIC'}})
+      publicSocket=await connect()
+      assertVerdict(await roomVerdict(publicSocket,'event:'+fixture.id),'joined','published public fixture allows anonymous socket')
+      const deleted=expectEvicted(publicSocket)
+      await db.event.update({where:{id:fixture.id},data:{deletedAt:new Date()}})
+      await deleted
+      console.log('PASS deleted event disconnects existing public socket')
+      ownSocket=await connect(cookie)
+      assertVerdict(await roomVerdict(ownSocket,'user:'+admin.id),'joined','current session joins its notification room')
+      const sessionRevoked=expectEvicted(ownSocket)
+      const token=decodeURIComponent(cookie.slice('ievx_session='.length))
+      const tokenHash=createHash('sha256').update(token).digest('hex')
+      const changed=await db.session.updateMany({where:{tokenHash,userId:admin.id},data:{revokedAt:new Date()}})
+      if(changed.count!==1)throw new Error('Expected one synthetic login session')
+      await sessionRevoked
+      console.log('PASS revoked session disconnects existing notification socket')
+    } finally {
+      guest.disconnect()
+      publicSocket?.disconnect()
+      ownSocket?.disconnect()
+      await db.event.delete({where:{id:fixture.id}})
+    }
+  }
+
 }
 main().catch((error) => {
   console.error('Realtime authorization smoke FAILED:', error instanceof Error ? error.message : error)
