@@ -36,6 +36,7 @@ async function send(method:string,path:string,cookie?:string,body?:unknown){
 }
 
 let storeId:string|undefined
+let notificationLink:string|undefined
 let intentSource:string|undefined
 const testMedia:string[]=[]
 try{
@@ -43,6 +44,7 @@ try{
  const stranger=await signIn('ama@example.dev')
  const unique=randomUUID().slice(0,10).toLowerCase()
  const slug='ci-marketplace-'+unique
+ notificationLink='#/shop/'+slug
  const draft={name:'CI Ghanaian Arts and Crafts',slug,category:'Handmade apparel',tagline:'Synthetic CI seller'}
  assert((await send('POST','/marketplace/stores',undefined,draft)).status===401,'anonymous cannot create seller storefront')
  const made=await send('POST','/marketplace/stores',owner,draft)
@@ -181,6 +183,10 @@ try{
    'buyer persists an explicitly non-binding purchase request')
  const duplicate=await send('POST',requestPath,stranger,orderBody)
  assert(duplicate.status===200&&duplicate.data.replayed===true&&duplicate.data.request.id===submitted.data.request.id,'duplicate purchase request is idempotent')
+ const initialNotices=await db.notification.findMany({where:{link:notificationLink,type:'MARKETPLACE_REQUEST'}})
+ const sellerUser=await db.user.findUniqueOrThrow({where:{email:'pastor@lightworld.dev'},select:{id:true}})
+ const buyerUser=await db.user.findUniqueOrThrow({where:{email:'ama@example.dev'},select:{id:true}})
+ assert(initialNotices.length===1&&initialNotices[0].userId===sellerUser.id,'request replay creates exactly one private seller notification')
  const changed={...orderBody,expectedTotalMinor:35000,items:[{variantId,quantity:1,expectedUnitPriceMinor:35000}]}
  assert((await send('POST',requestPath,stranger,changed)).status===409,'request key cannot be reused with different selection')
  const stale={...orderBody,requestKey:'stale-purchase-'+unique,expectedTotalMinor:60000,items:[{variantId,quantity:2,expectedUnitPriceMinor:30000}]}
@@ -199,10 +205,18 @@ try{
  assert((await send('GET',requestPath,stranger)).data.requests[0].status==='ACKNOWLEDGED','buyer sees seller response')
  assert((await send('PATCH',decisionPath,stranger,{status:'WITHDRAWN'})).data.request.status==='WITHDRAWN','buyer can withdraw acknowledged request')
  assert((await send('PATCH',decisionPath,owner,{status:'DECLINED'})).status===409,'withdrawn request cannot be changed')
+ const notices=await db.notification.findMany({where:{link:notificationLink,type:'MARKETPLACE_REQUEST'}})
+ assert(notices.length===3&&notices.filter(n=>n.userId===sellerUser.id).length===2&&notices.filter(n=>n.userId===buyerUser.id).length===1,'request transitions notify only participants without replay duplicates')
+ const buyerInbox=await send('GET','/notifications?pageSize=50',stranger)
+ const sellerInbox=await send('GET','/notifications?pageSize=50',owner)
+ const otherInbox=await send('GET','/notifications?pageSize=50',third)
+ const ids=new Set(notices.map(n=>n.id))
+ assert(buyerInbox.data.items.filter((n:Row)=>ids.has(n.id)).length===1&&sellerInbox.data.items.filter((n:Row)=>ids.has(n.id)).length===2&&!otherInbox.data.items.some((n:Row)=>ids.has(n.id)),'notification API exposes only the intended recipient alerts')
  const unchanged=await send('GET','/marketplace/stores/'+slug)
  assert(unchanged.data.products[0].variants[0].available===12,'non-binding request does not reserve inventory')
  console.log('MARKETPLACE_FOUNDATION_SMOKE_PASS')
 }finally{
+ if(notificationLink)await db.notification.deleteMany({where:{link:notificationLink,type:'MARKETPLACE_REQUEST'}})
  if(intentSource)await db.platformPaymentIntent.deleteMany({where:{sourceId:intentSource,purpose:'MARKETPLACE_GOODS'}})
  if(storeId){
    await db.marketplacePurchaseRequest.deleteMany({where:{storeId}})
