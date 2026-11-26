@@ -5,6 +5,7 @@ import { create } from 'zustand'
 export interface SessionUser {
   id: string
   email: string
+  emailVerifiedAt?: string | null
   displayName: string
   role: string
   avatarUrl: string | null

@@ -19,8 +19,9 @@ export default function AuthView({ mode }: { mode: 'signin' | 'register' }) {
   const proposedReturn = route.query.get('continue') ?? ''
   const inviteReturn = /^\/invite\/[A-Za-z0-9_-]{6,32}(?:\?meeting=[A-Za-z0-9_-]{8,64})?$/.test(proposedReturn)
     ? proposedReturn : null
+  const verifyReturn = proposedReturn === '/verify-email'
   const authDestination = (view: 'signin' | 'register') =>
-    '/' + view + (inviteReturn ? '?continue=' + encodeURIComponent(inviteReturn) : '')
+    '/' + view + (inviteReturn || verifyReturn ? '?continue=' + encodeURIComponent(inviteReturn || '/verify-email') : '')
   const { setUser, setMemberships } = usePortal()
   const [busy, setBusy] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
@@ -75,6 +76,10 @@ export default function AuthView({ mode }: { mode: 'signin' | 'register' }) {
     if (inviteReturn) {
       toast({ title: 'Signed in — continue to your invitation' })
       navigate(inviteReturn)
+      return
+    }
+    if (verifyReturn || (mode === 'register' && !me.user.emailVerifiedAt)) {
+      navigate('/verify-email')
       return
     }
     // R20: platform staff (SUPPORT / MODERATOR / FINANCE_ADMIN / SUPER_ADMIN) sign in through

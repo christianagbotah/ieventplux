@@ -1,4 +1,4 @@
-import { randomBytes, randomUUID } from 'crypto'
+import { randomBytes, randomUUID, randomInt } from 'crypto'
 
 /** Buyer-facing order reference, unique within documented provider limits. */
 export function orderReference(): string {
@@ -44,7 +44,7 @@ export function streamKey(): string {
 }
 
 export function otpCode(): string {
-  return String(Math.floor(100000 + Math.random() * 900000))
+  return String(randomInt(100000, 1000000))
 }
 
 export function invoiceNumber(seq: number): string {

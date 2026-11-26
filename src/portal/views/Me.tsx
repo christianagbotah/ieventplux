@@ -260,6 +260,7 @@ export default function Me({ route }: { route: Route }) {
         <h1 className="min-w-0 text-xl font-extrabold leading-tight tracking-tight [overflow-wrap:break-word] sm:text-2xl">{user.displayName}</h1>
         <div className="col-span-2 min-w-0 space-y-0.5 sm:col-span-1 sm:col-start-2 sm:row-start-2">
           <p className="text-sm leading-relaxed text-muted-foreground [overflow-wrap:anywhere]">{user.email}</p>
+          {user.emailVerifiedAt ? <p className="text-xs font-medium text-emerald-600 dark:text-emerald-400">✓ Email verified</p> : <a href="#/verify-email" className="inline-flex min-h-10 items-center text-sm font-semibold text-primary underline underline-offset-4">Verify email address</a>}
           {(user.city || memberships.length > 0) && <p className="text-xs leading-relaxed text-muted-foreground">{[user.city, memberships.length > 0 ? `Organizer (${memberships.length})` : null].filter(Boolean).join(' · ')}</p>}
         </div>
         {memberships.length > 0 ? (

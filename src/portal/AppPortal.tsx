@@ -37,6 +37,7 @@ const MarketplaceSellerStudio = lazy(() => import('./views/MarketplaceSellerStud
 const EffectsStudio = lazy(() => import('./views/EffectsStudio'))
 const OrgProfile = lazy(() => import('./views/OrgProfile'))
 const AuthView = lazy(() => import('./views/AuthView'))
+const VerifyEmail = lazy(() => import('./views/VerifyEmail'))
 const Me = lazy(() => import('./views/Me'))
 const OrderView = lazy(() => import('./views/OrderView'))
 const BroadcastView = lazy(() => import('./views/BroadcastView'))
@@ -198,6 +199,8 @@ export default function AppPortal() {
       case 'signin':
       case 'register':
         return <AuthView mode={head === 'register' ? 'register' : 'signin'} />
+      case 'verify-email':
+        return <VerifyEmail />
       case 'me':
         return <Me route={route} />
       case 'order':
@@ -349,6 +352,7 @@ export default function AppPortal() {
                       )}
                     </DropdownMenuLabel>
                     <DropdownMenuSeparator />
+                    {!user.emailVerifiedAt && <DropdownMenuItem onClick={() => navigate('/verify-email')}>Verify email address</DropdownMenuItem>}
                     <DropdownMenuItem onClick={() => navigate('/me?tab=tickets')}>
                       <Ticket className="h-4 w-4" /> My Tickets
                     </DropdownMenuItem>
@@ -406,6 +410,7 @@ export default function AppPortal() {
       </header>
 
       <main id="main" tabIndex={-1} ref={viewRef} className={`min-w-0 flex-1 outline-none ${workspaceMode ? 'ievx-workspace pb-6 md:h-[calc(100dvh-4rem)] md:min-h-0 md:flex-none md:overflow-hidden md:pb-0' : 'ievx-public pb-24 lg:pb-10'}`}>
+        {user && !user.emailVerifiedAt && route.path !== '/verify-email' && !workspaceMode && !immersiveMode && <div className="mx-auto flex max-w-[1152px] flex-wrap items-center justify-between gap-x-3 gap-y-1 px-4 py-2 text-sm sm:px-6" role="status"><span className="text-muted-foreground">Your email is not verified.</span><a href="#/verify-email" className="inline-flex min-h-10 items-center font-semibold text-primary underline underline-offset-4">Verify email</a></div>}
         <Suspense fallback={<ViewFallback />}>
           <div key={route.path} className={`ievx-view-enter ${workspaceMode ? 'md:h-full' : immersiveMode ? '' : 'ievx-page-shell'}`}>{view}</div>
         </Suspense>
