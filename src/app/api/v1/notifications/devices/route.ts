@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
       await db.$transaction(async tx => {
         const active = await tx.session.findFirst({ where: { id: sessionId, userId: user.id, revokedAt: null, expiresAt: { gt: new Date() }, user: { status: 'ACTIVE', deletedAt: null } }, select: { id: true } })
         if (!active) throw errors.unauthorized()
-        const prior = await tx.pushInstallation.findUnique({ where: { keyHash: data.keyHash }, select: { sessionId: true, revokedAt: true } })
+        const prior = await tx.pushInstallation.findUnique({ where: { keyHash: data.keyHash }, select: { sessionId: true, revokedAt: true, providerToken: true } })
         if (!prior || prior.sessionId !== sessionId || prior.revokedAt) {
           const count = await tx.pushInstallation.count({ where: { sessionId, revokedAt: null } })
           if (count >= 5) throw errors.conflict('Too many registered devices for this session. Remove an existing installation.')
@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
         await tx.pushInstallation.upsert({
           where: { keyHash: data.keyHash },
           create: { ...data, sessionId },
-          update: { sessionId, providerToken: data.providerToken, platform: data.platform, revokedAt: null },
+          update: { sessionId, providerToken: data.providerToken, platform: data.platform, revokedAt: null, ...(!prior || prior.sessionId !== sessionId || prior.revokedAt || prior.providerToken !== data.providerToken ? { activatedAt: new Date() } : {}) },
         })
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
     } catch (err) {

@@ -112,13 +112,37 @@ model PushInstallation {
   keyHash      String    @id
   sessionId    String
   providerToken String   @unique
+  activatedAt  DateTime  @default(now())
   platform     String
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   revokedAt    DateTime?
   session      Session   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  deliveries   PushDelivery[]
 
   @@index([sessionId, revokedAt])
+}
+
+// One durable attempt ledger per notification and installation. No provider
+// token, notification body or credential is copied into the delivery ledger.
+model PushDelivery {
+  id                 String   @id @default(cuid())
+  notificationId     String
+  installationKeyHash String
+  sessionId          String
+  activationAt       DateTime
+  status             String   @default("QUEUED")
+  attempts           Int      @default(0)
+  nextAttemptAt      DateTime @default(now())
+  providerTicketId   String?
+  failureCode        String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  notification       Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  installation       PushInstallation @relation(fields: [installationKeyHash], references: [keyHash], onDelete: Cascade)
+
+  @@unique([notificationId, installationKeyHash], map: "PushDelivery_notification_installation_key")
+  @@index([status, nextAttemptAt])
 }
 
 model ContactVerification {
@@ -1217,8 +1241,10 @@ model Notification {
   createdAt DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pushDeliveries PushDelivery[]
 
   @@index([userId, readAt])
+  @@index([createdAt])
 }
 
 model MessageDelivery {
