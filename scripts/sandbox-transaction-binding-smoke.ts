@@ -42,8 +42,8 @@ try {
   const b = await createAttempt(2)
   const c = await createAttempt(3)
   const d = await createAttempt(4)
-  const base = BigInt('9' + Date.now().toString()) * 100n
-  const shared = String(base + 1n)
+  const base = BigInt('9' + Date.now().toString()) * BigInt(100)
+  const shared = String(base + BigInt(1))
   const race = await Promise.allSettled([bind(a, shared, true), bind(b, shared)])
   check(race.filter(r => r.status === 'fulfilled').length === 1, 'competing notification and verification claims have one winner')
   const winner = (race[0].status === 'fulfilled') ? a : b
@@ -53,10 +53,10 @@ try {
   await bind(winner, shared, true)
   await bind(winner, shared)
   check((await db.platformSandboxAttempt.findUniqueOrThrow({ where: { id: winner } })).status === 'NOTIFICATION_RECEIVED', 'same identity replay is safe and does not downgrade notification')
-  check(await rejects(bind(winner, String(base + 2n))), 'same attempt rejects different transaction identity')
+  check(await rejects(bind(winner, String(base + BigInt(2)))), 'same attempt rejects different transaction identity')
   check(await rejects(bind(loser, shared)), 'different attempt rejects already claimed transaction')
   // Legacy evidence may have been saved before the shared attempt binding existed.
-  const oldId = String(base + 3n)
+  const oldId = String(base + BigInt(3))
   await db.platformSandboxCollectionEvidence.create({ data: {
     attemptId: c, providerTransactionId: oldId, amountMinor: 100, currency: 'GHS',
     recipientCode: null, allocation: 'PLATFORM_DIRECT',
