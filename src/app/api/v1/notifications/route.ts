@@ -2,17 +2,18 @@ import { NextRequest } from 'next/server'
 import { handle, jsonOk, requireUser, readJson, errors, jsonList, pagination } from '@/server/api'
 import { db } from '@/lib/db'
 import { getSession } from '@/server/auth'
+import { publishNotificationRead } from '@/server/services/notify'
 
 /** Notifications for the signed-in user. */
 export async function GET(req: NextRequest) {
   return handle(async () => {
     void req
     const session = await getSession()
-    if (!session) return jsonOk({ items: [], unread: 0 })
+    if (!session) return jsonOk({ items: [], unread: 0 }, { headers: { 'Cache-Control': 'private, no-store' } })
     const { page, pageSize, offset } = pagination(req, 20, 50)
-    const items = await db.notification.findMany({ where: { userId: session.user.id }, orderBy: { createdAt: 'desc' }, skip: offset, take: pageSize })
+    const items = await db.notification.findMany({ where: { userId: session.user.id }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], skip: offset, take: pageSize + 1 })
     const unread = await db.notification.count({ where: { userId: session.user.id, readAt: null } })
-    return jsonOk({ items, unread, page, pageSize })
+    return jsonOk({ items: items.slice(0, pageSize), unread, page, pageSize, hasMore: items.length > pageSize }, { headers: { 'Cache-Control': 'private, no-store' } })
   })
 }
 
@@ -22,10 +23,12 @@ export async function POST(req: NextRequest) {
     const body = await readJson<{ all?: boolean; id?: string }>(req)
     if (body.all) {
       await db.notification.updateMany({ where: { userId: user.id, readAt: null }, data: { readAt: new Date() } })
+      await publishNotificationRead(user.id)
       return jsonOk({ ok: true })
     }
     if (body.id) {
-      await db.notification.updateMany({ where: { id: String(body.id), userId: user.id }, data: { readAt: new Date() } })
+      await db.notification.updateMany({ where: { id: String(body.id), userId: user.id, readAt: null }, data: { readAt: new Date() } })
+      await publishNotificationRead(user.id)
       return jsonOk({ ok: true })
     }
     throw errors.badRequest('Specify a notification id or all=true.')
