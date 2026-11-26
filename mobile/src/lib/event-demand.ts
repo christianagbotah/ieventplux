@@ -7,7 +7,7 @@ export function allTicketsSoldOut(types: readonly {active:boolean;quota:number;s
   return active.length>0 && active.every(t=>t.quota>0 && t.soldCount+t.reservedCount>=t.quota)
 }
 export function canJoinDemandWaitlist(input:{open:boolean;soldOut:boolean;status?:string|null}) {
-  return input.open && input.soldOut && input.status!=='WAITING' && input.status!=='NOTIFIED' && input.status!=='CONVERTED'
+  return input.open && input.soldOut && input.status!=='WAITING' && input.status!=='CONVERTED'
 }
 export function waitlistPartySize(text:string) {
   if(!/^[0-9]{1,2}$/.test(text))return null
