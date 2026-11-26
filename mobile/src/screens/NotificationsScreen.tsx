@@ -1,7 +1,7 @@
 import {useCallback,useRef,useState} from 'react'
 import {ActivityIndicator,FlatList,Pressable,RefreshControl,StyleSheet,Text,View} from 'react-native'
 import {useFocusEffect} from '@react-navigation/native'
-import {api,ApiClientError,formatDateTime,type NativeNotification} from '../api/client'
+import {api,ApiClientError,formatDateTime,type NotificationItem} from '../api/client'
 import {useSession} from '../store/session'
 import {alertDestination,mergeAlerts} from '../lib/notification-inbox'
 import {mobileDesign} from '../ui/PremiumUI'
@@ -18,7 +18,7 @@ export default function NotificationsScreen(props:NotificationsScreenProps){
  return <Inbox key={user.id} {...props}/>
 }
 function Inbox({navigation}:NotificationsScreenProps){
- const [rows,setRows]=useState<NativeNotification[]>([])
+ const [rows,setRows]=useState<NotificationItem[]>([])
  const [unread,setUnread]=useState(0)
  const [page,setPage]=useState(1)
  const [more,setMore]=useState(false)
@@ -48,7 +48,7 @@ function Inbox({navigation}:NotificationsScreenProps){
   locked.current=false;setBusy(false);void load()
   return()=>{revision.current++;locked.current=false}
  },[load]))
- const mark=async(row?:NativeNotification)=>{
+ const mark=async(row?:NotificationItem)=>{
   if(locked.current)return
   locked.current=true;setBusy(true);setError('')
   const current=++revision.current
