@@ -1,7 +1,7 @@
 "use client"
 
 import {useCallback,useEffect,useRef,useState} from 'react'
-import {ArrowLeft,Check,CheckCheck,MessageCircle,Search,Send,UserPlus} from 'lucide-react'
+import {ArrowLeft,Check,CheckCheck,MessageCircle,Paperclip,Search,Send,UserPlus} from 'lucide-react'
 import {Button} from '@/components/ui/button'
 import {Input} from '@/components/ui/input'
 import {Textarea} from '@/components/ui/textarea'
@@ -14,7 +14,7 @@ import {initials,relative} from '../format'
 
 type Contact={id:string;displayName:string;avatarUrl:string|null}
 type Conversation={id:string;status:string;requesterId:string;updatedAt?:string;peer:Contact|null;unread?:number;canSend?:boolean;blockedByMe?:boolean;mutedByMe?:boolean}
-type Message={id:string;senderId:string;body:string;createdAt:string;readAt:string|null;removedAt?:string|null}
+type Message={id:string;senderId:string;body:string;createdAt:string;readAt:string|null;removedAt?:string|null;attachment?:{filename:string;mime:string;size:number}|null}
 type Detail={conversation:Conversation;items:Message[];nextCursor:string|null}
 function Avatar({contact}:{contact:Contact|null}){
  return <span className="grid size-10 shrink-0 place-items-center rounded-full bg-primary/10 text-sm font-bold text-primary">{initials(contact?.displayName??'Member')}</span>
@@ -33,6 +33,16 @@ function Inbox({userId,id}:{userId:string;id?:string}){
  const [older,setOlder]=useState<Message[]>([])
  const [cursor,setCursor]=useState<string|null>(null)
  const [draft,setDraft]=useState('')
+ const [attachmentEnabled,setAttachmentEnabled]=useState(false)
+ const [file,setFile]=useState<File|null>(null)
+ const fileInput=useRef<HTMLInputElement>(null)
+ const pendingFile=useRef<{file:File;caption:string;key:string}|null>(null)
+ useEffect(()=>{
+  if(!id)return
+  let alive=true
+  void api.get<{enabled:boolean}>('/direct-messages/attachments').then(result=>{if(alive)setAttachmentEnabled(result.enabled)}).catch(()=>{})
+  return()=>{alive=false}
+ },[id])
  const [reportTarget,setReportTarget]=useState<string|null>(null)
  const [safetyTarget,setSafetyTarget]=useState<'block'|'mute'|null>(null)
  const [reportReason,setReportReason]=useState('SPAM')
@@ -133,7 +143,23 @@ function Inbox({userId,id}:{userId:string;id?:string}){
   }catch(err){if(current())setError(err instanceof Error?err.message:'Could not submit report.')}
   finally{if(current())setBusy(false)}
  }
+ const sendFile=async()=>{
+  if(!file||!id||busy||!current())return
+  if(pending.current){setError('Retry your previous text message before attaching a file.');return}
+  const caption=draft.trim()
+  if(pendingFile.current&&(pendingFile.current.file!==file||pendingFile.current.caption!==caption)){setError('Retry the original attachment and caption first.');return}
+  if(!pendingFile.current)pendingFile.current={file,caption,key:crypto.randomUUID()}
+  setBusy(true);setError('')
+  try{
+   const form=new FormData()
+   form.append('id',id);form.append('expectedUserId',userId);form.append('clientKey',pendingFile.current.key);form.append('caption',caption);form.append('file',file)
+   await api.upload('/direct-messages/attachments',form)
+   if(current()){pendingFile.current=null;setFile(null);setDraft('');lastTyping.current=0;if(fileInput.current)fileInput.current.value='';await load()}
+  }catch(err){if(current())setError(err instanceof Error?err.message:'Could not send attachment. Retry with the same file.')}
+  finally{if(current())setBusy(false)}
+ }
  const send=()=>{
+  if(file){void sendFile();return}
   const body=draft.trim()
   if(!body||busy)return
   if(pending.current&&pending.current.body!==body){
@@ -186,10 +212,14 @@ function Inbox({userId,id}:{userId:string;id?:string}){
      <div className="flex h-[min(54vh,500px)] min-h-52 flex-col gap-3 overflow-y-auto bg-muted/20 p-4">
       {cursor&&<Button variant="ghost" size="sm" className="self-center" disabled={busy} onClick={()=>void more()}>Load older messages</Button>}
       {items.length===0&&<p className="py-6 text-center text-sm text-muted-foreground">Start the conversation.</p>}
-      {items.map(m=><div key={m.id} className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${m.senderId===userId?'self-end bg-primary text-primary-foreground':'self-start border bg-card'}`}><p className="whitespace-pre-wrap [overflow-wrap:anywhere]">{m.removedAt?'Message removed by moderation':m.body}</p>{m.senderId!==userId&&!m.removedAt&&<button type="button" className="mt-1 inline-flex min-h-8 items-center gap-1 text-xs text-muted-foreground" disabled={reported.includes(m.id)||busy} onClick={()=>{setReportTarget(m.id);setReportReason('SPAM');setReportDetails('');setError('')}}><Flag className="size-3"/>{reported.includes(m.id)?'Reported':'Report'}</button>}<span className="mt-1 flex items-center justify-end gap-1 text-[10px] opacity-80">{relative(m.createdAt)}{m.senderId===userId&&(m.readAt?<CheckCheck className="size-3" aria-label="Read"/>:<Check className="size-3" aria-label="Sent"/>)}</span></div>)}
+      {items.map(m=><div key={m.id} className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${m.senderId===userId?'self-end bg-primary text-primary-foreground':'self-start border bg-card'}`}><p className="whitespace-pre-wrap [overflow-wrap:anywhere]">{m.removedAt?'Message removed by moderation':m.body}</p>{!m.removedAt&&m.attachment&&<a className="mt-2 flex max-w-full items-center gap-2 rounded-lg border border-current/20 p-2 text-xs" href={'/api/v1/direct-messages/attachments?messageId='+encodeURIComponent(m.id)+'&expectedUserId='+encodeURIComponent(userId)} download><Paperclip className="size-4 shrink-0"/><span className="min-w-0 break-all">{m.attachment.filename}<span className="block opacity-80">{Math.ceil(m.attachment.size/1024)} KB · Download</span></span></a>}{m.senderId!==userId&&!m.removedAt&&<button type="button" className="mt-1 inline-flex min-h-8 items-center gap-1 text-xs text-muted-foreground" disabled={reported.includes(m.id)||busy} onClick={()=>{setReportTarget(m.id);setReportReason('SPAM');setReportDetails('');setError('')}}><Flag className="size-3"/>{reported.includes(m.id)?'Reported':'Report'}</button>}<span className="mt-1 flex items-center justify-end gap-1 text-[10px] opacity-80">{relative(m.createdAt)}{m.senderId===userId&&(m.readAt?<CheckCheck className="size-3" aria-label="Read"/>:<Check className="size-3" aria-label="Sent"/>)}</span></div>)}
       <div ref={scrollEnd}/>
      </div>
-     {c.canSend?<form className="flex items-end gap-2 border-t p-3" onSubmit={e=>{e.preventDefault();send()}}><Textarea value={draft} onChange={e=>{setDraft(e.target.value);lastTyping.current=e.target.value.trim()?Date.now():0}} maxLength={4000} rows={2} placeholder="Write a message…" aria-label="Message" className="min-h-11 resize-none"/><Button size="icon" className="size-11 shrink-0 rounded-xl" aria-label="Send message" disabled={busy||!draft.trim()}><Send className="size-4"/></Button></form>:<p className="border-t p-3 text-sm text-muted-foreground">Sending is unavailable for this contact.</p>}
+     {c.canSend?<form className="border-t p-3" onSubmit={e=>{e.preventDefault();send()}}>
+      {file&&<div className="mb-2 flex items-center justify-between gap-2 rounded-lg border p-2 text-xs"><span className="min-w-0 break-all">{file.name} · {Math.ceil(file.size/1024)} KB</span><Button type="button" size="sm" variant="ghost" disabled={busy} onClick={()=>{if(pendingFile.current){setError('Retry the pending attachment before removing it.');return}setFile(null);if(fileInput.current)fileInput.current.value=''}}>Remove</Button></div>}
+      <div className="flex items-end gap-2">
+      {attachmentEnabled&&<><input ref={fileInput} type="file" hidden accept="image/jpeg,image/png,image/webp,application/pdf" onChange={e=>{const selected=e.target.files?.[0];if(!selected)return;if(selected.size>2097152||selected.size<1){setError('Choose a file no larger than 2 MB.');e.target.value='';return}setFile(selected);setError('')}}/><Button type="button" variant="outline" size="icon" className="size-11 shrink-0" aria-label="Attach file" disabled={busy||!!file||!!pending.current} onClick={()=>fileInput.current?.click()}><Paperclip className="size-4"/></Button></>}
+      <Textarea value={draft} onChange={e=>{setDraft(e.target.value);lastTyping.current=e.target.value.trim()?Date.now():0}} maxLength={4000} rows={2} placeholder="Write a message…" aria-label="Message" className="min-h-11 resize-none"/><Button size="icon" className="size-11 shrink-0 rounded-xl" aria-label="Send message" disabled={busy||(!file&&!draft.trim())}><Send className="size-4"/></Button></div></form>:<p className="border-t p-3 text-sm text-muted-foreground">Sending is unavailable for this contact.</p>}
      </>}
     </>}
    </div>

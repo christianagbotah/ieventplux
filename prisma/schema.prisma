@@ -1279,10 +1279,23 @@ model DirectMessage {
   removedAt      DateTime?
   conversation DirectConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   sender User @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  attachment DirectAttachment?
 
   @@unique([conversationId, senderId, clientKey], map: "DirectMessage_client_key")
   @@index([conversationId, createdAt, id])
   @@index([conversationId, readAt])
+}
+
+// Private binary data is encrypted separately from public media. The message
+// transaction owns the attachment, avoiding orphan upload objects.
+model DirectAttachment {
+  messageId String @id
+  filename String
+  mime String
+  size Int
+  digest String
+  payload Bytes
+  message DirectMessage @relation(fields:[messageId], references:[id], onDelete:Cascade)
 }
 
 model Notification {

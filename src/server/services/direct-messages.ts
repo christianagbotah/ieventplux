@@ -1,4 +1,4 @@
-import {createHash} from 'node:crypto'
+import {createHash,randomUUID} from 'node:crypto'
 import {Prisma,type DirectConversation,type Notification} from '@prisma/client'
 import {db} from '../../lib/db'
 import {ApiError,errors} from '../api'
@@ -6,6 +6,8 @@ import {canonicalPair,mayDecide} from '../direct-message-policy'
 import {activityWindow} from '../direct-activity-policy'
 import {removedMessageBody,type DirectReportReason} from '../direct-report-policy'
 import {publishNotification} from './notify'
+import {MAX_DIRECT_USER_BYTES,MAX_DIRECT_GLOBAL_BYTES,encryptAttachment} from '../direct-attachment-policy'
+import {attachmentMetadata,requireAttachmentKey,type PreparedAttachment} from './direct-attachments'
 import {realtimeEmit} from './realtime'
 
 type Tx=Prisma.TransactionClient
@@ -74,19 +76,30 @@ export async function decideConversation(id:string,actorId:string,accept:boolean
  if(result.changed)await relay(result.conversation,result.notification)
  return result.conversation
 }
-export async function sendDirectMessage(id:string,actorId:string,input:{body:string;clientKey:string}){
+export async function assertAttachmentContact(id:string,actorId:string){
+ const c=await scoped(db,id,actorId)
+ if(c.status!=='ACCEPTED')throw errors.forbidden('The recipient must accept this conversation first.')
+ await canContact(db,actorId,peer(c,actorId))
+}
+export async function sendDirectMessage(id:string,actorId:string,input:{body:string;clientKey:string},attachment?:PreparedAttachment){
  const result=await transaction(async tx=>{
   const c=await scoped(tx,id,actorId)
   const other=peer(c,actorId)
   if(c.status!=='ACCEPTED')throw errors.forbidden('The recipient must accept this conversation first.')
   await canContact(tx,actorId,other)
-  const prior=await tx.directMessage.findUnique({where:{conversationId_senderId_clientKey:{conversationId:id,senderId:actorId,clientKey:input.clientKey}}})
+  const prior=await tx.directMessage.findUnique({where:{conversationId_senderId_clientKey:{conversationId:id,senderId:actorId,clientKey:input.clientKey}},include:{attachment:{select:{...attachmentMetadata,digest:true}}}})
   if(prior){
-   if(prior.removedAt) return {message:{...prior,body:removedMessageBody},conversation:c,notification:null,replayed:true}
-   if(prior.body!==input.body)throw errors.conflict('This message key was already used.')
-   return {message:prior,conversation:c,notification:null,replayed:true}
+   if(prior.removedAt) return {message:{...prior,body:removedMessageBody,attachment:null},conversation:c,notification:null,replayed:true}
+   if(prior.body!==input.body||Boolean(prior.attachment)!==Boolean(attachment)||(attachment&&(prior.attachment?.digest!==attachment.digest||prior.attachment?.filename!==attachment.filename)))throw errors.conflict('This message key was already used.')
+   return {message:{...prior,attachment:prior.attachment?{filename:prior.attachment.filename,mime:prior.attachment.mime,size:prior.attachment.size}:null},conversation:c,notification:null,replayed:true}
   }
-  const message=await tx.directMessage.create({data:{conversationId:id,senderId:actorId,...input}})
+  if(attachment){
+   const userBytes=await tx.directAttachment.aggregate({where:{message:{senderId:actorId}},_sum:{size:true}})
+   const totalBytes=await tx.directAttachment.aggregate({_sum:{size:true}})
+   if((userBytes._sum.size??0)+attachment.size>MAX_DIRECT_USER_BYTES||(totalBytes._sum.size??0)+attachment.size>MAX_DIRECT_GLOBAL_BYTES)throw errors.conflict('Private attachment storage quota reached.')
+  }
+  const messageId=attachment?randomUUID():undefined
+  const message=await tx.directMessage.create({data:{id:messageId,conversationId:id,senderId:actorId,...input,...(attachment&&messageId?{attachment:{create:{filename:attachment.filename,mime:attachment.mime,size:attachment.size,digest:attachment.digest,payload:encryptAttachment(attachment.bytes,requireAttachmentKey(true),messageId)}}}:{})},include:{attachment:{select:attachmentMetadata}}})
   const conversation=await tx.directConversation.update({where:{id},data:{updatedAt:new Date()}})
   const notification=await notice(tx,other,actorId,id,'DIRECT_MESSAGE','New private message','You have a new private message.')
   return {message,conversation,notification,replayed:false}
@@ -119,8 +132,8 @@ export async function getDirectConversation(id:string,userId:string,before:strin
  const blockedByMe=await db.userBlock.findUnique({where:{blockerId_blockedId:{blockerId:userId,blockedId:otherId}},select:{blockerId:true}})
  const anchor=before?await db.directMessage.findFirst({where:{id:before,conversationId:id},select:{id:true,createdAt:true}}):null
  if(before&&!anchor)throw errors.badRequest('Invalid message cursor.')
- const rows=await db.directMessage.findMany({where:{conversationId:id,...(anchor?{OR:[{createdAt:{lt:anchor.createdAt}},{createdAt:anchor.createdAt,id:{lt:anchor.id}}]}:{})},orderBy:[{createdAt:'desc'},{id:'desc'}],take:31,select:{id:true,senderId:true,body:true,createdAt:true,readAt:true,removedAt:true}})
- return {conversation:{id:c.id,status:c.status,requesterId:c.requesterId,peer:other,canSend:c.status==='ACCEPTED'&&!block&&active===1,blockedByMe:!!blockedByMe,mutedByMe:!!muted},items:rows.slice(0,30).map(m=>m.removedAt?{...m,body:removedMessageBody}:m),nextCursor:rows.length>30?rows[29]?.id??null:null}
+ const rows=await db.directMessage.findMany({where:{conversationId:id,...(anchor?{OR:[{createdAt:{lt:anchor.createdAt}},{createdAt:anchor.createdAt,id:{lt:anchor.id}}]}:{})},orderBy:[{createdAt:'desc'},{id:'desc'}],take:31,select:{id:true,senderId:true,body:true,createdAt:true,readAt:true,removedAt:true,attachment:{select:attachmentMetadata}}})
+ return {conversation:{id:c.id,status:c.status,requesterId:c.requesterId,peer:other,canSend:c.status==='ACCEPTED'&&!block&&active===1,blockedByMe:!!blockedByMe,mutedByMe:!!muted},items:rows.slice(0,30).map(m=>m.removedAt?{...m,body:removedMessageBody,attachment:null}:m),nextCursor:rows.length>30?rows[29]?.id??null:null}
 }
 
 export async function listDirectContacts(userId:string,query:string){

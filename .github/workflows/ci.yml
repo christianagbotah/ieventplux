@@ -191,7 +191,7 @@ jobs:
 
       - name: Start the stack
         run: |
-          (IEVENTPLUX_GROUP_MEETINGS_ENABLED=true bun run dev > dev.log 2>&1 &)
+          (IEVENTPLUX_GROUP_MEETINGS_ENABLED=true IEVENTPLUX_DIRECT_ATTACHMENTS_ENABLED=true IEVENTPLUX_DIRECT_ATTACHMENT_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef bun run dev > dev.log 2>&1 &)
           (cd mini-services/worker && bun install && (bun run dev > worker.log 2>&1 &))
           (cd mini-services/realtime && bun install && (IEVENTPLUX_GROUP_MEETINGS_ENABLED=true IEVENTPLUX_TEST_SHORT_MEETING_RECHECK=true bun run dev > realtime.log 2>&1 &))
           for i in $(seq 1 40); do
@@ -226,6 +226,8 @@ jobs:
           bash scripts/verify-direct-messaging-migration.sh
           bun test src/server/direct-message-policy.test.ts src/server/direct-activity-policy.test.ts src/server/direct-report-policy.test.ts
           bun run scripts/direct-messaging-smoke.ts
+          bun test src/server/direct-attachment-policy.test.ts
+          bun run scripts/direct-attachment-smoke.ts
 
       - name: Browser clarity and responsive screenshot acceptance
         run: |
