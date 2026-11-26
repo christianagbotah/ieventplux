@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports -- Standalone CommonJS CI harness. */
 // Browser-only CI checks. Uses disposable seeded stack, no live credentials.
 // Playwright is installed at a pinned version in runner temporary storage.
 const {chromium}=require(process.env.IEVX_PLAYWRIGHT_MODULE)
