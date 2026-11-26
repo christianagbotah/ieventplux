@@ -239,46 +239,6 @@ export default function DiscoverScreen({ navigation }: DiscoverScreenProps) {
               <Text style={styles.liveShortcutText}>● {state.home.stats.liveNow} LIVE  ›</Text>
             </Pressable>
           </View>
-          <View style={styles.hero} accessibilityLabel="Discover events worldwide">
-            <PremiumBackdrop mode="emerald" />
-            <View style={styles.heroEyebrowRow}><View style={styles.heroDot} /><Text style={styles.heroKicker}>{story.kicker}</Text></View>
-            <Text style={styles.heroTitle}>{story.line}</Text>
-            <Text style={styles.heroAccent}>{story.accent}</Text>
-            <Text style={styles.heroBody}>{story.description}</Text>
-            <View style={styles.heroActions}>
-              <Pressable accessibilityRole="button" accessibilityLabel="Explore events" style={styles.shopHeroButton}
-                onPress={() => listRef.current?.scrollToOffset({offset: 400, animated: true})}>
-                <Text style={styles.shopHeroText}>Explore events  →</Text>
-              </Pressable>
-              <Pressable accessibilityRole="button" accessibilityLabel="Watch live events" style={styles.organizerButton}
-                onPress={() => navigation.navigate('LiveHub')}><Text style={styles.organizerButtonText}>◉  Watch live</Text></Pressable>
-            </View>
-            <Pressable accessibilityRole="button" accessibilityLabel="Host an event" style={styles.hostAction}
-              onPress={() => navigation.navigate(status === 'authenticated' ? 'OrganizerStudio' : 'Login')}>
-              <Text style={styles.hostText}>Host an event  ↗</Text>
-            </Pressable>
-            <View style={styles.heroControls}>
-              {HOME_STORIES.map((story, index) => <Pressable key={story.label} accessibilityRole="button"
-                accessibilityLabel={'Show highlight ' + (index + 1) + ': ' + story.label}
-                accessibilityState={{selected:index===heroIndex}} onPress={() => setHeroIndex(index)} style={styles.heroControlTouch}>
-                <View style={[styles.heroControlDot,index===heroIndex && styles.heroControlActive]} />
-              </Pressable>)}
-              <Pressable accessibilityRole="button" accessibilityLabel={heroPlaying ? 'Pause rotating highlights' : 'Resume rotating highlights'}
-                onPress={() => setHeroPlaying(value => !value)} style={styles.heroPause}>
-                <Text style={styles.heroPauseText}>{heroPlaying ? 'Ⅱ  Pause' : '▶  Play'}</Text>
-              </Pressable>
-            </View>
-            {heroIndex === 0 && featured ? <Pressable accessibilityRole="button" accessibilityLabel={'Open featured event: '+featured.title}
-              style={styles.heroFeatured} onPress={() => navigation.navigate('EventDetail',{eventId:featured.id})}>
-              {featured.coverImageUrl ? <Image source={{uri:featured.coverImageUrl}} style={styles.heroFeaturedImage} /> : <View style={styles.heroFeaturedImage} />}
-              <View style={styles.heroFeaturedText}><Text style={styles.heroFeaturedLabel}>IN THE SPOTLIGHT</Text><Text numberOfLines={1} style={styles.heroFeaturedTitle}>{featured.title}</Text></View>
-              <Text style={styles.heroFeaturedArrow}>›</Text>
-            </Pressable> : heroIndex === 1 ? <Pressable accessibilityRole="button" style={styles.heroFeatured}
-              onPress={() => navigation.navigate('LiveHub')}><Text style={styles.heroFeatureSymbol}>◎</Text><View style={styles.heroFeaturedText}><Text style={styles.heroFeaturedLabel}>EXPLORE ONLINE</Text><Text style={styles.heroFeaturedTitle}>Experiences from anywhere</Text></View><Text style={styles.heroFeaturedArrow}>›</Text></Pressable>
-              : <Pressable accessibilityRole="button" style={styles.heroFeatured}
-                  onPress={() => navigation.navigate(status === 'authenticated' ? 'OrganizerStudio' : 'Login')}><Text style={styles.heroFeatureSymbol}>✦</Text><View style={styles.heroFeaturedText}><Text style={styles.heroFeaturedLabel}>FOR EVENT CREATORS</Text><Text style={styles.heroFeaturedTitle}>Create your own gathering</Text></View><Text style={styles.heroFeaturedArrow}>›</Text></Pressable>}
-          </View>
-
           </> : null}
           <View style={styles.searchField}>
             <Text style={styles.searchIcon} accessibilityElementsHidden>⌕</Text>
@@ -290,7 +250,7 @@ export default function DiscoverScreen({ navigation }: DiscoverScreenProps) {
               placeholderTextColor={theme.colors.textMuted}
               autoCorrect={false}
               returnKeyType="search"
-              accessibilityLabel="Search upcoming events"
+              accessibilityLabel="Search events"
             />
             {search ? (
               <Pressable onPress={() => setSearch('')} accessibilityRole="button" accessibilityLabel="Clear search" style={styles.clearSearch}>
@@ -318,8 +278,30 @@ export default function DiscoverScreen({ navigation }: DiscoverScreenProps) {
               </Pressable>)}
             </ScrollView>
           </View>
+          {!filtered ? (
+          <View style={styles.hero} accessibilityLabel="Discover events worldwide">
+            <PremiumBackdrop mode="emerald" />
+            <Text style={styles.heroTitle}>{story.line} <Text style={styles.heroAccent}>{story.accent}</Text></Text>
+            <View style={styles.heroActions}>
+              {heroIndex===0 && featured ? <Pressable accessibilityRole="button" accessibilityLabel={'Open featured event: '+featured.title} style={styles.shopHeroButton} onPress={()=>navigation.navigate('EventDetail',{eventId:featured.id})}><Text style={styles.shopHeroText}>Featured event ›</Text></Pressable> : heroIndex===1 ? <Pressable accessibilityRole="button" style={styles.shopHeroButton} onPress={()=>navigation.navigate('LiveHub')}><Text style={styles.shopHeroText}>Watch live ›</Text></Pressable> : <Pressable accessibilityRole="button" style={styles.shopHeroButton} onPress={() => navigation.navigate(status === 'authenticated' ? 'OrganizerStudio' : 'Login')}><Text style={styles.shopHeroText}>Host an event ›</Text></Pressable>}
+              {heroIndex!==2 ? <Pressable accessibilityRole="button" style={styles.organizerButton} onPress={() => navigation.navigate(status === 'authenticated' ? 'OrganizerStudio' : 'Login')}><Text style={styles.organizerButtonText}>Host event</Text></Pressable> : <Pressable accessibilityRole="button" style={styles.organizerButton} onPress={()=>navigation.navigate('LiveHub')}><Text style={styles.organizerButtonText}>Watch live</Text></Pressable>}
+            </View>
+            <View style={styles.heroControls}>
+              {HOME_STORIES.map((story, index) => <Pressable key={story.label} accessibilityRole="button"
+                accessibilityLabel={'Show highlight ' + (index + 1) + ': ' + story.label}
+                accessibilityState={{selected:index===heroIndex}} onPress={() => setHeroIndex(index)} style={styles.heroControlTouch}>
+                <View style={[styles.heroControlDot,index===heroIndex && styles.heroControlActive]} />
+              </Pressable>)}
+              <Pressable accessibilityRole="button" accessibilityLabel={heroPlaying ? 'Pause rotating highlights' : 'Resume rotating highlights'}
+                onPress={() => setHeroPlaying(value => !value)} style={styles.heroPause}>
+                <Text style={styles.heroPauseText}>{heroPlaying ? 'Ⅱ  Pause' : '▶  Play'}</Text>
+              </Pressable>
+            </View>
+          </View>
+
+          ) : null}
           {filtered ? <View style={styles.activeFilterBanner}>
-            <Text style={styles.activeFilterLabel}>Filtering the full event catalogue · {activeCount} active</Text>
+            <Text style={styles.activeFilterLabel}>{activeCount} active</Text>
             <Pressable accessibilityRole="button" accessibilityLabel="Clear all event filters" onPress={resetFilters}><Text style={styles.clearFilterLabel}>Clear all</Text></Pressable>
           </View> : null}
 
@@ -340,14 +322,14 @@ export default function DiscoverScreen({ navigation }: DiscoverScreenProps) {
 
           {featured && !filtered ? (
             <View style={styles.sectionBlock}>
-              <SectionHeading eyebrow="HANDPICKED HIGHLIGHTS" title="In the spotlight" />
+              <SectionHeading title="Featured" />
               <FeaturedEventCard event={featured} onPress={() => navigation.navigate('EventDetail', { eventId: featured.id })} />
             </View>
           ) : null}
 
           {liveNow.length > 0 && !filtered ? (
             <View style={styles.liveSection}>
-              <SectionHeading eyebrow="HAPPENING RIGHT NOW" title="Live experiences" action="Watch live" onAction={()=>navigation.navigate('LiveHub')} />
+              <SectionHeading title="Live now" action="Watch live" onAction={()=>navigation.navigate('LiveHub')} />
               <FlatList
                 horizontal
                 showsHorizontalScrollIndicator={false}
@@ -366,9 +348,8 @@ export default function DiscoverScreen({ navigation }: DiscoverScreenProps) {
             </View>
           ) : null}
 
-          <SectionHeading eyebrow={filtered?'YOUR SEARCH RESULTS':'CURATED FOR DISCOVERY'}
-            title={filtered?'Matching events':'Explore what’s next'}
-            subtitle={`${filtered && searchTotal!==null ? searchTotal : visibleUpcoming.length} published events to explore`} />
+          <SectionHeading title={filtered?'Matching events':'Upcoming events'}
+            subtitle={`${filtered && searchTotal!==null ? searchTotal : visibleUpcoming.length} events`} />
           {filtered && searchBusy ? (
             <View style={styles.searchStatus}>
               <ActivityIndicator color={theme.colors.primary} size="small" />
@@ -422,12 +403,10 @@ function FeaturedEventCard({ event, onPress }: { event: DiscoveryEventCard; onPr
     onPress={onPress} accessibilityRole="button" accessibilityLabel={'View featured event ' + event.title}>
     {event.coverImageUrl ? <Image source={{uri:event.coverImageUrl}} style={styles.featuredImage} accessibilityLabel={event.title+' event artwork'} />
       : <View style={[styles.featuredImage,styles.posterPlaceholder]} />}
-    <View style={styles.featuredTint} />
-    <View style={styles.featuredChip}><Text style={styles.featuredLabel}>FEATURED EVENT</Text></View>
     <View style={styles.featuredBody}>
       <Text style={styles.featuredMeta}>{formatDate(event.startsAt)} · {event.city ?? 'See event details'}</Text>
-      <Text style={styles.featuredTitle} numberOfLines={2}>{event.title}</Text>
-      <Text style={styles.featuredOrg} numberOfLines={1}>{event.org.name}</Text>
+      <Text style={styles.featuredTitle}>{event.title}</Text>
+      <Text style={styles.featuredOrg}>{event.org.name}</Text>
       <View style={styles.featuredBottom}><Text style={styles.featuredAction}>View details & tickets  →</Text><Text style={styles.featuredPrice}>{minPriceLabel((event.ticketTypes ?? []).map(t=>t.priceMinor))}</Text></View>
     </View>
   </Pressable>
@@ -499,14 +478,14 @@ const styles = StyleSheet.create({
   introRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   introLabel: { color: theme.colors.primary, fontSize: 12, letterSpacing: 1.7, fontWeight: '700', marginBottom: 6 },
   introTitle: { color: theme.colors.text, fontSize: 24, fontWeight: '700', letterSpacing: -1.0 },
-  liveShortcut: { backgroundColor: '#f9eeee', borderRadius: 100, paddingHorizontal: 13, minHeight: 37, justifyContent: 'center' },
+  liveShortcut: { backgroundColor: '#f9eeee', borderRadius: 100, paddingHorizontal: 13, minHeight: 44, justifyContent: 'center' },
   liveShortcutText: { color: '#a73530', fontSize: 12, fontWeight: '700', letterSpacing: .2 },
   hero: { backgroundColor: '#073e3b', borderRadius: 20, paddingHorizontal: 16, paddingTop: 18, paddingBottom: 12, marginBottom: 18, overflow: 'hidden', shadowColor: '#053a39', shadowOpacity:.10, shadowOffset:{width:0,height:13}, shadowRadius:20, elevation:7 },
   heroEyebrowRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
   heroDot: { width: 7, height: 7, backgroundColor: '#f3c464', borderRadius: 4 },
   heroKicker: { color: '#d8fbe9', fontSize: 12, fontWeight: '700', letterSpacing: 1.15, flexShrink: 1 },
-  heroTitle: { color: '#ffffff', fontSize: 25, fontWeight: '700', letterSpacing: -.6, lineHeight: 31, maxWidth:320 },
-  heroAccent: { color: '#caf8dc', fontSize: 25, fontWeight: '700', letterSpacing: -.6, lineHeight: 31 },
+  heroTitle: { color: '#ffffff', fontSize: 22, fontWeight: '700', letterSpacing: -.4, lineHeight: 28, maxWidth:320 },
+  heroAccent: { color: '#caf8dc', fontSize: 22, fontWeight: '700', letterSpacing: -.4, lineHeight: 28 },
   heroBody: { color: '#e2f2ee', fontSize: 13, lineHeight: 19, marginTop: 9, maxWidth:340 },
   heroStatsRow: { flexDirection: 'row', flexWrap:'wrap', alignItems: 'center', marginTop: 17, gap: 18 },
   heroStat: { alignItems: 'flex-start' },
@@ -520,11 +499,11 @@ const styles = StyleSheet.create({
   organizerButtonText: { color: '#e3f7ed', fontSize: 12, fontWeight: '800' },
   hostAction: { alignSelf:'flex-start', minHeight:44, justifyContent:'center', marginTop:0 },
   hostText: { color:'#e5f8f2',fontSize: 12,fontWeight:'800' },
-  heroControls: { flexDirection:'row',alignItems:'center',marginTop:7,gap:2 },
-  heroControlTouch:{width:32,height:35,justifyContent:'center',alignItems:'center'},
+  heroControls: { flexDirection:'row',alignItems:'center',marginTop:0,gap:2 },
+  heroControlTouch:{width:36,height:44,justifyContent:'center',alignItems:'center'},
   heroControlDot:{width:9,height:6,borderRadius:4,backgroundColor:'#63988c'},
   heroControlActive:{width:23,backgroundColor:'#b2e7d5'},
-  heroPause:{minHeight:36,marginLeft:5,justifyContent:'center',paddingHorizontal:6},
+  heroPause:{minHeight:44,marginLeft:5,justifyContent:'center',paddingHorizontal:6},
   heroPauseText:{fontWeight:'800',color:'#d2e9e5',fontSize: 12},
   heroFeatured:{marginTop:17,borderRadius:17,backgroundColor:'#ffffff22',borderWidth:1,borderColor:'#ffffff44',padding:10,flexDirection:'row',alignItems:'center',gap:10},
   heroFeaturedImage:{height:43,width:43,borderRadius:9,backgroundColor:'#30685a'},
@@ -566,18 +545,18 @@ const styles = StyleSheet.create({
   sectionTitle: { color: theme.colors.text, fontSize: 18, fontWeight: '700', letterSpacing: -0.25 },
   sectionCount: { color: theme.colors.textMuted, fontSize: 12, fontWeight: '600' },
   livePill: { color: theme.colors.danger, fontWeight: '800', fontSize: 12 },
-  featuredCard: { borderRadius: 26, backgroundColor: '#061b28', overflow: 'hidden', elevation: 5, minHeight:250, shadowColor:mobileDesign.shadow,shadowOpacity:.13,shadowRadius:16,shadowOffset:{width:0,height:10} },
-  featuredImage: { width: '100%',height: 274,resizeMode: 'cover' },
+  featuredCard: { borderRadius: 18, backgroundColor: '#fff', borderWidth:1,borderColor:theme.colors.border, overflow: 'hidden' },
+  featuredImage: { width: '100%',aspectRatio:16/9,resizeMode: 'cover' },
   featuredTint: { position:'absolute',left:0,right:0,top:0,bottom:0,backgroundColor:'rgba(3,20,29,.56)' },
   featuredChip:{position:'absolute',top:14,left:14,backgroundColor:'#101b25bf',borderRadius:18,paddingHorizontal:12,paddingVertical:8,borderWidth:1,borderColor:'#ffffff55'},
-  featuredBody: {position:'absolute',left:0,right:0,bottom:0,padding:16},
+  featuredBody: {padding:14},
   featuredLabel: {fontSize: 12,fontWeight: '700',color:'#fff',letterSpacing:1.1},
-  featuredTitle: {color:'#fff',fontWeight: '700',fontSize:20,lineHeight:26,marginTop:8,letterSpacing:-.5},
-  featuredMeta:{color:'#e4eee9',fontSize: 12,marginTop:3},
-  featuredOrg:{color:'#e3e9eb',fontSize: 12,marginTop:4},
-  featuredBottom:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',borderTopWidth:1,borderTopColor:'#ffffff55',marginTop:12,paddingTop:11},
-  featuredPrice:{color:'#b6f4dc',fontWeight: '700',fontSize: 12},
-  featuredAction:{color:'#fff',fontWeight:'800',fontSize: 12},
+  featuredTitle: {color:theme.colors.text,fontWeight:'700',fontSize:17,lineHeight:23,marginTop:5},
+  featuredMeta:{color:theme.colors.primaryDark,fontSize: 12,marginTop:3},
+  featuredOrg:{color:theme.colors.textMuted,fontSize: 12,marginTop:4},
+  featuredBottom:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',borderTopWidth:1,borderTopColor:theme.colors.border,marginTop:10,paddingTop:9},
+  featuredPrice:{color:theme.colors.primaryDark,fontWeight: '700',fontSize: 12},
+  featuredAction:{color:theme.colors.primaryDark,fontWeight:'800',fontSize: 12},
   filterEmpty: { alignItems: 'center', padding: theme.spacing.xxl, backgroundColor: theme.colors.card, borderRadius: theme.radius.lg },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: theme.spacing.xl, backgroundColor: theme.colors.bg },
   headerActions: { flexDirection: 'row', alignItems: 'center' },
