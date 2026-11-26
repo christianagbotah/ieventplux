@@ -67,6 +67,12 @@ export async function runJob(type: string, payload: JobPayload): Promise<{ detai
     case 'WAITLIST_PROMOTE': {
       return await runWaitlistJob({ eventId: payload.eventId ? String(payload.eventId) : undefined })
     }
+    case 'DIRECT_CALL_SWEEP': {
+      const { invitationPilotEnabled } = await import('../direct-call-policy')
+      if (!invitationPilotEnabled(process.env)) return {detail:'disabled'}
+      const { sweepDirectCalls } = await import('../services/direct-calls')
+      return {detail:`settled=${await sweepDirectCalls()}`}
+    }
     case 'DIRECT_ACTIVITY_CLEANUP': {
       const now = new Date()
       // Bounded removal of expired ephemeral signals, independent of payments.

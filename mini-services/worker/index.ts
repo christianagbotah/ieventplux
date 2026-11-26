@@ -102,11 +102,13 @@ const SWEEPS = [
   { type: 'PLAYBACK_CLEANUP', everyMs: 120_000 },
   { type: 'WAITLIST_SWEEP', everyMs: 60_000 },
   { type: 'DIRECT_ACTIVITY_CLEANUP', everyMs: 120_000 },
+  { type: 'DIRECT_CALL_SWEEP', everyMs: 10_000 },
 ] as const
 
 async function enqueueDueSweeps() {
   const now = new Date()
   for (const sweep of SWEEPS) {
+    if (sweep.type === 'DIRECT_CALL_SWEEP' && !(process.env.CI === 'true' && process.env.NODE_ENV !== 'production' && process.env.IEVENTPLUX_DIRECT_CALL_TEST_MODE === 'yes')) continue
     const key = `sweep:${sweep.type}`
     const marker = sweepState.get(key)
     if (marker && now.getTime() - marker < sweep.everyMs) continue
