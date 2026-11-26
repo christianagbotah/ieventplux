@@ -6,18 +6,19 @@ if(!['localhost','127.0.0.1'].includes(url.hostname)||url.port!=='5432'||url.pat
 const key=()=>randomBytes(24).toString('hex')
 const check=(v:unknown,label:string)=>{if(!v)throw new Error(label);console.log('PASS '+label)}
 const users:string[]=[]
-type Actor={id:string;cookie:string}
+type Actor={id:string;cookie:string;ip:string}
+let nextIp=100
 async function device(id:string){
  const token=key()
  await db.session.create({data:{userId:id,tokenHash:createHash('sha256').update(token).digest('hex'),expiresAt:new Date(Date.now()+600000)}})
- return {id,cookie:'ievx_session='+token}
+ return {id,cookie:'ievx_session='+token,ip:'192.0.2.'+(nextIp++)}
 }
 async function make(){
  const u=await db.user.create({data:{email:key()+'@example.invalid',displayName:'Synthetic call contact',passwordHash:'synthetic'}})
  users.push(u.id);return device(u.id)
 }
 async function api(actor:Actor|null,route:string,body?:object){
- const res=await fetch('http://127.0.0.1:3000/api/v1/'+route,{method:body?'POST':'GET',headers:{'Content-Type':'application/json','x-forwarded-for':'192.0.2.98',...(actor?{Cookie:actor.cookie}:{})},body:body?JSON.stringify({expectedUserId:actor?.id,...body}):undefined})
+ const res=await fetch('http://127.0.0.1:3000/api/v1/'+route,{method:body?'POST':'GET',headers:{'Content-Type':'application/json','x-forwarded-for':actor?.ip??'192.0.2.98',...(actor?{Cookie:actor.cookie}:{})},body:body?JSON.stringify({expectedUserId:actor?.id,...body}):undefined})
  return {status:res.status,data:await res.json(),headers:res.headers}
 }
 async function conversation(a:Actor,b:Actor,accept=true){
