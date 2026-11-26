@@ -50,7 +50,7 @@ export function DiscoverFilterSheet({ visible, filters, categories, countries, o
       <View style={[styles.sheet,{maxHeight:Math.max(350,height-60),paddingBottom:Math.max(insets.bottom,13)}]}>
         <View style={styles.handle} />
         <View style={styles.heading}>
-          <View style={{flex:1}}><Text style={styles.eyebrow}>FIND YOUR NEXT EXPERIENCE</Text><Text style={styles.title}>Discover filters</Text></View>
+          <View style={{flex:1}}><Text style={styles.title}>Discover filters</Text></View>
           <Pressable accessibilityRole="button" accessibilityLabel="Close filters" onPress={onClose} style={styles.close}><Text style={styles.closeText}>×</Text></Pressable>
         </View>
         <ScrollView style={styles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
@@ -90,15 +90,15 @@ const styles=StyleSheet.create({
   sheet:{width:'100%',backgroundColor:theme.colors.card,borderTopLeftRadius:25,borderTopRightRadius:25,paddingHorizontal:18},
   handle:{width:42,height:5,backgroundColor:'#ccd8de',borderRadius:5,alignSelf:'center',marginTop:9,marginBottom:17},
   heading:{flexDirection:'row',gap:12,alignItems:'center',paddingBottom:14,borderBottomWidth:1,borderBottomColor:theme.colors.border},
-  eyebrow:{fontSize:13,color:theme.colors.primary,fontWeight:'900',letterSpacing:1.1},title:{fontSize:24,fontWeight:'900',color:theme.colors.text,marginTop:5},
+  eyebrow:{fontSize:13,color:theme.colors.primary,fontWeight:'900',letterSpacing:1.1},title:{fontSize:20,fontWeight:'700',color:theme.colors.text,marginTop:5},
   close:{width:48,height:48,borderRadius:15,backgroundColor:theme.colors.bg,alignItems:'center',justifyContent:'center'},closeText:{fontSize:26,color:theme.colors.text},
-  scroll:{flexShrink:1},content:{paddingBottom:26,paddingTop:14},group:{marginBottom:21},groupTitle:{fontSize:16,fontWeight:'900',color:theme.colors.text,marginBottom:11},
-  options:{flexDirection:'row',flexWrap:'wrap',gap:8},chip:{minHeight:48,borderRadius:14,paddingHorizontal:13,paddingVertical:10,backgroundColor:theme.colors.bg,borderWidth:1,borderColor:theme.colors.border,justifyContent:'center'},activeChip:{backgroundColor:theme.web.tealSoft,borderColor:theme.colors.primary},
-  chipText:{fontSize:14,fontWeight:'700',color:theme.colors.textMuted},activeChipText:{color:theme.colors.primary},pressed:{opacity:.75},
-  input:{borderWidth:1,borderColor:theme.colors.border,borderRadius:13,minHeight:48,paddingHorizontal:14,fontSize:16,color:theme.colors.text,backgroundColor:'#fff',marginBottom:10},
-  note:{fontSize:14,color:theme.colors.textMuted,lineHeight:21,marginTop:9},
+  scroll:{flexShrink:1},content:{paddingBottom:26,paddingTop:14},group:{marginBottom:16},groupTitle:{fontSize:14,fontWeight:'700',color:theme.colors.text,marginBottom:11},
+  options:{flexDirection:'row',flexWrap:'wrap',gap:8},chip:{minHeight:44,borderRadius:12,paddingHorizontal:13,paddingVertical:10,backgroundColor:theme.colors.bg,borderWidth:1,borderColor:theme.colors.border,justifyContent:'center'},activeChip:{backgroundColor:theme.web.tealSoft,borderColor:theme.colors.primary},
+  chipText:{fontSize:13,fontWeight:'600',color:theme.colors.textMuted},activeChipText:{color:theme.colors.primary},pressed:{opacity:.75},
+  input:{borderWidth:1,borderColor:theme.colors.border,borderRadius:13,minHeight:48,paddingHorizontal:14,fontSize:14,color:theme.colors.text,backgroundColor:'#fff',marginBottom:10},
+  note:{fontSize:13,color:theme.colors.textMuted,lineHeight:19,marginTop:9},
   footer:{borderTopWidth:1,borderTopColor:theme.colors.border,flexDirection:'row',gap:10,paddingTop:14},
   footerStacked:{flexDirection:'column'},
-  clear:{minHeight:49,flex:1,backgroundColor:theme.colors.bg,borderRadius:13,alignItems:'center',justifyContent:'center'},clearText:{fontSize:16,fontWeight:'700',color:theme.colors.text},
-  apply:{minHeight:49,flex:2,backgroundColor:theme.colors.primary,borderRadius:13,alignItems:'center',justifyContent:'center'},applyText:{fontWeight:'700',fontSize:16,color:'#fff'},
+  clear:{minHeight:49,flex:1,backgroundColor:theme.colors.bg,borderRadius:13,alignItems:'center',justifyContent:'center'},clearText:{fontSize:14,fontWeight:'600',color:theme.colors.text},
+  apply:{minHeight:49,flex:2,backgroundColor:theme.colors.primary,borderRadius:13,alignItems:'center',justifyContent:'center'},applyText:{fontWeight:'600',fontSize:14,color:'#fff'},
 })
