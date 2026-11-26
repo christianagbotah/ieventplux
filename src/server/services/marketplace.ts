@@ -157,8 +157,15 @@ export async function updateStore(idOrSlug: string, userId: string, raw: unknown
   const update = parseStoreDraft({ ...existing, ...x })
   if (update.slug !== existing.slug) throw errors.badRequest('Store address cannot be changed after creation.')
   if (existing.status === 'SUSPENDED') throw errors.forbidden('Suspended stores require platform review.')
+  // Only write the validated fields explicitly requested. A location or status
+  // change must not restore a stale logo/banner after a concurrent upload.
+  const changed=Object.fromEntries(Object.entries(update).filter(([key])=>Object.hasOwn(x,key))) as Partial<typeof update>
+  if(Object.hasOwn(x,'latitude')||Object.hasOwn(x,'longitude')){
+    if(!Object.hasOwn(x,'latitude')||!Object.hasOwn(x,'longitude'))throw errors.badRequest('Submit both coordinates together.')
+    changed.latitude=update.latitude;changed.longitude=update.longitude
+  }
   const store=await db.marketplaceStore.update({
-    where:{id:existing.id}, data:{...update,...(x.status ? {status:x.status as string}:{})},
+    where:{id:existing.id,ownerId:userId,deletedAt:null,status:{not:'SUSPENDED'}}, data:{...changed,...(x.status ? {status:x.status as string}:{})},
     select:{id:true,slug:true,status:true},
   })
   await audit({actorUserId:userId,actorLabel:'store-owner',action:'marketplace.store.update',
