@@ -1,5 +1,7 @@
 'use client'
 import {useCallback,useEffect,useRef,useState} from 'react'
+import {SubmissionFeedback} from '@/components/ui/submission-feedback'
+import {useToast} from '@/hooks/use-toast'
 import {Button} from '@/components/ui/button'
 import {useConfirm} from '@/components/ui/confirm-dialog-provider'
 import {api} from '../api'
@@ -7,6 +9,9 @@ import {purchaseRequestBody,purchaseRequestFingerprint,requestStatusLabel,availa
 const price=(n:number)=>'₵'+(n/100).toLocaleString('en-GH',{minimumFractionDigits:2,maximumFractionDigits:2})
 export function MarketplaceRequests({slug,seller,quote,onSubmitted}:{slug:string;seller:boolean;quote:ReviewedBasket|null;onSubmitted:(submitted:ReviewedBasket)=>void}){
  const confirm=useConfirm()
+ const {toast}=useToast()
+ const [attempt,setAttempt]=useState(0)
+ function fail(e:unknown,fallback:string){const message=e instanceof Error?e.message:fallback;setSubmissionError(message);setAttempt(n=>n+1);toast({title:'Request not completed',description:message,variant:'destructive',duration:10000})}
  const [history,setHistory]=useState<PurchaseRequestHistory|null>(null)
  const [loading,setLoading]=useState(false)
  const [error,setError]=useState('')
@@ -39,8 +44,8 @@ export function MarketplaceRequests({slug,seller,quote,onSubmitted}:{slug:string
    const result=await api.post<PurchaseRequestResponse>(endpoint,purchaseRequestBody(quote,retry.current.get(fingerprint)!))
    if(result.checkoutEnabled!==false||result.inventoryReserved!==false)throw new Error('Unexpected purchase request response.')
    if(!active.current)return
-   retry.current.delete(fingerprint);setNotice('Purchase request received. Reference: '+result.request.id);onSubmitted(quote);await load()
-  }catch(e){if(active.current)setSubmissionError(e instanceof Error?e.message:'Could not submit. Retry with the same reviewed basket.')}
+   retry.current.delete(fingerprint);setNotice('Purchase request received. Reference: '+result.request.id);toast({title:'Purchase request submitted'});onSubmitted(quote);await load()
+  }catch(e){if(active.current)fail(e,'Could not submit. Retry with the same reviewed basket.')}
   finally{locked.current=false;if(active.current)setSubmitting(false)}
  }
  async function decide(id:string,status:RequestDecision){
@@ -52,8 +57,8 @@ export function MarketplaceRequests({slug,seller,quote,onSubmitted}:{slug:string
    const result=await api.patch<{request:PurchaseRequestRow;checkoutEnabled:false;inventoryReserved:false}>('/marketplace/requests/'+encodeURIComponent(id),{status})
    if(result.checkoutEnabled!==false||result.inventoryReserved!==false)throw new Error('Unexpected purchase request response.')
    if(!active.current)return
-   setNotice(requestStatusLabel(result.request.status));await load()
-  }catch(e){if(active.current){setSubmissionError(e instanceof Error?e.message:'Could not update request.');await load()}}
+   setNotice(requestStatusLabel(result.request.status));toast({title:'Request '+requestStatusLabel(result.request.status).toLowerCase()});await load()
+  }catch(e){if(active.current){fail(e,'Could not update request.');await load()}}
   finally{locked.current=false;if(active.current)setDecisionBusy(false)}
  }
  return <section className="space-y-3 rounded-2xl border bg-card p-4 sm:p-6" aria-label="Purchase requests">
@@ -61,7 +66,7 @@ export function MarketplaceRequests({slug,seller,quote,onSubmitted}:{slug:string
    <Button variant="outline" size="sm" disabled={loading} onClick={()=>void load()}>{loading?'Refreshing…':'Refresh requests'}</Button></div>
   {!seller&&quote&&<Button disabled={submitting||decisionBusy} onClick={()=>void submit()}>{submitting?'Submitting…':'Submit purchase request · '+price(quote.totalMinor)}</Button>}
   {!seller&&!quote&&<p className="text-xs text-muted-foreground">Review your basket to submit a new request.</p>}
-  {submissionError&&<p role="alert" className="text-sm text-destructive">{submissionError}</p>}
+  <SubmissionFeedback message={submissionError} attempt={attempt}/>
   {notice&&<p role="status" className="break-all text-sm text-primary">{notice}</p>}
   {error&&<p role="alert" className="text-sm text-destructive">{error}</p>}
   {history&&history.requests.length===0&&<p className="rounded-xl bg-muted/40 p-4 text-sm text-muted-foreground">No requests yet.</p>}

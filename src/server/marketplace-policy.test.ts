@@ -65,3 +65,17 @@ test('product accepts durable public upload path and rejects traversal',()=>{
  expect(JSON.parse(parseProductDraft({...goodProduct,images:[path]}).images)).toEqual([path])
  expect(()=>parseProductDraft({...goodProduct,images:['/uploads/../../secret']})).toThrow()
 })
+
+test('store GPS address is normalized, coordinates must be valid and paired',()=>{
+ const x=parseStoreDraft({...goodStore,gpsAddress:' ga-123-4567 ',latitude:5.6,longitude:-0.18})
+ expect(x.gpsAddress).toBe('GA-123-4567')
+ expect(x.latitude).toBe(5.6)
+ expect(x.longitude).toBe(-0.18)
+ for(const fields of [{latitude:5.6},{latitude:91,longitude:0},{latitude:0,longitude:181},{latitude:'5.6',longitude:0},{gpsAddress:'invalid'}])expect(()=>parseStoreDraft({...goodStore,...fields})).toThrow()
+ expect(parseStoreDraft({...goodStore,gpsAddress:'GA-123-4567'}).latitude).toBeNull()
+})
+test('store uploaded logo survives subsequent edits; unsafe paths denied',()=>{
+ const logoUrl='/uploads/cc181bfa-502d-45d1-878c-daf8e78ed3bc.webp'
+ expect(parseStoreDraft({...goodStore,logoUrl}).logoUrl).toBe(logoUrl)
+ expect(()=>parseStoreDraft({...goodStore,logoUrl:'/uploads/../../secret'})).toThrow()
+})

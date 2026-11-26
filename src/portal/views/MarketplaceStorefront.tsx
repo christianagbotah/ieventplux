@@ -1,6 +1,8 @@
 'use client'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ArrowLeft, BadgeCheck, Box, CheckCircle2, Globe, Loader2, Package, Plus, ShieldAlert, Store, Truck } from 'lucide-react'
+import { ArrowLeft, BadgeCheck, Box, Camera, Pencil, CheckCircle2, Globe, Loader2, Package, Plus, ShieldAlert, Store, Truck } from 'lucide-react'
+import { StoreLocationFields,emptyStoreLocation,locationPayload } from '../components/StoreLocationFields'
+import { SubmissionFeedback } from '@/components/ui/submission-feedback'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
@@ -21,7 +23,7 @@ import {MarketplacePaymentSettings} from '../components/MarketplacePaymentSettin
 
 type Variant = {id:string;sku:string;title:string;priceMinor:number;available:number;currency:string;stockOnHand?:number;reserved?:number;active:boolean}
 type Product = {id:string;slug:string;name:string;shortDesc:string|null;description:string;brand:string|null;category:string;productKind:string;specifications:Record<string,string>;images:string[];status:string;variants:Variant[]}
-type Shop = {id:string;slug:string;name:string;tagline:string|null;description:string|null;category:string;status:string;verificationState:string;logoUrl:string|null;coverUrl:string|null;website:string|null;country:string;region?:string|null;city:string|null;currency:string}
+type Shop = {id:string;slug:string;name:string;tagline:string|null;description:string|null;category:string;status:string;verificationState:string;logoUrl:string|null;coverUrl:string|null;website:string|null;country:string;region?:string|null;city:string|null;currency:string;gpsAddress?:string|null;latitude?:number|null;longitude?:number|null}
 type Detail = {store:Shop;products:Product[];canManage:boolean;checkoutEnabled:false}
 const price=(v:number)=>'₵'+(v/100).toLocaleString('en-GH',{minimumFractionDigits:2,maximumFractionDigits:2})
 function toMinor(raw:string){
@@ -40,6 +42,18 @@ export default function MarketplaceStorefront({slug}:{slug:string}) {
  const [loading,setLoading]=useState(true)
  const [error,setError]=useState('')
  const [busy,setBusy]=useState(false)
+ const [branding,setBranding]=useState<'logo'|'cover'|null>(null)
+ const [brandError,setBrandError]=useState('')
+ const [brandAttempt,setBrandAttempt]=useState(0)
+ const [formError,setFormError]=useState('')
+ const [formAttempt,setFormAttempt]=useState(0)
+ function reportFormError(title:string,e:unknown,fallback:string){const message=e instanceof Error?e.message:fallback;setFormError(message);setFormAttempt(n=>n+1);toast({title,description:message,variant:'destructive',duration:10000})}
+ const [locationOpen,setLocationOpen]=useState(false)
+ const [location,setLocation]=useState(emptyStoreLocation)
+ const [locationError,setLocationError]=useState('')
+ const [locationAttempt,setLocationAttempt]=useState(0)
+ const logoInput=useRef<HTMLInputElement>(null)
+ const coverInput=useRef<HTMLInputElement>(null)
  const [productOpen,setProductOpen]=useState(false)
  const [name,setName]=useState('')
  const [category,setCategory]=useState('')
@@ -112,20 +126,40 @@ export default function MarketplaceStorefront({slug}:{slug:string}) {
    }finally{setBusy(false)}
  }
 
+ async function saveLocation(){
+   if(busy||!data?.canManage)return
+   setBusy(true);setLocationError('')
+   try{
+     await api.patch('/marketplace/stores/'+encodeURIComponent(slug),locationPayload(location))
+     setLocationOpen(false);await load();toast({title:'Store location saved'})
+   }catch(e){const message=e instanceof Error?e.message:'Location could not be saved.';setLocationError(message);setLocationAttempt(n=>n+1);toast({title:'Location not saved',description:message,variant:'destructive',duration:10000})}
+   finally{setBusy(false)}
+ }
+ async function uploadBrand(file:File|undefined,purpose:'logo'|'cover'){
+   if(!file||!data?.canManage||branding||busy)return
+   setBranding(purpose);setBrandError('')
+   try{
+     const form=new FormData();form.append('file',file);form.append('purpose',purpose)
+     const result=await api.upload<{url:string}>('/marketplace/stores/'+encodeURIComponent(slug)+'/images',form)
+     setData(current=>current&&current.store.slug===slug?{...current,store:{...current.store,[purpose==='logo'?'logoUrl':'coverUrl']:result.url}}:current)
+     toast({title:purpose==='logo'?'Store logo updated':'Store banner updated'})
+   }catch(e){const message=e instanceof Error?e.message:'Image could not be uploaded.';setBrandError(message);setBrandAttempt(n=>n+1);toast({title:'Image not updated',description:message,variant:'destructive',duration:10000})}
+   finally{setBranding(null)}
+ }
  async function uploadImages(files:FileList|null,featured:boolean){
    if(!files?.length||uploading||busy)return
-   setUploading(true)
+   setUploading(true);setFormError('')
    try{
      const limit=featured?1:Math.max(0,10-images.length)
      if(files.length>limit)throw new Error('Choose no more than the remaining image slots (10 total).')
      const uploaded:string[]=[]
      for(const file of Array.from(files)){const form=new FormData();form.append('file',file);const result=await api.upload<{url:string}>('/marketplace/stores/'+encodeURIComponent(slug)+'/images',form);uploaded.push(result.url)}
-     setImages(prev=>featured?[uploaded[0],...prev.slice(1)]:[...prev,...uploaded])
-   }catch(e){toast({title:'Image upload failed',description:e instanceof Error?e.message:'Try a JPG, PNG or WebP image.',variant:'destructive'})}finally{setUploading(false)}
+     setImages(prev=>featured?[uploaded[0],...prev.slice(1)]:[...prev,...uploaded]);toast({title:'Images uploaded'})
+   }catch(e){reportFormError('Image upload failed',e,'Try a JPG, PNG or WebP image.')}finally{setUploading(false)}
  }
  async function submitProduct(){
    if(!data||busy||uploading)return
-   setBusy(true)
+   setBusy(true);setFormError('')
    try{
      const variants=variantLines.map((line,i)=>({title:line.title.trim(),sku:line.sku.trim()||('SKU-'+crypto.randomUUID().slice(0,8).toUpperCase()+'-'+(i+1)),priceMinor:toMinor(line.price),optionValues:{}}))
      const specifications:Record<string,string>={}
@@ -143,7 +177,7 @@ export default function MarketplaceStorefront({slug}:{slug:string}) {
      setName('');setDescription('');setSpecs([]);setImages([]);setBrand('');setProductKind('GOODS');setVariantLines([{title:'Standard',sku:'',price:''}])
      toast({title:'Product draft created',description:'Receive stock and publish the product when ready.'})
    }catch(e){
-     toast({title:'Could not create product',description:e instanceof Error?e.message:'Check the form.',variant:'destructive'})
+     reportFormError('Could not create product',e,'Check the form.')
    }finally{setBusy(false)}
  }
 
@@ -168,13 +202,13 @@ export default function MarketplaceStorefront({slug}:{slug:string}) {
 
  async function savePrice(){
    if(!priceVariant||busy)return
-   setBusy(true)
+   setBusy(true);setFormError('')
    try{
      await api.patch('/marketplace/variants/'+encodeURIComponent(priceVariant.id)+'/price',{priceMinor:toMinor(newPrice),expectedPriceMinor:priceVariant.priceMinor})
      setPriceVariant(null)
      await load()
      toast({title:'Product price updated'})
-   }catch(e){toast({title:'Price not updated',description:e instanceof Error?e.message:'Try again.',variant:'destructive'})}
+   }catch(e){reportFormError('Price not updated',e,'Try again.')}
    finally{setBusy(false)}
  }
 
@@ -182,7 +216,7 @@ export default function MarketplaceStorefront({slug}:{slug:string}) {
    if(!stockVariant||busy)return
    const amount=Number(delta)
    if(!Number.isSafeInteger(amount)||amount===0){
-     toast({title:'Enter a nonzero whole-number stock change',variant:'destructive'})
+     reportFormError('Invalid stock quantity',new Error('Enter a nonzero whole-number stock change.'),'Check quantity.')
      return
    }
    const approved=await confirm({
@@ -200,7 +234,7 @@ export default function MarketplaceStorefront({slug}:{slug:string}) {
      setStockVariant(null)
      toast({title:'Stock movement recorded',description:'Available inventory has been recalculated.'})
    }catch(e){
-     toast({title:'Stock was not changed',description:e instanceof ApiClientError?e.message:'Try again.',variant:'destructive'})
+     reportFormError('Stock was not changed',e,'Try again.')
    }finally{setBusy(false)}
  }
 
@@ -212,13 +246,15 @@ export default function MarketplaceStorefront({slug}:{slug:string}) {
  </div>
  return <div className="pb-28 sm:pb-16">
   <div className="relative h-44 overflow-hidden bg-gradient-to-br from-emerald-950 via-emerald-800 to-slate-900 sm:h-56">
-    {data.store.coverUrl&&<img src={data.store.coverUrl} alt="" className="h-full w-full object-cover opacity-65"/>}
+    {data.store.coverUrl&&<img src={data.store.coverUrl} alt="" className="h-full w-full object-cover"/>}
+    {data.canManage&&data.store.status!=='SUSPENDED'&&<><input ref={coverInput} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={e=>{void uploadBrand(e.target.files?.[0],'cover');e.target.value=''}}/><Button type="button" variant="secondary" size="sm" className="absolute right-4 top-4 gap-1 shadow" disabled={!!branding||busy} onClick={()=>coverInput.current?.click()}>{branding==='cover'?<Loader2 className="size-4 animate-spin"/>:<Camera className="size-4"/>} Edit banner</Button></>}
     <button type="button" onClick={()=>navigate('/shop')} className="absolute left-4 top-4 flex items-center gap-2 rounded-full bg-black/45 px-4 py-2 text-sm font-semibold text-white backdrop-blur-sm"><ArrowLeft className="size-4"/>Marketplace</button>
   </div>
   <div className="mx-auto max-w-7xl space-y-8 px-4">
     <div className="-mt-8 relative grid grid-cols-[auto_minmax(0,1fr)] items-start gap-3 sm:gap-4 lg:grid-cols-[auto_minmax(0,1fr)_auto]">
-      {data.store.logoUrl?<img src={data.store.logoUrl} alt="" className="size-20 rounded-2xl border-4 border-background bg-white object-contain shadow-xl"/>:
+      <div className="relative w-fit">{data.store.logoUrl?<img src={data.store.logoUrl} alt="" className="size-20 rounded-2xl border-4 border-background bg-white object-contain shadow-xl"/>:
         <div className="grid size-20 place-items-center rounded-2xl border-4 border-background bg-primary text-white shadow-xl"><Store className="size-8"/></div>}
+      {data.canManage&&data.store.status!=='SUSPENDED'&&<><input ref={logoInput} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={e=>{void uploadBrand(e.target.files?.[0],'logo');e.target.value=''}}/><button type="button" aria-label="Edit store logo" title="Edit logo" className="absolute -bottom-1 -right-1 grid size-10 place-items-center rounded-full border-2 border-background bg-primary text-primary-foreground shadow" disabled={!!branding||busy} onClick={()=>logoInput.current?.click()}>{branding==='logo'?<Loader2 className="size-4 animate-spin"/>:<Pencil className="size-4"/>}</button></>}</div>
       <div className="min-w-0 pt-9 sm:pt-5">
         <div className="flex flex-wrap items-center gap-2"><h1 className="break-words text-2xl font-extrabold sm:text-3xl">{data.store.name}</h1>
           {data.store.verificationState==='VERIFIED'&&<Badge variant="secondary" className="gap-1"><BadgeCheck className="size-3"/>Verified</Badge>}
@@ -229,18 +265,20 @@ export default function MarketplaceStorefront({slug}:{slug:string}) {
       </div>
       {data.canManage&&<div className="col-span-2 grid grid-cols-2 gap-2 lg:col-span-1 lg:flex lg:flex-wrap lg:pt-5">
         <Button variant="outline" onClick={()=>navigate('/seller')}>Seller studio</Button>
+        <Button variant="outline" disabled={busy||data.store.status==='SUSPENDED'} onClick={()=>{setLocation({gpsAddress:data.store.gpsAddress??'',latitude:data.store.latitude?.toString()??'',longitude:data.store.longitude?.toString()??''});setLocationError('');setLocationOpen(true)}}>Edit location</Button>
         <Button disabled={busy} onClick={()=>void setStoreStatus(data.store.status==='ACTIVE'?'DRAFT':'ACTIVE')}>
           {data.store.status==='ACTIVE'?'Unpublish store':'Publish store'}
         </Button>
       </div>}
     </div>
+    {data.canManage&&<><SubmissionFeedback message={brandError} attempt={brandAttempt}/><p className="text-xs text-muted-foreground">Brand images: square logo (512 × 512 recommended); banner (1600 × 600 recommended). JPG, PNG or WebP, up to 5 MB each. Images are public.</p></>}
     {data.store.description&&<p className="max-w-3xl whitespace-pre-wrap text-sm leading-7 text-muted-foreground">{data.store.description}</p>}
     <section className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div><h2 className="text-xl font-extrabold sm:text-2xl">Product catalogue</h2>
           <p className="mt-1 text-sm text-muted-foreground">Detailed goods, seller-defined variants and current available stock.</p>
         </div>
-        {data.canManage&&<Button onClick={()=>{setCategory(data.store.category);setProductOpen(true)}}><Plus className="mr-2 size-4"/>Add product</Button>}
+        {data.canManage&&<Button onClick={()=>{setCategory(data.store.category);setFormError('');setProductOpen(true)}}><Plus className="mr-2 size-4"/>Add product</Button>}
       </div>
       {data.products.length?<div className="grid items-start gap-5 sm:grid-cols-2 lg:grid-cols-3">
         {data.products.map(product=><Card key={product.id} className="overflow-hidden rounded-2xl border-border/70">
@@ -270,8 +308,8 @@ export default function MarketplaceStorefront({slug}:{slug:string}) {
                       onClick={()=>selectQty(v.id,(basket[v.id]??0)+1,v.available)} aria-label={`Add one ${v.title}`}>+</Button>
                   </div>
                 </div>}
-                {data.canManage&&v.active&&product.status!=='ARCHIVED'&&data.store.status!=='SUSPENDED'&&<Button size="sm" variant="outline" className="mt-2 w-full" disabled={busy} onClick={()=>{setPriceVariant(v);setNewPrice((v.priceMinor/100).toFixed(2))}}>Edit price</Button>}
-                {data.canManage&&product.productKind==='GOODS'&&<Button size="sm" variant="outline" className="mt-2 w-full" onClick={()=>{setStockVariant(v);setDelta('10');setReason('New stock received from supplier')}}>Adjust inventory</Button>}
+                {data.canManage&&v.active&&product.status!=='ARCHIVED'&&data.store.status!=='SUSPENDED'&&<Button size="sm" variant="outline" className="mt-2 w-full" disabled={busy} onClick={()=>{setFormError('');setPriceVariant(v);setNewPrice((v.priceMinor/100).toFixed(2))}}>Edit price</Button>}
+                {data.canManage&&product.productKind==='GOODS'&&<Button size="sm" variant="outline" className="mt-2 w-full" onClick={()=>{setFormError('');setStockVariant(v);setDelta('10');setReason('New stock received from supplier')}}>Adjust inventory</Button>}
               </div>)}
             </div>
             {data.canManage&&product.status==='DRAFT'&&<Button className="w-full" disabled={busy} onClick={()=>void publishProduct(product,'ACTIVE')}>Publish product</Button>}
@@ -313,10 +351,18 @@ export default function MarketplaceStorefront({slug}:{slug:string}) {
       <CheckCircle2 className="mr-1 inline size-4 text-primary"/> Product listings show seller-provided descriptions and inventory. Platform checkout, order delivery and refunds are not yet enabled for independent stores. Unverified sellers are not represented as verified.
     </p>
   </div>
+  <Dialog open={locationOpen} onOpenChange={open=>{if(!busy)setLocationOpen(open)}}>
+    <DialogContent className="flex max-h-[calc(100dvh-1.5rem)] max-w-lg flex-col gap-3 overflow-hidden rounded-2xl">
+      <DialogHeader><DialogTitle>Store location</DialogTitle></DialogHeader>
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-1 py-1"><SubmissionFeedback message={locationError} attempt={locationAttempt}/><StoreLocationFields value={location} onChange={setLocation} disabled={busy}/></div>
+      <DialogFooter><Button variant="outline" disabled={busy} onClick={()=>setLocationOpen(false)}>Cancel</Button><Button disabled={busy} onClick={()=>void saveLocation()}>{busy?'Saving…':'Save location'}</Button></DialogFooter>
+    </DialogContent>
+  </Dialog>
   <Dialog open={productOpen} onOpenChange={setProductOpen}>
     <DialogContent className="flex max-h-[calc(100dvh-1.5rem)] max-w-2xl flex-col gap-3 overflow-hidden rounded-2xl" onOpenAutoFocus={e=>e.preventDefault()}>
       <DialogHeader><DialogTitle>Add a new product</DialogTitle></DialogHeader>
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-1 py-1">
+        <SubmissionFeedback message={formError} attempt={formAttempt}/>
         <div><Label htmlFor="product-name">Product name</Label><Input id="product-name" maxLength={150} value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. Handwoven Kente cloth"/></div>
         <div><Label htmlFor="product-category">Category</Label><MarketplaceSelect id="product-category" options={MARKETPLACE_CATEGORIES} value={category} onChange={setCategory} placeholder="Choose product category"/></div>
         <div><Label htmlFor="product-kind">Listing type</Label><select id="product-kind" className="h-11 w-full rounded-md border border-input bg-background px-3" value={productKind} onChange={e=>setProductKind(e.target.value as typeof productKind)}><option value="GOODS">Physical product</option><option value="SERVICE">Service (catalogue listing only)</option><option value="DIGITAL">Digital product (catalogue listing only)</option></select></div><div><Label htmlFor="product-brand">Brand or manufacturer (optional)</Label><Input id="product-brand" maxLength={100} value={brand} onChange={e=>setBrand(e.target.value)}/></div>
@@ -332,6 +378,7 @@ export default function MarketplaceStorefront({slug}:{slug:string}) {
   <Dialog open={priceVariant!==null} onOpenChange={open=>{if(!open&&!busy)setPriceVariant(null)}}>
     <DialogContent className="rounded-2xl">
       <DialogHeader><DialogTitle>Edit product price</DialogTitle></DialogHeader>
+      <SubmissionFeedback message={formError} attempt={formAttempt}/>
       <p className="text-sm text-muted-foreground">{priceVariant?.title} · SKU {priceVariant?.sku}. Stock quantities are not changed.</p>
       <div><Label htmlFor="variant-price">New price (₵)</Label><Input id="variant-price" inputMode="decimal" value={newPrice} onChange={e=>setNewPrice(e.target.value)} disabled={busy}/></div>
       <DialogFooter><Button variant="outline" disabled={busy} onClick={()=>setPriceVariant(null)}>Cancel</Button><Button disabled={busy||!newPrice.trim()} onClick={()=>void savePrice()}>{busy?'Saving…':'Save price'}</Button></DialogFooter>
@@ -340,6 +387,7 @@ export default function MarketplaceStorefront({slug}:{slug:string}) {
   <Dialog open={stockVariant!==null} onOpenChange={open=>{if(!open)setStockVariant(null)}}>
     <DialogContent className="rounded-2xl">
       <DialogHeader><DialogTitle>Adjust physical inventory</DialogTitle></DialogHeader>
+      <SubmissionFeedback message={formError} attempt={formAttempt}/>
       <p className="text-sm text-muted-foreground">Variant: <strong>{stockVariant?.sku}</strong>. Use a positive number to receive goods or a negative number to record an authorized stock reduction.</p>
       <div><Label htmlFor="stock-delta">Quantity change</Label><Input id="stock-delta" inputMode="numeric" value={delta} onChange={e=>setDelta(e.target.value)}/></div>
       <div><Label htmlFor="stock-reason">Reason for this inventory movement</Label><Textarea id="stock-reason" value={reason} maxLength={200} onChange={e=>setReason(e.target.value)}/></div>

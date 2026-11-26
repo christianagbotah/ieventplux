@@ -1,6 +1,7 @@
 'use client'
-import { useCallback, useEffect, useState } from 'react'
-import { ArrowRight, BadgeCheck, Globe, Search, ShoppingBag, Store, Sparkles } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { ArrowRight, BadgeCheck, Globe, LocateFixed, Search, ShoppingBag, Store, Sparkles } from 'lucide-react'
+import { SubmissionFeedback } from '@/components/ui/submission-feedback'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -11,25 +12,46 @@ import { navigate } from '../router'
 type ShopRow = {
   id:string;slug:string;name:string;tagline:string|null;category:string
   logoUrl:string|null;coverUrl:string|null;country:string;city:string|null
-  verificationState:string;productCount:number
+  verificationState:string;productCount:number;distanceKm?:number
 }
 export default function MarketplaceExplore() {
   const [query,setQuery]=useState('')
   const [stores,setStores]=useState<ShopRow[]>([])
   const [loading,setLoading]=useState(true)
   const [error,setError]=useState('')
+  const [nearby,setNearby]=useState(false)
+  const [locating,setLocating]=useState(false)
+  const [attempt,setAttempt]=useState(0)
+  const requestEpoch=useRef(0)
   const load=useCallback(async(q:string)=>{
-    setLoading(true)
+    const epoch=++requestEpoch.current
+    setLoading(true);setNearby(false);setLocating(false)
     try{
       const response=await api.get<{stores:ShopRow[]}>('/marketplace/stores'+(q?'?q='+encodeURIComponent(q):''))
+      if(epoch!==requestEpoch.current)return
       setStores(response.stores)
       setError('')
     }catch(e){
+      if(epoch!==requestEpoch.current)return
       setStores([])
       setError(e instanceof ApiClientError?e.message:'Could not load storefronts.')
-    }finally{setLoading(false)}
+    }finally{if(epoch===requestEpoch.current)setLoading(false)}
   },[])
-  useEffect(()=>{void load('')},[load])
+  useEffect(()=>{void load('');return()=>{requestEpoch.current++}},[load])
+  function findNearby(){
+    const epoch=++requestEpoch.current
+    setError('');setLocating(true);setLoading(true);setNearby(false)
+    const fail=(message:string)=>{if(epoch!==requestEpoch.current)return;setError(message);setAttempt(n=>n+1);setLocating(false);setLoading(false);setStores([])}
+    if(!navigator.geolocation){fail('Location is unavailable on this device. You can still search by store name.');return}
+    navigator.geolocation.getCurrentPosition(async position=>{
+      if(epoch!==requestEpoch.current)return
+      try{
+        const result=await api.post<{stores:ShopRow[];radiusKm:number}>('/marketplace/stores/nearby',{latitude:position.coords.latitude,longitude:position.coords.longitude,q:query.trim()})
+        if(epoch!==requestEpoch.current)return
+        setStores(result.stores);setNearby(true);setLoading(false);setLocating(false)
+      }catch(e){fail(e instanceof Error?e.message:'Nearby search could not be completed.')}
+    },()=>fail('Location permission was denied or unavailable. Enable it to find stores near you.'),{enableHighAccuracy:false,timeout:12000,maximumAge:0})
+  }
   return <div className="min-h-[68dvh] pb-12">
     <section className="relative overflow-hidden border-b bg-gradient-to-br from-emerald-950 via-emerald-900 to-slate-950 text-white">
       <div className="pointer-events-none absolute -right-12 -top-24 size-80 rounded-full bg-emerald-300/10 blur-3xl" />
@@ -55,7 +77,8 @@ export default function MarketplaceExplore() {
           <Button type="submit" disabled={loading} className="h-11"><Search className="size-4"/></Button>
         </form>
       </div>
-      {error&&<p role="alert" className="mt-5 rounded-xl bg-destructive/10 p-4 text-sm text-destructive">{error}</p>}
+      <div className="mt-3 flex flex-wrap items-center gap-2"><Button variant="outline" size="sm" disabled={locating||loading} onClick={findNearby}><LocateFixed className="size-4"/>{locating?'Locating…':'Near me'}</Button>{nearby&&<><Button variant="ghost" size="sm" onClick={()=>void load(query.trim())}>All stores</Button><p role="status" className="text-xs text-muted-foreground">Within 50 km · approximate straight-line distance</p></>}</div>
+      <SubmissionFeedback message={error} attempt={attempt} bringIntoView={attempt>0}/>
       {loading?<div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3" aria-busy>{Array.from({length:6},(_,i)=><div key={i} className="h-60 animate-pulse rounded-2xl bg-muted" />)}</div>:
         stores.length?<div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {stores.map(store=><Card key={store.id} className="group cursor-pointer overflow-hidden rounded-2xl border-border/70 transition-all hover:-translate-y-1 hover:border-primary/40 hover:shadow-xl" onClick={()=>navigate('/shop/'+store.slug)} role="link" tabIndex={0} aria-label={'Open '+store.name+' storefront'} onKeyDown={event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();navigate('/shop/'+store.slug)}}}>
@@ -73,12 +96,12 @@ export default function MarketplaceExplore() {
                 <Badge variant="outline">{store.category}</Badge>
                 {store.verificationState==='VERIFIED'&&<Badge variant="secondary" className="gap-1"><BadgeCheck className="size-3"/>Verified seller</Badge>}
               </div>
-              <p className="flex items-center gap-1 text-xs text-muted-foreground"><Globe className="size-3.5"/>{[store.city,store.country].filter(Boolean).join(', ')}</p>
+              <p className="flex items-center gap-1 text-xs text-muted-foreground"><Globe className="size-3.5"/>{[store.city,store.country].filter(Boolean).join(', ')}{typeof store.distanceKm==='number'&&<span className="ml-auto font-semibold text-primary">{store.distanceKm.toFixed(1)} km away</span>}</p>
             </CardContent>
           </Card>)}
         </div>:<div className="mt-10 rounded-2xl border border-dashed bg-card px-6 py-14 text-center">
           <ShoppingBag className="mx-auto size-11 text-primary/40"/>
-          <h3 className="mt-4 text-lg font-bold">No matching stores yet</h3>
+          <h3 className="mt-4 text-lg font-bold">{nearby?'No located stores within 50 km':'No matching stores yet'}</h3>
           <p className="mt-2 text-sm text-muted-foreground">Be one of the first creators or merchants to publish a storefront.</p>
           <Button className="mt-5" onClick={()=>navigate('/seller')}>Open a store</Button>
         </div>}

@@ -1617,6 +1617,9 @@ model MarketplaceStore {
   region            String?
   city              String?
   pickupAddress     String?
+  gpsAddress        String?
+  latitude          Float?
+  longitude         Float?
   currency          String   @default("GHS")
   status            String   @default("DRAFT") // DRAFT | ACTIVE | SUSPENDED
   verificationState String   @default("UNVERIFIED") // UNVERIFIED | PENDING | VERIFIED | REJECTED

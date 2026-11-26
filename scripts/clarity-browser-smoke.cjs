@@ -46,6 +46,49 @@ async function main(){
    console.log('PASS clarity viewport '+width,check,detail)
    await page.close()
   }
+  // Real seeded owner session and draft storefront; simulate the exact 403
+  // at the network boundary to reproduce the user-reported scroll failure.
+  const page=await browser.newPage({viewport:{width:390,height:844},reducedMotion:'reduce',deviceScaleFactor:1})
+  const login=await page.request.post(base+'/api/v1/auth/login',{data:{email:'pastor@lightworld.dev',password:'Dev@12345'}})
+  assert(login.ok(),'Seeded seller sign-in')
+  const slug='ci-visual-shop-'+Date.now()
+  const created=await page.request.post(base+'/api/v1/marketplace/stores',{data:{name:'Visual QA shop',slug,category:'Arts and crafts'}})
+  assert(created.ok(),'Seeded visual store created')
+  await page.goto(base+'/#/shop/'+slug,{waitUntil:'domcontentloaded'})
+  const settings=page.getByRole('region',{name:'Payment and settlement settings'})
+  const save=settings.getByRole('button',{name:'Save payment preferences'})
+  await save.waitFor({state:'visible',timeout:45000})
+  for(const width of [320,390,1440]){
+    await page.setViewportSize({width,height:width===1440?900:740})
+    const radios=settings.getByRole('radio')
+    const first=await radios.nth(0).boundingBox(), second=await radios.nth(1).boundingBox()
+    assert(first&&second&&Math.abs(first.y-second.y)<20&&second.x>first.x,'Settlement destination choices must share a row at '+width)
+  }
+  for(const width of [390,1440]){
+   await page.setViewportSize({width,height:width===1440?900:740})
+   await page.route('**/api/v1/marketplace/stores/'+slug+'/payment-settings',async route=>{
+    if(route.request().method()==='PATCH')await route.fulfill({status:403,contentType:'application/json',body:JSON.stringify({error:{code:'FORBIDDEN',message:'Verify your email before changing payment preferences.'}})})
+    else await route.continue()
+   })
+   await save.scrollIntoViewIfNeeded()
+   await save.click()
+   const feedback=settings.locator('[data-submission-feedback][role=alert]')
+   await feedback.waitFor({state:'visible'})
+   await page.waitForFunction(()=>document.activeElement?.hasAttribute('data-submission-feedback'))
+   const bounds=await feedback.boundingBox()
+   assert(bounds&&bounds.y>=0&&bounds.y+bounds.height<= (width===1440?900:740),'Submission error must be inside viewport '+width)
+   assert((await feedback.innerText()).includes('Verify your email'),'Exact verification error visible')
+   await page.screenshot({path:path.join(output,'shop-payment-error-'+width+'.png'),animations:'disabled'})
+   await page.unroute('**/api/v1/marketplace/stores/'+slug+'/payment-settings')
+  }
+  await settings.getByRole('checkbox',{name:'Mobile money',exact:true}).check()
+  await save.click()
+  await settings.locator('[data-submission-feedback][role=status]').waitFor({state:'visible'})
+  assert((await settings.locator('[data-submission-feedback][role=status]').innerText()).includes('saved'),'Successful server save confirmed')
+  await page.getByRole('button',{name:'Edit store logo'}).waitFor({state:'visible'})
+  await page.getByRole('button',{name:'Edit banner'}).waitFor({state:'visible'})
+  console.log('MARKETPLACE_SUBMISSION_FEEDBACK_BROWSER_PASS')
+  await page.close()
  }finally{await browser.close()}
 }
 main().catch(error=>{console.error(error.message);process.exitCode=1})

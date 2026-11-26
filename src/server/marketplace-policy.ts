@@ -22,15 +22,31 @@ function httpsUrl(value: unknown): string | null {
     return u.toString()
   } catch { throw new MarketplacePolicyError('Images and websites must use valid HTTPS URLs.') }
 }
+function imageUrl(value:unknown):string|null {
+  return typeof value==='string'&&/^\/uploads\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(jpg|png|webp)$/i.test(value)?value:httpsUrl(value)
+}
 function slug(value: unknown): string {
   if (typeof value !== 'string' || !/^[a-z0-9][a-z0-9-]{2,58}[a-z0-9]$/.test(value))
     throw new MarketplacePolicyError('Use a lowercase address of 4–60 letters, numbers and hyphens.')
   return value
 }
+export function parseCoordinates(latitude:unknown,longitude:unknown):{latitude:number|null;longitude:number|null}{
+  if(latitude==null&&longitude==null)return {latitude:null,longitude:null}
+  if(typeof latitude!=='number'||typeof longitude!=='number'||!Number.isFinite(latitude)||!Number.isFinite(longitude)||latitude < -90||latitude > 90||longitude < -180||longitude > 180)
+    throw new MarketplacePolicyError('Choose a valid latitude and longitude together.')
+  return {latitude,longitude}
+}
+export function parseGpsAddress(value:unknown):string|null{
+  if(value==null||value==='')return null
+  if(typeof value!=='string')throw new MarketplacePolicyError('Enter a valid GhanaPost GPS address.')
+  const code=value.trim().toUpperCase().replace(/\s+/g,'')
+  if(!/^[A-Z]{2}-\d{3,4}-\d{4}$/.test(code))throw new MarketplacePolicyError('Use a GhanaPost GPS address such as GA-123-4567.')
+  return code
+}
 export type StoreDraft = {
   name: string; slug: string; tagline: string | null; description: string | null
   category: string; logoUrl: string | null; coverUrl: string | null
-  website: string | null; country: string; region: string | null; city: string | null; pickupAddress: string | null
+  website: string | null; country: string; region: string | null; city: string | null; pickupAddress: string | null; gpsAddress:string|null; latitude:number|null; longitude:number|null
 }
 export function parseStoreDraft(raw: unknown): StoreDraft {
   if (!raw || Array.isArray(raw) || typeof raw !== 'object') throw new MarketplacePolicyError('Store information is required.')
@@ -45,9 +61,9 @@ export function parseStoreDraft(raw: unknown): StoreDraft {
   if(region&&!GHANA_REGIONS.some(r=>r===region))throw new MarketplacePolicyError('Choose a valid Ghana region.')
   return { name, slug: slug(x.slug), category,country,region,
     tagline: optionalText(x.tagline, 180), description: optionalText(x.description, 2400),
-    logoUrl: httpsUrl(x.logoUrl), coverUrl: httpsUrl(x.coverUrl),
+    logoUrl: imageUrl(x.logoUrl), coverUrl: imageUrl(x.coverUrl),
     website: httpsUrl(x.website), city: optionalText(x.city, 90),
-    pickupAddress: optionalText(x.pickupAddress, 350),
+    pickupAddress: optionalText(x.pickupAddress, 350), gpsAddress:parseGpsAddress(x.gpsAddress), ...parseCoordinates(x.latitude,x.longitude),
   }
 }
 export type VariantDraft = {

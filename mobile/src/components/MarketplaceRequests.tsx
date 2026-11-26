@@ -1,5 +1,5 @@
 import {useCallback,useEffect,useRef,useState} from 'react'
-import {Pressable,StyleSheet,Text,View} from 'react-native'
+import {Alert,Pressable,StyleSheet,Text,View} from 'react-native'
 import {api,formatMinor} from '../api/client'
 import {ActionDialog} from './ActionDialog'
 import {mobileDesign} from '../ui/PremiumUI'
@@ -36,8 +36,8 @@ export function MarketplaceRequests({slug,seller,quote,onSubmitted}:{slug:string
    const result=await api.marketplace.createPurchaseRequest(slug,purchaseRequestBody(pending,retry.current.get(fingerprint)!))
    if(result.checkoutEnabled!==false||result.inventoryReserved!==false)throw new Error('Unexpected purchase request response.')
    if(!active.current)return
-   retry.current.delete(fingerprint);setNotice('Purchase request received. Reference: '+result.request.id);onSubmitted(pending);await load()
-  }catch(e){if(active.current)setSubmissionError(e instanceof Error?e.message:'Could not submit. Retry with the same reviewed basket.')}
+   retry.current.delete(fingerprint);setNotice('Purchase request received. Reference: '+result.request.id);Alert.alert('Request submitted','Your purchase request has been sent to the seller.');onSubmitted(pending);await load()
+  }catch(e){if(active.current){const message=e instanceof Error?e.message:'Could not submit. Retry with the same reviewed basket.';setSubmissionError(message);Alert.alert('Request not submitted',message)}}
   finally{locked.current=false;if(active.current){setPending(null);setSubmitting(false)}}
  }
  async function decide(){
@@ -47,8 +47,8 @@ export function MarketplaceRequests({slug,seller,quote,onSubmitted}:{slug:string
    const result=await api.marketplace.decidePurchaseRequest(decision.id,decision.status)
    if(result.checkoutEnabled!==false||result.inventoryReserved!==false)throw new Error('Unexpected purchase request response.')
    if(!active.current)return
-   setNotice(requestStatusLabel(result.request.status));await load()
-  }catch(e){if(active.current){setSubmissionError(e instanceof Error?e.message:'Could not update request.');await load()}}
+   setNotice(requestStatusLabel(result.request.status));Alert.alert('Request updated',requestStatusLabel(result.request.status));await load()
+  }catch(e){if(active.current){const message=e instanceof Error?e.message:'Could not update request.';setSubmissionError(message);Alert.alert('Request not updated',message);await load()}}
   finally{locked.current=false;if(active.current){setDecision(null);setSubmitting(false)}}
  }
  return <View style={styles.panel}>
