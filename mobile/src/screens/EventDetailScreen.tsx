@@ -45,6 +45,7 @@ import {
 import { theme } from '../theme'
 import {PremiumBackdrop,SectionHeading,TileGlyph,mobileDesign} from '../ui/PremiumUI'
 import { EventProgrammeSections } from '../components/EventProgrammeSections'
+import { EventDemandCard } from '../components/EventDemandCard'
 import { eventTimeLabel } from '../lib/event-programme'
 import type { EventDetailScreenProps } from '../navigation'
 
@@ -228,6 +229,7 @@ export default function EventDetailScreen({ navigation, route }: EventDetailScre
         </View>
       </View>
 
+      <EventDemandCard key={event.id} event={event} canManage={canManage} />
       <View style={styles.ticketsHeading}><SectionHeading title="Tickets & entry"/></View>
       {event.ticketTypes.length === 0 ? (
         <Text style={styles.muted}>No ticket types are on sale for this event yet.</Text>
