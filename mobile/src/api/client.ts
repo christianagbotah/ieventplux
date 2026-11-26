@@ -707,7 +707,7 @@ async function request<T>(
 // ────────────────────────────────────────────────── endpoint surface used ──
 
 export type PushDevice={id:string;platform:string;lastUpdatedAt:string;leaseUntil:string|null;currentSession:boolean;registrationCurrent:boolean}
-export type DirectCall={id:string;callerId:string;calleeId:string;kind:'VOICE'|'VIDEO';status:string;createdAt:string;expiresAt:string;thisDevice:boolean;mediaConnected:boolean}
+export type DirectCall={id:string;conversationId:string;callerId:string;callerName?:string|null;calleeId:string;kind:'VOICE'|'VIDEO';status:string;createdAt:string;expiresAt:string;thisDevice:boolean;mediaConnected:boolean}
 export type DirectContact={id:string;displayName:string;avatarUrl:string|null}
 export type DirectConversation={id:string;status:string;requesterId:string;updatedAt?:string;peer:DirectContact|null;unread?:number;canSend?:boolean;blockedByMe?:boolean;mutedByMe?:boolean}
 export type DirectAttachment={filename:string;mime:string;size:number}
@@ -968,7 +968,8 @@ export const api = {
       request<{ message: BroadcastChatMessage }>('POST', `/broadcasts/${encodeURIComponent(id)}/chat`, { body }),
   },
   directCalls: {
-    list: (conversationId:string,userId:string)=>request<{enabled:boolean;mediaAvailable:boolean;items:DirectCall[]}>('GET','/direct-calls?conversationId='+encodeURIComponent(conversationId)+'&expectedUserId='+encodeURIComponent(userId)),
+    incoming: (userId:string)=>request<{enabled:boolean;mediaAvailable:boolean;items:DirectCall[];serverNow?:string}>('GET','/direct-calls?expectedUserId='+encodeURIComponent(userId)),
+    list: (conversationId:string,userId:string)=>request<{enabled:boolean;mediaAvailable:boolean;items:DirectCall[];serverNow?:string}>('GET','/direct-calls?conversationId='+encodeURIComponent(conversationId)+'&expectedUserId='+encodeURIComponent(userId)),
     mutate: (data:Record<string,unknown>)=>request<{call:DirectCall;replayed?:boolean}>('POST','/direct-calls',data),
   },
   directMessages: {

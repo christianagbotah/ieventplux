@@ -191,7 +191,7 @@ jobs:
 
       - name: Start the stack
         run: |
-          (IEVENTPLUX_GROUP_MEETINGS_ENABLED=true IEVENTPLUX_DIRECT_CALL_TEST_MODE=yes IEVENTPLUX_DIRECT_ATTACHMENTS_ENABLED=true IEVENTPLUX_DIRECT_ATTACHMENT_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef bun run dev > dev.log 2>&1 &)
+          (IEVENTPLUX_GROUP_MEETINGS_ENABLED=true IEVENTPLUX_DIRECT_CALL_TEST_MODE=yes IEVENTPLUX_DIRECT_CALL_MEDIA_TEST_MODE=yes IEVENTPLUX_DIRECT_ATTACHMENTS_ENABLED=true IEVENTPLUX_DIRECT_ATTACHMENT_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef bun run dev > dev.log 2>&1 &)
           (cd mini-services/worker && bun install && (bun run dev > worker.log 2>&1 &))
           (cd mini-services/realtime && bun install && (IEVENTPLUX_GROUP_MEETINGS_ENABLED=true IEVENTPLUX_TEST_SHORT_MEETING_RECHECK=true bun run dev > realtime.log 2>&1 &))
           for i in $(seq 1 40); do
@@ -229,7 +229,7 @@ jobs:
           bun run scripts/direct-messaging-smoke.ts
           bun test src/server/direct-attachment-policy.test.ts
           bun run scripts/direct-attachment-smoke.ts
-          bun test src/server/direct-call-policy.test.ts
+          bun test src/server/direct-call-policy.test.ts src/server/direct-call-media.test.ts src/server/direct-call-room-policy.test.ts src/portal/lib/direct-call-ui-policy.test.ts
           bun run scripts/direct-call-smoke.ts
 
       - name: Browser clarity and responsive screenshot acceptance
