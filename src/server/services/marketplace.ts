@@ -3,7 +3,7 @@ import { db } from '@/lib/db'
 import { errors } from '@/server/api'
 import {
   availableStock, parseProductDraft, parseStockAdjustment, parseStoreDraft,
-  stockChangeAllowed, parseVariantPriceChange,
+  stockChangeAllowed, parseVariantPriceChange, parseCoordinates,
 } from '@/server/marketplace-policy'
 import { audit } from '@/server/audit'
 
@@ -52,6 +52,33 @@ export async function listStores(viewerId: string | null, mine: boolean, search 
     _count:undefined,
   }))
 }
+/** Actual great-circle distance in kilometres, across all eligible stores.
+ * Never infer a position from a digital address or city label. Do not expose
+ * seller coordinates in the result list, or persist the shopper origin.
+ */
+export async function nearbyStores(raw:unknown){
+ if(!raw||typeof raw!=='object'||Array.isArray(raw))throw errors.badRequest('Choose a search location.')
+ const x=raw as Record<string,unknown>
+ const {latitude,longitude}=parseCoordinates(x.latitude,x.longitude)
+ if(latitude===null||longitude===null)throw errors.badRequest('A search location is required.')
+ const q=typeof x.q==='string'?x.q.trim().slice(0,90).toLowerCase():''
+ const radiusKm=50
+ const rows=await db.$queryRaw<{id:string;distanceKm:number}[]>(Prisma.sql`
+  SELECT "id", "distanceKm" FROM (
+    SELECT "id", 6371.0088 * acos(LEAST(1.0,GREATEST(-1.0,
+      sin(radians(${latitude}::double precision))*sin(radians("latitude"))+
+      cos(radians(${latitude}::double precision))*cos(radians("latitude"))*cos(radians("longitude"-${longitude}::double precision))
+    ))) AS "distanceKm"
+    FROM "MarketplaceStore"
+    WHERE "status"='ACTIVE' AND "deletedAt" IS NULL AND "latitude" IS NOT NULL AND "longitude" IS NOT NULL
+      AND (${q}='' OR strpos(lower("name"),${q})>0 OR strpos(lower("category"),${q})>0 OR strpos(lower(coalesce("tagline",'')),${q})>0)
+  ) AS located WHERE "distanceKm" <= ${radiusKm}
+  ORDER BY "distanceKm" ASC,"id" ASC LIMIT 30
+ `)
+ const stores=await db.marketplaceStore.findMany({where:{id:{in:rows.map(row=>row.id)},status:'ACTIVE',deletedAt:null},select:{id:true,slug:true,name:true,tagline:true,category:true,logoUrl:true,coverUrl:true,country:true,city:true,status:true,verificationState:true,_count:{select:{products:true}}}})
+ const byId=new Map(stores.map(store=>[store.id,store]))
+ return {radiusKm,stores:rows.flatMap(row=>{const store=byId.get(row.id);return store?[{...store,_count:undefined,productCount:store._count.products,distanceKm:Math.round(row.distanceKm*10)/10}]:[]})}
+}
 export async function getStoreCatalogue(slug: string, viewerId: string | null) {
   const store = await db.marketplaceStore.findUnique({
     where: { slug, deletedAt: null },
@@ -71,7 +98,7 @@ export async function getStoreCatalogue(slug: string, viewerId: string | null) {
       id:store.id, slug:store.slug, name:store.name, category:store.category,
       tagline:store.tagline, description:store.description,
       country:store.country, region:store.region, city:store.city, website:store.website,
-      ...(owner?{pickupAddress:store.pickupAddress}:{}),
+      ...(owner?{pickupAddress:store.pickupAddress,gpsAddress:store.gpsAddress,latitude:store.latitude,longitude:store.longitude}:{}),
       logoUrl:store.logoUrl, coverUrl:store.coverUrl,
       status:store.status, currency:store.currency,
       verificationState:store.verificationState,
