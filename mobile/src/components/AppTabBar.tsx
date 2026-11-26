@@ -35,7 +35,7 @@ function TabIcon({ name, selected }: { name: IconName; selected: boolean }) {
 export function AppTabBar({ active, onSelect }: { active: MainTabRoute; onSelect: (route: MainTabRoute) => void }) {
   const insets = useSafeAreaInsets()
   const {fontScale,width}=useWindowDimensions()
-  const expanded=fontScale>=1.3||width<330
+  const expanded=fontScale>=1.4||width<310
   return <View style={[styles.outer, expanded&&styles.outerExpanded, { paddingBottom: Math.max(insets.bottom, 8) }]} accessibilityRole="tablist">
     {MAIN_TABS.map(tab => {
       const selected = tab.route === active
@@ -55,17 +55,17 @@ export function AppTabBar({ active, onSelect }: { active: MainTabRoute; onSelect
 const styles = StyleSheet.create({
   outer: {
     flexDirection:'row',alignItems:'center',backgroundColor:'#ffffff',
-    borderRadius:18,borderWidth:1,borderColor:theme.colors.border,
-    paddingTop:8,paddingHorizontal:5,marginHorizontal:10,marginTop:5,marginBottom:4,
+    borderRadius:16,borderWidth:1,borderColor:theme.colors.border,
+    paddingTop:4,paddingHorizontal:4,marginHorizontal:8,marginTop:3,marginBottom:2,
     elevation:4,shadowColor:'#102f36',shadowOpacity:.06,shadowRadius:22,shadowOffset:{width:0,height:-3},
   },
   outerExpanded:{flexWrap:'wrap'},
   tabExpanded:{flex:0,width:'33.333%'},
-  tab:{flex:1,minHeight:64,alignItems:'center',justifyContent:'center',gap:2,paddingHorizontal:1},
-  iconBox:{height:33,minWidth:42,alignItems:'center',justifyContent:'center',borderRadius:14},
+  tab:{flex:1,minHeight:54,alignItems:'center',justifyContent:'center',gap:2,paddingHorizontal:1},
+  iconBox:{height:29,minWidth:36,alignItems:'center',justifyContent:'center',borderRadius:14},
   selectedIcon:{backgroundColor:'#e4f5ee'},
-  label:{fontSize:12,lineHeight:17,textAlign:'center',fontWeight:'600',color:theme.colors.textMuted,letterSpacing:-.1},
-  selectedLabel:{color:theme.colors.primaryDark,fontWeight:'900'},
+  label:{fontSize:11,lineHeight:15,textAlign:'center',fontWeight:'600',color:theme.colors.textMuted,letterSpacing:-.1},
+  selectedLabel:{color:theme.colors.primaryDark,fontWeight:'700'},
   indicator:{height:3,width:13,borderRadius:2,backgroundColor:'transparent',marginTop:2},
   indicatorActive:{backgroundColor:theme.colors.primary},
   pressed:{opacity:.68},
