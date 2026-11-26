@@ -706,6 +706,7 @@ async function request<T>(
 
 // ────────────────────────────────────────────────── endpoint surface used ──
 
+export type PushDevice={id:string;platform:string;lastUpdatedAt:string;leaseUntil:string|null;currentSession:boolean;registrationCurrent:boolean}
 export type DirectCall={id:string;callerId:string;calleeId:string;kind:'VOICE'|'VIDEO';status:string;createdAt:string;expiresAt:string;thisDevice:boolean;mediaConnected:boolean}
 export type DirectContact={id:string;displayName:string;avatarUrl:string|null}
 export type DirectConversation={id:string;status:string;requesterId:string;updatedAt?:string;peer:DirectContact|null;unread?:number;canSend?:boolean;blockedByMe?:boolean;mutedByMe?:boolean}
@@ -982,6 +983,8 @@ export const api = {
     activity: (data:{id:string;expectedUserId:string;share:boolean;typing:boolean})=>request<{active:boolean;typing:boolean}>('POST','/direct-messages',{action:'activity',...data}),
   },
   notifications: {
+    devices: (userId:string)=>request<{accountEnabled:boolean;deliveryEnabled:boolean;hasMore:boolean;items:PushDevice[]}>('GET','/notifications/devices/manage?expectedUserId='+encodeURIComponent(userId)),
+    removeDevice: (userId:string,id:string)=>request<{ok:boolean}>('POST','/notifications/devices/manage',{expectedUserId:userId,id}),
     list: (page=1) => request<NotificationsResponse>('GET','/notifications?page='+page+'&pageSize=20'),
     mark: (id:string) => request<{ok:boolean}>('POST','/notifications',{id}),
     markAll: () => request<{ok:boolean}>('POST','/notifications',{all:true}),

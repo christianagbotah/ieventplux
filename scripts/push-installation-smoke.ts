@@ -64,6 +64,30 @@ async function main(){
   check((await call('POST',{notifPrefs:{email:false}},a.cookie,'/auth/profile')).status===200,'partial preference update accepted')
   check(JSON.parse((await db.user.findUniqueOrThrow({where:{id:a.user.id}})).notifPrefs).push===true,'email change preserves push consent')
   check((await call('POST',{notifPrefs:{push:'true'}},a.cookie,'/auth/profile')).status===400,'nonboolean push consent rejected')
+  check((await call('POST',{...newDevice,enableAccountPush:true},a.cookie)).status===200,'explicit consent renews previously revoked phone')
+  const devices=async(cookie?:string,expected=a.user.id)=>{
+   const res=await fetch(base+'/notifications/devices/manage?expectedUserId='+encodeURIComponent(expected),{headers:cookie?{Cookie:cookie}:{}})
+   return {status:res.status,headers:res.headers,body:await res.json()}
+  }
+  check((await devices()).status===401,'anonymous device list denied')
+  check((await devices(a.cookie,b.user.id)).status===409,'stale account device list denied')
+  const listed=await devices(a.cookie)
+  check(listed.status===200&&listed.headers.get('cache-control')?.includes('no-store')&&listed.body.accountEnabled===true,'private account device list')
+  const selected=listed.body.items[0]
+  check(selected&&selected.currentSession&&selected.registrationCurrent&&!JSON.stringify(listed.body).includes(newDevice.providerToken)&&!JSON.stringify(listed.body).includes(hash(newDevice.installationKey)),'list exposes neither provider token nor registration capability')
+  // A new session for the other account cannot revoke another account's registration.
+  const other=await make()
+  try{
+   const foreign=await fetch(base+'/notifications/devices/manage',{method:'POST',headers:{Cookie:other.cookie,'Content-Type':'application/json'},body:JSON.stringify({id:selected.id,expectedUserId:other.user.id})})
+   check(foreign.status===200,'foreign removal is non-disclosing')
+   check(!(await db.pushInstallation.findUniqueOrThrow({where:{keyHash:hash(newDevice.installationKey)}})).revokedAt,'foreign removal cannot revoke another account')
+  }finally{await db.user.delete({where:{id:other.user.id}})}
+  check((await call('POST',{id:selected.id},a.cookie,'/notifications/devices/manage')).status===200,'account owner can remove phone')
+  check((await devices(a.cookie)).body.items.length===0,'removed phone disappears from registry list')
+  check((await call('POST',newDevice,a.cookie)).status===403,'remote removal cannot silently reactivate phone')
+  check((await call('POST',{...newDevice,enableAccountPush:true},a.cookie)).status===200,'owner can explicitly register again')
+  check((await call('POST',{id:selected.id},a.cookie,'/notifications/devices/manage')).status===200,'stale generation removal is non-disclosing')
+  check(!(await db.pushInstallation.findUniqueOrThrow({where:{keyHash:hash(newDevice.installationKey)}})).revokedAt,'stale selection cannot revoke new registration')
   console.log('PUSH_INSTALLATION_SMOKE_PASS')
  }finally{await db.user.deleteMany({where:{id:{in:[a.user.id,b.user.id]}}})}
 }

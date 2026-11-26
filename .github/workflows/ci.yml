@@ -216,7 +216,7 @@ jobs:
         env:
           IEVENTPLUX_ISOLATED_DB_TEST: "yes"
         run: |
-          bun test src/server/push-installation-policy.test.ts
+          bun test src/server/push-installation-policy.test.ts src/server/push-device-management.test.ts
           bun run scripts/push-installation-smoke.ts
 
       - name: Private direct messaging access and durable read receipts

@@ -16,6 +16,7 @@ import { navigate, type Route } from '../router'
 import { usePortal } from '../store'
 import { money, dateLong, relative, humanize, statusTone, initials, countdown } from '../format'
 import { EmptyState } from '../components/EventCard'
+import PushDeviceManager from '../components/PushDeviceManager'
 import { cacheTicketList, cacheTicketDetail, readCachedTicketList, readCachedTicketDetail, type CachedTicketDetail, type CachedTicketRow } from '../lib/ticket-cache'
 
 interface TicketRow {
@@ -562,6 +563,7 @@ export default function Me({ route }: { route: Route }) {
                   </div>
                 ))}
               </div>
+              <PushDeviceManager key={user.id} userId={user.id}/>
               <div className="space-y-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
                 <p className="text-sm font-semibold text-amber-800">Security</p>
                 <p className="text-xs text-muted-foreground">Privileged actions (payouts, refunds) require a recent password confirmation.</p>
