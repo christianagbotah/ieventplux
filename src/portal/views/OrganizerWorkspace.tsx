@@ -134,7 +134,7 @@ export default function OrganizerWorkspace({ route }: { route: Route }) {
   })
 
   return (
-    <div className="ievx-workspace-shell mx-auto max-w-[1600px] px-0 py-0 md:gap-4 md:overflow-hidden md:px-5 md:py-4">
+    <div className="ievx-workspace-shell mx-auto max-w-[1440px] px-0 py-0 md:gap-4 md:overflow-hidden md:px-6 md:py-4">
       {sidebarOpen && (
         <button
           type="button"
@@ -196,7 +196,7 @@ export default function OrganizerWorkspace({ route }: { route: Route }) {
         )}
       </aside>
       {/* Independent content area. The title/action toolbar is never oversized. */}
-      <div ref={contentRef} className="ievx-workspace-content ievx-scrollbar min-w-0 flex-1 px-3 py-3 pb-7 sm:px-5 md:px-1 md:py-0 md:pb-8">
+      <div ref={contentRef} className="ievx-workspace-content ievx-scrollbar min-w-0 flex-1 px-3 py-3 pb-7 sm:px-5 md:px-3 md:py-0 md:pb-8">
         <div className="ievx-workspace-toolbar">
           <div className="flex min-w-0 items-center gap-2">
             <Button
