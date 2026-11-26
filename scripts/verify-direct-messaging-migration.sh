@@ -14,7 +14,7 @@ CREATE TABLE "Session" ("id" TEXT PRIMARY KEY);
 INSERT INTO "Session" VALUES ('session-a');
 INSERT INTO "User" VALUES ('a'),('b'),('c');
 SQL
-for attempt in 1 2; do sql -f ops/migrations/20261126_direct_messaging.sql; sql -f ops/migrations/20261126_direct_activity.sql; sql -f ops/migrations/20261126_direct_message_moderation.sql; sql -f ops/migrations/20261126_direct_attachments.sql; sql -f ops/migrations/20261126_direct_voice.sql; done
+for attempt in 1 2; do sql -f ops/migrations/20261126_direct_messaging.sql; sql -f ops/migrations/20261126_direct_activity.sql; sql -f ops/migrations/20261126_direct_message_moderation.sql; sql -f ops/migrations/20261126_direct_attachments.sql; sql -f ops/migrations/20261126_direct_voice.sql; sql -f ops/migrations/20261126_direct_calls.sql; done
 sql <<'SQL'
 INSERT INTO "DirectConversation" ("id","participantLowId","participantHighId","requesterId","updatedAt") VALUES ('d','a','b','a',CURRENT_TIMESTAMP);
 INSERT INTO "DirectMessage" ("id","conversationId","senderId","clientKey","body") VALUES ('m','d','a','abcdefghijklmnop','Hello');
@@ -23,7 +23,19 @@ INSERT INTO "DirectActivity" ("conversationId","sessionId","activeUntil","typing
 UPDATE "DirectAttachment" SET "mime"='audio/mp4' WHERE "messageId"='m';
 UPDATE "DirectAttachment" SET "mime"='audio/webm' WHERE "messageId"='m';
 UPDATE "DirectAttachment" SET "mime"='image/webp' WHERE "messageId"='m';
+INSERT INTO "DirectCall" ("id","conversationId","callerId","calleeId","callerSessionId","clientKey","kind","expiresAt") VALUES ('call-a','d','a','b','session-a','abcdefghijklmnop','VOICE',CURRENT_TIMESTAMP+INTERVAL '45 seconds');
+INSERT INTO "DirectCallSlot" ("userId","callId") VALUES ('a','call-a'),('b','call-a');
 DO $$ BEGIN
+ BEGIN
+  INSERT INTO "DirectCallSlot" ("userId","callId") VALUES ('a','call-a');
+  RAISE EXCEPTION 'overlapping call slot accepted';
+ EXCEPTION WHEN unique_violation THEN NULL;
+ END;
+ BEGIN
+  UPDATE "DirectCall" SET "status"='ACCEPTED';
+  RAISE EXCEPTION 'accepted call missing device accepted';
+ EXCEPTION WHEN check_violation THEN NULL;
+ END;
  BEGIN
   UPDATE "DirectAttachment" SET "size"=2097153;
   RAISE EXCEPTION 'oversized attachment accepted';
@@ -72,7 +84,7 @@ DO $$ BEGIN
  UPDATE "DirectMessage" SET "removedAt"=CURRENT_TIMESTAMP,"body"='[Message removed by moderation]' WHERE id='m';
  IF NOT EXISTS (SELECT 1 FROM "DirectMessage" WHERE id='m' AND "removedAt" IS NOT NULL) THEN RAISE EXCEPTION 'missing redaction'; END IF;
  DELETE FROM "User" WHERE id='a';
- IF EXISTS (SELECT 1 FROM "DirectConversation") OR EXISTS (SELECT 1 FROM "DirectMessage") OR EXISTS (SELECT 1 FROM "DirectActivity") OR EXISTS (SELECT 1 FROM "DirectAttachment") THEN RAISE EXCEPTION 'orphan conversation or message'; END IF;
+ IF EXISTS (SELECT 1 FROM "DirectConversation") OR EXISTS (SELECT 1 FROM "DirectMessage") OR EXISTS (SELECT 1 FROM "DirectActivity") OR EXISTS (SELECT 1 FROM "DirectAttachment") OR EXISTS (SELECT 1 FROM "DirectCall") OR EXISTS (SELECT 1 FROM "DirectCallSlot") THEN RAISE EXCEPTION 'orphan conversation or message'; END IF;
 END $$;
 SQL
 echo 'DIRECT_MESSAGING_MIGRATION_PASS'
