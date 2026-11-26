@@ -7,6 +7,16 @@ const path=require('node:path')
 const assert=require('node:assert/strict')
 const base='http://127.0.0.1:3000'
 const output=path.resolve('ui-qa')
+async function verifyShell(page,width,route){
+ const shell=page.locator('#main > div.ievx-page-shell')
+ await shell.waitFor({state:'visible'})
+ const box=await shell.boundingBox()
+ assert(box&&box.width<=1153,'Shared shell exceeds 1152px: '+route+' '+width)
+ if(width>=1024)assert(box.x>=39&&Math.abs(width-box.x-box.width-box.x)<=3,'Shared shell not centered: '+route+' '+width+' '+JSON.stringify(box))
+ const overflow=await page.evaluate(()=>document.documentElement.scrollWidth-innerWidth)
+ assert(overflow<=2,'Page overflow: '+route+' '+width+' '+overflow)
+ return box
+}
 async function main(){
  fs.mkdirSync(output,{recursive:true})
  const catalogue=await fetch(base+'/api/v1/events?pageSize=12').then(r=>r.json())
@@ -22,6 +32,7 @@ async function main(){
    await search.waitFor({state:'visible',timeout:45000})
    await page.locator('.ievx-event-card').first().waitFor({state:'visible',timeout:45000})
    await page.screenshot({path:path.join(output,'discover-'+width+'.png'),fullPage:true,animations:'disabled'})
+   await verifyShell(page,width,'discover')
    const check=await page.evaluate(()=>{
     const input=document.querySelector('#browse input[type=search]')
     const card=document.querySelector('.ievx-event-card h3')
@@ -39,6 +50,7 @@ async function main(){
    assert(check.titleFont>=(width<1024?17:18),'Event card title too small '+width)
    await page.goto(base+'/#/event/'+encodeURIComponent(event.slug),{waitUntil:'domcontentloaded'})
    await page.getByRole('heading',{level:1,name:event.title,exact:true}).waitFor({state:'visible',timeout:45000})
+   await verifyShell(page,width,'event')
    const detail=await page.evaluate(()=>({overflow:document.documentElement.scrollWidth-innerWidth,titleSize:parseFloat(getComputedStyle(document.querySelector('h1')).fontSize)}))
    assert(detail.overflow<=2,'Event detail viewport overflow '+width+': '+detail.overflow)
    assert(detail.titleSize>=(width<640?26:28),'Event heading too small '+width)
@@ -58,11 +70,16 @@ async function main(){
   const settings=page.getByRole('region',{name:'Payment and settlement settings'})
   const save=settings.getByRole('button',{name:'Save payment preferences'})
   await save.waitFor({state:'visible',timeout:45000})
-  for(const width of [320,390,1440]){
+  for(const width of [320,390,768,1280,1440]){
     await page.setViewportSize({width,height:width===1440?900:740})
     const radios=settings.getByRole('radio')
     const first=await radios.nth(0).boundingBox(), second=await radios.nth(1).boundingBox()
-    assert(first&&second&&Math.abs(first.y-second.y)<20&&second.x>first.x,'Settlement destination choices must share a row at '+width)
+    assert(first&&second&&Math.abs(first.y-second.y)<25&&second.x>first.x,'Settlement destination choices must share a row at '+width)
+    await verifyShell(page,width,'shop detail')
+    const optionBoxes=await settings.locator('.ievx-payment-option').evaluateAll(nodes=>nodes.map(el=>({width:el.getBoundingClientRect().width,height:el.getBoundingClientRect().height})))
+    assert(optionBoxes.every(box=>box.width<=250&&box.height>=44),'Payment options must be compact, not full-row: '+width+' '+JSON.stringify(optionBoxes))
+    if(width>=1280){const a=await settings.locator('[data-payment-methods]').boundingBox(),b=await settings.locator('[data-settlement-destination]').boundingBox();assert(a&&b&&Math.abs(a.y-b.y)<5&&a.x<b.x&&a.width>b.width,'Desktop payment/settlement should share a 3:2 row')}
+    await settings.scrollIntoViewIfNeeded();await page.screenshot({path:path.join(output,'shop-payment-layout-'+width+'.png'),animations:'disabled'})
   }
   for(const width of [390,1440]){
    await page.setViewportSize({width,height:width===1440?900:740})
@@ -88,6 +105,17 @@ async function main(){
   await page.getByRole('button',{name:'Edit store logo'}).waitFor({state:'visible'})
   await page.getByRole('button',{name:'Edit banner'}).waitFor({state:'visible'})
   console.log('MARKETPLACE_SUBMISSION_FEEDBACK_BROWSER_PASS')
+  for(const width of [390,1280,1440,1920]){
+    await page.setViewportSize({width,height:900})
+    for(const route of ['services','following','shop','seller','me?tab=profile','live']){
+      await page.goto(base+'/#/'+route,{waitUntil:'domcontentloaded'})
+      await page.locator('#main').getByRole('heading').first().waitFor({state:'visible',timeout:45000})
+      const bounds=await verifyShell(page,width,route)
+      console.log('PASS shared content shell',route,width,bounds.width,bounds.x)
+      if(width===1440||width===390)await page.screenshot({path:path.join(output,'shell-'+route.replace(/[^a-z]/g,'-')+'-'+width+'.png'),animations:'disabled'})
+    }
+  }
+  console.log('SHARED_PAGE_SHELL_BROWSER_PASS')
   await page.close()
  }finally{await browser.close()}
 }

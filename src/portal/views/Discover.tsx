@@ -383,7 +383,7 @@ export default function Discover({ route }: { route: Route }) {
     <div>
       {/* Search + filters */}
       <section id="browse" className="ievx-discovery-search z-20 lg:sticky lg:top-16">
-        <div className="mx-auto flex max-w-[1500px] flex-wrap items-center gap-2 px-3 py-2.5 sm:px-6 lg:px-8">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-2 px-4 py-2.5 sm:px-6">
           <form
             className="flex min-w-[140px] flex-1 items-center"
             role="search"
@@ -540,7 +540,7 @@ export default function Discover({ route }: { route: Route }) {
         </div>
         {/* Category chips — icon + brand colour for fast visual navigation */}
         {home?.categories && !browsing && (
-          <div className="ievx-scrollbar mx-auto flex max-w-7xl items-center gap-2 overflow-x-auto px-4 pb-3">
+          <div className="ievx-scrollbar mx-auto flex max-w-6xl items-center gap-2 overflow-x-auto px-4 pb-3 sm:px-6">
             {home.categories.map((c) => {
               const Icon = CATEGORY_ICONS[c.icon] ?? SparklesIcon
               return (
@@ -557,7 +557,7 @@ export default function Discover({ route }: { route: Route }) {
           </div>
         )}
         {browsing && activeFilters.length > 0 && (
-          <div className="mx-auto flex max-w-[1500px] items-center gap-2 overflow-x-auto px-3 pb-3 pt-1 sm:px-6 lg:px-8" aria-label="Active search filters">
+          <div className="mx-auto flex max-w-6xl items-center gap-2 overflow-x-auto px-4 pb-3 pt-1 sm:px-6" aria-label="Active search filters">
             <span className="shrink-0 text-[11px] font-semibold text-muted-foreground">Active filters</span>
             {activeFilters.map(({ key, label }) => (
               <button key={key} type="button" className="ievx-active-filter shrink-0" aria-label={'Remove filter: ' + label}
@@ -576,7 +576,7 @@ export default function Discover({ route }: { route: Route }) {
       {/* Public entry: real-world discovery first, real featured media second. */}
       {!browsing && (
         <section className="ievx-home-hero" aria-label="Discover events worldwide">
-          <div className="mx-auto max-w-[1500px] px-3 pt-3 pb-3 sm:px-6 sm:pt-5 sm:pb-5 lg:px-8 lg:pt-7 lg:pb-6">
+          <div className="mx-auto max-w-6xl px-4 pt-3 pb-3 sm:px-6 sm:pt-5 sm:pb-5 lg:pt-7 lg:pb-6">
             <div className="ievx-hero-panel" data-hero-story={heroIndex}
               onMouseEnter={() => setHeroPausedByInteraction(true)}
               onMouseLeave={() => setHeroPausedByInteraction(false)}
@@ -704,7 +704,7 @@ export default function Discover({ route }: { route: Route }) {
       )}
 
       {/* Content */}
-      <div className="mx-auto max-w-7xl px-4 py-6">
+      <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
         {browsing ? (
           <section aria-label="Search results" aria-busy={loading}>
             <div className="mb-3 flex flex-wrap items-baseline justify-between gap-3">
@@ -731,12 +731,12 @@ export default function Discover({ route }: { route: Route }) {
               </div>
             )}
             {loading && !items?.length ? (
-              <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+              <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
                 {Array.from({ length: 8 }).map((_, i) => <EventCardSkeleton key={i} />)}
               </div>
             ) : items && items.length > 0 ? (
               <>
-                <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
                   {items.map((event, i) => <EventCard key={event.id} event={event} index={i} compare={comparison(event)} />)}
                 </div>
                 {items.length < total && (
@@ -817,11 +817,11 @@ export default function Discover({ route }: { route: Route }) {
                   <Button variant="outline" className="rounded-full" onClick={() => setHomeRetry((value) => value + 1)}>Try again</Button>
                 </div>
               ) : home === null ? (
-                <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
                   {Array.from({ length: 8 }).map((_, i) => <EventCardSkeleton key={i} />)}
                 </div>
               ) : home.upcoming.length > 0 ? (
-                <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
                   {home.upcoming.map((event, i) => <EventCard key={event.id} event={event} index={i} compare={comparison(event)} />)}
                 </div>
               ) : (

@@ -65,7 +65,7 @@ export default function LiveNow() {
     b.accessPolicy === 'FREE' ? 'Free stream' : b.accessPolicy === 'PAID' ? (b.priceMinor ? `Pass ${money(b.priceMinor)}` : 'Paid pass') : b.accessPolicy === 'TICKET_HOLDERS' ? 'Ticket holders' : 'Invitation only'
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8">
+    <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
       <div className="mb-8 flex flex-wrap items-center gap-3">
         <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-destructive/10 text-destructive"><Radio className="h-5 w-5" aria-hidden /></span>
         <div>

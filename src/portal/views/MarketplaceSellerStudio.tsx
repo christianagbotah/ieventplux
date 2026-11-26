@@ -75,14 +75,14 @@ export default function MarketplaceSellerStudio(){
     <p className="mt-3 text-sm text-muted-foreground">Sign in or register to create an independent storefront that people can discover beyond one event.</p>
     <Button className="mt-6" onClick={()=>navigate('/signin')}>Sign in to start</Button>
   </div>
-  return <div className="mx-auto max-w-6xl space-y-8 px-4 py-9 pb-16">
+  return <div className="mx-auto max-w-6xl space-y-6 px-4 py-7 sm:px-6 pb-16">
     <div className="flex flex-wrap items-start justify-between gap-4">
       <div>
         <Badge variant="secondary" className="mb-3 gap-1"><Store className="size-3"/>SELLER STUDIO</Badge>
-        <h1 className="text-3xl font-extrabold sm:text-4xl">Your businesses, always open.</h1>
+        <h1 className="text-2xl font-bold sm:text-3xl">Your businesses, always open.</h1>
         <p className="mt-2 max-w-2xl text-sm leading-7 text-muted-foreground">Create independent stores, list detailed products and variants, and manage physical inventory. Commerce and delivery activation follow verified payment and fulfilment certification.</p>
       </div>
-      <div className="flex gap-2"><Button variant="outline" onClick={()=>navigate('/shop')}>Browse marketplace</Button>
+      <div className="flex flex-wrap gap-2"><Button variant="outline" onClick={()=>navigate('/shop')}>Browse marketplace</Button>
         <Button onClick={()=>{setName('');setSlug('');setCategory('');setTagline('');setDescription('');setWebsite('');setCity('');setCountry('Ghana');setRegion('');setAddress('');setLocation(emptyStoreLocation);setSubmitError('');setOpen(true)}}><Plus className="mr-2 size-4"/>New store</Button>
       </div>
     </div>

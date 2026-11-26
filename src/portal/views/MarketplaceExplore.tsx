@@ -52,12 +52,12 @@ export default function MarketplaceExplore() {
       }catch(e){fail(e instanceof Error?e.message:'Nearby search could not be completed.')}
     },()=>fail('Location permission was denied or unavailable. Enable it to find stores near you.'),{enableHighAccuracy:false,timeout:12000,maximumAge:0})
   }
-  return <div className="min-h-[68dvh] pb-12">
-    <section className="relative overflow-hidden border-b bg-gradient-to-br from-emerald-950 via-emerald-900 to-slate-950 text-white">
+  return <div className="min-h-[68dvh] px-4 pb-12 pt-4 sm:px-6 sm:pt-6">
+    <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-emerald-950 via-emerald-900 to-slate-950 text-white">
       <div className="pointer-events-none absolute -right-12 -top-24 size-80 rounded-full bg-emerald-300/10 blur-3xl" />
-      <div className="mx-auto max-w-7xl px-4 py-12 sm:py-16">
+      <div className="mx-auto max-w-6xl px-5 py-7 sm:p-9">
         <Badge className="mb-4 border-emerald-400/30 bg-white/10 text-emerald-100"><Sparkles className="mr-1.5 size-3.5"/>iEventPlux Marketplace</Badge>
-        <h1 className="max-w-2xl text-3xl font-extrabold tracking-tight sm:text-5xl">Discover creators, makers and local businesses. <span className="text-emerald-300">Anytime.</span></h1>
+        <h1 className="max-w-2xl text-2xl font-bold tracking-tight sm:text-4xl">Discover creators, makers and local businesses. <span className="text-emerald-300">Anytime.</span></h1>
         <p className="mt-4 max-w-2xl text-sm leading-7 text-emerald-50/80 sm:text-base">Find independent Ghanaian businesses and their products. Sellers can showcase collections with detailed specifications, variants and live stock information, independent of any one event.</p>
         <div className="mt-6 flex flex-wrap gap-3">
           <Button onClick={()=>navigate('/seller')} className="h-11 bg-white text-emerald-950 hover:bg-emerald-50"><Store className="mr-2 size-4"/>Create your store</Button>
@@ -65,7 +65,7 @@ export default function MarketplaceExplore() {
         </div>
       </div>
     </section>
-    <section id="marketplace-results" className="mx-auto max-w-7xl scroll-mt-20 px-4 py-9">
+    <section id="marketplace-results" className="mx-auto max-w-6xl scroll-mt-20 py-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-xs font-extrabold uppercase tracking-widest text-primary">Discover stores</p>
@@ -73,7 +73,7 @@ export default function MarketplaceExplore() {
           <p className="mt-1 text-sm text-muted-foreground">Only published stores are listed. Verification badges are shown only when confirmed.</p>
         </div>
         <form className="flex w-full gap-2 sm:max-w-sm" onSubmit={e=>{e.preventDefault();void load(query.trim())}}>
-          <Input value={query} onChange={e=>setQuery(e.target.value)} maxLength={90} placeholder="Find products or shop names…" aria-label="Search stores" className="h-11"/>
+          <Input value={query} onChange={e=>setQuery(e.target.value)} maxLength={90} placeholder="Find stores or categories…" aria-label="Search stores" className="h-11"/>
           <Button type="submit" disabled={loading} className="h-11"><Search className="size-4"/></Button>
         </form>
       </div>

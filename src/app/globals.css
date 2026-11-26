@@ -1544,3 +1544,30 @@ body {
   .ievx-public .ievx-real-activity > button { display: none; }
   .ievx-public .ievx-home-hero .ievx-hero-action { align-self: stretch; }
 }
+
+/* Shared public page measure, modelled on Services / Following.
+   Narrow inner forms keep their caps; media and workspaces retain their sizing. */
+:root { --ievx-page-max: 72rem; }
+.ievx-page-shell { width: 100%; max-width: var(--ievx-page-max); margin-inline: auto; min-width: 0; }
+@media (min-width: 768px) {
+  .ievx-page-shell { width: calc(100% - 48px); }
+}
+@media (min-width: 1024px) {
+  .ievx-page-shell { width: calc(100% - 80px); }
+}
+.ievx-payment-options { display: flex; flex-wrap: wrap; align-items: flex-start; gap: .5rem; }
+.ievx-payment-option { display: inline-flex; align-items: center; gap: .5rem; width: fit-content; max-width: 100%; min-width: 0; min-height: 44px; padding: .5rem .75rem; border: 1px solid var(--border); border-radius: .625rem; cursor: pointer; font-size: .875rem; line-height: 1.35; }
+.ievx-payment-option:has(input:checked) { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 7%, var(--card)); }
+.ievx-payment-option:has(input:focus-visible) { outline: 2px solid var(--ring); outline-offset: 2px; }
+.ievx-payment-option:has(input:disabled) { cursor: not-allowed; opacity: .65; }
+.ievx-settlement-options { display: flex; flex-wrap: wrap; gap: .5rem; align-items: stretch; }
+@media (max-width: 639px) {
+  .ievx-settlement-options { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .ievx-settlement-options .ievx-payment-option { width: auto; padding: .5rem; }
+}
+
+/* Workspace gets a larger shared frame for its sidebar and independent panes.
+   Preserve content height/scrolling and use breathing room outside the panels. */
+@media (min-width: 1024px) {
+  .ievx-workspace-shell { width: calc(100% - 48px); max-width: 90rem; }
+}
