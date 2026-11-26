@@ -4,6 +4,7 @@ import { eventOrgAccess } from '../permissions'
 import { audit } from '../audit'
 import { notifyUser, queueMessage } from './notify'
 import { realtimeEmit } from './realtime'
+import { eventUpdateAudience, eventUpdateNotice } from '../event-update-delivery-policy'
 
 /**
  * Organizer updates — the operational voice of an event (schedule changes,
@@ -106,19 +107,12 @@ export async function postUpdate(input: PostUpdateInput): Promise<PostUpdateResu
     isPrivate ? Promise.resolve([]) : db.follow.findMany({ where: { orgId: access.event.orgId }, select: { followerId: true } }),
     isPrivate ? db.rsvp.findMany({ where: { eventId: input.eventId, status: 'APPROVED' }, select: { userId: true } }) : Promise.resolve([]),
   ])
-  const audience = new Set<string>()
-  for (const h of holderRows) if (h.userId) audience.add(h.userId)
-  for (const b of buyerRows) if (b.userId) audience.add(b.userId)
-  for (const f of followerRows) audience.add(f.followerId)
-  for (const r of approvedRows) if (r.userId) audience.add(r.userId)
-  audience.delete(input.userId) // the author is never notified about their own post
-
+  const audience = eventUpdateAudience({ privateEvent: isPrivate, authorId: input.userId, holders: holderRows, buyers: buyerRows, followers: followerRows, approvals: approvedRows })
+  const notice = eventUpdateNotice(isPrivate, important, title, body)
   const link = `#/event/${input.eventId}`
   let notified = 0
-  const notifyTitle = isPrivate ? (important ? 'Important private event update' : 'Private event update') : important ? `Important update — ${title}` : title
-  const notifyBody = isPrivate ? 'Sign in and open the event to view the latest update.' : body.slice(0, 200)
   for (const userId of [...audience].slice(0, MAX_AUDIENCE_NOTIFY)) {
-    const delivered = await notifyUser({ userId, type: 'EVENT_CHANGE', title: notifyTitle, body: notifyBody, link }).catch(() => null)
+    const delivered = await notifyUser({ userId, type: 'EVENT_CHANGE', title: notice.title, body: notice.body, link }).catch(() => null)
     if (delivered) notified += 1
   }
 
@@ -138,7 +132,7 @@ export async function postUpdate(input: PostUpdateInput): Promise<PostUpdateResu
       select: { buyerPhone: true },
     })
     for (const g of guestBuyers) if (g.buyerPhone) smsTargets.set(g.buyerPhone, '')
-    const smsBody = isPrivate ? 'iEventPlux: Important private event update. Sign in to view it.' : `iEventPlux — ${title}: ${body.slice(0, 120)}${body.length > 120 ? '…' : ''}`
+    const smsBody = notice.sms
     for (const [phone, uid] of smsTargets) {
       const queued = await queueMessage({
         channel: 'SMS',
