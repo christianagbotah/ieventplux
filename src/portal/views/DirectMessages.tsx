@@ -10,6 +10,8 @@ import {Flag} from 'lucide-react'
 import ChatVoiceRecorder from '../components/ChatVoiceRecorder'
 import ChatVoicePlayer from '../components/ChatVoicePlayer'
 import {api} from '../api'
+import {readTextRetry,saveTextRetry,clearTextRetry} from '../lib/direct-text-retry'
+import {validPendingText,type PendingText} from '../lib/direct-text-retry-policy'
 import {navigate} from '../router'
 import {usePortal} from '../store'
 import {initials,relative} from '../format'
@@ -85,7 +87,9 @@ function Inbox({userId,id}:{userId:string;id?:string}){
  const [hasMore,setHasMore]=useState(false)
  const active=useRef(true)
  const version=useRef(0)
- const pending=useRef<{body:string;key:string}|null>(null)
+ const [queued,setQueued]=useState<PendingText|null>(()=>readTextRetry(userId))
+ const [retryNotice,setRetryNotice]=useState('')
+ const retryLock=useRef(false)
  const lastRead=useRef('')
  const historyStarted=useRef(false)
  const scrollEnd=useRef<HTMLDivElement>(null)
@@ -131,7 +135,6 @@ function Inbox({userId,id}:{userId:string;id?:string}){
    const result=await api.post<{conversation?:Conversation}>('/direct-messages',{...payload,expectedUserId:userId})
    if(!current())return
    if(payload.action==='request'&&result.conversation)navigate('/messages/'+result.conversation.id)
-   if(payload.action==='send'){pending.current=null;lastTyping.current=0;setDraft('')}
    await load()
   }catch(err){if(current())setError(err instanceof Error?err.message:'Could not complete action.')}
   finally{if(current())setBusy(false)}
@@ -147,7 +150,7 @@ function Inbox({userId,id}:{userId:string;id?:string}){
  }
  const sendFile=async()=>{
   if(!file||!id||busy||!current())return
-  if(pending.current){setError('Retry your previous text message before attaching a file.');return}
+  if(readTextRetry(userId)){setError('Resolve the pending text message before attaching a file.');return}
   const caption=draft.trim()
   if(pendingFile.current&&(pendingFile.current.file!==file||pendingFile.current.caption!==caption)){setError('Retry the original attachment and caption first.');return}
   if(!pendingFile.current)pendingFile.current={file,caption,key:crypto.randomUUID()}
@@ -160,15 +163,31 @@ function Inbox({userId,id}:{userId:string;id?:string}){
   }catch(err){if(current())setError(err instanceof Error?err.message:'Could not send attachment. Retry with the same file.')}
   finally{if(current())setBusy(false)}
  }
+ const resolveText=async(mode:'retry'|'check'|'discard',record:PendingText)=>{
+  if(!current()||busy||retryLock.current||record.conversationId!==id)return
+  if(!validPendingText(record,userId)){setError('This pending copy has expired. Reopen the conversation to refresh.');return}
+  retryLock.current=true;setBusy(true);setError('')
+  try{
+   const result=await api.post<{committed:boolean}>('/direct-messages',{action:'send-status',id,expectedUserId:userId,clientKey:record.key})
+   if(!current())return
+   if(!result.committed&&mode==='check'){setRetryNotice('Not confirmed yet. Retry when connected.');return}
+   if(!result.committed&&mode==='retry'){
+    await api.post('/direct-messages',{action:'send',id,expectedUserId:userId,body:record.body,clientKey:record.key})
+   }
+   clearTextRetry(userId,record.key)
+   if(current()){setQueued(null);setDraft('');lastTyping.current=0;setRetryNotice(result.committed||mode==='retry'?'Message confirmed.':'Pending copy discarded. An in-flight request may still arrive.');await load()}
+  }catch(err){if(current())setError(err instanceof Error?err.message:'Delivery is unconfirmed. Retry the same message.')}
+  finally{retryLock.current=false;if(current())setBusy(false)}
+ }
  const send=()=>{
   if(file){void sendFile();return}
   const body=draft.trim()
-  if(!body||busy)return
-  if(pending.current&&pending.current.body!==body){
-   setError('The previous message has an uncertain result. Retry the original text first.');return
-  }
-  if(!pending.current)pending.current={body,key:crypto.randomUUID()}
-  void mutate({action:'send',id,...{body:pending.current.body,clientKey:pending.current.key}})
+  if(!id||!body||busy||retryLock.current||!current())return
+  if(readTextRetry(userId)){setError('Resolve your pending message first.');return}
+  const record={owner:userId,conversationId:id,key:crypto.randomUUID(),body,createdAt:Date.now()}
+  if(!saveTextRetry(record)){setError('Another message is pending.');return}
+  setQueued(record);setRetryNotice('Saved in this tab until delivery is confirmed.')
+  void resolveText('retry',record)
  }
  const more=async()=>{
   if(!id||!cursor||busy)return
@@ -192,6 +211,8 @@ function Inbox({userId,id}:{userId:string;id?:string}){
  }
  return <section className="mx-auto w-full max-w-6xl px-2 py-4 sm:px-0 sm:py-6">
   <header className="mb-4 flex items-center justify-between gap-3"><div><h1 className="text-2xl font-bold tracking-tight">Messages</h1><p className="text-sm text-muted-foreground">Private conversations</p></div><Button variant="outline" size="sm" onClick={()=>navigate('/me?tab=notifications')}>Activity</Button></header>
+  {queued&&<div className="mb-3 space-y-2 rounded-xl border p-3 text-sm" role="status"><p className="font-medium">Message delivery pending</p>{queued.conversationId===id?<><p className="whitespace-pre-wrap break-words">{queued.body}</p><p className="text-xs text-muted-foreground">Retry uses the original message key. Refreshing or closing this tab loses the local copy.</p><div className="flex flex-wrap gap-2"><Button size="sm" disabled={busy||!detail?.conversation.canSend} onClick={()=>void resolveText('retry',queued)}>Retry</Button><Button size="sm" variant="outline" disabled={busy} onClick={()=>void resolveText('check',queued)}>Check delivery</Button><Button size="sm" variant="outline" disabled={busy} onClick={()=>void resolveText('discard',queued)}>Discard if unconfirmed</Button></div></>:<Button size="sm" variant="outline" onClick={()=>navigate('/messages/'+queued.conversationId)}>Open pending conversation</Button>}</div>}
+  {retryNotice&&<p className="mb-2 text-xs text-muted-foreground" role="status">{retryNotice}</p>}
   {reportStatus&&<p role="status" className="mb-3 rounded-xl border bg-card p-3 text-sm">{reportStatus}</p>}
   {error&&<div role="alert" className="mb-3 rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{error} <button className="underline" onClick={()=>{setError('');void load()}}>Refresh</button></div>}
   <div className="grid min-w-0 gap-4 md:grid-cols-[minmax(235px,1fr)_minmax(0,2fr)]">
@@ -219,10 +240,10 @@ function Inbox({userId,id}:{userId:string;id?:string}){
      </div>
      {c.canSend?<form className="border-t p-3" onSubmit={e=>{e.preventDefault();send()}}>
       {file&&<div className="mb-2 flex items-center justify-between gap-2 rounded-lg border p-2 text-xs"><span className="min-w-0 break-all">{file.name} · {Math.ceil(file.size/1024)} KB</span><Button type="button" size="sm" variant="ghost" disabled={busy} onClick={()=>{if(pendingFile.current){setError('Retry the pending attachment before removing it.');return}setFile(null);if(fileInput.current)fileInput.current.value=''}}>Remove</Button></div>}
-      {attachmentEnabled&&!file&&<div className="mb-2"><ChatVoiceRecorder disabled={busy} onFile={recorded=>{setFile(recorded);setError('')}} onError={setError}/></div>}
+      {attachmentEnabled&&!file&&<div className="mb-2"><ChatVoiceRecorder disabled={busy||!!queued} onFile={recorded=>{setFile(recorded);setError('')}} onError={setError}/></div>}
       <div className="flex items-end gap-2">
-      {attachmentEnabled&&<><input ref={fileInput} type="file" hidden accept="image/jpeg,image/png,image/webp,application/pdf" onChange={e=>{const selected=e.target.files?.[0];if(!selected)return;if(selected.size>2097152||selected.size<1){setError('Choose a file no larger than 2 MB.');e.target.value='';return}setFile(selected);setError('')}}/><Button type="button" variant="outline" size="icon" className="size-11 shrink-0" aria-label="Attach file" disabled={busy||!!file||!!pending.current} onClick={()=>fileInput.current?.click()}><Paperclip className="size-4"/></Button></>}
-      <Textarea value={draft} onChange={e=>{setDraft(e.target.value);lastTyping.current=e.target.value.trim()?Date.now():0}} maxLength={4000} rows={2} placeholder="Write a message…" aria-label="Message" className="min-h-11 resize-none"/><Button size="icon" className="size-11 shrink-0 rounded-xl" aria-label="Send message" disabled={busy||(!file&&!draft.trim())}><Send className="size-4"/></Button></div></form>:<p className="border-t p-3 text-sm text-muted-foreground">Sending is unavailable for this contact.</p>}
+      {attachmentEnabled&&<><input ref={fileInput} type="file" hidden accept="image/jpeg,image/png,image/webp,application/pdf" onChange={e=>{const selected=e.target.files?.[0];if(!selected)return;if(selected.size>2097152||selected.size<1){setError('Choose a file no larger than 2 MB.');e.target.value='';return}setFile(selected);setError('')}}/><Button type="button" variant="outline" size="icon" className="size-11 shrink-0" aria-label="Attach file" disabled={busy||!!file||!!queued} onClick={()=>fileInput.current?.click()}><Paperclip className="size-4"/></Button></>}
+      <Textarea disabled={!!queued} value={draft} onChange={e=>{setDraft(e.target.value);lastTyping.current=e.target.value.trim()?Date.now():0}} maxLength={4000} rows={2} placeholder="Write a message…" aria-label="Message" className="min-h-11 resize-none"/><Button size="icon" className="size-11 shrink-0 rounded-xl" aria-label="Send message" disabled={busy||!!queued||(!file&&!draft.trim())}><Send className="size-4"/></Button></div></form>:<p className="border-t p-3 text-sm text-muted-foreground">Sending is unavailable for this contact.</p>}
      </>}
     </>}
    </div>
