@@ -14,5 +14,6 @@ declare const process: {
     readonly NODE_ENV?: 'development' | 'production' | 'test'
     /** iEventPlux web deployment base URL, inlined by the Expo babel preset. */
     readonly EXPO_PUBLIC_API_BASE_URL?: string
+    readonly EXPO_PUBLIC_EAS_PROJECT_ID?: string
   }
 }

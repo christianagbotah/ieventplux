@@ -12,7 +12,9 @@ export async function POST(req: NextRequest) {
   return handle(async () => {
     await rateLimit(req, 'push-installation', 20, 60_000)
     const { user, sessionId } = await requireSession()
-    const data = parsePushRegistration(await readJson(req))
+    const raw = await readJson<Record<string, unknown>>(req)
+    if (typeof raw?.expectedUserId !== 'string' || raw.expectedUserId !== user.id) throw errors.conflict('The signed-in account changed. Reopen notification settings.')
+    const data = parsePushRegistration(raw)
     if (!data) throw errors.badRequest('A valid device installation and notification permission are required.')
     if (user.notifPrefs.push === false) throw errors.forbidden('Push notifications are disabled in your preferences.')
     try {
@@ -47,8 +49,9 @@ export async function POST(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   return handle(async () => {
-    const { sessionId } = await requireSession()
-    const body = await readJson<{ installationKey?: string }>(req)
+    const { user, sessionId } = await requireSession()
+    const body = await readJson<{ installationKey?: string; expectedUserId?: string }>(req)
+    if (body?.expectedUserId !== user.id) throw errors.conflict('The signed-in account changed. Reopen notification settings.')
     const keyHash = parsePushKey(body?.installationKey)
     if (!keyHash) throw errors.badRequest('A valid device installation is required.')
     await db.pushInstallation.updateMany({ where: { keyHash, sessionId, revokedAt: null }, data: { revokedAt: new Date() } })
