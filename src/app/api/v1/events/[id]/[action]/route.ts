@@ -5,6 +5,8 @@ import { eventOrgAccess } from '@/server/permissions'
 import { boundedInt, ticketSalesSettings } from '@/server/ticket-sales-policy'
 import { requireCommunityAccess } from '@/server/community-access'
 import { validReplyTarget } from '@/server/community-policy'
+import { requireOpenDemand } from '@/server/event-demand-access'
+import { demandIsOpen } from '@/server/event-demand-policy'
 
 type RouteContext = { params: Promise<{ id: string; action: string }> }
 
@@ -74,6 +76,8 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
     }
 
     if (action === 'waitlist') {
+      const { canViewProgramme } = await import('@/server/event-operations-access')
+      await canViewProgramme(id)
       const event = await db.event.findUnique({ where: { id } })
       if (!event || event.deletedAt) throw errors.notFound('Event not found.')
       const session = await (await import('@/server/auth')).getSession()
@@ -84,15 +88,17 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
         const access = await eventOrgAccess(session.user.id, id, 'attendees:view')
         if (access.allowed) entries = await waitlistOrganizerView(id)
       }
-      return jsonOk({ ...status, entries })
+      return jsonOk({ ...status, entries }, { headers: { 'Cache-Control': 'private, no-store' } })
     }
 
     // ── Round 15: "Remind me" opt-in state (signed-in fans without a ticket) ─
     if (action === 'reminder') {
+      const { canViewProgramme } = await import('@/server/event-operations-access')
+      await canViewProgramme(id)
       const event = await db.event.findUnique({ where: { id } })
       if (!event || event.deletedAt) throw errors.notFound('Event not found.')
       const session = await (await import('@/server/auth')).getSession()
-      if (!session) return jsonOk({ active: false, holdingTicket: false, upcoming: event.startsAt > new Date() && !['CANCELLED', 'ENDED', 'POSTPONED'].includes(event.status) })
+      if (!session) return jsonOk({ active: false, holdingTicket: false, upcoming: demandIsOpen(event, new Date()) }, { headers: { 'Cache-Control': 'private, no-store' } })
       const [row, ticket] = await Promise.all([
         db.eventReminder.findUnique({ where: { eventId_userId: { eventId: event.id, userId: session.user.id } } }),
         db.ticket.findFirst({ where: { userId: session.user.id, eventId: event.id, status: { in: ['VALID', 'CHECKED_IN'] } }, select: { id: true } }),
@@ -100,8 +106,8 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
       return jsonOk({
         active: Boolean(row),
         holdingTicket: Boolean(ticket),
-        upcoming: event.startsAt > new Date() && !['CANCELLED', 'ENDED', 'POSTPONED'].includes(event.status),
-      })
+        upcoming: demandIsOpen(event, new Date()),
+      }, { headers: { 'Cache-Control': 'private, no-store' } })
     }
 
     if (action === 'ics') {
@@ -442,9 +448,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
       const user = await requireUser()
       const event = await db.event.findUnique({ where: { id } })
       if (!event || event.deletedAt) throw errors.notFound('Event not found.')
-      if (['CANCELLED', 'ENDED', 'POSTPONED'].includes(event.status) || event.startsAt <= new Date()) {
-        throw errors.conflict('Reminders are only available for upcoming events.')
-      }
+      await requireOpenDemand(event, user.id)
       await db.eventReminder.upsert({
         where: { eventId_userId: { eventId: event.id, userId: user.id } },
         update: {},
