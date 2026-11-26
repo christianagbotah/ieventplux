@@ -1,6 +1,6 @@
 import {useCallback,useEffect,useRef,useState} from 'react'
 import {ActivityIndicator,Pressable,StyleSheet,Text,TextInput,View} from 'react-native'
-import {api,ApiClientError,type EventDetail,type EventReminderState,type EventWaitlistState} from '../api/client'
+import {api,ApiClientError,type EventDetail,type EventReminderState,type EventWaitlistState,type User} from '../api/client'
 import {useSession} from '../store/session'
 import {SectionHeading,mobileDesign} from '../ui/PremiumUI'
 import {allTicketsSoldOut,canJoinDemandWaitlist,demandDenied,eventDemandOpen,waitlistPartySize} from '../lib/event-demand'
@@ -10,7 +10,11 @@ const errorText=(reason:unknown)=>reason instanceof ApiClientError?reason.messag
 
 /** Native attendee controls use the same authoritative API as the web portal. */
 export function EventDemandCard({event,canManage}:{event:EventDetail;canManage:boolean}){
- const {user,status:sessionStatus}=useSession()
+ const {user,status}=useSession()
+ if(canManage||status!=='authenticated'||!user||!eventDemandOpen(event.status,event.startsAt))return null
+ return <DemandControls key={event.id+':'+user.id} event={event} user={user}/>
+}
+function DemandControls({event,user}:{event:EventDetail;user:User}){
  const open=eventDemandOpen(event.status,event.startsAt)
  const soldOut=allTicketsSoldOut(event.ticketTypes)
  const [state,setState]=useState<DemandState>({kind:'loading'})
@@ -36,14 +40,9 @@ export function EventDemandCard({event,canManage}:{event:EventDetail;canManage:b
   }
  },[event.id])
  useEffect(()=>{
-  setContact(user?.email??'');setParty('1');setFeedback('');setFailure('')
-  if(!canManage&&open&&user&&sessionStatus==='authenticated')void load()
-  else setState({kind:'loading'})
+  void load()
   return()=>{revision.current++}
- },[canManage,open,user?.id,user?.email,sessionStatus,load])
- if(canManage||!open)return null
- if(sessionStatus==='restoring')return null
- if(!user||sessionStatus!=='authenticated')return null
+ },[load])
 
  const act=async(action:()=>Promise<unknown>,success:string)=>{
   if(locked.current)return
