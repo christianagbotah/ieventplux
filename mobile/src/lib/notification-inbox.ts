@@ -6,7 +6,7 @@ export function alertDestination(link:string|null|undefined):AlertDestination|nu
  if(!link)return null
  const path=link.startsWith('#')?link.slice(1):link
  const event=/^\/event\/([A-Za-z0-9_-]{1,128})$/.exec(path)
- if(event)return {screen:'EventDetail',eventId:event[1]}
+ if(event?.[1])return {screen:'EventDetail',eventId:event[1]}
  if(path==='/me?tab=tickets')return {screen:'MyTickets',segment:'tickets'}
  if(path==='/me?tab=orders')return {screen:'MyTickets',segment:'orders'}
  return null
