@@ -150,10 +150,10 @@ function ProfileView({slug}:{slug:string}){
 
       <div className="px-1">
         <div className="flex flex-wrap items-start justify-between gap-3 pt-3">
-          <div className="flex min-w-0 flex-1 items-start gap-3 sm:gap-4">
+          <div className="flex min-w-0 basis-full items-start gap-3 sm:flex-1 sm:gap-4">
             <div className="relative -mt-9 shrink-0">
             <span className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl border-4 border-background bg-primary text-2xl font-extrabold text-primary-foreground shadow-lg">
-              {data.org.logoUrl ? <img src={data.org.logoUrl} alt={data.org.name + ' logo'} className="h-full w-full object-contain bg-white" /> : data.org.name.slice(0, 2).toUpperCase()}
+              {data.org.logoUrl ? <img src={data.org.logoUrl} alt={data.org.name + ' profile picture'} className="h-full w-full object-contain bg-white" /> : data.org.name.slice(0, 2).toUpperCase()}
             </span>
             {data.canEdit&&<><input ref={logoInput} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={e=>{void uploadBrand(e.target.files?.[0],'logo');e.target.value=''}}/><button type="button" className="absolute -bottom-1 -right-1 grid size-11 place-items-center rounded-full border-2 border-background bg-primary text-primary-foreground shadow" aria-label="Edit profile picture" disabled={!!branding||editorOpen} onClick={()=>logoInput.current?.click()}>{branding==='logo'?<Loader2 className="size-4 animate-spin"/>:<Pencil className="size-4"/>}</button></>}
             </div>
@@ -170,7 +170,7 @@ function ProfileView({slug}:{slug:string}){
             </div>
           </div>
           {data.myOrg ? (
-            <div className="flex flex-wrap gap-2">{data.canEdit&&<Button size="sm" className="min-h-11" disabled={!!branding} onClick={()=>setEditorOpen(true)}><Pencil className="size-4"/>Edit profile</Button>}
+            <div className="flex w-full flex-wrap gap-2 sm:w-auto">{data.canEdit&&<Button size="sm" className="min-h-11" disabled={!!branding} onClick={()=>setEditorOpen(true)}><Pencil className="size-4"/>Edit profile</Button>}
             <Button variant="outline" size="sm" className="min-h-11" onClick={() => {setActiveOrg(data.org.id);navigate('/organizer?tab=events')}}>Manage events</Button></div>
           ) : following ? (
             <Button className="rounded-full ievx-press" variant="outline" disabled={followingBusy} onClick={() => void toggleFollow()}>
