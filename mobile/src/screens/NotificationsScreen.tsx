@@ -3,6 +3,7 @@ import {ActivityIndicator,AppState,FlatList,Pressable,RefreshControl,StyleSheet,
 import {useFocusEffect} from '@react-navigation/native'
 import {api,ApiClientError,formatDateTime,type NotificationItem} from '../api/client'
 import {useSession} from '../store/session'
+import {subscribeActivity} from '../lib/activity-signal'
 import {alertDestination,mergeAlerts} from '../lib/notification-inbox'
 import {mobileDesign} from '../ui/PremiumUI'
 import type {NotificationsScreenProps} from '../navigation'
@@ -18,6 +19,7 @@ export default function NotificationsScreen(props:NotificationsScreenProps){
  return <Inbox key={user.id} {...props}/>
 }
 function Inbox({navigation}:NotificationsScreenProps){
+ const {user}=useSession()
  const [rows,setRows]=useState<NotificationItem[]>([])
  const [unread,setUnread]=useState(0)
  const [page,setPage]=useState(1)
@@ -47,9 +49,11 @@ function Inbox({navigation}:NotificationsScreenProps){
  },[])
  useFocusEffect(useCallback(()=>{
   locked.current=false;setBusy(false);void load()
-  const timer=setInterval(()=>{if(AppState.currentState==='active'&&pageRef.current===1&&!locked.current)void load()},8000)
-  return()=>{clearInterval(timer);revision.current++;locked.current=false}
- },[load]))
+  const refresh=()=>{if(AppState.currentState==='active'&&pageRef.current===1&&!locked.current)void load()}
+  const unsubscribe=user?.id?subscribeActivity(user.id,refresh):()=>{}
+  const timer=setInterval(refresh,8000)
+  return()=>{unsubscribe();clearInterval(timer);revision.current++;locked.current=false}
+ },[load,user?.id]))
  const mark=async(row?:NotificationItem)=>{
   if(locked.current)return
   locked.current=true;setBusy(true);setError('')
