@@ -10,14 +10,15 @@ import { realtimeEmit } from './realtime'
  * venue notes, safety announcements) reaching every affected person honestly.
  *
  * Reach contract:
- *  - Audience = ticket holders ∪ fulfilled-order buyers ∪ organization
- *    followers, deduplicated by user. Nobody is notified twice.
+ *  - Public audience = ticket holders, fulfilled-order buyers and followers.
+ *  - Invite-only audience = current ticket holders and approved RSVP users.
+ *    Both audiences are deduplicated by user.
  *  - In-app notifications are free and always sent.
  *  - SMS is reserved for updates marked `important` (real transactional need —
  *    time/venue/safety changes). Every send is durable (MessageDelivery + retry)
  *    and deduplicated per update+target.
- *  - Open event pages receive the update over the :3003 relay immediately
- *    (best-effort; the API remains the source of truth).
+ *  - Public event pages receive realtime updates; invite-only users receive
+ *    a generic notice and retrieve the content through authorized HTTP.
  *  - Guests (no account) who bought with a phone number are reached by SMS
  *    for important updates — they cannot receive in-app notifications.
  */
@@ -109,16 +110,16 @@ export async function postUpdate(input: PostUpdateInput): Promise<PostUpdateResu
   for (const h of holderRows) if (h.userId) audience.add(h.userId)
   for (const b of buyerRows) if (b.userId) audience.add(b.userId)
   for (const f of followerRows) audience.add(f.followerId)
+  for (const r of approvedRows) if (r.userId) audience.add(r.userId)
   audience.delete(input.userId) // the author is never notified about their own post
 
   const link = `#/event/${input.eventId}`
   let notified = 0
   const notifyTitle = isPrivate ? (important ? 'Important private event update' : 'Private event update') : important ? `Important update — ${title}` : title
   const notifyBody = isPrivate ? 'Sign in and open the event to view the latest update.' : body.slice(0, 200)
-  for (const userId of audience) {
-    if (notified >= MAX_AUDIENCE_NOTIFY) break
-    await notifyUser({ userId, type: 'EVENT_CHANGE', title: notifyTitle, body: notifyBody, link }).catch(() => {})
-    notified += 1
+  for (const userId of [...audience].slice(0, MAX_AUDIENCE_NOTIFY)) {
+    const delivered = await notifyUser({ userId, type: 'EVENT_CHANGE', title: notifyTitle, body: notifyBody, link }).catch(() => null)
+    if (delivered) notified += 1
   }
 
   // ── SMS for important updates (durable, deduped, TRANSACTIONAL) ──────────────
