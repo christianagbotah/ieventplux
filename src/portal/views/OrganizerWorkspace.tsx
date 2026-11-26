@@ -119,7 +119,9 @@ export default function OrganizerWorkspace({ route }: { route: Route }) {
   useEffect(() => {
     const tab = route.query.get('tab')
     if (tab) setSection(tab)
-  }, [route])
+    const requestedOrg = route.query.get('orgId')
+    if (requestedOrg && memberships.some(m => m.orgId === requestedOrg)) setActiveOrg(requestedOrg)
+  }, [route, memberships, setActiveOrg])
 
   if (!user || memberships.length === 0) return null
   const activeOrg = memberships.find((m) => m.orgId === activeOrgId) ?? memberships[0]
@@ -243,7 +245,7 @@ export default function OrganizerWorkspace({ route }: { route: Route }) {
           {section === 'insights' && (canViewReports ? <InsightsView orgId={activeOrg.orgId} /> : <RoleRestricted />)}
           {section === 'growth' && (canViewGrowth ? <div className="space-y-5"><GrowthCommandCenter orgId={activeOrg.orgId} canCreate={canManageEvents} />{canViewReports && <AiAdvisorCard orgId={activeOrg.orgId} />}</div> : <RoleRestricted />)}
           {section === 'events' && <EventsManager orgId={activeOrg.orgId} role={activeOrg.role} autoNew={route.query.get('new') === '1'} />}
-          {section === 'orders' && <OrdersView orgId={activeOrg.orgId} />}
+          {section === 'orders' && <OrdersView orgId={activeOrg.orgId} initialEventId={route.query.get('eventId') ?? ''} />}
           {section === 'attendees' && <AttendeesView orgId={activeOrg.orgId} initialEventId={route.query.get('eventId') ?? ''} />}
           {section === 'studio' && <StudioView orgId={activeOrg.orgId} />}
           {section === 'creator-media' && (canManageEvents ? <CreatorClipsStudio orgId={activeOrg.orgId} /> : <RoleRestricted />)}
@@ -1644,7 +1646,7 @@ interface OrgOrderRow {
   items: { qty: number; ticketType: { name: string } }[]
 }
 
-function OrdersView({ orgId }: { orgId: string }) {
+function OrdersView({ orgId, initialEventId }: { orgId: string; initialEventId: string }) {
   const [events, setEvents] = useState<OrgEvent[]>([])
   const [eventId, setEventId] = useState('')
   const [orders, setOrders] = useState<OrgOrderRow[] | null>(null)
@@ -1667,12 +1669,12 @@ function OrdersView({ orgId }: { orgId: string }) {
     ).then((data) => {
       if (controller.signal.aborted) return
       setEvents(data.items)
-      setEventId(data.items[0]?.id ?? '')
+      setEventId(data.items.some(event => event.id === initialEventId) ? initialEventId : data.items[0]?.id ?? '')
     }).catch(() => {
       if (!controller.signal.aborted) setError('Could not load organization events.')
     })
     return () => controller.abort()
-  }, [orgId])
+  }, [orgId, initialEventId])
 
   useEffect(() => {
     if (!eventId) {

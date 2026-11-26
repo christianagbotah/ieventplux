@@ -1,7 +1,9 @@
 import { NextRequest } from 'next/server'
+import { createHash } from 'node:crypto'
 import { handle, jsonOk, requireUser, readJson, errors, rateLimit, sanitizeText, jsonList, pagination } from '@/server/api'
 import { db } from '@/lib/db'
 import { getSession } from '@/server/auth'
+import { publishNotification, publishNotificationRead } from '@/server/services/notify'
 import {
   cursorForFollowingRow, decodeFollowingCursor, followingOrgIds,
   followingSourceSeek, sortFollowingRows,
@@ -40,6 +42,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
       if (userId === user.id) throw errors.badRequest('You cannot follow yourself.')
       if (orgId && userId) throw errors.badRequest('Follow either an organizer or a user, not both.')
       if (action === 'follow') {
+        await rateLimit(req, 'follow', 30, 60_000)
         // A forged ID must not create a follow relationship with hidden,
         // suspended or removed organizer profiles.
         const target = orgId
@@ -63,11 +66,24 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
           })
           if (blocked) throw errors.forbidden('This profile cannot be followed.')
         }
-        await db.follow.upsert({
-          where: orgId ? { followerId_orgId: { followerId: user.id, orgId } } : { followerId_userId: { followerId: user.id, userId: userId as string } },
-          create: orgId ? { followerId: user.id, orgId } : { followerId: user.id, userId: userId as string },
-          update: {},
+        const notice = await db.$transaction(async (tx) => {
+          const result = await tx.follow.createMany({
+            data: [orgId ? { followerId: user.id, orgId } : { followerId: user.id, userId: userId as string }],
+            skipDuplicates: true,
+          })
+          if (!result.count || !ownerId) return null
+          const recipient = await tx.user.findFirst({ where: { id: ownerId, status: 'ACTIVE', deletedAt: null }, select: { id: true } })
+          if (!recipient) return null
+          const muted = await tx.userMute.findUnique({ where: { muterId_mutedId: { muterId: ownerId, mutedId: user.id } } })
+          if (muted) return null
+          // Avoid repeat alerts for a follow already recorded in this hour.
+          const title = 'New follower'
+          const body = (user.displayName.slice(0, 80) || 'Someone') + (orgId ? ' followed your organizer profile.' : ' followed you.')
+          const id = 'follow_' + createHash('sha256').update(JSON.stringify([user.id, ownerId, orgId, Math.floor(Date.now() / 3600000)])).digest('hex')
+          const inserted = await tx.notification.createMany({ data: [{ id, userId: ownerId, type: 'FOLLOW', title, body }], skipDuplicates: true })
+          return inserted.count ? tx.notification.findUnique({ where: { id } }) : null
         })
+        if (notice) await publishNotification(notice)
       } else {
         if (orgId) await db.follow.deleteMany({ where: { followerId: user.id, orgId } })
         else await db.follow.deleteMany({ where: { followerId: user.id, userId: userId as string } })
@@ -145,10 +161,12 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     if (action === 'notifications-read') {
       if (String(body.all) === 'true') {
         await db.notification.updateMany({ where: { userId: user.id, readAt: null }, data: { readAt: new Date() } })
+        await publishNotificationRead(user.id)
         return jsonOk({ ok: true })
       }
       const id = String(body.id ?? '')
-      await db.notification.updateMany({ where: { id, userId: user.id }, data: { readAt: new Date() } })
+      await db.notification.updateMany({ where: { id, userId: user.id, readAt: null }, data: { readAt: new Date() } })
+      await publishNotificationRead(user.id)
       return jsonOk({ ok: true })
     }
 

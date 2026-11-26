@@ -194,6 +194,11 @@ jobs:
           IEVENTPLUX_ISOLATED_DB_TEST: "yes"
         run: bun run scripts/email-verification-smoke.ts
 
+      - name: Durable follow and ticket reservation notification privacy
+        env:
+          IEVENTPLUX_ISOLATED_DB_TEST: "yes"
+        run: bun run scripts/activity-notification-smoke.ts
+
       - name: Browser clarity and responsive screenshot acceptance
         run: |
           npm install --prefix "$RUNNER_TEMP/ievent-ui-qa" --no-audit --no-fund playwright@1.51.1

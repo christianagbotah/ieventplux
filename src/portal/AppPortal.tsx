@@ -98,8 +98,6 @@ export default function AppPortal() {
         if (cancelled) return
         setUser(me.user)
         setMemberships(me.memberships ?? [])
-        const notif = await api.get<{ unread: number }>('/notifications').catch(() => ({ unread: 0 }))
-        if (!cancelled) setUnread(notif.unread ?? 0)
       } catch {
         if (!cancelled) setUser(null)
       } finally {
@@ -112,25 +110,55 @@ export default function AppPortal() {
     }
   }, [])
 
-  // Realtime notifications over the gateway WebSocket (port ONLY in XTransformPort).
+  // Server counts are authoritative, including missed and cross-device reads.
+  const notificationUserId = user?.id
   useEffect(() => {
-    if (!user) return
+    if (!notificationUserId) { setUnread(0); return }
+    let active = true
+    let revision = 0
+    const seen = new Set<string>()
+    const refresh = async () => {
+      const current = ++revision
+      try {
+        const data = await api.get<{ unread: number }>('/notifications?pageSize=1')
+        if (!active || current !== revision) return
+        setUnread(data.unread)
+        window.dispatchEvent(new Event('ievx:notifications-changed'))
+      } catch { /* retain the last confirmed state while offline */ }
+    }
     const socket = connectRealtime()
     socket.on('connect', () => {
       setRealtimeConnected(true)
-      socket.emit('join', { room: `user:${user.id}` })
+      socket.emit('join', { room: `user:${notificationUserId}` })
+      void refresh()
     })
+    socket.on('room:joined', () => void refresh())
     socket.on('disconnect', () => setRealtimeConnected(false))
     socket.on('room:denied', () => setRealtimeConnected(false))
-    socket.on('notification', (payload: { title: string; body: string; link?: string }) => {
-      setUnread(usePortal.getState().unread + 1)
-      toast({ title: payload.title, description: payload.body })
+    socket.on('notification', (payload: { id: string; title: string; body: string }) => {
+      if (!active) return
+      if (payload.id && !seen.has(payload.id)) {
+        if (seen.size >= 500) seen.clear()
+        seen.add(payload.id)
+        toast({ title: payload.title, description: payload.body })
+      }
+      void refresh()
     })
+    socket.on('notification:read', () => void refresh())
+    const onVisible = () => { if (document.visibilityState === 'visible') void refresh() }
+    const interval = window.setInterval(onVisible, 15000)
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('online', onVisible)
+    void refresh()
     return () => {
+      active = false
+      window.clearInterval(interval)
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('online', onVisible)
       socket.disconnect()
       setRealtimeConnected(false)
     }
-  }, [user, setRealtimeConnected, setUnread, toast])
+  }, [notificationUserId, setRealtimeConnected, setUnread, toast])
 
   // jQuery-powered view transition: fade out, swap, fade in.
   useEffect(() => {
@@ -202,7 +230,7 @@ export default function AppPortal() {
       case 'verify-email':
         return <VerifyEmail />
       case 'me':
-        return <Me route={route} />
+        return <Me key={user?.id ?? "anonymous"} route={route} />
       case 'order':
         return param ? <OrderView key={param} reference={param} /> : <Discover route={route} />
       case 'broadcast':

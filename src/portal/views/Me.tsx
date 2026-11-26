@@ -61,6 +61,7 @@ export default function Me({ route }: { route: Route }) {
   const [saved, setSaved] = useState<SavedRow[] | null>(null)
   const [following, setFollowing] = useState<{ orgId: string; org: { name: string; slug: string } }[] | null>(null)
   const [notifications, setNotifications] = useState<NotificationRow[] | null>(null)
+  const [notificationError, setNotificationError] = useState('')
   const [selectedTicket, setSelectedTicket] = useState<{ row: TicketRow; qrSvg: string; qrPayload: string; offlineCopy?: boolean; savedAt?: string } | null>(null)
   const [ticketsOffline, setTicketsOffline] = useState(false)
   const [transferUrl, setTransferUrl] = useState<string | null>(null)
@@ -124,22 +125,39 @@ export default function Me({ route }: { route: Route }) {
   }, [])
 
   const loadOthers = useCallback(async () => {
-    const [savedData, followingData, notifData] = await Promise.all([
+    const [savedData, followingData] = await Promise.all([
       api.get<{ items: SavedRow[] }>('/social/saved').catch(() => ({ items: [] })),
       api.get<{ items: { orgId: string; org: { name: string; slug: string } }[] }>('/social/following').catch(() => ({ items: [] })),
-      api.get<{ items: NotificationRow[] }>('/notifications').catch(() => ({ items: [] })),
     ])
     setSaved(savedData.items)
     setFollowing(followingData.items.filter((item) => Boolean(item.orgId && item.org)))
-    setNotifications(notifData.items)
   }, [])
 
   useEffect(() => {
     if (!user) return
     if (tab === 'tickets' && tickets === null) void loadTickets()
     if (tab === 'orders' && orders === null) void loadOrders()
-    if (['saved', 'following', 'notifications'].includes(tab)) void loadOthers()
+    if (['saved', 'following'].includes(tab)) void loadOthers()
   }, [tab, user, tickets, orders, loadTickets, loadOrders, loadOthers])
+
+  const notificationUserId = user?.id
+  const loadNotifications = useCallback(async () => {
+    if (!notificationUserId) return
+    try {
+      const result = await api.get<{ items: NotificationRow[]; unread: number }>('/notifications')
+      if (usePortal.getState().user?.id !== notificationUserId) return
+      setNotifications(result.items); setUnread(result.unread); setNotificationError('')
+    } catch (err) {
+      if (usePortal.getState().user?.id === notificationUserId) setNotificationError(err instanceof Error ? err.message : 'Could not load notifications.')
+    }
+  }, [notificationUserId, setUnread])
+  useEffect(() => {
+    if (!notificationUserId || tab !== 'notifications') return
+    const refresh = () => { void loadNotifications() }
+    refresh()
+    window.addEventListener('ievx:notifications-changed', refresh)
+    return () => window.removeEventListener('ievx:notifications-changed', refresh)
+  }, [notificationUserId, tab, loadNotifications])
 
   const openTicket = async (row: TicketRow) => {
     try {
@@ -175,9 +193,8 @@ export default function Me({ route }: { route: Route }) {
   }
 
   const markAllRead = async () => {
-    await api.post('/notifications', { all: true }).catch(() => {})
-    setNotifications((n) => (n ?? []).map((item) => ({ ...item, readAt: item.readAt ?? new Date().toISOString() })))
-    setUnread(0)
+    try { await api.post('/notifications', { all: true }); await loadNotifications() }
+    catch (err) { setNotificationError(err instanceof Error ? err.message : 'Could not mark notifications read.') }
   }
 
   const saveProfile = async () => {
@@ -441,6 +458,7 @@ export default function Me({ route }: { route: Route }) {
             <p className="text-sm text-muted-foreground">{unread} unread</p>
             <Button variant="outline" size="sm" className="rounded-full" onClick={() => void markAllRead()} disabled={unread === 0}><Check className="mr-1 h-3.5 w-3.5" /> Mark all read</Button>
           </div>
+          {notificationError && <p role="alert" className="text-sm text-destructive">{notificationError} <button className="underline" onClick={() => void loadNotifications()}>Retry</button></p>}
           {notifications === null ? (
             Array.from({ length: 3 }).map((_, i) => <div key={i} className="ievx-skeleton h-16 rounded-xl" />)
           ) : notifications.length === 0 ? (
@@ -452,11 +470,10 @@ export default function Me({ route }: { route: Route }) {
                 className={`flex w-full gap-3 rounded-xl border p-4 text-left transition-colors ${n.readAt ? 'border-border/50 bg-card' : 'border-primary/30 bg-primary/5'}`}
                 onClick={async () => {
                   if (!n.readAt) {
-                    await api.post('/notifications', { id: n.id }).catch(() => {})
-                    setNotifications((list) => (list ?? []).map((item) => (item.id === n.id ? { ...item, readAt: new Date().toISOString() } : item)))
-                    setUnread(Math.max(0, unread - 1))
+                    try { await api.post('/notifications', { id: n.id }); await loadNotifications() }
+                    catch (err) { setNotificationError(err instanceof Error ? err.message : 'Could not mark notification read.'); return }
                   }
-                  if (n.link) navigate(n.link.replace(/^#/, ''))
+                  if (n.link?.startsWith('#/') && !n.link.startsWith('#//')) navigate(n.link.slice(1))
                 }}
               >
                 {n.readAt ? (

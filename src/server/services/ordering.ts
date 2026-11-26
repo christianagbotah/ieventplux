@@ -6,6 +6,7 @@ import { getSetting } from '../settings'
 import { checkoutLinePrice, normalizeCheckoutLines } from '../checkout-policy'
 import { supportedTicketCheckoutCurrency } from '../paid-currency-policy'
 import { ticketOrderShadowIntent } from '../ticket-payment-intent'
+import { publishNotification } from './notify'
 
 /**
  * Order creation with database-enforced inventory reservations.
@@ -90,7 +91,7 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
   // multiple buyers select the same tiers in a different visual order.
   validated.sort((a, b) => a.ticketTypeId.localeCompare(b.ticketTypeId))
 
-  const order = await db.$transaction(async (tx) => {
+  const { order, notice } = await db.$transaction(async (tx) => {
     // Lock identity to prevent two checkouts for the same buyer from both
     // reading the old per-buyer total and reserving past the configured cap.
     if (input.userId) {
@@ -183,8 +184,17 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
     // Existing Hubtel/simulator fulfilment remains the sole execution path.
     const shadow = ticketOrderShadowIntent(created)
     if (shadow) await tx.platformPaymentIntent.create({ data: shadow })
-    return created
+    const organizer = await tx.organization.findFirst({ where: { id: event.orgId, deletedAt: null, status: 'ACTIVE' }, select: { ownerId: true } })
+    const recipient = organizer && organizer.ownerId !== input.userId
+      ? await tx.user.findFirst({ where: { id: organizer.ownerId, status: 'ACTIVE', deletedAt: null }, select: { id: true } }) : null
+    const notice = recipient ? await tx.notification.create({ data: {
+      userId: recipient.id, type: 'ORDER_CREATED', title: 'New ticket reservation',
+      body: `A new ${kind === 'FREE' ? 'free RSVP reservation' : 'ticket order awaiting payment'} was created for ${event.title.slice(0, 120)}.`,
+      link: `#/organizer?tab=orders&orgId=${encodeURIComponent(event.orgId)}&eventId=${encodeURIComponent(event.id)}`,
+    } }) : null
+    return { order: created, notice }
   })
+  if (notice) await publishNotification(notice)
 
   return { orderReference: order.reference, status: order.status, totalMinor: order.totalMinor, kind, expiresAt }
 }
