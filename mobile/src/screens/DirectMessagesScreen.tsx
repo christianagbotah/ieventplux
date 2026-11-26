@@ -5,6 +5,8 @@ import type {NativeStackScreenProps} from '@react-navigation/native-stack'
 import type {RootStackParamList} from '../navigation'
 import {api,formatDateTime,type DirectContact,type DirectConversation,type DirectDetail,type DirectMessage} from '../api/client'
 import {useSession} from '../store/session'
+import {readTextRetry,saveTextRetry,clearTextRetry} from '../lib/direct-text-retry'
+import {validPendingText,type PendingText} from '../lib/direct-text-retry-policy'
 import {mobileDesign} from '../ui/PremiumUI'
 import {subscribeActivity} from '../lib/activity-signal'
 import ChatVoiceRecorder from '../components/ChatVoiceRecorder'
@@ -74,7 +76,15 @@ function Inbox({userId,route,navigation}:Props&{userId:string}){
  const active=useRef(false)
  const revision=useRef(0)
  const loadingRef=useRef(false)
- const pending=useRef<{body:string;key:string}|null>(null)
+ const [queued,setQueued]=useState<PendingText|null>(null)
+ const [journalReady,setJournalReady]=useState(false)
+ const [retryNotice,setRetryNotice]=useState('')
+ const retryLock=useRef(false)
+ useFocusEffect(useCallback(()=>{
+  let alive=true
+  void readTextRetry(userId).then(record=>{if(alive){setQueued(record);setJournalReady(true)}}).catch(()=>{if(alive)setJournalReady(true)})
+  return()=>{alive=false}
+ },[userId]))
  const lastRead=useRef('')
  const historyStarted=useRef(false)
  const load=useCallback(async(next=1)=>{
@@ -117,7 +127,6 @@ function Inbox({userId,route,navigation}:Props&{userId:string}){
    const result=await api.directMessages.mutate({...data,expectedUserId:userId})
    if(!active.current)return
    if(data.action==='request'&&result.conversation){navigation.push('DirectMessages',{id:result.conversation.id});return}
-   if(data.action==='send'){pending.current=null;lastTyping.current=0;setDraft('')}
    await load()
   }catch(err){if(active.current)setError(err instanceof Error?err.message:'Could not complete action.')}
   finally{if(active.current)setBusy(false)}
@@ -138,7 +147,7 @@ function Inbox({userId,route,navigation}:Props&{userId:string}){
   finally{if(active.current)setBusy(false)}
  }
  const pickFile=async()=>{
-  if(busy||file||pending.current)return
+  if(busy||file||queued||!journalReady)return
   setError('')
   try{
    const picker=await import('expo-document-picker')
@@ -151,7 +160,7 @@ function Inbox({userId,route,navigation}:Props&{userId:string}){
  }
  const sendFile=async()=>{
   if(!file||!id||busy||!active.current)return
-  if(pending.current){setError('Retry the previous text message first.');return}
+  if(await readTextRetry(userId)){setError('Resolve the pending text message first.');return}
   const caption=draft.trim()
   if(pendingFile.current&&(pendingFile.current.uri!==file.uri||pendingFile.current.caption!==caption)){setError('Retry the original attachment and caption first.');return}
   setBusy(true);setError('')
@@ -188,16 +197,39 @@ function Inbox({userId,route,navigation}:Props&{userId:string}){
    if(active.current)setBusy(false)
   }
  }
+ const resolveText=async(mode:'retry'|'check'|'discard',record:PendingText)=>{
+  if(!active.current||busy||retryLock.current||record.conversationId!==id)return
+  if(!validPendingText(record,userId)){setError('This pending copy has expired. Reopen the conversation to refresh.');return}
+  retryLock.current=true;setBusy(true);setError('')
+  try{
+   const result=await api.directMessages.sendStatus(id,userId,record.key)
+   if(!active.current)return
+   if(!result.committed&&mode==='check'){setRetryNotice('Not confirmed yet. Retry when connected.');return}
+   if(!result.committed&&mode==='retry')await api.directMessages.mutate({action:'send',id,expectedUserId:userId,body:record.body,clientKey:record.key})
+   await clearTextRetry(userId,record.key)
+   if(active.current){setQueued(null);setDraft('');lastTyping.current=0;setRetryNotice(result.committed||mode==='retry'?'Message confirmed.':'Pending copy discarded. An in-flight request may still arrive.');await load()}
+  }catch(err){if(active.current)setError(err instanceof Error?err.message:'Delivery is unconfirmed. Retry the same message.')}
+  finally{retryLock.current=false;if(active.current)setBusy(false)}
+ }
  const send=async()=>{
   if(file){await sendFile();return}
   const body=draft.trim()
-  if(!body||busy)return
-  if(pending.current&&pending.current.body!==body){setError('Retry the original message before changing its text.');return}
-  if(!pending.current){
+  if(!id||!body||busy||retryLock.current||!journalReady||!active.current)return
+  retryLock.current=true
+  let record:PendingText|null=null
+  try{
+   const old=await readTextRetry(userId)
+   if(old){if(active.current){setQueued(old);setError('Resolve your pending message first.')}return}
    const crypto=await import('expo-crypto')
-   pending.current={body,key:crypto.randomUUID()}
-  }
-  await mutate({action:'send',id,body:pending.current.body,clientKey:pending.current.key})
+   const next={owner:userId,conversationId:id,key:crypto.randomUUID(),body,createdAt:Date.now()}
+   const result=await saveTextRetry(next)
+   if(!result.saved){if(active.current)setError('Could not reserve a retry record.');return}
+   if(!active.current)return
+   record=next;setQueued(record)
+   setRetryNotice(result.durable?'Protected local copy saved until delivery is confirmed.':'This message is kept in memory only. Closing the app may lose the local copy.')
+  }catch{if(active.current)setError('Could not prepare the message.')}
+  finally{retryLock.current=false}
+  if(record)await resolveText('retry',record)
  }
  const more=async()=>{
   if(!id||!cursor||busy)return
@@ -206,9 +238,10 @@ function Inbox({userId,route,navigation}:Props&{userId:string}){
   catch(err){if(active.current)setError(err instanceof Error?err.message:'Could not load history.')}
   finally{if(active.current)setBusy(false)}
  }
+ const retryPanel=queued?<View style={styles.card}><Text style={styles.title}>Message delivery pending</Text>{queued.conversationId===id?<><Text style={styles.message}>{queued.body}</Text><View style={[styles.row,{flexWrap:'wrap'}]}><Action label="Retry" disabled={busy||!detail?.conversation.canSend} onPress={()=>void resolveText('retry',queued)}/><Action label="Check delivery" secondary disabled={busy} onPress={()=>void resolveText('check',queued)}/><Action label="Discard if unconfirmed" secondary disabled={busy} onPress={()=>void resolveText('discard',queued)}/></View></>:<Action label="Open pending conversation" secondary onPress={()=>navigation.push('DirectMessages',{id:queued.conversationId})}/>}</View>:null
  const feedback=error?<View style={styles.error}><Text accessibilityRole="alert" style={styles.errorText}>{error}</Text><Action secondary label="Refresh" onPress={()=>{setError('');void load(page)}}/></View>:null
  if(!id)return <FlatList style={styles.screen} contentContainerStyle={styles.content} data={rows} keyExtractor={r=>r.id} refreshControl={<RefreshControl refreshing={loading} onRefresh={()=>void load()}/>}
-  ListHeaderComponent={<View style={styles.stack}><Text style={styles.heading}>Messages</Text><Text style={styles.muted}>Private conversations</Text>{feedback}<View style={styles.row}><TextInput style={[styles.input,{flex:1}]} value={query} onChangeText={setQuery} placeholder="Find a connection" placeholderTextColor={mobileDesign.inkMuted} accessibilityLabel="Find a connection"/><Action label="Search" secondary disabled={busy} onPress={()=>void search()}/></View>{contacts!==null&&<View style={styles.card}><Text style={styles.title}>Your connections</Text>{contacts.length===0?<Text style={styles.muted}>No matching connections.</Text>:contacts.map(p=><Pressable key={p.id} style={styles.contact} disabled={busy} onPress={()=>void mutate({action:'request',userId:p.id})}><Text style={styles.title}>{p.displayName}</Text><Text style={styles.link}>Message ›</Text></Pressable>)}</View>}</View>}
+  ListHeaderComponent={<View style={styles.stack}><Text style={styles.heading}>Messages</Text><Text style={styles.muted}>Private conversations</Text>{feedback}{retryPanel}<View style={styles.row}><TextInput style={[styles.input,{flex:1}]} value={query} onChangeText={setQuery} placeholder="Find a connection" placeholderTextColor={mobileDesign.inkMuted} accessibilityLabel="Find a connection"/><Action label="Search" secondary disabled={busy} onPress={()=>void search()}/></View>{contacts!==null&&<View style={styles.card}><Text style={styles.title}>Your connections</Text>{contacts.length===0?<Text style={styles.muted}>No matching connections.</Text>:contacts.map(p=><Pressable key={p.id} style={styles.contact} disabled={busy} onPress={()=>void mutate({action:'request',userId:p.id})}><Text style={styles.title}>{p.displayName}</Text><Text style={styles.link}>Message ›</Text></Pressable>)}</View>}</View>}
   ListEmptyComponent={!loaded&&loading?<ActivityIndicator color={mobileDesign.emerald}/>:loaded?<Text style={styles.muted}>No conversations yet. Find a connection to start.</Text>:null}
   renderItem={({item})=><Pressable style={styles.contact} accessibilityRole="button" onPress={()=>navigation.push('DirectMessages',{id:item.id})}><View style={styles.avatar}><Text style={styles.link}>{(item.peer?.displayName??'M').slice(0,1).toUpperCase()}</Text></View><View style={{flex:1}}><Text numberOfLines={1} style={styles.title}>{item.peer?.displayName??'Member'}</Text><Text style={styles.muted}>{item.status==='PENDING'?'Message request':item.status==='DECLINED'?'Request declined':'Private conversation'}</Text></View>{!!item.unread&&<View style={styles.badge}><Text style={styles.buttonText}>{item.unread}</Text></View>}</Pressable>}
   ListFooterComponent={hasMore||page>1?<View style={styles.row}><Action label="Previous" secondary disabled={page<=1||loading} onPress={()=>void load(page-1)}/><Action label="Next" secondary disabled={!hasMore||loading} onPress={()=>void load(page+1)}/></View>:null}/>
@@ -223,10 +256,10 @@ function Inbox({userId,route,navigation}:Props&{userId:string}){
  }
  const messages=Array.from(new Map([...older,...(detail?.items??[])].map(m=>[m.id,m])).values()).sort((a,b)=>b.createdAt.localeCompare(a.createdAt)||b.id.localeCompare(a.id))
  return <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS==='ios'?'padding':undefined} keyboardVerticalOffset={Platform.OS==='ios'?85:0}>
-  <View style={styles.threadHeader}><Text numberOfLines={1} style={styles.heading}>{c.peer?.displayName??'Member'}</Text><Text style={styles.muted}>{c.canSend&&peerActivity.typing?'Typing…':c.canSend&&peerActivity.active?'Active in this chat':'Private conversation'}</Text>{feedback}<View style={styles.row}><Action label={c.mutedByMe?'Unmute':'Mute'} secondary disabled={busy} onPress={()=>setSafetyTarget('mute')}/><Action label={c.blockedByMe?'Unblock':'Block'} secondary disabled={busy} onPress={()=>setSafetyTarget('block')}/></View>{!!reportStatus&&<Text accessibilityLiveRegion="polite" style={styles.muted}>{reportStatus}</Text>}{c.canSend&&<View style={styles.activityRow}><Text style={styles.muted}>Share chat activity</Text><Switch accessibilityLabel="Share chat activity" value={shareActivity} onValueChange={value=>{setShareActivity(value);lastTyping.current=0}}/></View>}</View>
+  <View style={styles.threadHeader}><Text numberOfLines={1} style={styles.heading}>{c.peer?.displayName??'Member'}</Text><Text style={styles.muted}>{c.canSend&&peerActivity.typing?'Typing…':c.canSend&&peerActivity.active?'Active in this chat':'Private conversation'}</Text>{feedback}{retryPanel}{!!retryNotice&&<Text style={styles.muted}>{retryNotice}</Text>}<View style={styles.row}><Action label={c.mutedByMe?'Unmute':'Mute'} secondary disabled={busy} onPress={()=>setSafetyTarget('mute')}/><Action label={c.blockedByMe?'Unblock':'Block'} secondary disabled={busy} onPress={()=>setSafetyTarget('block')}/></View>{!!reportStatus&&<Text accessibilityLiveRegion="polite" style={styles.muted}>{reportStatus}</Text>}{c.canSend&&<View style={styles.activityRow}><Text style={styles.muted}>Share chat activity</Text><Switch accessibilityLabel="Share chat activity" value={shareActivity} onValueChange={value=>{setShareActivity(value);lastTyping.current=0}}/></View>}</View>
   {c.status==='PENDING'?<View style={styles.content}><Text style={styles.title}>{c.requesterId===userId?'Waiting for acceptance':'Message request'}</Text>{c.requesterId!==userId&&<View style={styles.row}><Action label="Accept" disabled={busy} onPress={()=>void mutate({action:'accept',id})}/><Action label="Decline" secondary disabled={busy} onPress={()=>void mutate({action:'decline',id})}/></View>}</View>:c.status==='DECLINED'?<View style={styles.content}><Text style={styles.muted}>This request was declined.</Text></View>:<>
   <FlatList inverted contentContainerStyle={styles.content} data={messages} keyExtractor={m=>m.id} keyboardShouldPersistTaps="handled" ListEmptyComponent={<Text style={styles.muted}>Start the conversation.</Text>} ListFooterComponent={cursor?<Action label="Load older messages" secondary disabled={busy} onPress={()=>void more()}/>:null} renderItem={({item})=>{const mine=item.senderId===userId;return <View style={[styles.bubble,mine&&styles.mine]}><Text style={[styles.message,mine&&styles.mineText]}>{item.removedAt?'Message removed by moderation':item.body}</Text>{!item.removedAt&&item.attachment?.mime.startsWith('audio/')&&<ChatVoicePlayer key={userId+':'+item.id} messageId={item.id} userId={userId} mime={item.attachment.mime}/>}{!item.removedAt&&item.attachment&&!item.attachment.mime.startsWith('audio/')&&<Pressable accessibilityRole="button" disabled={busy} style={{padding:8,borderWidth:1,borderColor:mine?'#fff':mobileDesign.border,borderRadius:10,marginTop:6}} onPress={()=>void openFile(item.id)}><Text style={[styles.message,mine&&styles.mineText]}>{item.attachment.filename}</Text><Text style={[styles.timestamp,mine&&styles.mineText]}>{Math.ceil(item.attachment.size/1024)} KB · Open file</Text></Pressable>}{!mine&&!item.removedAt&&<Pressable accessibilityRole="button" disabled={busy||reported.includes(item.id)} style={{minHeight:32,justifyContent:'center'}} onPress={()=>{setReportTarget(item.id);setReportReason('SPAM');setReportDetails('');setError('')}}><Text style={styles.link}>{reported.includes(item.id)?'Reported':'Report message'}</Text></Pressable>}<Text style={[styles.timestamp,mine&&styles.mineText]}>{formatDateTime(item.createdAt)}{mine?(item.readAt?' · Read':' · Sent'):''}</Text></View>}}/>
-  {c.canSend?<View style={{backgroundColor:'#fff'}}>{attachmentEnabled&&!file&&<View style={{paddingHorizontal:12,paddingTop:6}}><ChatVoiceRecorder disabled={busy} onFile={recorded=>{setFile(recorded);setError('')}} onError={setError}/></View>}{file&&<View style={{padding:10,flexDirection:'row',alignItems:'center',gap:8}}><Text style={[styles.muted,{flex:1}]}>{file.name} · {Math.ceil((file.size??0)/1024)} KB</Text><Action secondary label="Remove" disabled={busy} onPress={()=>{if(pendingFile.current){setError('Retry the pending attachment before removing it.');return}const uri=file.uri;setFile(null);void import('expo-file-system').then(fs=>{if(fs.cacheDirectory&&uri.startsWith(fs.cacheDirectory))return fs.deleteAsync(uri,{idempotent:true})}).catch(()=>{})}}/></View>}<View style={styles.composer}>{attachmentEnabled&&<Action secondary label="+" disabled={busy||!!file||!!pending.current} onPress={()=>void pickFile()}/>}<TextInput accessibilityLabel="Message" style={[styles.input,{flex:1,maxHeight:100}]} multiline value={draft} onChangeText={value=>{setDraft(value);lastTyping.current=value.trim()?Date.now():0}} placeholder="Write a message…" placeholderTextColor={mobileDesign.inkMuted} maxLength={4000}/><Action label="Send" disabled={busy||(!file&&!draft.trim())} onPress={()=>void send()}/></View></View>:<View style={styles.content}><Text style={styles.muted}>Sending is unavailable for this contact.</Text></View>}
+  {c.canSend?<View style={{backgroundColor:'#fff'}}>{attachmentEnabled&&!file&&<View style={{paddingHorizontal:12,paddingTop:6}}><ChatVoiceRecorder disabled={busy||!!queued||!journalReady} onFile={recorded=>{setFile(recorded);setError('')}} onError={setError}/></View>}{file&&<View style={{padding:10,flexDirection:'row',alignItems:'center',gap:8}}><Text style={[styles.muted,{flex:1}]}>{file.name} · {Math.ceil((file.size??0)/1024)} KB</Text><Action secondary label="Remove" disabled={busy} onPress={()=>{if(pendingFile.current){setError('Retry the pending attachment before removing it.');return}const uri=file.uri;setFile(null);void import('expo-file-system').then(fs=>{if(fs.cacheDirectory&&uri.startsWith(fs.cacheDirectory))return fs.deleteAsync(uri,{idempotent:true})}).catch(()=>{})}}/></View>}<View style={styles.composer}>{attachmentEnabled&&<Action secondary label="+" disabled={busy||!!file||!!queued||!journalReady} onPress={()=>void pickFile()}/>}<TextInput editable={!queued&&journalReady} accessibilityLabel="Message" style={[styles.input,{flex:1,maxHeight:100}]} multiline value={draft} onChangeText={value=>{setDraft(value);lastTyping.current=value.trim()?Date.now():0}} placeholder="Write a message…" placeholderTextColor={mobileDesign.inkMuted} maxLength={4000}/><Action label="Send" disabled={busy||!!queued||!journalReady||(!file&&!draft.trim())} onPress={()=>void send()}/></View></View>:<View style={styles.content}><Text style={styles.muted}>Sending is unavailable for this contact.</Text></View>}
   </>}
   <Modal visible={!!safetyTarget} transparent animationType="fade" onRequestClose={()=>setSafetyTarget(null)}>
    <View style={styles.reportBackdrop}><View style={styles.reportCard} accessibilityViewIsModal><Text style={styles.heading}>{safetyTarget==='block'?(c.blockedByMe?'Unblock contact?':'Block contact?'):(c.mutedByMe?'Unmute contact?':'Mute contact?')}</Text><Text style={styles.muted}>{safetyTarget==='block'?(c.blockedByMe?'Remove your block. The other person may still have blocked you.':'Stop new private messages and chat activity. Existing history remains available.'):(c.mutedByMe?'Resume eligible message alerts.':'Stop new message alerts without blocking messages.')}</Text><View style={styles.row}><Action label="Cancel" secondary onPress={()=>setSafetyTarget(null)}/><Action label="Confirm" disabled={busy} onPress={()=>void toggleSafety()}/></View></View></View>
