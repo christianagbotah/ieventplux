@@ -30,3 +30,14 @@ test('request decision policy preserves terminal states and role boundaries',asy
  expect(decisionAllowed('buyer','REQUESTED','ACKNOWLEDGED')).toBe(false)
  expect(decisionAllowed('seller','REQUESTED','WITHDRAWN')).toBe(false)
 })
+
+test('purchase notifications are truthful and do not imply paid orders',async()=>{
+ const {requestNotification}=await import('./marketplace-request-policy')
+ for(const status of ['REQUESTED','ACKNOWLEDGED','DECLINED','WITHDRAWN'] as const){
+  const notice=requestNotification(status)
+  expect(notice.type).toBe('MARKETPLACE_REQUEST')
+  expect(notice.title.length).toBeGreaterThan(0)
+ }
+ expect(requestNotification('ACKNOWLEDGED').body).toContain('No order has been confirmed')
+ expect(requestNotification('DECLINED').body).toContain('No payment')
+})
