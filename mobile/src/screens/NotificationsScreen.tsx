@@ -1,5 +1,5 @@
 import {useCallback,useRef,useState} from 'react'
-import {ActivityIndicator,FlatList,Pressable,RefreshControl,StyleSheet,Text,View} from 'react-native'
+import {ActivityIndicator,AppState,FlatList,Pressable,RefreshControl,StyleSheet,Text,View} from 'react-native'
 import {useFocusEffect} from '@react-navigation/native'
 import {api,ApiClientError,formatDateTime,type NotificationItem} from '../api/client'
 import {useSession} from '../store/session'
@@ -27,6 +27,7 @@ function Inbox({navigation}:NotificationsScreenProps){
  const [busy,setBusy]=useState(false)
  const [error,setError]=useState('')
  const revision=useRef(0)
+ const pageRef=useRef(1)
  const locked=useRef(false)
  const load=useCallback(async(next=1)=>{
   if(locked.current)return
@@ -37,7 +38,7 @@ function Inbox({navigation}:NotificationsScreenProps){
    const result=await api.notifications.list(next)
    if(current!==revision.current)return
    setRows(previous=>next===1?result.items:mergeAlerts(previous,result.items))
-   setUnread(result.unread);setPage(next);setMore(result.hasMore??result.items.length===20);setLoaded(true)
+   setUnread(result.unread);setPage(next);pageRef.current=next;setMore(result.hasMore??result.items.length===20);setLoaded(true)
   }catch(err){
    if(current===revision.current)setError(errorMessage(err))
   }finally{
@@ -46,7 +47,8 @@ function Inbox({navigation}:NotificationsScreenProps){
  },[])
  useFocusEffect(useCallback(()=>{
   locked.current=false;setBusy(false);void load()
-  return()=>{revision.current++;locked.current=false}
+  const timer=setInterval(()=>{if(AppState.currentState==='active'&&pageRef.current===1&&!locked.current)void load()},8000)
+  return()=>{clearInterval(timer);revision.current++;locked.current=false}
  },[load]))
  const mark=async(row?:NotificationItem)=>{
   if(locked.current)return
