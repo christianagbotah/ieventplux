@@ -116,6 +116,7 @@ function AppRoutes() {
         headerStyle: { backgroundColor: theme.colors.card },
         headerTintColor: theme.colors.primaryDark,
         headerShadowVisible: false,
+        statusBarStyle: 'dark',
         headerTitleStyle: { fontWeight: '800', color: theme.colors.text, fontSize: 18 },
         contentStyle: { backgroundColor: theme.colors.bg },
       }}
@@ -143,7 +144,7 @@ function AppRoutes() {
       <Stack.Screen name="Services" component={ServicesScreen} options={{ title: 'Local services' }} />
       <Stack.Screen name="Marketplace" component={MarketplaceScreen} options={{ title: 'Shop & discover' }} />
       <Stack.Screen name="MarketplaceStore" component={MarketplaceStoreScreen} options={{ title: 'Storefront' }} />
-      <Stack.Screen name="NativeMeeting" component={NativeMeetingLoader} options={{ headerShown: false, gestureEnabled: false }} />
+      <Stack.Screen name="NativeMeeting" component={NativeMeetingLoader} options={{ headerShown: false, gestureEnabled: false, statusBarStyle: 'light' }} />
     </Stack.Navigator>
   )
 }

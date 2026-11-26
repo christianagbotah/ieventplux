@@ -1511,3 +1511,36 @@ body {
   .ievx-public .ievx-home-hero .ievx-hero-action { flex: 1 1 135px; white-space: normal; text-align: center; }
   .ievx-public .ievx-home-hero .ievx-hero-quick { margin-right: 0; padding-right: 0; }
 }
+
+/* Mobile and tablet discovery: search first, compact editorial feature.
+   Keep the desktop feature panel and all real event/filter actions. */
+@media (max-width: 1023px) {
+  .ievx-public .ievx-home-hero .ievx-hero-panel {
+    padding: 18px;
+    border-radius: 18px;
+  }
+  .ievx-public .ievx-home-hero .ievx-hero-kicker,
+  .ievx-public .ievx-home-hero .ievx-hero-desktop-quick {
+    display: none;
+  }
+  .ievx-public .ievx-home-hero .ievx-hero-title {
+    font-size: clamp(24px, 4vw, 32px);
+    line-height: 1.25;
+    letter-spacing: -.035em;
+  }
+  .ievx-public .ievx-home-hero .ievx-hero-action {
+    min-height: 44px;
+    padding: 8px 12px;
+    font-size: .875rem;
+    flex: 1 1 125px;
+    white-space: normal;
+    text-align: center;
+  }
+  .ievx-hero-cta { margin-top: 12px; }
+  .ievx-hero-story-controls { margin-top: 6px; }
+  .ievx-public .ievx-home-hero .ievx-hero-copy { display: none; }
+  .ievx-public .ievx-event-card h3 { font-size: 1.0625rem; line-height: 1.4; }
+  .ievx-public .ievx-discovery-search { min-width: 0; }
+  .ievx-public .ievx-real-activity > button { display: none; }
+  .ievx-public .ievx-home-hero .ievx-hero-action { align-self: stretch; }
+}

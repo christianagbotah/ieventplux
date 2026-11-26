@@ -249,7 +249,7 @@ export default function AppPortal() {
             </span>
           </button>
 
-          <nav className={`hidden items-center gap-1 md:flex ${workspaceMode ? 'md:hidden' : ''}`} aria-label="Primary">
+          <nav className={`hidden items-center gap-1 lg:flex ${workspaceMode ? 'lg:hidden' : ''}`} aria-label="Primary">
             {NAV.map((item) => (
               <button
                 key={item.path}
@@ -262,16 +262,14 @@ export default function AppPortal() {
                 }`}
               >
                 <item.icon className="h-4 w-4" aria-hidden />
-                {/* md–lg band runs icon-only (round 18): full pill labels + the
-                    account group overflowed 768px tablets by ~49px; labels
-                    return at lg where the row has room again. */}
+                {/* Tablets use the bottom navigation; desktop keeps compact icons until XL. */}
                 <span className="hidden xl:inline">{item.label}</span>
               </button>
             ))}
           </nav>
 
           <form
-            className={`ml-auto hidden max-w-xs flex-1 items-center ${workspaceMode || ['', 'search'].includes(route.segments[0] ?? '') ? '' : 'lg:flex'}`}
+            className={`ml-auto hidden max-w-xs flex-1 items-center ${workspaceMode || ['', 'search'].includes(route.segments[0] ?? '') ? '' : 'xl:flex'}`}
             role="search"
             onSubmit={(e) => {
               e.preventDefault()
@@ -300,23 +298,24 @@ export default function AppPortal() {
               <Compass className="size-4" aria-hidden /> Browse events
             </button>
           )}
-          <div className={`ml-auto flex shrink-0 items-center gap-1 lg:gap-1.5 ${workspaceMode ? 'md:ml-2' : 'lg:ml-0'}`}>
-            <Button variant="ghost" size="icon" className="rounded-full lg:hidden" aria-label="Search events" onClick={() => navigate('/search')}>
+          <div className={`ml-auto flex shrink-0 items-center gap-1 lg:gap-1.5 ${workspaceMode ? 'md:ml-2' : ''}`}>
+            <Button variant="ghost" size="icon" className="rounded-full xl:hidden" aria-label="Search events" onClick={() => navigate('/search')}>
               <Search className="h-5 w-5" aria-hidden />
             </Button>
             <Button
               variant="ghost"
               size="icon"
-              className="hidden rounded-lg sm:inline-flex"
+              className="hidden rounded-lg lg:inline-flex"
               aria-label="Open command palette (Ctrl+K)"
               title="Command palette (Ctrl+K)"
               onClick={() => setPaletteOpen(true)}
             >
               <CommandIcon className="h-5 w-5" aria-hidden />
             </Button>
-            <Button variant="ghost" size="icon" className="rounded-full sm:hidden" aria-label="Watch live events" onClick={() => navigate('/live')}>
+            <Button variant="ghost" size="icon" className="rounded-full lg:hidden" aria-label="Watch live events" onClick={() => navigate('/live')}>
               <Radio className="size-5" aria-hidden />
             </Button>
+            <Button variant="ghost" size="icon" className="hidden rounded-full sm:inline-flex lg:hidden" aria-label="Local services" onClick={() => navigate('/services')}><Compass className="size-5" aria-hidden /></Button>
             <div className="hidden sm:block"><ThemeToggle /></div>
             {user ? (
               <>
@@ -404,7 +403,7 @@ export default function AppPortal() {
         <ConnectionStatus />
       </header>
 
-      <main id="main" tabIndex={-1} ref={viewRef} className={`min-w-0 flex-1 outline-none ${workspaceMode ? 'ievx-workspace pb-6 md:h-[calc(100dvh-4rem)] md:min-h-0 md:flex-none md:overflow-hidden md:pb-0' : 'ievx-public pb-24 md:pb-10'}`}>
+      <main id="main" tabIndex={-1} ref={viewRef} className={`min-w-0 flex-1 outline-none ${workspaceMode ? 'ievx-workspace pb-6 md:h-[calc(100dvh-4rem)] md:min-h-0 md:flex-none md:overflow-hidden md:pb-0' : 'ievx-public pb-24 lg:pb-10'}`}>
         <Suspense fallback={<ViewFallback />}>
           <div key={route.path} className={`ievx-view-enter ${workspaceMode ? 'md:h-full' : ''}`}>{view}</div>
         </Suspense>
@@ -414,7 +413,7 @@ export default function AppPortal() {
           R19b: pr-20 clears the fixed voice-concierge FAB (56px + right-4 + gap = 80px) — at page bottom it
           overlapped and blocked the right edge of the footer link row. R20: the dev-only Effects Studio
           footer link was removed with its menu entries; the /effects route stays reachable by direct URL. */}
-      <footer className={`mt-auto border-t border-border/60 bg-card pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0 ${workspaceMode ? 'hidden' : ''}`}>
+      <footer className={`mt-auto border-t border-border/60 bg-card pb-[calc(4rem+env(safe-area-inset-bottom))] lg:pb-0 ${workspaceMode ? 'hidden' : ''}`}>
         <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-6 pr-20 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
           <p>© {new Date().getFullYear()} iEventPlux · Lightworld Technologies Ltd. · Accra, Ghana</p>
           <p className="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -426,8 +425,8 @@ export default function AppPortal() {
       </footer>
 
       {/* Mobile bottom navigation */}
-      <nav className={`${workspaceMode ? 'hidden' : 'fixed'} inset-x-0 bottom-0 z-30 border-t border-border/60 ievx-glass md:hidden`} aria-label="Mobile primary">
-        <div className="mx-auto flex min-h-16 max-w-lg items-center justify-around px-2 py-1 pb-[calc(0.25rem+env(safe-area-inset-bottom))]">
+      <nav className={`${workspaceMode ? 'hidden' : 'fixed'} inset-x-0 bottom-0 z-30 border-t border-border bg-card shadow-[0_-3px_14px_rgb(16_35_51_/_0.06)] lg:hidden`} aria-label="Mobile primary">
+        <div className="mx-auto flex min-h-16 max-w-lg items-center justify-around px-0 min-[360px]:px-2 py-1 pb-[calc(0.25rem+env(safe-area-inset-bottom))]">
           {MOBILE_NAV.map((item) => {
             const active = item.path.startsWith('/me')
               ? route.segments[0] === 'me' && (route.query.get('tab') ?? 'tickets') === item.tab
@@ -439,12 +438,12 @@ export default function AppPortal() {
                 onClick={() => navigate(item.path)}
                 aria-current={active ? 'page' : undefined}
                 aria-label={item.label}
-                className={`flex min-h-12 min-w-0 flex-1 flex-col items-center justify-center gap-1 ievx-mobile-nav-item rounded-2xl px-1 py-1.5 text-xs font-semibold transition-colors ievx-press ${
+                className={`flex min-h-12 min-w-0 flex-1 flex-col items-center justify-center gap-1 ievx-mobile-nav-item rounded-xl px-0 min-[360px]:px-0.5 py-1.5 text-[10px] font-semibold transition-colors min-[360px]:text-[11px] sm:text-xs ievx-press ${
                   active ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
                 }`}
               >
                 <item.icon className="h-5 w-5" aria-hidden />
-                <span className="truncate">{item.label}</span>
+                <span className="max-w-full truncate">{item.label}</span>
               </button>
             )
           })}

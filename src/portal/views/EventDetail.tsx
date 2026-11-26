@@ -432,13 +432,13 @@ export default function EventDetail({ slug }: { slug: string }) {
 
       <div className="relative">
         <figure className="relative mx-4 overflow-hidden rounded-2xl sm:mx-6 lg:mx-8">
-          <div className="relative h-52 w-full overflow-hidden sm:h-72 md:h-[380px]">
+          <div className="relative aspect-[16/9] w-full overflow-hidden sm:aspect-auto sm:h-72 md:h-[380px]">
             {event.coverImageUrl ? (
               <img src={event.coverImageUrl} alt={`${event.title} artwork`} className="h-full w-full object-cover" />
             ) : (
               <div className="h-full w-full bg-gradient-to-br from-primary/20 to-accent/20" />
             )}
-            <div className="absolute inset-0 z-10 bg-gradient-to-t from-background via-background/20 to-transparent" />
+            <div className="absolute inset-0 z-10 hidden bg-gradient-to-t from-background via-background/20 to-transparent sm:block" />
             {statusBadge && <span className={`absolute left-4 top-4 z-20 rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide shadow ${statusBadge.className}`}>{statusBadge.label}</span>}
             {event.visibility !== 'PUBLIC' && (
               <span className="absolute right-4 top-4 z-20 rounded-full bg-black/55 px-3 py-1 text-xs font-semibold text-white backdrop-blur">{event.visibility === 'UNLISTED' ? 'Unlisted (link only)' : 'Invitation only'}</span>
@@ -447,16 +447,16 @@ export default function EventDetail({ slug }: { slug: string }) {
         </figure>
 
         {/* relative + z-10 keeps the title above the ken-burns image's compositing layer */}
-        <div className="relative z-10 mx-auto -mt-16 max-w-5xl px-4">
+        <div className="relative z-10 mx-auto mt-4 max-w-5xl px-4 sm:-mt-16">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="min-w-0">
               <div className="mb-2 flex flex-wrap items-center gap-2">
                 <Badge variant="secondary" className="capitalize">{humanize(event.categorySlug)}</Badge>
                 <Badge variant="outline" className="gap-1 capitalize">{event.mode === 'VIRTUAL' ? <Monitor className="h-3 w-3" /> : <MapPin className="h-3 w-3" />}{humanize(event.mode)}</Badge>
               </div>
-              <h1 className="max-w-3xl text-[1.9rem] font-bold leading-tight tracking-tight sm:text-4xl">{event.title}</h1>
+              <h1 className="max-w-3xl text-[1.625rem] font-bold leading-tight tracking-tight sm:text-4xl">{event.title}</h1>
               {event.summary && (
-                <p className="mt-3 max-w-2xl text-base leading-relaxed text-muted-foreground">{event.summary}</p>
+                <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base">{event.summary}</p>
               )}
               <button className="mt-3 flex items-center gap-2 text-sm font-medium text-primary" onClick={() => navigate(`/org/${event.org.slug}`)}>
                 <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10"><Church className="h-4 w-4 text-primary" aria-hidden /></span>

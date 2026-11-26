@@ -21,21 +21,27 @@ async function main(){
    const search=page.locator('#browse input[type=search]')
    await search.waitFor({state:'visible',timeout:45000})
    await page.locator('.ievx-event-card').first().waitFor({state:'visible',timeout:45000})
+   await page.screenshot({path:path.join(output,'discover-'+width+'.png'),fullPage:true,animations:'disabled'})
    const check=await page.evaluate(()=>{
     const input=document.querySelector('#browse input[type=search]')
     const card=document.querySelector('.ievx-event-card h3')
-    return {overflow:document.documentElement.scrollWidth-innerWidth,inputFont:parseFloat(getComputedStyle(input).fontSize),inputHeight:input.getBoundingClientRect().height,titleFont:parseFloat(getComputedStyle(card).fontSize)}
+    const nav=document.querySelector('nav[aria-label="Mobile primary"]')
+    const labels=nav&&getComputedStyle(nav).display!=='none'?Array.from(nav.querySelectorAll('button span')).map(el=>({text:el.textContent,overflow:el.scrollWidth-el.clientWidth})):[]
+    const overflow=document.documentElement.scrollWidth-innerWidth
+    const offenders=overflow>2?Array.from(document.querySelectorAll('body *')).filter(el=>{const r=el.getBoundingClientRect();return r.width>0&&r.right>innerWidth+2&&getComputedStyle(el).position!=='fixed'}).slice(0,15).map(el=>({tag:el.tagName,classes:typeof el.className==='string'?el.className.slice(0,180):'',right:Math.round(el.getBoundingClientRect().right)})):[]
+    return {overflow,offenders,labels,inputFont:parseFloat(getComputedStyle(input).fontSize),inputHeight:input.getBoundingClientRect().height,inputTop:input.getBoundingClientRect().top,titleFont:parseFloat(getComputedStyle(card).fontSize)}
    })
-   assert(check.overflow<=2,'Discovery viewport overflow '+width+': '+check.overflow)
+   assert(check.overflow<=2,'Discovery viewport overflow '+width+': '+check.overflow+' '+JSON.stringify(check.offenders))
    assert(check.inputFont>=16,'Search font too small '+width)
    assert(check.inputHeight>=48,'Search control too small '+width)
-   assert(check.titleFont>=18,'Event card title too small '+width)
-   await page.screenshot({path:path.join(output,'discover-'+width+'.png'),fullPage:true,animations:'disabled'})
+   assert(check.inputTop<180,'Search not near the top of viewport '+width+': '+check.inputTop)
+   assert(check.labels.every(label=>label.overflow<=1),'Mobile nav label clipped '+width+': '+JSON.stringify(check.labels))
+   assert(check.titleFont>=(width<1024?17:18),'Event card title too small '+width)
    await page.goto(base+'/#/event/'+encodeURIComponent(event.slug),{waitUntil:'domcontentloaded'})
    await page.getByRole('heading',{level:1,name:event.title,exact:true}).waitFor({state:'visible',timeout:45000})
    const detail=await page.evaluate(()=>({overflow:document.documentElement.scrollWidth-innerWidth,titleSize:parseFloat(getComputedStyle(document.querySelector('h1')).fontSize)}))
    assert(detail.overflow<=2,'Event detail viewport overflow '+width+': '+detail.overflow)
-   assert(detail.titleSize>=28,'Event heading too small '+width)
+   assert(detail.titleSize>=(width<640?26:28),'Event heading too small '+width)
    await page.screenshot({path:path.join(output,'event-'+width+'.png'),fullPage:true,animations:'disabled'})
    console.log('PASS clarity viewport '+width,check,detail)
    await page.close()
