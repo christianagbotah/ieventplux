@@ -21,16 +21,18 @@ async function main(){
    const search=page.locator('#browse input[type=search]')
    await search.waitFor({state:'visible',timeout:45000})
    await page.locator('.ievx-event-card').first().waitFor({state:'visible',timeout:45000})
+   await page.screenshot({path:path.join(output,'discover-'+width+'.png'),fullPage:true,animations:'disabled'})
    const check=await page.evaluate(()=>{
     const input=document.querySelector('#browse input[type=search]')
     const card=document.querySelector('.ievx-event-card h3')
-    return {overflow:document.documentElement.scrollWidth-innerWidth,inputFont:parseFloat(getComputedStyle(input).fontSize),inputHeight:input.getBoundingClientRect().height,titleFont:parseFloat(getComputedStyle(card).fontSize)}
+    const overflow=document.documentElement.scrollWidth-innerWidth
+    const offenders=overflow>2?Array.from(document.querySelectorAll('body *')).filter(el=>{const r=el.getBoundingClientRect();return r.width>0&&r.right>innerWidth+2&&getComputedStyle(el).position!=='fixed'}).slice(0,15).map(el=>({tag:el.tagName,classes:typeof el.className==='string'?el.className.slice(0,180):'',right:Math.round(el.getBoundingClientRect().right)})):[]
+    return {overflow,offenders,inputFont:parseFloat(getComputedStyle(input).fontSize),inputHeight:input.getBoundingClientRect().height,titleFont:parseFloat(getComputedStyle(card).fontSize)}
    })
-   assert(check.overflow<=2,'Discovery viewport overflow '+width+': '+check.overflow)
+   assert(check.overflow<=2,'Discovery viewport overflow '+width+': '+check.overflow+' '+JSON.stringify(check.offenders))
    assert(check.inputFont>=16,'Search font too small '+width)
    assert(check.inputHeight>=48,'Search control too small '+width)
    assert(check.titleFont>=18,'Event card title too small '+width)
-   await page.screenshot({path:path.join(output,'discover-'+width+'.png'),fullPage:true,animations:'disabled'})
    await page.goto(base+'/#/event/'+encodeURIComponent(event.slug),{waitUntil:'domcontentloaded'})
    await page.getByRole('heading',{level:1,name:event.title,exact:true}).waitFor({state:'visible',timeout:45000})
    const detail=await page.evaluate(()=>({overflow:document.documentElement.scrollWidth-innerWidth,titleSize:parseFloat(getComputedStyle(document.querySelector('h1')).fontSize)}))
