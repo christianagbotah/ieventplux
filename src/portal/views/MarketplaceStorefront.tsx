@@ -1,6 +1,7 @@
 'use client'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ArrowLeft, BadgeCheck, Box, Camera, Pencil, CheckCircle2, Globe, Loader2, Package, Plus, ShieldAlert, Store, Truck } from 'lucide-react'
+import { StoreLocationFields,emptyStoreLocation,locationPayload } from '../components/StoreLocationFields'
 import { SubmissionFeedback } from '@/components/ui/submission-feedback'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -22,7 +23,7 @@ import {MarketplacePaymentSettings} from '../components/MarketplacePaymentSettin
 
 type Variant = {id:string;sku:string;title:string;priceMinor:number;available:number;currency:string;stockOnHand?:number;reserved?:number;active:boolean}
 type Product = {id:string;slug:string;name:string;shortDesc:string|null;description:string;brand:string|null;category:string;productKind:string;specifications:Record<string,string>;images:string[];status:string;variants:Variant[]}
-type Shop = {id:string;slug:string;name:string;tagline:string|null;description:string|null;category:string;status:string;verificationState:string;logoUrl:string|null;coverUrl:string|null;website:string|null;country:string;region?:string|null;city:string|null;currency:string}
+type Shop = {id:string;slug:string;name:string;tagline:string|null;description:string|null;category:string;status:string;verificationState:string;logoUrl:string|null;coverUrl:string|null;website:string|null;country:string;region?:string|null;city:string|null;currency:string;gpsAddress?:string|null;latitude?:number|null;longitude?:number|null}
 type Detail = {store:Shop;products:Product[];canManage:boolean;checkoutEnabled:false}
 const price=(v:number)=>'₵'+(v/100).toLocaleString('en-GH',{minimumFractionDigits:2,maximumFractionDigits:2})
 function toMinor(raw:string){
@@ -44,6 +45,10 @@ export default function MarketplaceStorefront({slug}:{slug:string}) {
  const [branding,setBranding]=useState<'logo'|'cover'|null>(null)
  const [brandError,setBrandError]=useState('')
  const [brandAttempt,setBrandAttempt]=useState(0)
+ const [locationOpen,setLocationOpen]=useState(false)
+ const [location,setLocation]=useState(emptyStoreLocation)
+ const [locationError,setLocationError]=useState('')
+ const [locationAttempt,setLocationAttempt]=useState(0)
  const logoInput=useRef<HTMLInputElement>(null)
  const coverInput=useRef<HTMLInputElement>(null)
  const [productOpen,setProductOpen]=useState(false)
@@ -118,6 +123,15 @@ export default function MarketplaceStorefront({slug}:{slug:string}) {
    }finally{setBusy(false)}
  }
 
+ async function saveLocation(){
+   if(busy||!data?.canManage)return
+   setBusy(true);setLocationError('')
+   try{
+     await api.patch('/marketplace/stores/'+encodeURIComponent(slug),locationPayload(location))
+     setLocationOpen(false);await load();toast({title:'Store location saved'})
+   }catch(e){const message=e instanceof Error?e.message:'Location could not be saved.';setLocationError(message);setLocationAttempt(n=>n+1);toast({title:'Location not saved',description:message,variant:'destructive',duration:10000})}
+   finally{setBusy(false)}
+ }
  async function uploadBrand(file:File|undefined,purpose:'logo'|'cover'){
    if(!file||!data?.canManage||branding||busy)return
    setBranding(purpose);setBrandError('')
@@ -248,6 +262,7 @@ export default function MarketplaceStorefront({slug}:{slug:string}) {
       </div>
       {data.canManage&&<div className="col-span-2 grid grid-cols-2 gap-2 lg:col-span-1 lg:flex lg:flex-wrap lg:pt-5">
         <Button variant="outline" onClick={()=>navigate('/seller')}>Seller studio</Button>
+        <Button variant="outline" disabled={busy||data.store.status==='SUSPENDED'} onClick={()=>{setLocation({gpsAddress:data.store.gpsAddress??'',latitude:data.store.latitude?.toString()??'',longitude:data.store.longitude?.toString()??''});setLocationError('');setLocationOpen(true)}}>Edit location</Button>
         <Button disabled={busy} onClick={()=>void setStoreStatus(data.store.status==='ACTIVE'?'DRAFT':'ACTIVE')}>
           {data.store.status==='ACTIVE'?'Unpublish store':'Publish store'}
         </Button>
@@ -333,6 +348,13 @@ export default function MarketplaceStorefront({slug}:{slug:string}) {
       <CheckCircle2 className="mr-1 inline size-4 text-primary"/> Product listings show seller-provided descriptions and inventory. Platform checkout, order delivery and refunds are not yet enabled for independent stores. Unverified sellers are not represented as verified.
     </p>
   </div>
+  <Dialog open={locationOpen} onOpenChange={open=>{if(!busy)setLocationOpen(open)}}>
+    <DialogContent className="flex max-h-[calc(100dvh-1.5rem)] max-w-lg flex-col gap-3 overflow-hidden rounded-2xl">
+      <DialogHeader><DialogTitle>Store location</DialogTitle></DialogHeader>
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-1 py-1"><SubmissionFeedback message={locationError} attempt={locationAttempt}/><StoreLocationFields value={location} onChange={setLocation} disabled={busy}/></div>
+      <DialogFooter><Button variant="outline" disabled={busy} onClick={()=>setLocationOpen(false)}>Cancel</Button><Button disabled={busy} onClick={()=>void saveLocation()}>{busy?'Saving…':'Save location'}</Button></DialogFooter>
+    </DialogContent>
+  </Dialog>
   <Dialog open={productOpen} onOpenChange={setProductOpen}>
     <DialogContent className="flex max-h-[calc(100dvh-1.5rem)] max-w-2xl flex-col gap-3 overflow-hidden rounded-2xl" onOpenAutoFocus={e=>e.preventDefault()}>
       <DialogHeader><DialogTitle>Add a new product</DialogTitle></DialogHeader>
