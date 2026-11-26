@@ -3,6 +3,9 @@
  * ONLY against disposable seeded GitHub CI PostgreSQL, never live commerce.
  */
 import { randomUUID } from 'node:crypto'
+import {unlink} from 'node:fs/promises'
+import sharp from 'sharp'
+import {mediaFilePath,isPublicUploadName} from '../src/server/media-storage'
 import { db } from '../src/lib/db'
 import { recordPlannedPaymentIntent } from '../src/server/services/platform-payment-intents'
 
@@ -34,6 +37,7 @@ async function send(method:string,path:string,cookie?:string,body?:unknown){
 
 let storeId:string|undefined
 let intentSource:string|undefined
+const testMedia:string[]=[]
 try{
  const owner=await signIn('pastor@lightworld.dev')
  const stranger=await signIn('ama@example.dev')
@@ -64,6 +68,27 @@ try{
   assert(!near.data.stores.some((x:Row)=>x.slug===hidden.slug)&&near.data.stores.every((x:Row)=>x.latitude===undefined&&x.longitude===undefined),'nearby excludes drafts and exact coordinates')
   assert((await send('POST',nearbyPath,undefined,{latitude:5.6})).status===400,'incomplete search origin rejected')
  }finally{await db.marketplaceStore.deleteMany({where:{id:{in:[far.id,hidden.id]}}})}
+ const uploadBrand=async(cookie:string,purpose:string)=>{
+  const bytes=await sharp({create:{width:32,height:32,channels:3,background:'#09776d'}}).png().toBuffer()
+  const form=new FormData()
+  form.append('file',new Blob([Uint8Array.from(bytes)],{type:'image/png'}),'synthetic.png')
+  form.append('purpose',purpose)
+  const response=await fetch(BASE+'/marketplace/stores/'+slug+'/images',{method:'POST',headers:{Cookie:cookie},body:form})
+  const data=await response.json()
+  if(response.ok&&typeof data.url==='string'&&data.url.startsWith('/uploads/')){
+    const filename=data.url.slice('/uploads/'.length)
+    if(isPublicUploadName(filename))testMedia.push(filename)
+  }
+  return {status:response.status,data}
+ }
+ assert((await uploadBrand(stranger,'logo')).status===403,'non-owner cannot upload store branding')
+ const logo=await uploadBrand(owner,'logo'),cover=await uploadBrand(owner,'cover')
+ assert(logo.status===201&&cover.status===201&&logo.data.url!==cover.data.url,'owner uploads distinct logo and banner')
+ const branded=await send('GET','/marketplace/stores/'+slug,owner)
+ assert(branded.data.store.logoUrl===logo.data.url&&branded.data.store.coverUrl===cover.data.url,'branding persists on catalogue')
+ assert((await send('PATCH','/marketplace/stores/'+slug,owner,{gpsAddress:'GA-123-4568'})).status===200,'location-only edit preserves branded store')
+ const brandedAgain=await send('GET','/marketplace/stores/'+slug)
+ assert(brandedAgain.data.store.logoUrl===logo.data.url&&brandedAgain.data.store.coverUrl===cover.data.url,'public storefront preserves branding after update')
  const settingsPath='/marketplace/stores/'+slug+'/payment-settings'
  const onboardingPath='/marketplace/stores/'+slug+'/settlement-onboarding'
  const pref={mobileMoney:true,card:true,cash:true,destination:'BANK'}
@@ -184,5 +209,6 @@ try{
    await db.marketplaceStore.delete({where:{id:storeId}})
    console.log('Synthetic seller and stock ledger deleted from disposable CI DB.')
  }
+ for(const filename of testMedia)await unlink(mediaFilePath(filename)).catch(()=>{})
  await db.$disconnect()
 }
