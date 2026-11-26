@@ -244,34 +244,34 @@ export default function MarketplaceStorefront({slug}:{slug:string}) {
   <p className="mt-2 text-sm text-muted-foreground">{error||'This store may be private or unavailable.'}</p>
   <Button className="mt-5" onClick={()=>navigate('/shop')}>Return to marketplace</Button>
  </div>
- return <div className="pb-28 sm:pb-16">
-  <div className="relative h-44 overflow-hidden bg-gradient-to-br from-emerald-950 via-emerald-800 to-slate-900 sm:h-56">
+ return <div className="space-y-0 px-4 pb-16 pt-4 sm:px-6 sm:pt-6">
+  <div className="relative h-36 overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-950 via-emerald-800 to-slate-900 sm:h-52">
     {data.store.coverUrl&&<img src={data.store.coverUrl} alt="" className="h-full w-full object-cover"/>}
     {data.canManage&&data.store.status!=='SUSPENDED'&&<><input ref={coverInput} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={e=>{void uploadBrand(e.target.files?.[0],'cover');e.target.value=''}}/><Button type="button" variant="secondary" size="sm" className="absolute right-4 top-4 gap-1 shadow" disabled={!!branding||busy} onClick={()=>coverInput.current?.click()}>{branding==='cover'?<Loader2 className="size-4 animate-spin"/>:<Camera className="size-4"/>} Edit banner</Button></>}
     <button type="button" onClick={()=>navigate('/shop')} className="absolute left-4 top-4 flex items-center gap-2 rounded-full bg-black/45 px-4 py-2 text-sm font-semibold text-white backdrop-blur-sm"><ArrowLeft className="size-4"/>Marketplace</button>
   </div>
-  <div className="mx-auto max-w-7xl space-y-8 px-4">
-    <div className="-mt-8 relative grid grid-cols-[auto_minmax(0,1fr)] items-start gap-3 sm:gap-4 lg:grid-cols-[auto_minmax(0,1fr)_auto]">
-      <div className="relative w-fit">{data.store.logoUrl?<img src={data.store.logoUrl} alt="" className="size-20 rounded-2xl border-4 border-background bg-white object-contain shadow-xl"/>:
+  <div className="space-y-5 px-1 sm:space-y-6">
+    <div className="relative grid grid-cols-[auto_minmax(0,1fr)] items-start gap-3 pt-3 sm:gap-4 lg:grid-cols-[auto_minmax(0,1fr)_auto]">
+      <div className="relative -mt-9 w-fit">{data.store.logoUrl?<img src={data.store.logoUrl} alt="" className="size-20 rounded-2xl border-4 border-background bg-white object-contain shadow-xl"/>:
         <div className="grid size-20 place-items-center rounded-2xl border-4 border-background bg-primary text-white shadow-xl"><Store className="size-8"/></div>}
       {data.canManage&&data.store.status!=='SUSPENDED'&&<><input ref={logoInput} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={e=>{void uploadBrand(e.target.files?.[0],'logo');e.target.value=''}}/><button type="button" aria-label="Edit store logo" title="Edit logo" className="absolute -bottom-1 -right-1 grid size-10 place-items-center rounded-full border-2 border-background bg-primary text-primary-foreground shadow" disabled={!!branding||busy} onClick={()=>logoInput.current?.click()}>{branding==='logo'?<Loader2 className="size-4 animate-spin"/>:<Pencil className="size-4"/>}</button></>}</div>
-      <div className="min-w-0 pt-9 sm:pt-5">
-        <div className="flex flex-wrap items-center gap-2"><h1 className="break-words text-2xl font-extrabold sm:text-3xl">{data.store.name}</h1>
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2"><h1 className="break-words text-xl font-bold sm:text-2xl">{data.store.name}</h1>
           {data.store.verificationState==='VERIFIED'&&<Badge variant="secondary" className="gap-1"><BadgeCheck className="size-3"/>Verified</Badge>}
           {data.canManage&&<Badge variant="outline">{data.store.status}</Badge>}
         </div>
         <p className="mt-1 text-sm text-muted-foreground">{data.store.tagline||data.store.category}</p>
         <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground"><Globe className="size-3.5"/>{[data.store.city,data.store.region,data.store.country==='GH'?'Ghana':data.store.country].filter(Boolean).join(', ')} <span>·</span> {data.store.category}</p>
       </div>
-      {data.canManage&&<div className="col-span-2 grid grid-cols-2 gap-2 lg:col-span-1 lg:flex lg:flex-wrap lg:pt-5">
-        <Button variant="outline" onClick={()=>navigate('/seller')}>Seller studio</Button>
-        <Button variant="outline" disabled={busy||data.store.status==='SUSPENDED'} onClick={()=>{setLocation({gpsAddress:data.store.gpsAddress??'',latitude:data.store.latitude?.toString()??'',longitude:data.store.longitude?.toString()??''});setLocationError('');setLocationOpen(true)}}>Edit location</Button>
-        <Button disabled={busy} onClick={()=>void setStoreStatus(data.store.status==='ACTIVE'?'DRAFT':'ACTIVE')}>
+      {data.canManage&&<div className="col-span-2 flex flex-wrap items-center gap-2 lg:col-span-1 lg:justify-end">
+        <Button size="sm" variant="outline" onClick={()=>navigate('/seller')}>Seller studio</Button>
+        <Button size="sm" variant="outline" disabled={busy||data.store.status==='SUSPENDED'} onClick={()=>{setLocation({gpsAddress:data.store.gpsAddress??'',latitude:data.store.latitude?.toString()??'',longitude:data.store.longitude?.toString()??''});setLocationError('');setLocationOpen(true)}}>Edit location</Button>
+        <Button size="sm" disabled={busy} onClick={()=>void setStoreStatus(data.store.status==='ACTIVE'?'DRAFT':'ACTIVE')}>
           {data.store.status==='ACTIVE'?'Unpublish store':'Publish store'}
         </Button>
       </div>}
     </div>
-    {data.canManage&&<><SubmissionFeedback message={brandError} attempt={brandAttempt}/><p className="text-xs text-muted-foreground">Brand images: square logo (512 × 512 recommended); banner (1600 × 600 recommended). JPG, PNG or WebP, up to 5 MB each. Images are public.</p></>}
+    {data.canManage&&<><SubmissionFeedback message={brandError} attempt={brandAttempt}/><p className="text-xs text-muted-foreground">Logo: 512 × 512 · Banner: 1600 × 600 · JPG, PNG or WebP, max 5 MB. Public images.</p></>}
     {data.store.description&&<p className="max-w-3xl whitespace-pre-wrap text-sm leading-7 text-muted-foreground">{data.store.description}</p>}
     <section className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
