@@ -567,6 +567,7 @@ export interface NotificationsResponse {
   unread: number
   page?: number
   pageSize?: number
+  hasMore?: boolean
 }
 
 // ──────────────────────────────────────────────────────────── error type ───
@@ -954,7 +955,9 @@ export const api = {
       request<{ message: BroadcastChatMessage }>('POST', `/broadcasts/${encodeURIComponent(id)}/chat`, { body }),
   },
   notifications: {
-    list: () => request<NotificationsResponse>('GET', '/notifications'),
+    list: (page=1) => request<NotificationsResponse>('GET','/notifications?page='+page+'&pageSize=20'),
+    mark: (id:string) => request<{ok:boolean}>('POST','/notifications',{id}),
+    markAll: () => request<{ok:boolean}>('POST','/notifications',{all:true}),
   },
 }
 

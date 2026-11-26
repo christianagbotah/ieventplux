@@ -96,7 +96,8 @@ const ORDER_STATUS_COLORS: Record<string, string> = {
 export default function MyTicketsScreen({ navigation, route }: MyTicketsScreenProps) {
   const { signOut } = useSession()
   const orderRef = route.params?.orderRef
-  const [segment, setSegment] = useState<Segment>('tickets')
+  const [segment, setSegment] = useState<Segment>(route.params?.segment ?? 'tickets')
+  useEffect(()=>{if(route.params?.segment)setSegment(route.params.segment)},[route.params?.segment])
   const [state, setState] = useState<ListState>({ status: 'loading' })
   const [orders, setOrders] = useState<OrdersState>({ status: 'loading' })
   const [refreshing, setRefreshing] = useState(false)
