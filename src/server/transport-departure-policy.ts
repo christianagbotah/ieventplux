@@ -16,3 +16,14 @@ export function planDeparture(input:ReturnType<typeof parseDeparture>,route:{sta
  if(departureAt.getTime()<now.getTime()+30*60000)throw new Error('Departure must be at least 30 minutes ahead')
  return {departureAt,arrivalAt:new Date(departureAt.getTime()+route.estimatedMinutes*60000)}
 }
+
+// Keep all supported upcoming allocations visible even after history grows.
+// Use the same cutoff for both disjoint scopes.
+export const DEPARTURE_INVENTORY_LIMIT=100
+export function departureInventoryScopes(providerId:string,now:Date){
+ const ownerScope={route:{providerId},vehicle:{providerId}}
+ return {
+  upcoming:{...ownerScope,state:'DRAFT',departureAt:{gte:now}},
+  history:{...ownerScope,OR:[{state:{not:'DRAFT'}},{departureAt:{lt:now}}]},
+ }
+}
