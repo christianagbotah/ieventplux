@@ -23,11 +23,22 @@ async function send(method:string,path:string,cookie?:string,body?:unknown){
  return {status:r.status,data,headers:r.headers}
 }
 async function login(email:string){
- const r=await send('POST','/auth/login',undefined,{email,password:'Dev@12345'})
- check(r.status===200,'synthetic login '+email)
- const cookie=(r.headers.getSetCookie?.()[0]??r.headers.get('set-cookie')??'').split(';')[0]
- check(cookie.length>0,'session cookie returned')
- return cookie
+ // The shared smoke stack deliberately retains the real login limiter.
+ for(let attempt=0;attempt<3;attempt++){
+  const r=await send('POST','/auth/login',undefined,{email,password:'Dev@12345'})
+  if(r.status===429){
+   const retry=Number(r.headers.get('retry-after')??'60')
+   if(attempt===2||!Number.isFinite(retry)||retry>75)throw new Error('CI login rate limit did not clear')
+   console.log('CI login limiter reached; respecting Retry-After.')
+   await Bun.sleep(Math.max(1,retry+1)*1000)
+   continue
+  }
+  check(r.status===200,'synthetic login '+email+' HTTP '+r.status)
+  const cookie=(r.headers.getSetCookie?.()[0]??r.headers.get('set-cookie')??'').split(';')[0]
+  check(cookie.startsWith('ievx_session='),'session cookie returned')
+  return cookie
+ }
+ throw new Error('CI login retry exhausted')
 }
 const key=randomUUID()
 const ids={provider:'ci-p-'+key,other:'ci-o-'+key,origin:'ci-a-'+key,destination:'ci-b-'+key,route:'ci-r-'+key,overlap:'ci-s-'+key,vehicle:'ci-v-'+key,foreignVehicle:'ci-f-'+key}
