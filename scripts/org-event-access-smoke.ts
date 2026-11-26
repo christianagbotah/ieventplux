@@ -270,6 +270,7 @@ async function main() {
       categorySlug: 'community', status: 'PUBLISHED', visibility: 'INVITE_ONLY',
       startsAt: new Date(Date.now()+172800000), endsAt: new Date(Date.now()+176400000),
     } })
+    let createdFollowId: string | undefined
     try {
       await db.agendaItem.create({ data: { eventId: fixture.id, title: secret, startsAt: fixture.startsAt } })
       await db.eventContributor.create({ data: { eventId: fixture.id, name: secret } })
@@ -307,11 +308,27 @@ async function main() {
       assert((await post('/reminder',attendee)).status===200,'approved guest can subscribe to private reminder')
       const reminder = await read('/reminder',attendee)
       assert(reminder.status===200 && (await reminder.json()).active===true && reminder.headers.get('cache-control')?.includes('no-store'),'private reminder state is personalized and non-cacheable')
+      // End-to-end fanout: actual notification rows, not just pure policy tests.
+      const outsider = await db.user.findFirstOrThrow({where:{id:{notIn:[ama.id,chapel.ownerId]},status:'ACTIVE',deletedAt:null},orderBy:{id:'asc'}})
+      const previousFollow = await db.follow.findUnique({where:{followerId_orgId:{followerId:outsider.id,orgId:chapel.id}}})
+      if (!previousFollow) createdFollowId = (await db.follow.create({data:{followerId:outsider.id,orgId:chapel.id}})).id
+      const posted = await fetch(fixturePath+'/updates',{method:'POST',headers:{Cookie:pastor,'Content-Type':'application/json'},body:JSON.stringify({title:secret,body:secret,important:false})})
+      assert(posted.ok,'organizer posts a synthetic private update')
+      const result = await posted.json()
+      const notices = await db.notification.findMany({where:{link:'#/event/'+fixture.id,type:'EVENT_CHANGE'}})
+      assert(notices.length===1 && notices[0].userId===ama.id && notices.every(n=>!n.title.includes(secret)&&!n.body.includes(secret)),
+        'private update delivers one generic notice to approved guest and excludes unrelated follower')
+      assert(result.reach?.audience===1 && result.reach?.notified===1 && result.reach?.smsQueued===0,'private update reports actual delivery reach')
       await db.rsvp.update({where:{id:rsvp.id},data:{status:'DECLINED'}})
+      const afterRevocation = await fetch(fixturePath+'/updates',{method:'POST',headers:{Cookie:pastor,'Content-Type':'application/json'},body:JSON.stringify({title:secret+'-revoked',body:secret,important:false})})
+      assert(afterRevocation.ok,'organizer can post another update after revocation')
+      assert(await db.notification.count({where:{link:'#/event/'+fixture.id,type:'EVENT_CHANGE'}})===1,'revoked guest receives no additional private updates')
       assert((await post('/reminder',attendee)).status===403,'revoked approval prevents reminder subscription')
       assert((await post('/reminder-cancel',attendee)).status===200,'revoked guest can cancel their own reminder')
       assert((await read('/updates',attendee)).status===403,'revoked approval removes private content access')
     } finally {
+      await db.notification.deleteMany({where:{link:'#/event/'+fixture.id}})
+      if(createdFollowId) await db.follow.deleteMany({where:{id:createdFollowId}})
       await db.mediaAsset.deleteMany({where:{eventId:fixture.id}})
       await db.event.delete({where:{id:fixture.id}})
     }
