@@ -718,7 +718,15 @@ export type CharterPlan={id:string;title:string;origin:ServiceArea;destination:S
 export type CharterDraft={title:string;originAreaId:string;destinationAreaId:string;departureAt:string;returnAt:string|null;passengers:number;requestKey:string}
 export type TransportRouteDraft={id:string;label:string;origin:ServiceArea;destination:ServiceArea;departureMinute:number;operatingDays:number[];estimatedMinutes:number;state:string}
 export type DepartureDraft={id:string;state:string;departureAt:string;arrivalAt:string;allocatedSeats:number;route:{label:string};vehicle:{label:string;passengerSeats:number}}
+export interface NativeNotification { id:string; title:string; body:string; type:string; link:string|null; createdAt:string; readAt:string|null }
+export interface NativeNotificationPage { items:NativeNotification[]; unread:number; page?:number; pageSize?:number; hasMore?:boolean }
+
 export const api = {
+  notifications: {
+    list: (page=1) => request<NativeNotificationPage>('GET','/notifications?page='+page+'&pageSize=20'),
+    mark: (id:string) => request<{ok:boolean}>('POST','/notifications',{id}),
+    markAll: () => request<{ok:boolean}>('POST','/notifications',{all:true}),
+  },
   transportDepartures:{
     list:(id:string)=>request<{items:DepartureDraft[]}>('GET','/service-providers/'+encodeURIComponent(id)+'/departures'),
     create:(id:string,body:{routeId:string;vehicleId:string;date:string;allocatedSeats:number})=>request<{item:DepartureDraft}>('POST','/service-providers/'+encodeURIComponent(id)+'/departures',body),
