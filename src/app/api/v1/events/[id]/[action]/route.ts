@@ -47,6 +47,8 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
     }
 
     if (action === 'series') {
+      const { canViewProgramme } = await import('@/server/event-operations-access')
+      await canViewProgramme(id)
       const event = await db.event.findUnique({ where: { id } })
       if (!event || event.deletedAt || !event.seriesId) return jsonOk({ series: null, occurrences: [] })
       const series = await db.eventSeries.findUnique({ where: { id: event.seriesId } })
@@ -68,7 +70,7 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
       return jsonOk({
         series: series ? { id: series.id, title: series.title, recurrence: series.recurrence } : null,
         occurrences: visible.map((o) => ({ id: o.id, slug: o.slug, title: o.title, startsAt: o.startsAt.toISOString(), status: o.status })),
-      })
+      }, { headers: { 'Cache-Control': 'private, no-store' } })
     }
 
     if (action === 'waitlist') {
@@ -150,13 +152,15 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
     }
 
     if (action === 'media') {
+      const { canViewProgramme } = await import('@/server/event-operations-access')
+      await canViewProgramme(id)
       const items = await db.mediaAsset.findMany({
         // Never expose pending creator-video quarantine locators through event media.
-        where: { eventId: id, status: 'READY', OR: [{ linksToEventId: id }] },
+        where: { eventId: id, status: 'READY', kind: { not: 'PROGRAMME' }, OR: [{ linksToEventId: id }] },
         select: { id: true, kind: true, url: true, posterUrl: true, durationSec: true, caption: true, status: true, views: true, createdAt: true },
         orderBy: { createdAt: 'desc' },
       })
-      return jsonOk({ items })
+      return jsonOk({ items }, { headers: { 'Cache-Control': 'private, no-store' } })
     }
 
     if (action === 'comments') {
@@ -193,8 +197,10 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
     }
 
     if (action === 'updates') {
+      const { canViewProgramme } = await import('@/server/event-operations-access')
+      await canViewProgramme(id)
       const { listUpdates } = await import('@/server/services/updates')
-      return jsonOk({ items: await listUpdates(id) })
+      return jsonOk({ items: await listUpdates(id) }, { headers: { 'Cache-Control': 'private, no-store' } })
     }
 
     if (action === 'attendees') {
@@ -378,10 +384,12 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
 
     // ── Round 15: AI review digest (public, DB-cached, honest fallback) ────
     if (action === 'review-digest') {
+      const { canViewProgramme } = await import('@/server/event-operations-access')
+      await canViewProgramme(id)
       const event = await db.event.findUnique({ where: { id }, select: { id: true, deletedAt: true } })
       if (!event || event.deletedAt) throw errors.notFound('Event not found.')
       const { reviewDigest } = await import('@/server/services/aiDigest')
-      return jsonOk(await reviewDigest(id))
+      return jsonOk(await reviewDigest(id), { headers: { 'Cache-Control': 'private, no-store' } })
     }
 
     void url
