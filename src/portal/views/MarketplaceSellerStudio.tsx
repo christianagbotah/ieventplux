@@ -75,7 +75,7 @@ export default function MarketplaceSellerStudio(){
     <p className="mt-3 text-sm text-muted-foreground">Sign in or register to create an independent storefront that people can discover beyond one event.</p>
     <Button className="mt-6" onClick={()=>navigate('/signin')}>Sign in to start</Button>
   </div>
-  return <div className="mx-auto max-w-6xl space-y-8 px-4 py-9 pb-16">
+  return <div className="mx-auto max-w-6xl space-y-6 px-4 py-7 sm:px-6 pb-16">
     <div className="flex flex-wrap items-start justify-between gap-4">
       <div>
         <Badge variant="secondary" className="mb-3 gap-1"><Store className="size-3"/>SELLER STUDIO</Badge>
