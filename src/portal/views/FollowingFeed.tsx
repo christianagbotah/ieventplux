@@ -92,7 +92,7 @@ export default function FollowingFeed() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-3 py-6 sm:px-6 sm:py-9">
+    <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-9">
       <div className="mb-7 flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-primary"><Globe2 className="size-4" /> Events and communities worldwide</p>
