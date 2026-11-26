@@ -1,0 +1,158 @@
+name: Android Native Visual Acceptance
+
+# Separate, deliberately non-distributable visual test variant. No signing
+# secrets, customer data, live payment calls or production API access.
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/android-visual-qa.yml'
+      - 'scripts/android-visual-fixture.py'
+      - 'scripts/android-visual-smoke.py'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-visual-qa-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-visual:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 55
+    env:
+      CI: "true"
+      EXPO_NO_TELEMETRY: "1"
+      EXPO_PUBLIC_API_BASE_URL: http://127.0.0.1:3137
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Prepare Android tools and local emulator image
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          SDKMANAGER="$(find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager | sort -V | tail -1)"
+          test -x "$SDKMANAGER"
+          echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "$SDK_ROOT/platform-tools" >> "$GITHUB_PATH"
+          echo "$SDK_ROOT/emulator" >> "$GITHUB_PATH"
+          echo "$(dirname "$SDKMANAGER")" >> "$GITHUB_PATH"
+          "$SDKMANAGER" --sdk_root="$SDK_ROOT" --install "platforms;android-35" "build-tools;35.0.0" "platform-tools" "ndk;26.1.10909125" "emulator" "system-images;android-35;google_apis;x86_64"
+          test -e /dev/kvm
+          sudo chmod a+rw /dev/kvm
+
+      - name: Install mobile locked dependencies
+        working-directory: mobile
+        run: bun install --frozen-lockfile
+
+      - name: Generate fixture-only native variant
+        working-directory: mobile
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('app.json')
+          cfg=json.loads(p.read_text())
+          e=cfg['expo']
+          e['name']='iEventPlux Visual QA'
+          e['android']['package']='com.lightworld.ieventplux.visualqa'
+          e['scheme']='ieventpluxvisualqa'
+          e['extra']={'apiBaseUrl':'http://127.0.0.1:3137'}
+          p.write_text(json.dumps(cfg,indent=2))
+          # This generated test workspace must not call live update endpoints.
+          p=Path('App.tsx')
+          s=p.read_text()
+          assert s.count('<AndroidUpdateNotice />')==1
+          p.write_text(s.replace('<AndroidUpdateNotice />','{null}'))
+          PY
+          bunx expo prebuild --platform android --no-install --clean
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          p=Path('android/app/src/main/AndroidManifest.xml')
+          ET.register_namespace('android','http://schemas.android.com/apk/res/android')
+          tree=ET.parse(p)
+          application=tree.getroot().find('application')
+          assert application is not None
+          application.set('{http://schemas.android.com/apk/res/android}usesCleartextTraffic','true')
+          tree.write(p,encoding='utf-8',xml_declaration=True)
+          PY
+          # No production signing identity, publishing or deploy step exists.
+
+      - name: Build embedded JS x86_64 visual QA APK
+        working-directory: mobile/android
+        shell: bash
+        env:
+          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx3072m"
+        run: |
+          set -euo pipefail
+          unset JAVA_TOOL_OPTIONS JDK_JAVA_OPTIONS _JAVA_OPTIONS
+          chmod +x gradlew
+          ./gradlew --no-daemon --max-workers=2 -PreactNativeArchitectures=x86_64 :app:assembleRelease > "$GITHUB_WORKSPACE/android-visual-build.log" 2>&1 || { tail -n 120 "$GITHUB_WORKSPACE/android-visual-build.log"; exit 1; }
+          APK=app/build/outputs/apk/release/app-release.apk
+          test -s "$APK"
+          unzip -Z1 "$APK" | grep -Fx assets/index.android.bundle
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -F "package: name='com.lightworld.ieventplux.visualqa'"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify "$APK"
+
+      - name: Boot emulator and capture actual native screens
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p android-visual-qa
+          python3 scripts/android-visual-fixture.py > android-visual-qa/fixture.log 2>&1 &
+          fixture_pid=$!
+          printf 'no\n' | avdmanager create avd --force --name ievent-visual --package 'system-images;android-35;google_apis;x86_64' --device pixel_6
+          emulator -avd ievent-visual -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -no-snapshot -wipe-data > android-visual-qa/emulator.log 2>&1 &
+          emulator_pid=$!
+          trap 'adb emu kill >/dev/null 2>&1 || true; kill "$fixture_pid" "$emulator_pid" 2>/dev/null || true' EXIT
+          timeout 180 adb wait-for-device
+          for i in $(seq 1 120); do
+            if [ "$(adb shell getprop sys.boot_completed | tr -d '\r')" = 1 ]; then break; fi
+            sleep 2
+          done
+          test "$(adb shell getprop sys.boot_completed | tr -d '\r')" = 1
+          adb shell input keyevent 82
+          adb shell settings put global window_animation_scale 0
+          adb shell settings put global transition_animation_scale 0
+          adb shell settings put global animator_duration_scale 0
+          adb reverse tcp:3137 tcp:3137
+          curl -fsS http://127.0.0.1:3137/api/v1/health
+          adb install -r mobile/android/app/build/outputs/apk/release/app-release.apk
+          python3 scripts/android-visual-smoke.py
+          grep -F 'GET /api/v1/discovery/home' android-visual-qa/fixture.log
+          grep -F 'GET /api/v1/events/visual-event' android-visual-qa/fixture.log
+          test "$(find android-visual-qa -name '*.png' | wc -l)" -eq 12
+
+      - name: Upload synthetic native screenshots and accessibility trees
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-native-visual-evidence
+          path: android-visual-qa/
+          retention-days: 7
+          if-no-files-found: warn
+
+      - name: Upload native build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-visual-build-diagnostics
+          path: android-visual-build.log
+          retention-days: 7
+          if-no-files-found: ignore
