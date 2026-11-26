@@ -201,11 +201,6 @@ jobs:
           IEVENTPLUX_ISOLATED_DB_TEST: "yes"
         run: bun run scripts/marketplace-foundation-smoke.ts
 
-      - name: Transport departure ownership, historical inventory and allocation races
-        env:
-          IEVENTPLUX_ISOLATED_DB_TEST: "yes"
-        run: bun run scripts/transport-departure-smoke.ts
-
       - name: Check-in replay isolation with synthetic admission record
         run: bun run scripts/checkin-replay-scope-smoke.ts
 
@@ -231,6 +226,11 @@ jobs:
 
       - name: KYC privacy and manual approval regression (synthetic documents, seeded users only)
         run: bun run scripts/kyc-access-smoke.ts
+
+      - name: Transport departure ownership, historical inventory and allocation races
+        env:
+          IEVENTPLUX_ISOLATED_DB_TEST: "yes"
+        run: bun run scripts/transport-departure-smoke.ts
 
       - name: Upload stack logs on failure
         if: failure()
