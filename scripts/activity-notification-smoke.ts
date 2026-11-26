@@ -46,6 +46,16 @@ async function main() {
  assert(alert&&alert.link?.includes(event.id),'organizer receives reservation alert with event destination')
  assert((await call('/notifications',ownerCookie)).data.items.some((n:{id:string})=>n.id===alert?.id),'organizer can retrieve order alert')
  assert(!(await call('/notifications',c)).data.items.some((n:{id:string})=>n.id===alert?.id),'outsider cannot retrieve reservation alert')
+ // Same timestamp forces the secondary ID ordering; a new alert must not shift older pages.
+ const stamp=new Date(Date.now()+60000)
+ await db.notification.createMany({data:Array.from({length:25},(_,i)=>({id:'page-'+key+'-'+String(i).padStart(2,'0'),userId:target.id,type:'SYSTEM',title:'Synthetic history',body:'History',createdAt:stamp}))})
+ const first=await call('/notifications?pageSize=20',b)
+ assert(first.data.items.length===20&&typeof first.data.nextCursor==='string','history exposes a private next cursor')
+ await db.notification.create({data:{userId:target.id,type:'SYSTEM',title:'Newest synthetic alert',body:'History',createdAt:new Date(+stamp+1000)}})
+ const older=await call('/notifications?pageSize=20&before='+encodeURIComponent(first.data.nextCursor),b)
+ assert(older.response.ok&&older.data.items.length===6&&!older.data.items.some((n:{id:string})=>first.data.items.some((x:{id:string})=>x.id===n.id)),'new alert does not shift the older cursor page')
+ assert((await call('/notifications?before='+encodeURIComponent(first.data.nextCursor),c)).response.status===400,'another account cannot use private history cursor')
+ assert((await call('/notifications?page=1.5',b)).response.status===400,'invalid fractional page rejected')
  console.log('ACTIVITY_NOTIFICATION_SMOKE_PASS')
 }
 main().finally(()=>db.$disconnect()).catch(err=>{console.error(err);process.exitCode=1})
