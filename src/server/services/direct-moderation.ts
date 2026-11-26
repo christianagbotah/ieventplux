@@ -3,11 +3,13 @@ import {db} from '../../lib/db'
 import {ApiError,errors} from '../api'
 import {removedMessageBody} from '../direct-report-policy'
 import {realtimeEmit} from './realtime'
+import {attachmentMetadata,requireAttachmentKey} from './direct-attachments'
+import {decryptAttachment,digestAttachment} from '../direct-attachment-policy'
 type Actor={id:string;email:string}
 async function scope(tx:Prisma.TransactionClient,id:string){
  const report=await tx.moderationReport.findFirst({where:{id,targetType:'DIRECT_MESSAGE',status:{in:['OPEN','REVIEWING']}}})
  if(!report||!report.reporterId)throw errors.notFound('Open message report not found.')
- const message=await tx.directMessage.findFirst({where:{id:report.targetId,senderId:{not:report.reporterId},conversation:{OR:[{participantLowId:report.reporterId},{participantHighId:report.reporterId}]}},include:{conversation:{select:{participantLowId:true,participantHighId:true}},sender:{select:{id:true,displayName:true}}}})
+ const message=await tx.directMessage.findFirst({where:{id:report.targetId,senderId:{not:report.reporterId},conversation:{OR:[{participantLowId:report.reporterId},{participantHighId:report.reporterId}]}},include:{conversation:{select:{participantLowId:true,participantHighId:true}},sender:{select:{id:true,displayName:true}},attachment:{select:attachmentMetadata}}})
  if(!message)throw errors.notFound('Reported message is no longer available.')
  return {report,message}
 }
@@ -26,7 +28,7 @@ export async function viewReportedMessage(id:string,actor:Actor){
  return safeTransaction(async tx=>{
   const {message}=await scope(tx,id)
   await record(tx,actor,id,'moderation.direct_message.view')
-  return {message:{id:message.id,body:message.removedAt?removedMessageBody:message.body,createdAt:message.createdAt,removedAt:message.removedAt,sender:message.sender}}
+  return {message:{id:message.id,body:message.removedAt?removedMessageBody:message.body,createdAt:message.createdAt,removedAt:message.removedAt,sender:message.sender,attachment:message.removedAt?null:message.attachment}}
  })
 }
 export async function resolveReportedMessage(id:string,actor:Actor,action:string,note:string){
@@ -34,7 +36,10 @@ export async function resolveReportedMessage(id:string,actor:Actor,action:string
   const {report,message}=await scope(tx,id)
   if(!['DISMISS','REVIEWING','REMOVE_CONTENT','SUSPEND_USER'].includes(action))throw errors.badRequest('Invalid moderation action.')
   const now=new Date()
-  if(action==='REMOVE_CONTENT'&&!message.removedAt)await tx.directMessage.update({where:{id:message.id},data:{removedAt:now,body:removedMessageBody}})
+  if(action==='REMOVE_CONTENT'&&!message.removedAt){
+   await tx.directAttachment.deleteMany({where:{messageId:message.id}})
+   await tx.directMessage.update({where:{id:message.id},data:{removedAt:now,body:removedMessageBody}})
+  }
   if(action==='SUSPEND_USER'){
    // Never silently suspend a staff account through an ordinary message report.
    const changed=await tx.user.updateMany({where:{id:message.senderId,role:'USER',status:'ACTIVE',deletedAt:null},data:{status:'SUSPENDED'}})
@@ -52,4 +57,17 @@ export async function resolveReportedMessage(id:string,actor:Actor,action:string
   realtimeEmit('user:'+result.conversation.participantHighId,'direct:changed',{}),
  ])
  return {status:result.status}
+}
+
+export async function downloadReportedAttachment(id:string,actor:Actor){
+ return safeTransaction(async tx=>{
+  const {message}=await scope(tx,id)
+  if(message.removedAt)throw errors.notFound('Attachment unavailable.')
+  const row=await tx.directAttachment.findUnique({where:{messageId:message.id}})
+  if(!row)throw errors.notFound('Attachment unavailable.')
+  const bytes=decryptAttachment(row.payload,requireAttachmentKey(),row.messageId)
+  if(bytes.length!==row.size||digestAttachment(bytes)!==row.digest)throw new Error('Attachment integrity failed.')
+  await record(tx,actor,id,'moderation.direct_message.attachment')
+  return {filename:row.filename,mime:row.mime,size:row.size,bytes}
+ })
 }

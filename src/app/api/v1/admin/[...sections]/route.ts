@@ -100,6 +100,14 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
       return jsonList(items, total, page, pageSize)
     }
 
+    if (root === 'moderation' && sections[1] && sections[2] === 'attachment') {
+      if (!platformCan(user.role, 'admin:moderate')) throw errors.forbidden('Moderator role required.')
+      await rateLimit(req, 'direct-message-evidence-file', 15, 60_000)
+      const { downloadReportedAttachment } = await import('@/server/services/direct-moderation')
+      const file = await downloadReportedAttachment(sections[1], user)
+      return new Response(new Uint8Array(file.bytes), {headers: {'Cache-Control':'private, no-store','Content-Type':file.mime,'Content-Length':String(file.size),'Content-Disposition':'attachment; filename="'+file.filename+'"','X-Content-Type-Options':'nosniff','Cross-Origin-Resource-Policy':'same-origin','Content-Security-Policy':"default-src 'none'; sandbox"}})
+    }
+
     if (root === 'moderation' && sections[1] && sections[2] === 'message') {
       if (!platformCan(user.role, 'admin:moderate')) throw errors.forbidden('Moderator role required.')
       await rateLimit(req, 'direct-message-evidence', 30, 60_000)

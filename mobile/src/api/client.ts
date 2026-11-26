@@ -658,7 +658,8 @@ async function request<T>(
   }
 
   const headers: Record<string, string> = { Accept: 'application/json' }
-  if (body !== undefined) headers['Content-Type'] = 'application/json'
+  const multipart = typeof FormData !== 'undefined' && body instanceof FormData
+  if (body !== undefined && !multipart) headers['Content-Type'] = 'application/json'
 
   // Forward-compat Bearer layer — empty today (see file header).
   const token = await getStoredSessionToken()
@@ -669,7 +670,7 @@ async function request<T>(
     res = await fetch(`${base}/api/v1${path}`, {
       method,
       headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: body === undefined ? undefined : multipart ? body as FormData : JSON.stringify(body),
       // Cookie-jar layer: React Native persists Set-Cookie (ievx_session)
       // natively; 'include' makes the intent explicit for typed RequestInit.
       credentials: 'include',
@@ -705,7 +706,8 @@ async function request<T>(
 
 export type DirectContact={id:string;displayName:string;avatarUrl:string|null}
 export type DirectConversation={id:string;status:string;requesterId:string;updatedAt?:string;peer:DirectContact|null;unread?:number;canSend?:boolean;blockedByMe?:boolean;mutedByMe?:boolean}
-export type DirectMessage={id:string;senderId:string;body:string;createdAt:string;readAt:string|null;removedAt?:string|null}
+export type DirectAttachment={filename:string;mime:string;size:number}
+export type DirectMessage={id:string;senderId:string;body:string;createdAt:string;readAt:string|null;removedAt?:string|null;attachment?:DirectAttachment|null}
 export type DirectDetail={conversation:DirectConversation;items:DirectMessage[];nextCursor:string|null}
 export type SouvenirRequestItem={id:string;productName:string;productSku:string;quantity:number;totalMinor:number;status:string}
 export type ServiceProviderCategory={id:string;division:string;regulated:boolean}
@@ -966,6 +968,9 @@ export const api = {
     contacts: (q:string)=>request<{items:DirectContact[]}>('GET','/direct-messages?contacts=1&q='+encodeURIComponent(q)),
     detail: (id:string,before?:string)=>request<DirectDetail>('GET','/direct-messages?id='+encodeURIComponent(id)+(before?'&before='+encodeURIComponent(before):'')),
     mutate: (data:Record<string,unknown>)=>request<{conversation?:DirectConversation;message?:DirectMessage;marked?:number;replayed?:boolean}>('POST','/direct-messages',data),
+    attachmentConfig: ()=>request<{enabled:boolean;maxBytes:number}>('GET','/direct-messages/attachments'),
+    uploadAttachment: (form:FormData)=>request<{message:DirectMessage;replayed:boolean}>('POST','/direct-messages/attachments',form),
+    getAttachment: (messageId:string,userId:string)=>request<DirectAttachment&{base64:string}>('GET','/direct-messages/attachments?encoding=base64&messageId='+encodeURIComponent(messageId)+'&expectedUserId='+encodeURIComponent(userId)),
     activity: (data:{id:string;expectedUserId:string;share:boolean;typing:boolean})=>request<{active:boolean;typing:boolean}>('POST','/direct-messages',{action:'activity',...data}),
   },
   notifications: {

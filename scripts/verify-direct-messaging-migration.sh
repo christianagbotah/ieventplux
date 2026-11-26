@@ -14,12 +14,28 @@ CREATE TABLE "Session" ("id" TEXT PRIMARY KEY);
 INSERT INTO "Session" VALUES ('session-a');
 INSERT INTO "User" VALUES ('a'),('b'),('c');
 SQL
-for attempt in 1 2; do sql -f ops/migrations/20261126_direct_messaging.sql; sql -f ops/migrations/20261126_direct_activity.sql; sql -f ops/migrations/20261126_direct_message_moderation.sql; done
+for attempt in 1 2; do sql -f ops/migrations/20261126_direct_messaging.sql; sql -f ops/migrations/20261126_direct_activity.sql; sql -f ops/migrations/20261126_direct_message_moderation.sql; sql -f ops/migrations/20261126_direct_attachments.sql; done
 sql <<'SQL'
 INSERT INTO "DirectConversation" ("id","participantLowId","participantHighId","requesterId","updatedAt") VALUES ('d','a','b','a',CURRENT_TIMESTAMP);
 INSERT INTO "DirectMessage" ("id","conversationId","senderId","clientKey","body") VALUES ('m','d','a','abcdefghijklmnop','Hello');
+INSERT INTO "DirectAttachment" ("messageId","filename","mime","size","digest","payload") VALUES ('m','synthetic.webp','image/webp',1,repeat('a',64),decode(repeat('00',29),'hex'));
 INSERT INTO "DirectActivity" ("conversationId","sessionId","activeUntil","typingUntil") VALUES ('d','session-a',CURRENT_TIMESTAMP+INTERVAL '20 seconds',CURRENT_TIMESTAMP+INTERVAL '8 seconds');
 DO $$ BEGIN
+ BEGIN
+  UPDATE "DirectAttachment" SET "size"=2097153;
+  RAISE EXCEPTION 'oversized attachment accepted';
+ EXCEPTION WHEN check_violation THEN NULL;
+ END;
+ BEGIN
+  UPDATE "DirectAttachment" SET "mime"='text/html';
+  RAISE EXCEPTION 'active HTML accepted';
+ EXCEPTION WHEN check_violation THEN NULL;
+ END;
+ BEGIN
+  UPDATE "DirectAttachment" SET "payload"=decode('00','hex');
+  RAISE EXCEPTION 'invalid encrypted payload length accepted';
+ EXCEPTION WHEN check_violation THEN NULL;
+ END;
  BEGIN
   UPDATE "DirectActivity" SET "typingUntil"="activeUntil"+INTERVAL '1 second';
   RAISE EXCEPTION 'typing outlives activity';
@@ -53,7 +69,7 @@ DO $$ BEGIN
  UPDATE "DirectMessage" SET "removedAt"=CURRENT_TIMESTAMP,"body"='[Message removed by moderation]' WHERE id='m';
  IF NOT EXISTS (SELECT 1 FROM "DirectMessage" WHERE id='m' AND "removedAt" IS NOT NULL) THEN RAISE EXCEPTION 'missing redaction'; END IF;
  DELETE FROM "User" WHERE id='a';
- IF EXISTS (SELECT 1 FROM "DirectConversation") OR EXISTS (SELECT 1 FROM "DirectMessage") OR EXISTS (SELECT 1 FROM "DirectActivity") THEN RAISE EXCEPTION 'orphan conversation or message'; END IF;
+ IF EXISTS (SELECT 1 FROM "DirectConversation") OR EXISTS (SELECT 1 FROM "DirectMessage") OR EXISTS (SELECT 1 FROM "DirectActivity") OR EXISTS (SELECT 1 FROM "DirectAttachment") THEN RAISE EXCEPTION 'orphan conversation or message'; END IF;
 END $$;
 SQL
 echo 'DIRECT_MESSAGING_MIGRATION_PASS'

@@ -28,6 +28,15 @@ function Inbox({userId,route,navigation}:Props&{userId:string}){
  const [page,setPage]=useState(1)
  const [hasMore,setHasMore]=useState(false)
  const [draft,setDraft]=useState('')
+ const [attachmentEnabled,setAttachmentEnabled]=useState(false)
+ const [file,setFile]=useState<{uri:string;name:string;mimeType:string;size?:number}|null>(null)
+ const pendingFile=useRef<{uri:string;caption:string;key:string}|null>(null)
+ useFocusEffect(useCallback(()=>{
+  if(!id)return
+  let alive=true
+  void api.directMessages.attachmentConfig().then(result=>{if(alive)setAttachmentEnabled(result.enabled)}).catch(()=>{})
+  return()=>{alive=false}
+ },[id]))
  const [reportTarget,setReportTarget]=useState<string|null>(null)
  const [safetyTarget,setSafetyTarget]=useState<'block'|'mute'|null>(null)
  const [reportReason,setReportReason]=useState('SPAM')
@@ -126,7 +135,59 @@ function Inbox({userId,route,navigation}:Props&{userId:string}){
   }catch(err){if(active.current)setError(err instanceof Error?err.message:'Could not submit report.')}
   finally{if(active.current)setBusy(false)}
  }
+ const pickFile=async()=>{
+  if(busy||file||pending.current)return
+  setError('')
+  try{
+   const picker=await import('expo-document-picker')
+   const result=await picker.getDocumentAsync({type:['image/jpeg','image/png','image/webp','application/pdf'],multiple:false,copyToCacheDirectory:true})
+   if(result.canceled||!active.current)return
+   const picked=result.assets[0]
+   if(!picked?.mimeType||!['image/jpeg','image/png','image/webp','application/pdf'].includes(picked.mimeType)||picked.size===undefined||picked.size>2097152||picked.size<1){setError('Choose a supported file no larger than 2 MB.');return}
+   setFile({uri:picked.uri,name:picked.name,mimeType:picked.mimeType,size:picked.size})
+  }catch{if(active.current)setError('Could not open file picker.')}
+ }
+ const sendFile=async()=>{
+  if(!file||!id||busy||!active.current)return
+  if(pending.current){setError('Retry the previous text message first.');return}
+  const caption=draft.trim()
+  if(pendingFile.current&&(pendingFile.current.uri!==file.uri||pendingFile.current.caption!==caption)){setError('Retry the original attachment and caption first.');return}
+  setBusy(true);setError('')
+  try{
+   if(!pendingFile.current){const crypto=await import('expo-crypto');pendingFile.current={uri:file.uri,caption,key:crypto.randomUUID()}}
+   const form=new FormData()
+   form.append('id',id);form.append('expectedUserId',userId);form.append('clientKey',pendingFile.current.key);form.append('caption',caption)
+   // React Native FormData accepts the file URI descriptor, not a browser File.
+   form.append('file',{uri:file.uri,name:file.name,type:file.mimeType} as unknown as Blob)
+   await api.directMessages.uploadAttachment(form)
+   pendingFile.current=null
+   if(active.current){setFile(null);setDraft('');lastTyping.current=0;await load()}
+   const fs=await import('expo-file-system')
+   if(fs.cacheDirectory&&file.uri.startsWith(fs.cacheDirectory))await fs.deleteAsync(file.uri,{idempotent:true}).catch(()=>{})
+  }catch(err){if(active.current)setError(err instanceof Error?err.message:'Could not send attachment. Retry with the same file.')}
+  finally{if(active.current)setBusy(false)}
+ }
+ const openFile=async(messageId:string)=>{
+  if(busy||!active.current)return
+  setBusy(true);setError('')
+  let temp:string|undefined
+  try{
+   const sharing=await import('expo-sharing'),fs=await import('expo-file-system'),crypto=await import('expo-crypto')
+   if(!fs.cacheDirectory||!await sharing.isAvailableAsync())throw new Error('File sharing is not available on this device.')
+   const result=await api.directMessages.getAttachment(messageId,userId)
+   if(!active.current)return
+   if(!['image/webp','application/pdf'].includes(result.mime)||result.size>2097152)throw new Error('Unsupported attachment.')
+   temp=fs.cacheDirectory+'ievx-chat-'+crypto.randomUUID()+(result.mime==='application/pdf'?'.pdf':'.webp')
+   await fs.writeAsStringAsync(temp,result.base64,{encoding:fs.EncodingType.Base64})
+   if(active.current)await sharing.shareAsync(temp,{mimeType:result.mime,dialogTitle:result.filename})
+  }catch(err){if(active.current)setError(err instanceof Error?err.message:'Could not open attachment.')}
+  finally{
+   if(temp){const fs=await import('expo-file-system');await fs.deleteAsync(temp,{idempotent:true}).catch(()=>{})}
+   if(active.current)setBusy(false)
+  }
+ }
  const send=async()=>{
+  if(file){await sendFile();return}
   const body=draft.trim()
   if(!body||busy)return
   if(pending.current&&pending.current.body!==body){setError('Retry the original message before changing its text.');return}
@@ -162,8 +223,8 @@ function Inbox({userId,route,navigation}:Props&{userId:string}){
  return <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS==='ios'?'padding':undefined} keyboardVerticalOffset={Platform.OS==='ios'?85:0}>
   <View style={styles.threadHeader}><Text numberOfLines={1} style={styles.heading}>{c.peer?.displayName??'Member'}</Text><Text style={styles.muted}>{c.canSend&&peerActivity.typing?'Typing…':c.canSend&&peerActivity.active?'Active in this chat':'Private conversation'}</Text>{feedback}<View style={styles.row}><Action label={c.mutedByMe?'Unmute':'Mute'} secondary disabled={busy} onPress={()=>setSafetyTarget('mute')}/><Action label={c.blockedByMe?'Unblock':'Block'} secondary disabled={busy} onPress={()=>setSafetyTarget('block')}/></View>{!!reportStatus&&<Text accessibilityLiveRegion="polite" style={styles.muted}>{reportStatus}</Text>}{c.canSend&&<View style={styles.activityRow}><Text style={styles.muted}>Share chat activity</Text><Switch accessibilityLabel="Share chat activity" value={shareActivity} onValueChange={value=>{setShareActivity(value);lastTyping.current=0}}/></View>}</View>
   {c.status==='PENDING'?<View style={styles.content}><Text style={styles.title}>{c.requesterId===userId?'Waiting for acceptance':'Message request'}</Text>{c.requesterId!==userId&&<View style={styles.row}><Action label="Accept" disabled={busy} onPress={()=>void mutate({action:'accept',id})}/><Action label="Decline" secondary disabled={busy} onPress={()=>void mutate({action:'decline',id})}/></View>}</View>:c.status==='DECLINED'?<View style={styles.content}><Text style={styles.muted}>This request was declined.</Text></View>:<>
-  <FlatList inverted contentContainerStyle={styles.content} data={messages} keyExtractor={m=>m.id} keyboardShouldPersistTaps="handled" ListEmptyComponent={<Text style={styles.muted}>Start the conversation.</Text>} ListFooterComponent={cursor?<Action label="Load older messages" secondary disabled={busy} onPress={()=>void more()}/>:null} renderItem={({item})=>{const mine=item.senderId===userId;return <View style={[styles.bubble,mine&&styles.mine]}><Text style={[styles.message,mine&&styles.mineText]}>{item.removedAt?'Message removed by moderation':item.body}</Text>{!mine&&!item.removedAt&&<Pressable accessibilityRole="button" disabled={busy||reported.includes(item.id)} style={{minHeight:32,justifyContent:'center'}} onPress={()=>{setReportTarget(item.id);setReportReason('SPAM');setReportDetails('');setError('')}}><Text style={styles.link}>{reported.includes(item.id)?'Reported':'Report message'}</Text></Pressable>}<Text style={[styles.timestamp,mine&&styles.mineText]}>{formatDateTime(item.createdAt)}{mine?(item.readAt?' · Read':' · Sent'):''}</Text></View>}}/>
-  {c.canSend?<View style={styles.composer}><TextInput accessibilityLabel="Message" style={[styles.input,{flex:1,maxHeight:100}]} multiline value={draft} onChangeText={value=>{setDraft(value);lastTyping.current=value.trim()?Date.now():0}} placeholder="Write a message…" placeholderTextColor={mobileDesign.inkMuted} maxLength={4000}/><Action label="Send" disabled={busy||!draft.trim()} onPress={()=>void send()}/></View>:<View style={styles.content}><Text style={styles.muted}>Sending is unavailable for this contact.</Text></View>}
+  <FlatList inverted contentContainerStyle={styles.content} data={messages} keyExtractor={m=>m.id} keyboardShouldPersistTaps="handled" ListEmptyComponent={<Text style={styles.muted}>Start the conversation.</Text>} ListFooterComponent={cursor?<Action label="Load older messages" secondary disabled={busy} onPress={()=>void more()}/>:null} renderItem={({item})=>{const mine=item.senderId===userId;return <View style={[styles.bubble,mine&&styles.mine]}><Text style={[styles.message,mine&&styles.mineText]}>{item.removedAt?'Message removed by moderation':item.body}</Text>{!item.removedAt&&item.attachment&&<Pressable accessibilityRole="button" disabled={busy} style={{padding:8,borderWidth:1,borderColor:mine?'#fff':mobileDesign.border,borderRadius:10,marginTop:6}} onPress={()=>void openFile(item.id)}><Text style={[styles.message,mine&&styles.mineText]}>{item.attachment.filename}</Text><Text style={[styles.timestamp,mine&&styles.mineText]}>{Math.ceil(item.attachment.size/1024)} KB · Open file</Text></Pressable>}{!mine&&!item.removedAt&&<Pressable accessibilityRole="button" disabled={busy||reported.includes(item.id)} style={{minHeight:32,justifyContent:'center'}} onPress={()=>{setReportTarget(item.id);setReportReason('SPAM');setReportDetails('');setError('')}}><Text style={styles.link}>{reported.includes(item.id)?'Reported':'Report message'}</Text></Pressable>}<Text style={[styles.timestamp,mine&&styles.mineText]}>{formatDateTime(item.createdAt)}{mine?(item.readAt?' · Read':' · Sent'):''}</Text></View>}}/>
+  {c.canSend?<View style={{backgroundColor:'#fff'}}>{file&&<View style={{padding:10,flexDirection:'row',alignItems:'center',gap:8}}><Text style={[styles.muted,{flex:1}]}>{file.name} · {Math.ceil((file.size??0)/1024)} KB</Text><Action secondary label="Remove" disabled={busy} onPress={()=>{if(pendingFile.current){setError('Retry the pending attachment before removing it.');return}const uri=file.uri;setFile(null);void import('expo-file-system').then(fs=>{if(fs.cacheDirectory&&uri.startsWith(fs.cacheDirectory))return fs.deleteAsync(uri,{idempotent:true})}).catch(()=>{})}}/></View>}<View style={styles.composer}>{attachmentEnabled&&<Action secondary label="+" disabled={busy||!!file||!!pending.current} onPress={()=>void pickFile()}/>}<TextInput accessibilityLabel="Message" style={[styles.input,{flex:1,maxHeight:100}]} multiline value={draft} onChangeText={value=>{setDraft(value);lastTyping.current=value.trim()?Date.now():0}} placeholder="Write a message…" placeholderTextColor={mobileDesign.inkMuted} maxLength={4000}/><Action label="Send" disabled={busy||(!file&&!draft.trim())} onPress={()=>void send()}/></View></View>:<View style={styles.content}><Text style={styles.muted}>Sending is unavailable for this contact.</Text></View>}
   </>}
   <Modal visible={!!safetyTarget} transparent animationType="fade" onRequestClose={()=>setSafetyTarget(null)}>
    <View style={styles.reportBackdrop}><View style={styles.reportCard} accessibilityViewIsModal><Text style={styles.heading}>{safetyTarget==='block'?(c.blockedByMe?'Unblock contact?':'Block contact?'):(c.mutedByMe?'Unmute contact?':'Mute contact?')}</Text><Text style={styles.muted}>{safetyTarget==='block'?(c.blockedByMe?'Remove your block. The other person may still have blocked you.':'Stop new private messages and chat activity. Existing history remains available.'):(c.mutedByMe?'Resume eligible message alerts.':'Stop new message alerts without blocking messages.')}</Text><View style={styles.row}><Action label="Cancel" secondary onPress={()=>setSafetyTarget(null)}/><Action label="Confirm" disabled={busy} onPress={()=>void toggleSafety()}/></View></View></View>
