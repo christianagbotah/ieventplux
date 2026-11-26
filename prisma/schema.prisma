@@ -62,6 +62,7 @@ model User {
   directConversationsHigh DirectConversation[] @relation("DirectParticipantHigh")
   directRequests DirectConversation[] @relation("DirectRequester")
   directMessages DirectMessage[]
+  directCallSlot DirectCallSlot?
   messageDeliveries   MessageDelivery[]
   eventReminders      EventReminder[]
   blocksMade          UserBlock[]            @relation("Blocker")
@@ -1250,6 +1251,7 @@ model DirectConversation {
   requester User @relation("DirectRequester", fields: [requesterId], references: [id], onDelete: Cascade)
   messages DirectMessage[]
   activities DirectActivity[]
+  calls DirectCall[]
 
   @@unique([participantLowId, participantHighId], map: "DirectConversation_pair_key")
   @@index([participantLowId, updatedAt])
@@ -1266,6 +1268,36 @@ model DirectActivity {
   session Session @relation(fields:[sessionId], references:[id], onDelete:Cascade)
   @@id([conversationId,sessionId])
   @@index([activeUntil])
+}
+
+// Invitation lifecycle is distinct from a connected media session.
+model DirectCall {
+  id String @id @default(cuid())
+  conversationId String
+  callerId String
+  calleeId String
+  callerSessionId String
+  acceptedSessionId String?
+  clientKey String
+  kind String
+  status String @default("RINGING")
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  acceptedAt DateTime?
+  endedAt DateTime?
+  conversation DirectConversation @relation(fields:[conversationId], references:[id], onDelete:Cascade)
+  slots DirectCallSlot[]
+  @@unique([conversationId,callerId,clientKey], map:"DirectCall_client_key")
+  @@index([status,expiresAt])
+  @@index([conversationId,createdAt,id])
+}
+
+model DirectCallSlot {
+  userId String @id
+  callId String
+  user User @relation(fields:[userId], references:[id], onDelete:Cascade)
+  call DirectCall @relation(fields:[callId], references:[id], onDelete:Cascade)
+  @@index([callId])
 }
 
 model DirectMessage {
