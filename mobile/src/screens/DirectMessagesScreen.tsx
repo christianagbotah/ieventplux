@@ -1,5 +1,5 @@
 import {useCallback,useRef,useState} from 'react'
-import {ActivityIndicator,AppState,FlatList,KeyboardAvoidingView,Platform,Pressable,RefreshControl,StyleSheet,Text,TextInput,View} from 'react-native'
+import {ActivityIndicator,AppState,FlatList,KeyboardAvoidingView,Platform,Pressable,RefreshControl,StyleSheet,Switch,Text,TextInput,View} from 'react-native'
 import {useFocusEffect} from '@react-navigation/native'
 import type {NativeStackScreenProps} from '@react-navigation/native-stack'
 import type {RootStackParamList} from '../navigation'
@@ -28,6 +28,28 @@ function Inbox({userId,route,navigation}:Props&{userId:string}){
  const [page,setPage]=useState(1)
  const [hasMore,setHasMore]=useState(false)
  const [draft,setDraft]=useState('')
+ const [shareActivity,setShareActivity]=useState(false)
+ const [peerActivity,setPeerActivity]=useState({active:false,typing:false})
+ const lastTyping=useRef(0)
+ const canShare=detail?.conversation.canSend===true
+ useFocusEffect(useCallback(()=>{
+  if(!id||!canShare)return
+  let alive=true,inFlight=false
+  const tick=async()=>{
+   if(!alive||inFlight||AppState.currentState!=='active')return
+   inFlight=true
+   try{
+    const result=await api.directMessages.activity({id,expectedUserId:userId,share:shareActivity,typing:shareActivity&&Date.now()-lastTyping.current<6000})
+    if(alive)setPeerActivity(result)
+   }catch{if(alive)setPeerActivity({active:false,typing:false})}
+   finally{inFlight=false}
+  }
+  void tick()
+  const timer=setInterval(()=>void tick(),4000)
+  const sub=AppState.addEventListener('change',state=>{if(state==='active')void tick()})
+  return()=>{alive=false;clearInterval(timer);sub.remove()}
+ },[id,canShare,shareActivity,userId]))
+
  const [error,setError]=useState('')
  const [busy,setBusy]=useState(false)
  const [loading,setLoading]=useState(false)
@@ -78,7 +100,7 @@ function Inbox({userId,route,navigation}:Props&{userId:string}){
    const result=await api.directMessages.mutate({...data,expectedUserId:userId})
    if(!active.current)return
    if(data.action==='request'&&result.conversation){navigation.push('DirectMessages',{id:result.conversation.id});return}
-   if(data.action==='send'){pending.current=null;setDraft('')}
+   if(data.action==='send'){pending.current=null;lastTyping.current=0;setDraft('')}
    await load()
   }catch(err){if(active.current)setError(err instanceof Error?err.message:'Could not complete action.')}
   finally{if(active.current)setBusy(false)}
@@ -116,17 +138,17 @@ function Inbox({userId,route,navigation}:Props&{userId:string}){
  if(!c)return <View style={styles.center}>{feedback}{loading&&<ActivityIndicator color={mobileDesign.emerald}/>}<Text style={styles.muted}>Loading conversation…</Text></View>
  const messages=Array.from(new Map([...older,...(detail?.items??[])].map(m=>[m.id,m])).values()).sort((a,b)=>b.createdAt.localeCompare(a.createdAt)||b.id.localeCompare(a.id))
  return <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS==='ios'?'padding':undefined} keyboardVerticalOffset={Platform.OS==='ios'?85:0}>
-  <View style={styles.threadHeader}><Text numberOfLines={1} style={styles.heading}>{c.peer?.displayName??'Member'}</Text><Text style={styles.muted}>Private conversation</Text>{feedback}</View>
+  <View style={styles.threadHeader}><Text numberOfLines={1} style={styles.heading}>{c.peer?.displayName??'Member'}</Text><Text style={styles.muted}>{c.canSend&&peerActivity.typing?'Typing…':c.canSend&&peerActivity.active?'Active in this chat':'Private conversation'}</Text>{feedback}{c.canSend&&<View style={styles.activityRow}><Text style={styles.muted}>Share chat activity</Text><Switch accessibilityLabel="Share chat activity" value={shareActivity} onValueChange={value=>{setShareActivity(value);lastTyping.current=0}}/></View>}</View>
   {c.status==='PENDING'?<View style={styles.content}><Text style={styles.title}>{c.requesterId===userId?'Waiting for acceptance':'Message request'}</Text>{c.requesterId!==userId&&<View style={styles.row}><Action label="Accept" disabled={busy} onPress={()=>void mutate({action:'accept',id})}/><Action label="Decline" secondary disabled={busy} onPress={()=>void mutate({action:'decline',id})}/></View>}</View>:c.status==='DECLINED'?<View style={styles.content}><Text style={styles.muted}>This request was declined.</Text></View>:<>
   <FlatList inverted contentContainerStyle={styles.content} data={messages} keyExtractor={m=>m.id} keyboardShouldPersistTaps="handled" ListEmptyComponent={<Text style={styles.muted}>Start the conversation.</Text>} ListFooterComponent={cursor?<Action label="Load older messages" secondary disabled={busy} onPress={()=>void more()}/>:null} renderItem={({item})=>{const mine=item.senderId===userId;return <View style={[styles.bubble,mine&&styles.mine]}><Text style={[styles.message,mine&&styles.mineText]}>{item.body}</Text><Text style={[styles.timestamp,mine&&styles.mineText]}>{formatDateTime(item.createdAt)}{mine?(item.readAt?' · Read':' · Sent'):''}</Text></View>}}/>
-  {c.canSend?<View style={styles.composer}><TextInput accessibilityLabel="Message" style={[styles.input,{flex:1,maxHeight:100}]} multiline value={draft} onChangeText={setDraft} placeholder="Write a message…" placeholderTextColor={mobileDesign.inkMuted} maxLength={4000}/><Action label="Send" disabled={busy||!draft.trim()} onPress={()=>void send()}/></View>:<View style={styles.content}><Text style={styles.muted}>Sending is unavailable for this contact.</Text></View>}
+  {c.canSend?<View style={styles.composer}><TextInput accessibilityLabel="Message" style={[styles.input,{flex:1,maxHeight:100}]} multiline value={draft} onChangeText={value=>{setDraft(value);lastTyping.current=value.trim()?Date.now():0}} placeholder="Write a message…" placeholderTextColor={mobileDesign.inkMuted} maxLength={4000}/><Action label="Send" disabled={busy||!draft.trim()} onPress={()=>void send()}/></View>:<View style={styles.content}><Text style={styles.muted}>Sending is unavailable for this contact.</Text></View>}
   </>}
  </KeyboardAvoidingView>
 }
 const styles=StyleSheet.create({
  screen:{flex:1,backgroundColor:mobileDesign.canvas},content:{padding:16,gap:10},center:{flex:1,justifyContent:'center',padding:20,gap:12},stack:{gap:10,marginBottom:12},
  heading:{fontSize:21,fontWeight:'700',color:mobileDesign.ink},title:{fontSize:15,fontWeight:'700',color:mobileDesign.ink},muted:{fontSize:13,color:mobileDesign.inkMuted,lineHeight:19},link:{color:mobileDesign.emerald,fontWeight:'700',fontSize:13},
- row:{flexDirection:'row',alignItems:'center',gap:8,marginTop:8},card:{padding:12,backgroundColor:'#fff',borderRadius:15,borderWidth:1,borderColor:mobileDesign.border,gap:6},contact:{flexDirection:'row',alignItems:'center',gap:10,padding:12,borderRadius:15,backgroundColor:'#fff',borderWidth:1,borderColor:mobileDesign.border,marginBottom:8},avatar:{width:42,height:42,borderRadius:21,backgroundColor:'#e4f5ed',alignItems:'center',justifyContent:'center'},badge:{backgroundColor:mobileDesign.emerald,borderRadius:20,paddingHorizontal:8,paddingVertical:4},
+ activityRow:{flexDirection:'row',alignItems:'center',justifyContent:'space-between'},row:{flexDirection:'row',alignItems:'center',gap:8,marginTop:8},card:{padding:12,backgroundColor:'#fff',borderRadius:15,borderWidth:1,borderColor:mobileDesign.border,gap:6},contact:{flexDirection:'row',alignItems:'center',gap:10,padding:12,borderRadius:15,backgroundColor:'#fff',borderWidth:1,borderColor:mobileDesign.border,marginBottom:8},avatar:{width:42,height:42,borderRadius:21,backgroundColor:'#e4f5ed',alignItems:'center',justifyContent:'center'},badge:{backgroundColor:mobileDesign.emerald,borderRadius:20,paddingHorizontal:8,paddingVertical:4},
  input:{backgroundColor:'#fff',borderWidth:1,borderColor:mobileDesign.border,borderRadius:13,minHeight:46,padding:11,color:mobileDesign.ink,fontSize:15},button:{minHeight:44,paddingHorizontal:15,borderRadius:12,backgroundColor:mobileDesign.emerald,justifyContent:'center',alignItems:'center'},buttonText:{fontWeight:'700',color:'#fff',fontSize:14},secondary:{backgroundColor:'#fff',borderWidth:1,borderColor:mobileDesign.border},secondaryText:{color:mobileDesign.emerald},
  error:{backgroundColor:'#fdf2f2',padding:10,borderRadius:12,gap:8},errorText:{color:'#a73530',fontSize:13},threadHeader:{padding:16,backgroundColor:'#fff',borderBottomWidth:1,borderColor:mobileDesign.border,gap:4},composer:{flexDirection:'row',alignItems:'flex-end',padding:12,gap:8,backgroundColor:'#fff',borderTopWidth:1,borderColor:mobileDesign.border},bubble:{maxWidth:'85%',alignSelf:'flex-start',backgroundColor:'#fff',borderRadius:16,padding:12,marginVertical:4},mine:{alignSelf:'flex-end',backgroundColor:mobileDesign.emerald},message:{fontSize:15,lineHeight:21,color:mobileDesign.ink},mineText:{color:'#fff'},timestamp:{marginTop:5,fontSize:10,color:mobileDesign.inkMuted,textAlign:'right'}
 })

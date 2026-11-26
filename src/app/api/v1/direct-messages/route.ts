@@ -1,7 +1,8 @@
 import {NextRequest} from 'next/server'
-import {errors,handle,jsonOk,rateLimit,readJson,requireUser} from '@/server/api'
+import {errors,handle,jsonOk,rateLimit,readJson,requireUser,requireSession} from '@/server/api'
 import {validDirectId,parseDirectMessage} from '@/server/direct-message-policy'
-import {requestConversation,decideConversation,sendDirectMessage,readDirectMessages,listDirectConversations,getDirectConversation,listDirectContacts} from '@/server/services/direct-messages'
+import {parseActivity} from '@/server/direct-activity-policy'
+import {requestConversation,decideConversation,sendDirectMessage,readDirectMessages,listDirectConversations,getDirectConversation,listDirectContacts,directActivity} from '@/server/services/direct-messages'
 const headers={'Cache-Control':'private, no-store'}
 const ok=(value:unknown)=>jsonOk(value,{headers})
 export async function GET(req:NextRequest){
@@ -31,6 +32,14 @@ export async function POST(req:NextRequest){
   }
   const id=body.id
   if(!validDirectId(id))throw errors.badRequest('Invalid conversation.')
+  if(body.action==='activity'){
+   const input=parseActivity(body)
+   if(!input)throw errors.badRequest('Invalid chat activity.')
+   const session=await requireSession()
+   if(session.user.id!==user.id)throw errors.conflict('The signed-in account changed.')
+   await rateLimit(req,'direct-activity',120,60_000)
+   return ok(await directActivity(id,user.id,session.sessionId,input))
+  }
   if(body.action==='accept'||body.action==='decline'){
    await rateLimit(req,'direct-decision',30,60_000)
    return ok({conversation:await decideConversation(id,user.id,body.action==='accept')})

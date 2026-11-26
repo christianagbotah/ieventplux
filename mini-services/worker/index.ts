@@ -101,6 +101,7 @@ const SWEEPS = [
   { type: 'PAYOUT_STATUS_POLL', everyMs: 120_000 },
   { type: 'PLAYBACK_CLEANUP', everyMs: 120_000 },
   { type: 'WAITLIST_SWEEP', everyMs: 60_000 },
+  { type: 'DIRECT_ACTIVITY_CLEANUP', everyMs: 120_000 },
 ] as const
 
 async function enqueueDueSweeps() {

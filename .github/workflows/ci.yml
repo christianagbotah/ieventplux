@@ -224,7 +224,7 @@ jobs:
           IEVENTPLUX_ISOLATED_DB_TEST: "yes"
         run: |
           bash scripts/verify-direct-messaging-migration.sh
-          bun test src/server/direct-message-policy.test.ts
+          bun test src/server/direct-message-policy.test.ts src/server/direct-activity-policy.test.ts
           bun run scripts/direct-messaging-smoke.ts
 
       - name: Browser clarity and responsive screenshot acceptance

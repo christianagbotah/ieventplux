@@ -10,13 +10,21 @@ export PGOPTIONS="-c search_path=$schema"
 sql(){ psql -X -q -v ON_ERROR_STOP=1 -d "$DATABASE_URL" "$@"; }
 sql <<'SQL'
 CREATE TABLE "User" ("id" TEXT PRIMARY KEY);
+CREATE TABLE "Session" ("id" TEXT PRIMARY KEY);
+INSERT INTO "Session" VALUES ('session-a');
 INSERT INTO "User" VALUES ('a'),('b'),('c');
 SQL
-for attempt in 1 2; do sql -f ops/migrations/20261126_direct_messaging.sql; done
+for attempt in 1 2; do sql -f ops/migrations/20261126_direct_messaging.sql; sql -f ops/migrations/20261126_direct_activity.sql; done
 sql <<'SQL'
 INSERT INTO "DirectConversation" ("id","participantLowId","participantHighId","requesterId","updatedAt") VALUES ('d','a','b','a',CURRENT_TIMESTAMP);
 INSERT INTO "DirectMessage" ("id","conversationId","senderId","clientKey","body") VALUES ('m','d','a','abcdefghijklmnop','Hello');
+INSERT INTO "DirectActivity" ("conversationId","sessionId","activeUntil","typingUntil") VALUES ('d','session-a',CURRENT_TIMESTAMP+INTERVAL '20 seconds',CURRENT_TIMESTAMP+INTERVAL '8 seconds');
 DO $$ BEGIN
+ BEGIN
+  UPDATE "DirectActivity" SET "typingUntil"="activeUntil"+INTERVAL '1 second';
+  RAISE EXCEPTION 'typing outlives activity';
+ EXCEPTION WHEN check_violation THEN NULL;
+ END;
  BEGIN
   INSERT INTO "DirectConversation" ("id","participantLowId","participantHighId","requesterId","updatedAt") VALUES ('duplicate','a','b','b',CURRENT_TIMESTAMP);
   RAISE EXCEPTION 'duplicate pair accepted';
@@ -43,7 +51,7 @@ DO $$ BEGIN
  EXCEPTION WHEN check_violation THEN NULL;
  END;
  DELETE FROM "User" WHERE id='a';
- IF EXISTS (SELECT 1 FROM "DirectConversation") OR EXISTS (SELECT 1 FROM "DirectMessage") THEN RAISE EXCEPTION 'orphan conversation or message'; END IF;
+ IF EXISTS (SELECT 1 FROM "DirectConversation") OR EXISTS (SELECT 1 FROM "DirectMessage") OR EXISTS (SELECT 1 FROM "DirectActivity") THEN RAISE EXCEPTION 'orphan conversation or message'; END IF;
 END $$;
 SQL
 echo 'DIRECT_MESSAGING_MIGRATION_PASS'

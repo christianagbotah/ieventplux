@@ -67,6 +67,14 @@ export async function runJob(type: string, payload: JobPayload): Promise<{ detai
     case 'WAITLIST_PROMOTE': {
       return await runWaitlistJob({ eventId: payload.eventId ? String(payload.eventId) : undefined })
     }
+    case 'DIRECT_ACTIVITY_CLEANUP': {
+      const now = new Date()
+      // Bounded removal of expired ephemeral signals, independent of payments.
+      const removed = await db.$executeRaw`DELETE FROM "DirectActivity" WHERE ("conversationId","sessionId") IN
+       (SELECT "conversationId","sessionId" FROM "DirectActivity" WHERE "activeUntil" <= ${now} ORDER BY "activeUntil" LIMIT 5000)
+       AND "activeUntil" <= ${now}`
+      return {detail:`expired=${removed}`}
+    }
     case 'WAITLIST_SWEEP': {
       return await runWaitlistJob({})
     }

@@ -107,6 +107,7 @@ model Session {
   revokedAt   DateTime?
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   pushInstallations PushInstallation[]
+  directActivities DirectActivity[]
 
   @@index([userId])
 }
@@ -1248,10 +1249,23 @@ model DirectConversation {
   participantHigh User @relation("DirectParticipantHigh", fields: [participantHighId], references: [id], onDelete: Cascade)
   requester User @relation("DirectRequester", fields: [requesterId], references: [id], onDelete: Cascade)
   messages DirectMessage[]
+  activities DirectActivity[]
 
   @@unique([participantLowId, participantHighId], map: "DirectConversation_pair_key")
   @@index([participantLowId, updatedAt])
   @@index([participantHighId, updatedAt])
+}
+
+// Ephemeral per-session signals; never store composer contents.
+model DirectActivity {
+  conversationId String
+  sessionId String
+  activeUntil DateTime
+  typingUntil DateTime?
+  conversation DirectConversation @relation(fields:[conversationId], references:[id], onDelete:Cascade)
+  session Session @relation(fields:[sessionId], references:[id], onDelete:Cascade)
+  @@id([conversationId,sessionId])
+  @@index([activeUntil])
 }
 
 model DirectMessage {
