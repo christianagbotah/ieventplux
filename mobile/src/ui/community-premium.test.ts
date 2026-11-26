@@ -32,10 +32,10 @@ test('community and networking distinguish feedback from failures and drop stale
   expect(n).toContain("api.networking.consent(eventId, join ? 'join' : 'leave')")
   expect(n).toContain('requestRevision.current++')
 })
-test('all moderation, network consent and vote confirmations use a native modal with 52px actions',()=>{
+test('all moderation, network consent and vote confirmations use a native modal with 48dp accessible actions',()=>{
   const dialog=read('components/ActionDialog.tsx')
   expect(dialog).toContain('<Modal transparent')
-  expect(dialog).toContain('minHeight:52')
+  expect(dialog.match(/minHeight:48/g)?.length).toBe(2)
   expect(dialog).toContain('destructive')
   expect(dialog).not.toContain('Alert.alert(')
 })
