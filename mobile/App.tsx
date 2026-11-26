@@ -167,7 +167,7 @@ function AppNavigation() {
   return <NavigationContainer ref={navigationRef} linking={linking} onReady={syncRoute} onStateChange={syncRoute}>
     <View style={styles.appContainer}>
       <AppRoutes />
-      {status === 'authenticated' && user ? <ForegroundActivity key={user.id}
+      {status === 'authenticated' && user ? <ForegroundActivity key={user.id} userId={user.id}
         visible={currentRoute !== 'Notifications' && currentRoute !== 'NativeMeeting' && currentRoute !== 'Broadcast' && currentRoute !== 'Login'}
         onOpen={() => { if (navigationRef.isReady()) navigationRef.navigate('Notifications') }} /> : null}
       {(status === 'authenticated' || status === 'anonymous') && isMainTabRoute(currentRoute) ?
