@@ -113,7 +113,7 @@ const io = new Server(httpServer, {
 })
 
 // Fast access revalidation is CI-only; production remains bounded at 30s.
-const MEETING_RECHECK_MS =
+const ROOM_RECHECK_MS =
   process.env.NODE_ENV !== 'production' && process.env.IEVENTPLUX_TEST_SHORT_MEETING_RECHECK === 'true'
     ? 1500 : 30_000
 
@@ -136,14 +136,13 @@ io.on('connection', (socket) => {
   let recheckPending = false
 
   // A valid ticket or RSVP at connection time is not permanent permission.
-  // Re-evaluate active meeting AND conversation sockets after bans, session
-  // revocation, organization suspension or ticket cancellation. Client-only
-  // heartbeat checks cannot protect other participants from stale sockets.
-  const meetingAccessTimer = setInterval(() => {
+  // Revalidate all joined rooms, including user notifications and event or
+  // broadcast rooms, after session revocation or admission changes. Public
+  // rooms also require a still-visible event.
+  const roomAccessTimer = setInterval(() => {
     if (!socket.connected || !joinedRoom || recheckPending) return
     const room = joinedRoom
-    const kind = parseRoomKey(room)?.kind
-    if (kind !== 'meeting' && kind !== 'meeting-chat') return
+    if (!parseRoomKey(room)) return
     recheckPending = true
     void mayJoinRealtimeRoom(room, socket.handshake.headers.cookie)
       .then((allowed) => {
@@ -161,8 +160,8 @@ io.on('connection', (socket) => {
         }
       })
       .finally(() => { recheckPending = false })
-  }, MEETING_RECHECK_MS)
-  meetingAccessTimer.unref()
+  }, ROOM_RECHECK_MS)
+  roomAccessTimer.unref()
 
   function notifyMeetingDeparture(room: string) {
     if (room.startsWith('meeting:')) {
@@ -325,7 +324,7 @@ io.on('connection', (socket) => {
   })
 
   socket.on('disconnect', () => {
-    clearInterval(meetingAccessTimer)
+    clearInterval(roomAccessTimer)
     if (joinedRoom) {
       notifyMeetingDeparture(joinedRoom)
       const count = bumpRoom(joinedRoom, -1)
