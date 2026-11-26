@@ -229,7 +229,7 @@ jobs:
           bun run scripts/direct-messaging-smoke.ts
           bun test src/server/direct-attachment-policy.test.ts
           bun run scripts/direct-attachment-smoke.ts
-          bun test src/server/direct-call-policy.test.ts src/server/direct-call-media.test.ts
+          bun test src/server/direct-call-policy.test.ts src/server/direct-call-media.test.ts src/server/direct-call-room-policy.test.ts
           bun run scripts/direct-call-smoke.ts
 
       - name: Browser clarity and responsive screenshot acceptance
