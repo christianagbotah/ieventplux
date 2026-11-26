@@ -82,7 +82,7 @@ jobs:
         run: bun test src/server/event-network-policy.test.ts
 
       - name: Event community privacy, moderation and reply authorization
-        run: bun test src/server/community-policy.test.ts src/server/event-update-delivery-policy.test.ts
+        run: bun test src/server/community-policy.test.ts src/server/event-update-delivery-policy.test.ts src/server/event-demand-policy.test.ts
 
       - name: Awards, pageants and supporter-voting policy regression
         run: bun test src/server/competition-policy.test.ts
