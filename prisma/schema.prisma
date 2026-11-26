@@ -102,8 +102,23 @@ model Session {
   expiresAt   DateTime
   revokedAt   DateTime?
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pushInstallations PushInstallation[]
 
   @@index([userId])
+}
+
+// Device-bound push registry. Delivery must recheck the associated session.
+model PushInstallation {
+  keyHash      String    @id
+  sessionId    String
+  providerToken String   @unique
+  platform     String
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  revokedAt    DateTime?
+  session      Session   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, revokedAt])
 }
 
 model ContactVerification {
