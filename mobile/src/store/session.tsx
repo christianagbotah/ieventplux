@@ -15,6 +15,7 @@ import {
 } from 'react'
 import { api, type Membership, type User } from '../api/client'
 import {AppState} from 'react-native'
+import {setTextRetryOwner} from '../lib/direct-text-retry'
 import {allowPushAccount,refreshPush,revokePushBeforeLogout} from '../lib/push-registration'
 
 export type SessionStatus = 'restoring' | 'authenticated' | 'anonymous' | 'error'
@@ -44,10 +45,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     try {
       const res = await api.auth.me()
       if (res.user) {
+        setTextRetryOwner(res.user.id)
         setUser(res.user)
         setMemberships(res.memberships ?? [])
         setStatus('authenticated')
       } else {
+        setTextRetryOwner(null)
         setUser(null)
         setMemberships([])
         setStatus('anonymous')
@@ -67,6 +70,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [refresh])
 
   const signIn = useCallback((nextUser: User, nextMemberships: Membership[]) => {
+    setTextRetryOwner(nextUser.id)
     setUser(nextUser)
     setMemberships(nextMemberships)
     setStatus('authenticated')
@@ -85,6 +89,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   },[status,user?.id])
 
   const signOut = useCallback(async () => {
+    setTextRetryOwner(null)
     try {
       if(user?.id)await revokePushBeforeLogout(user.id).catch(()=>{})
 
