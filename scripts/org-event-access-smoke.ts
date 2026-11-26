@@ -60,6 +60,31 @@ async function main() {
   }
 
   const pastor = await auth('pastor@lightworld.dev')
+  // Notification inbox: isolated synthetic records; no external delivery.
+  if (process.env.IEVENTPLUX_ISOLATED_DB_TEST === 'yes') {
+    const owner = await db.user.findUniqueOrThrow({ where: { email: 'pastor@lightworld.dev' } })
+    const createdAt = new Date(Date.now() + 60_000)
+    const own = await db.notification.create({ data: { userId: ama.id, type: 'REMINDER', title: 'Synthetic attendee alert', body: 'Test only', link: '#/me?tab=tickets', createdAt } })
+    const other = await db.notification.create({ data: { userId: owner.id, type: 'SYSTEM', title: 'Synthetic organizer alert', body: 'Test only', createdAt } })
+    try {
+      const anon = await fetch(base + '/notifications')
+      const anonData = await anon.json()
+      assert(anon.ok && anonData.items.length === 0 && anon.headers.get('cache-control')?.includes('no-store'), 'anonymous inbox is empty and never cached')
+      const response = await fetch(base + '/notifications?pageSize=50', { headers: { Cookie: attendee } })
+      const inbox = await response.json()
+      assert(response.ok && response.headers.get('cache-control')?.includes('no-store') && inbox.items.some((n: {id:string}) => n.id === own.id) &&
+        !inbox.items.some((n: {id:string}) => n.id === other.id), 'notification inbox is private to the signed-in account')
+      const first = await fetch(base + '/notifications?page=1&pageSize=1', { headers: { Cookie: attendee } }).then(r => r.json())
+      assert(first.items.length === 1 && first.items[0].id === own.id && typeof first.hasMore === 'boolean', 'notification pagination returns stable page and hasMore')
+      const mark = (id: string) => fetch(base + '/notifications', { method: 'POST', headers: { Cookie: attendee, 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
+      assert((await mark(other.id)).ok && !(await db.notification.findUniqueOrThrow({ where: { id: other.id } })).readAt, 'guessing another account alert ID never marks it read')
+      const acknowledged = await mark(own.id)
+      assert(acknowledged.ok && acknowledged.headers.get('cache-control')?.includes('no-store') && !!(await db.notification.findUniqueOrThrow({ where: { id: own.id } })).readAt, 'own notification read is server acknowledged')
+      console.log('NATIVE_NOTIFICATION_INBOX_SCOPE_PASS')
+    } finally {
+      await db.notification.deleteMany({ where: { id: { in: [own.id, other.id] } } })
+    }
+  }
   const own = await list(pastor, 'mine=1&orgId=' + chapel.id + '&pageSize=50')
   assert(own.status === 200 && own.data.total > 0, 'organizer accesses own organization')
   assert(own.data.items.every((item: any) => item.org.id === chapel.id), 'requested org listing is tenant scoped')
