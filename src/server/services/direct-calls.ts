@@ -133,5 +133,8 @@ export async function listDirectCalls(actor:Actor,conversationId:string|null){
  await sweepDirectCalls()
  if(conversationId&&!await db.directConversation.findFirst({where:{id:conversationId,...participant(actor.userId)},select:{id:true}}))throw errors.notFound('Conversation not found.')
  const rows=await db.directCall.findMany({where:{conversation:participant(actor.userId),...(conversationId?{conversationId}:{status:{in:['RINGING','ACCEPTED']},expiresAt:{gt:new Date()}})},orderBy:[{createdAt:'desc'},{id:'desc'}],take:50})
- return {items:rows.map(c=>publicCall(c,actor)),mediaAvailable:false}
+ const incomingIds=[...new Set(rows.filter(c=>c.status==='RINGING'&&c.calleeId===actor.userId&&c.expiresAt>new Date()).map(c=>c.callerId))]
+ const names=incomingIds.length?await db.user.findMany({where:{id:{in:incomingIds},status:'ACTIVE',deletedAt:null},select:{id:true,displayName:true}}):[]
+ const byId=new Map(names.map(u=>[u.id,u.displayName]))
+ return {items:rows.map(c=>({...publicCall(c,actor),callerName:c.status==='RINGING'&&c.calleeId===actor.userId?byId.get(c.callerId)??null:null})),mediaAvailable:false,serverNow:new Date().toISOString()}
 }

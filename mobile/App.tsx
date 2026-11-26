@@ -160,7 +160,12 @@ function AppRoutes() {
 function AppNavigation() {
   const { status, user } = useSession()
   const [currentRoute, setCurrentRoute] = useState<string | undefined>()
-  const syncRoute = () => setCurrentRoute(navigationRef.getCurrentRoute()?.name)
+  const [currentThread,setCurrentThread]=useState<string|undefined>()
+  const syncRoute = () => {
+    const route=navigationRef.getCurrentRoute()
+    setCurrentRoute(route?.name)
+    setCurrentThread(route?.name==='DirectMessages'?(route.params as RootStackParamList['DirectMessages'])?.id:undefined)
+  }
   const openPushActivity=useCallback(()=>{
     if(navigationRef.isReady())navigationRef.navigate(activityDestination(status==='authenticated'))
   },[status])
@@ -175,7 +180,7 @@ function AppNavigation() {
   return <NavigationContainer ref={navigationRef} linking={linking} onReady={syncRoute} onStateChange={syncRoute}>
     <View style={styles.appContainer}>
       <AppRoutes />
-      {status==='authenticated'&&user&&<IncomingCallInvitation key={user.id} userId={user.id} visible={!!currentRoute&&!['DirectMessages','NativeMeeting','Broadcast','Login'].includes(currentRoute)} onAccepted={id=>{if(navigationRef.isReady())navigationRef.navigate('DirectMessages',{id})}}/>}
+      {status==='authenticated'&&user&&<IncomingCallInvitation key={user.id} userId={user.id} visible={!!currentRoute&&!['NativeMeeting','Broadcast','Login'].includes(currentRoute)} currentThread={currentThread} onAccepted={id=>{if(navigationRef.isReady())navigationRef.navigate('DirectMessages',{id})}}/>}
       <PushActivityBridge ready={!!currentRoute&&(status==='authenticated'||status==='anonymous')} userId={status==='authenticated'?user?.id:undefined} onOpen={openPushActivity}/>
       {status === 'authenticated' && user ? <ForegroundActivity key={user.id} userId={user.id}
         visible={currentRoute !== 'Notifications' && currentRoute !== 'NativeMeeting' && currentRoute !== 'Broadcast' && currentRoute !== 'Login'}
