@@ -49,6 +49,21 @@ try{
  assert((await send('PATCH','/marketplace/stores/'+slug,stranger,{status:'ACTIVE'})).status===403,'another user cannot publish store')
  const activate=await send('PATCH','/marketplace/stores/'+slug,owner,{status:'ACTIVE'})
  assert(activate.status===200,'verified seeded seller publishes store')
+ const location={gpsAddress:'GA-123-4567',latitude:5.603717,longitude:-0.186964}
+ assert((await send('PATCH','/marketplace/stores/'+slug,stranger,location)).status===403,'non-owner cannot change store location')
+ assert((await send('PATCH','/marketplace/stores/'+slug,owner,{latitude:100,longitude:0})).status===400,'invalid coordinates rejected')
+ assert((await send('PATCH','/marketplace/stores/'+slug,owner,location)).status===200,'seller saves GPS and coordinates')
+ const located=await send('GET','/marketplace/stores/'+slug,owner)
+ assert(located.data.store.gpsAddress===location.gpsAddress&&located.data.store.latitude===location.latitude,'owner location persists')
+ const nearbyPath='/marketplace/stores/nearby'
+ const far=await db.marketplaceStore.create({data:{ownerId:(await db.marketplaceStore.findUniqueOrThrow({where:{id:storeId}})).ownerId,name:'CI farther '+unique,slug:slug+'-far',category:'Handmade apparel',latitude:5.703717,longitude:-0.186964,status:'ACTIVE'}})
+ const hidden=await db.marketplaceStore.create({data:{ownerId:far.ownerId,name:'CI hidden '+unique,slug:slug+'-hidden',category:'Handmade apparel',latitude:5.603717,longitude:-0.186964,status:'DRAFT'}})
+ try{
+  const near=await send('POST',nearbyPath,undefined,{latitude:location.latitude,longitude:location.longitude,q:'Handmade apparel'})
+  assert(near.status===200&&near.data.stores.some((x:Row)=>x.slug===slug)&&near.data.stores.some((x:Row)=>x.slug===far.slug)&&near.data.stores.findIndex((x:Row)=>x.slug===slug)<near.data.stores.findIndex((x:Row)=>x.slug===far.slug),'nearby search ranks real coordinates nearest first')
+  assert(!near.data.stores.some((x:Row)=>x.slug===hidden.slug)&&near.data.stores.every((x:Row)=>x.latitude===undefined&&x.longitude===undefined),'nearby excludes drafts and exact coordinates')
+  assert((await send('POST',nearbyPath,undefined,{latitude:5.6})).status===400,'incomplete search origin rejected')
+ }finally{await db.marketplaceStore.deleteMany({where:{id:{in:[far.id,hidden.id]}}})}
  const settingsPath='/marketplace/stores/'+slug+'/payment-settings'
  const onboardingPath='/marketplace/stores/'+slug+'/settlement-onboarding'
  const pref={mobileMoney:true,card:true,cash:true,destination:'BANK'}
