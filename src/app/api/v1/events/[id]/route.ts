@@ -35,7 +35,7 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
     const session = await getSession()
     const isOrgMember = session
       ? await db.membership.findFirst({
-          where: { userId: session.user.id, orgId: event.orgId, acceptedAt: { not: null } },
+          where: { userId: session.user.id, orgId: event.orgId, acceptedAt: { not: null }, org: { deletedAt: null } },
         })
       : null
     if (!isOrgMember && !['PUBLISHED', 'LIVE', 'ENDED', 'POSTPONED', 'CANCELLED'].includes(event.status)) {
@@ -57,6 +57,9 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
         ? await db.rsvp.findFirst({ where: { eventId: event.id, userId: session.user.id }, select: { status: true, guests: true } })
         : null
     const inviteApproved = Boolean(myRsvp && myRsvp.status === 'APPROVED')
+    const inviteTicket = session && event.visibility === 'INVITE_ONLY' && !isOrgMember && !inviteApproved
+      ? await db.ticket.findFirst({ where: { eventId: event.id, userId: session.user.id, status: { in: ['VALID', 'CHECKED_IN'] } }, select: { id: true } })
+      : null
 
     const mine = session
       ? {
@@ -70,7 +73,7 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
 
     // Do not reveal private venue names, geocoordinates, map URLs or direct
     // directions through nested fields before invitation approval.
-    const redactVenue = event.visibility === 'INVITE_ONLY' && !isOrgMember && !inviteApproved
+    const redactVenue = event.visibility === 'INVITE_ONLY' && !isOrgMember && !inviteApproved && !inviteTicket
     const venueSafe = event.venue
       ? redactVenue
         ? { id: null, name: 'Location shared with approved guests', address: null, city: null, mapsUrl: null, lat: null, lng: null, accessibilityInfo: null }
@@ -93,8 +96,13 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
         tags: parseTags(event.tags),
         venueId: redactVenue ? null : event.venueId,
         directionsUrl: redactVenue ? null : event.directionsUrl,
-        gallery: media.filter((item) => item.kind !== 'PROGRAMME').map((item) => ({ id: item.id, url: item.url, caption: item.caption })),
-        programmes: (event.visibility === 'INVITE_ONLY' && !isOrgMember && !inviteApproved ? [] : media.filter((item) => item.kind === 'PROGRAMME')).map((item) => ({
+        agenda: redactVenue ? [] : event.agenda,
+        contributors: redactVenue ? [] : event.contributors,
+        updates: redactVenue ? [] : event.updates,
+        series: redactVenue ? null : event.series,
+        seriesId: redactVenue ? null : event.seriesId,
+        gallery: (redactVenue ? [] : media.filter((item) => item.kind !== 'PROGRAMME')).map((item) => ({ id: item.id, url: item.url, caption: item.caption })),
+        programmes: (redactVenue ? [] : media.filter((item) => item.kind === 'PROGRAMME')).map((item) => ({
           id: item.id, title: item.caption || 'Event programme', downloadUrl: `/api/v1/events/${event.id}/programmes/${item.id}`,
         })),
         souvenirs: event.souvenirs.map((p) => ({
@@ -108,7 +116,7 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
       mine,
       canManage: Boolean(isOrgMember),
       isEventHost,
-    })
+    }, { headers: { 'Cache-Control': 'private, no-store' } })
   })
 }
 
