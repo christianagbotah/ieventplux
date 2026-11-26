@@ -204,3 +204,11 @@ export async function setDirectSafety(id:string,actorId:string,kind:'block'|'mut
  await relay(result,null)
  return {ok:true}
 }
+
+// A read-only receipt lookup still works after a contact blocks the sender.
+// It never returns another participant's client key, message body or attachment.
+export async function directSendReceipt(id:string,actorId:string,clientKey:string){
+ await scoped(db,id,actorId)
+ const row=await db.directMessage.findUnique({where:{conversationId_senderId_clientKey:{conversationId:id,senderId:actorId,clientKey}},select:{id:true,readAt:true,removedAt:true}})
+ return row?{found:true,messageId:row.id,status:row.removedAt?'REMOVED':row.readAt?'READ':'SENT'}:{found:false}
+}

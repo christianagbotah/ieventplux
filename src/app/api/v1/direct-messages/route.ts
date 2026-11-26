@@ -3,7 +3,7 @@ import {errors,handle,jsonOk,rateLimit,readJson,requireUser,requireSession} from
 import {validDirectId,parseDirectMessage} from '@/server/direct-message-policy'
 import {parseActivity} from '@/server/direct-activity-policy'
 import {parseDirectReport} from '@/server/direct-report-policy'
-import {requestConversation,decideConversation,sendDirectMessage,readDirectMessages,listDirectConversations,getDirectConversation,listDirectContacts,directActivity,reportDirectMessage,setDirectSafety} from '@/server/services/direct-messages'
+import {requestConversation,decideConversation,sendDirectMessage,readDirectMessages,listDirectConversations,getDirectConversation,listDirectContacts,directActivity,reportDirectMessage,setDirectSafety,directSendReceipt} from '@/server/services/direct-messages'
 const headers={'Cache-Control':'private, no-store'}
 const ok=(value:unknown)=>jsonOk(value,{headers})
 export async function GET(req:NextRequest){
@@ -12,6 +12,13 @@ export async function GET(req:NextRequest){
   const query=req.nextUrl.searchParams
   if(query.get('contacts')==='1')return ok(await listDirectContacts(user.id,(query.get('q')??'').trim().slice(0,80)))
   const id=query.get('id'),before=query.get('before')
+  const receipt=query.get('clientKey')
+  if(receipt!==null){
+   if(query.get('expectedUserId')!==user.id)throw errors.conflict('The signed-in account changed.')
+   if(!validDirectId(id)||!/^[A-Za-z0-9_-]{16,128}$/.test(receipt))throw errors.badRequest('Invalid delivery lookup.')
+   await rateLimit(req,'direct-receipt',60,60_000)
+   return ok(await directSendReceipt(id,user.id,receipt))
+  }
   if(id!==null){
    if(!validDirectId(id)||(before!==null&&!validDirectId(before)))throw errors.badRequest('Invalid conversation or cursor.')
    return ok(await getDirectConversation(id,user.id,before))

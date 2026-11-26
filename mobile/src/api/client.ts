@@ -968,6 +968,7 @@ export const api = {
     contacts: (q:string)=>request<{items:DirectContact[]}>('GET','/direct-messages?contacts=1&q='+encodeURIComponent(q)),
     detail: (id:string,before?:string)=>request<DirectDetail>('GET','/direct-messages?id='+encodeURIComponent(id)+(before?'&before='+encodeURIComponent(before):'')),
     mutate: (data:Record<string,unknown>)=>request<{conversation?:DirectConversation;message?:DirectMessage;marked?:number;replayed?:boolean}>('POST','/direct-messages',data),
+    receipt: (id:string,userId:string,clientKey:string)=>request<{found:boolean;messageId?:string;status?:'SENT'|'READ'|'REMOVED'}>('GET','/direct-messages?id='+encodeURIComponent(id)+'&expectedUserId='+encodeURIComponent(userId)+'&clientKey='+encodeURIComponent(clientKey)),
     attachmentConfig: ()=>request<{enabled:boolean;maxBytes:number}>('GET','/direct-messages/attachments'),
     uploadAttachment: (form:FormData)=>request<{message:DirectMessage;replayed:boolean}>('POST','/direct-messages/attachments',form),
     getAttachment: (messageId:string,userId:string)=>request<DirectAttachment&{base64:string}>('GET','/direct-messages/attachments?encoding=base64&messageId='+encodeURIComponent(messageId)+'&expectedUserId='+encodeURIComponent(userId)),

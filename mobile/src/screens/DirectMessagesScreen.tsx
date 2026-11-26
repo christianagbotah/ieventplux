@@ -9,6 +9,8 @@ import {mobileDesign} from '../ui/PremiumUI'
 import {subscribeActivity} from '../lib/activity-signal'
 import ChatVoiceRecorder from '../components/ChatVoiceRecorder'
 import ChatVoicePlayer from '../components/ChatVoicePlayer'
+import {loadPendingText,savePendingText,clearPendingText} from '../lib/direct-pending'
+import {MAX_PENDING_AGE,type PendingText} from '../lib/direct-pending-policy'
 
 type Props=NativeStackScreenProps<RootStackParamList,'DirectMessages'>
 export default function DirectMessagesScreen(props:Props){
@@ -30,6 +32,21 @@ function Inbox({userId,route,navigation}:Props&{userId:string}){
  const [page,setPage]=useState(1)
  const [hasMore,setHasMore]=useState(false)
  const [draft,setDraft]=useState('')
+ const [pendingText,setPendingText]=useState<PendingText|null>(null)
+ const [pendingReady,setPendingReady]=useState(false)
+ const [receiptStatus,setReceiptStatus]=useState('')
+ const [discardPending,setDiscardPending]=useState(false)
+ const sending=useRef(false)
+ const pending=useRef<PendingText|null>(null)
+ useFocusEffect(useCallback(()=>{
+  if(!id)return
+  let alive=true
+  setPendingReady(false)
+  void loadPendingText(userId,id).then(record=>{
+   if(alive){pending.current=record;setPendingText(record);if(record)setDraft(record.body);setPendingReady(true)}
+  }).catch(()=>{if(alive){setPendingReady(false);setError('Secure pending-message storage is unavailable. Reopen this conversation to retry.')}})
+  return()=>{alive=false}
+ },[id,userId]))
  const [attachmentEnabled,setAttachmentEnabled]=useState(false)
  const [file,setFile]=useState<{uri:string;name:string;mimeType:string;size?:number}|null>(null)
  const pendingFile=useRef<{uri:string;caption:string;key:string}|null>(null)
@@ -74,7 +91,6 @@ function Inbox({userId,route,navigation}:Props&{userId:string}){
  const active=useRef(false)
  const revision=useRef(0)
  const loadingRef=useRef(false)
- const pending=useRef<{body:string;key:string}|null>(null)
  const lastRead=useRef('')
  const historyStarted=useRef(false)
  const load=useCallback(async(next=1)=>{
@@ -117,7 +133,7 @@ function Inbox({userId,route,navigation}:Props&{userId:string}){
    const result=await api.directMessages.mutate({...data,expectedUserId:userId})
    if(!active.current)return
    if(data.action==='request'&&result.conversation){navigation.push('DirectMessages',{id:result.conversation.id});return}
-   if(data.action==='send'){pending.current=null;lastTyping.current=0;setDraft('')}
+   if(data.action==='send'){pending.current=null;setPendingText(null);lastTyping.current=0;setDraft('')}
    await load()
   }catch(err){if(active.current)setError(err instanceof Error?err.message:'Could not complete action.')}
   finally{if(active.current)setBusy(false)}
@@ -188,16 +204,35 @@ function Inbox({userId,route,navigation}:Props&{userId:string}){
    if(active.current)setBusy(false)
   }
  }
+ const reconcileText=async(retry:boolean,create=false)=>{
+  if(!id||busy||sending.current||!active.current||!pendingReady)return
+  sending.current=true;setBusy(true);setError('');setReceiptStatus('')
+  try{
+   let record=pending.current
+   if(!record&&create){
+    const body=draft.trim()
+    if(!body)return
+    const crypto=await import('expo-crypto')
+    record={userId,conversationId:id,body,key:crypto.randomUUID(),createdAt:Date.now()}
+    await savePendingText(record)
+    pending.current=record
+    if(active.current)setPendingText(record)
+   }
+   if(!record||!active.current)return
+   const receipt=await api.directMessages.receipt(id,userId,record.key)
+   if(!active.current)return
+   if(!receipt.found&&!retry){setReceiptStatus('No server receipt yet. Retry uses the same message key.');return}
+   if(!receipt.found&&Date.now()-record.createdAt>MAX_PENDING_AGE){setReceiptStatus('The pending retry has expired. Check delivery or discard the local copy.');return}
+   if(!receipt.found)await api.directMessages.mutate({action:'send',id,body:record.body,clientKey:record.key,expectedUserId:userId})
+   await clearPendingText(userId,id)
+   pending.current=null
+   if(active.current){setPendingText(null);setDraft('');lastTyping.current=0;setReceiptStatus(receipt.status==='REMOVED'?'Message was received and later removed.':'Message saved on server.');await load()}
+  }catch(err){if(active.current)setError((err instanceof Error?err.message:'Could not confirm delivery.')+(pending.current?' Pending text is saved securely on this device.':' Message was not queued.'))}
+  finally{sending.current=false;setBusy(false)}
+ }
  const send=async()=>{
   if(file){await sendFile();return}
-  const body=draft.trim()
-  if(!body||busy)return
-  if(pending.current&&pending.current.body!==body){setError('Retry the original message before changing its text.');return}
-  if(!pending.current){
-   const crypto=await import('expo-crypto')
-   pending.current={body,key:crypto.randomUUID()}
-  }
-  await mutate({action:'send',id,body:pending.current.body,clientKey:pending.current.key})
+  if(!pending.current)await reconcileText(true,true)
  }
  const more=async()=>{
   if(!id||!cursor||busy)return
@@ -226,8 +261,11 @@ function Inbox({userId,route,navigation}:Props&{userId:string}){
   <View style={styles.threadHeader}><Text numberOfLines={1} style={styles.heading}>{c.peer?.displayName??'Member'}</Text><Text style={styles.muted}>{c.canSend&&peerActivity.typing?'Typing…':c.canSend&&peerActivity.active?'Active in this chat':'Private conversation'}</Text>{feedback}<View style={styles.row}><Action label={c.mutedByMe?'Unmute':'Mute'} secondary disabled={busy} onPress={()=>setSafetyTarget('mute')}/><Action label={c.blockedByMe?'Unblock':'Block'} secondary disabled={busy} onPress={()=>setSafetyTarget('block')}/></View>{!!reportStatus&&<Text accessibilityLiveRegion="polite" style={styles.muted}>{reportStatus}</Text>}{c.canSend&&<View style={styles.activityRow}><Text style={styles.muted}>Share chat activity</Text><Switch accessibilityLabel="Share chat activity" value={shareActivity} onValueChange={value=>{setShareActivity(value);lastTyping.current=0}}/></View>}</View>
   {c.status==='PENDING'?<View style={styles.content}><Text style={styles.title}>{c.requesterId===userId?'Waiting for acceptance':'Message request'}</Text>{c.requesterId!==userId&&<View style={styles.row}><Action label="Accept" disabled={busy} onPress={()=>void mutate({action:'accept',id})}/><Action label="Decline" secondary disabled={busy} onPress={()=>void mutate({action:'decline',id})}/></View>}</View>:c.status==='DECLINED'?<View style={styles.content}><Text style={styles.muted}>This request was declined.</Text></View>:<>
   <FlatList inverted contentContainerStyle={styles.content} data={messages} keyExtractor={m=>m.id} keyboardShouldPersistTaps="handled" ListEmptyComponent={<Text style={styles.muted}>Start the conversation.</Text>} ListFooterComponent={cursor?<Action label="Load older messages" secondary disabled={busy} onPress={()=>void more()}/>:null} renderItem={({item})=>{const mine=item.senderId===userId;return <View style={[styles.bubble,mine&&styles.mine]}><Text style={[styles.message,mine&&styles.mineText]}>{item.removedAt?'Message removed by moderation':item.body}</Text>{!item.removedAt&&item.attachment?.mime.startsWith('audio/')&&<ChatVoicePlayer key={userId+':'+item.id} messageId={item.id} userId={userId} mime={item.attachment.mime}/>}{!item.removedAt&&item.attachment&&!item.attachment.mime.startsWith('audio/')&&<Pressable accessibilityRole="button" disabled={busy} style={{padding:8,borderWidth:1,borderColor:mine?'#fff':mobileDesign.border,borderRadius:10,marginTop:6}} onPress={()=>void openFile(item.id)}><Text style={[styles.message,mine&&styles.mineText]}>{item.attachment.filename}</Text><Text style={[styles.timestamp,mine&&styles.mineText]}>{Math.ceil(item.attachment.size/1024)} KB · Open file</Text></Pressable>}{!mine&&!item.removedAt&&<Pressable accessibilityRole="button" disabled={busy||reported.includes(item.id)} style={{minHeight:32,justifyContent:'center'}} onPress={()=>{setReportTarget(item.id);setReportReason('SPAM');setReportDetails('');setError('')}}><Text style={styles.link}>{reported.includes(item.id)?'Reported':'Report message'}</Text></Pressable>}<Text style={[styles.timestamp,mine&&styles.mineText]}>{formatDateTime(item.createdAt)}{mine?(item.readAt?' · Read':' · Sent'):''}</Text></View>}}/>
-  {c.canSend?<View style={{backgroundColor:'#fff'}}>{attachmentEnabled&&!file&&<View style={{paddingHorizontal:12,paddingTop:6}}><ChatVoiceRecorder disabled={busy} onFile={recorded=>{setFile(recorded);setError('')}} onError={setError}/></View>}{file&&<View style={{padding:10,flexDirection:'row',alignItems:'center',gap:8}}><Text style={[styles.muted,{flex:1}]}>{file.name} · {Math.ceil((file.size??0)/1024)} KB</Text><Action secondary label="Remove" disabled={busy} onPress={()=>{if(pendingFile.current){setError('Retry the pending attachment before removing it.');return}const uri=file.uri;setFile(null);void import('expo-file-system').then(fs=>{if(fs.cacheDirectory&&uri.startsWith(fs.cacheDirectory))return fs.deleteAsync(uri,{idempotent:true})}).catch(()=>{})}}/></View>}<View style={styles.composer}>{attachmentEnabled&&<Action secondary label="+" disabled={busy||!!file||!!pending.current} onPress={()=>void pickFile()}/>}<TextInput accessibilityLabel="Message" style={[styles.input,{flex:1,maxHeight:100}]} multiline value={draft} onChangeText={value=>{setDraft(value);lastTyping.current=value.trim()?Date.now():0}} placeholder="Write a message…" placeholderTextColor={mobileDesign.inkMuted} maxLength={4000}/><Action label="Send" disabled={busy||(!file&&!draft.trim())} onPress={()=>void send()}/></View></View>:<View style={styles.content}><Text style={styles.muted}>Sending is unavailable for this contact.</Text></View>}
+  {!!receiptStatus&&<Text accessibilityLiveRegion="polite" style={[styles.muted,{padding:10}]}>{receiptStatus}</Text>}
+  {pendingText&&<View style={styles.content}><Text style={styles.title}>Pending confirmation</Text><Text style={styles.message}>{pendingText.body}</Text><Text style={styles.muted}>Saved securely on this device. Retry only when you choose; expired copies are cleared when reopened.</Text><View style={styles.row}><Action label="Check delivery" secondary disabled={busy||!pendingReady} onPress={()=>void reconcileText(false)}/><Action label="Retry" disabled={busy||!pendingReady||!c.canSend} onPress={()=>void reconcileText(true)}/></View><Action label="Discard local copy" secondary disabled={busy} onPress={()=>setDiscardPending(true)}/></View>}
+  {c.canSend?<View style={{backgroundColor:'#fff'}}>{attachmentEnabled&&!file&&<View style={{paddingHorizontal:12,paddingTop:6}}><ChatVoiceRecorder disabled={busy||!!pendingText} onFile={recorded=>{setFile(recorded);setError('')}} onError={setError}/></View>}{file&&<View style={{padding:10,flexDirection:'row',alignItems:'center',gap:8}}><Text style={[styles.muted,{flex:1}]}>{file.name} · {Math.ceil((file.size??0)/1024)} KB</Text><Action secondary label="Remove" disabled={busy} onPress={()=>{if(pendingFile.current){setError('Retry the pending attachment before removing it.');return}const uri=file.uri;setFile(null);void import('expo-file-system').then(fs=>{if(fs.cacheDirectory&&uri.startsWith(fs.cacheDirectory))return fs.deleteAsync(uri,{idempotent:true})}).catch(()=>{})}}/></View>}<View style={styles.composer}>{attachmentEnabled&&<Action secondary label="+" disabled={busy||!!file||!!pending.current} onPress={()=>void pickFile()}/>}<TextInput accessibilityLabel="Message" style={[styles.input,{flex:1,maxHeight:100}]} multiline editable={!busy&&!pendingText&&pendingReady} value={draft} onChangeText={value=>{setDraft(value);lastTyping.current=value.trim()?Date.now():0}} placeholder="Write a message…" placeholderTextColor={mobileDesign.inkMuted} maxLength={4000}/><Action label="Send" disabled={busy||!!pendingText||(!file&&(!draft.trim()||!pendingReady))} onPress={()=>void send()}/></View></View>:<View style={styles.content}><Text style={styles.muted}>Sending is unavailable for this contact.</Text></View>}
   </>}
+  <Modal visible={discardPending} transparent animationType="fade" onRequestClose={()=>setDiscardPending(false)}><View style={styles.reportBackdrop}><View style={styles.reportCard} accessibilityViewIsModal><Text style={styles.heading}>Discard pending message?</Text><Text style={styles.muted}>Only the local retry copy will be removed. A message already received by the server will remain in the chat.</Text><View style={styles.row}><Action label="Cancel" secondary onPress={()=>setDiscardPending(false)}/><Action label="Discard" disabled={busy} onPress={()=>{if(!id||sending.current)return;setBusy(true);void clearPendingText(userId,id).then(()=>{pending.current=null;setPendingText(null);setDraft('');setReceiptStatus('Local retry copy discarded.');setDiscardPending(false)}).catch(()=>setError('Could not clear secure storage. Retry.')).finally(()=>setBusy(false))}}/></View></View></View></Modal>
   <Modal visible={!!safetyTarget} transparent animationType="fade" onRequestClose={()=>setSafetyTarget(null)}>
    <View style={styles.reportBackdrop}><View style={styles.reportCard} accessibilityViewIsModal><Text style={styles.heading}>{safetyTarget==='block'?(c.blockedByMe?'Unblock contact?':'Block contact?'):(c.mutedByMe?'Unmute contact?':'Mute contact?')}</Text><Text style={styles.muted}>{safetyTarget==='block'?(c.blockedByMe?'Remove your block. The other person may still have blocked you.':'Stop new private messages and chat activity. Existing history remains available.'):(c.mutedByMe?'Resume eligible message alerts.':'Stop new message alerts without blocking messages.')}</Text><View style={styles.row}><Action label="Cancel" secondary onPress={()=>setSafetyTarget(null)}/><Action label="Confirm" disabled={busy} onPress={()=>void toggleSafety()}/></View></View></View>
   </Modal>

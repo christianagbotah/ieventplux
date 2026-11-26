@@ -35,6 +35,10 @@ function Inbox({userId,id}:{userId:string;id?:string}){
  const [older,setOlder]=useState<Message[]>([])
  const [cursor,setCursor]=useState<string|null>(null)
  const [draft,setDraft]=useState('')
+ const [pendingText,setPendingText]=useState<{body:string;key:string}|null>(null)
+ const sending=useRef(false)
+ const [receiptStatus,setReceiptStatus]=useState('')
+ const [discardPending,setDiscardPending]=useState(false)
  const [attachmentEnabled,setAttachmentEnabled]=useState(false)
  const [file,setFile]=useState<File|null>(null)
  const fileInput=useRef<HTMLInputElement>(null)
@@ -114,9 +118,10 @@ function Inbox({userId,id}:{userId:string;id?:string}){
   refresh()
   window.addEventListener('ievx:direct-changed',refresh)
   window.addEventListener('focus',refresh)
+  window.addEventListener('online',refresh)
   document.addEventListener('visibilitychange',refresh)
   const timer=window.setInterval(refresh,5000)
-  return()=>{active.current=false;version.current++;window.clearInterval(timer);window.removeEventListener('ievx:direct-changed',refresh);window.removeEventListener('focus',refresh);document.removeEventListener('visibilitychange',refresh)}
+  return()=>{active.current=false;version.current++;window.clearInterval(timer);window.removeEventListener('ievx:direct-changed',refresh);window.removeEventListener('focus',refresh);window.removeEventListener('online',refresh);document.removeEventListener('visibilitychange',refresh)}
  },[load])
  const search=async()=>{
   setBusy(true);setError('')
@@ -131,7 +136,7 @@ function Inbox({userId,id}:{userId:string;id?:string}){
    const result=await api.post<{conversation?:Conversation}>('/direct-messages',{...payload,expectedUserId:userId})
    if(!current())return
    if(payload.action==='request'&&result.conversation)navigate('/messages/'+result.conversation.id)
-   if(payload.action==='send'){pending.current=null;lastTyping.current=0;setDraft('')}
+   if(payload.action==='send'){pending.current=null;setPendingText(null);lastTyping.current=0;setDraft('')}
    await load()
   }catch(err){if(current())setError(err instanceof Error?err.message:'Could not complete action.')}
   finally{if(current())setBusy(false)}
@@ -160,15 +165,26 @@ function Inbox({userId,id}:{userId:string;id?:string}){
   }catch(err){if(current())setError(err instanceof Error?err.message:'Could not send attachment. Retry with the same file.')}
   finally{if(current())setBusy(false)}
  }
+ const reconcileText=async(retry:boolean)=>{
+  const record=pending.current
+  if(!record||!id||busy||sending.current||!current())return
+  sending.current=true;setBusy(true);setError('');setReceiptStatus('')
+  try{
+   const result=await api.get<{found:boolean;status?:string}>('/direct-messages?id='+encodeURIComponent(id)+'&expectedUserId='+encodeURIComponent(userId)+'&clientKey='+encodeURIComponent(record.key))
+   if(!current())return
+   if(!result.found&&!retry){setReceiptStatus('No server receipt yet. Retry uses the original message key.');return}
+   if(!result.found)await api.post('/direct-messages',{action:'send',id,body:record.body,clientKey:record.key,expectedUserId:userId})
+   if(current()){pending.current=null;setPendingText(null);setDraft('');lastTyping.current=0;setReceiptStatus(result.status==='REMOVED'?'Message was received and later removed.':'Message saved on server.');await load()}
+  }catch(err){if(current())setError((err instanceof Error?err.message:'Could not confirm delivery.')+' Your pending message is retained while this conversation stays open.')}
+  finally{sending.current=false;if(current())setBusy(false)}
+ }
  const send=()=>{
   if(file){void sendFile();return}
   const body=draft.trim()
-  if(!body||busy)return
-  if(pending.current&&pending.current.body!==body){
-   setError('The previous message has an uncertain result. Retry the original text first.');return
-  }
-  if(!pending.current)pending.current={body,key:crypto.randomUUID()}
-  void mutate({action:'send',id,...{body:pending.current.body,clientKey:pending.current.key}})
+  if(!body||busy||sending.current||pending.current||!current()||!id)return
+  pending.current={body,key:crypto.randomUUID()}
+  setPendingText(pending.current)
+  void reconcileText(true)
  }
  const more=async()=>{
   if(!id||!cursor||busy)return
@@ -217,16 +233,19 @@ function Inbox({userId,id}:{userId:string;id?:string}){
       {items.map(m=><div key={m.id} className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${m.senderId===userId?'self-end bg-primary text-primary-foreground':'self-start border bg-card'}`}><p className="whitespace-pre-wrap [overflow-wrap:anywhere]">{m.removedAt?'Message removed by moderation':m.body}</p>{!m.removedAt&&m.attachment?.mime.startsWith('audio/')&&<ChatVoicePlayer key={userId+':'+m.id} messageId={m.id} userId={userId} mime={m.attachment.mime}/>}{!m.removedAt&&m.attachment&&<a className="mt-2 flex max-w-full items-center gap-2 rounded-lg border border-current/20 p-2 text-xs" href={'/api/v1/direct-messages/attachments?messageId='+encodeURIComponent(m.id)+'&expectedUserId='+encodeURIComponent(userId)} download><Paperclip className="size-4 shrink-0"/><span className="min-w-0 break-all">{m.attachment.filename}<span className="block opacity-80">{Math.ceil(m.attachment.size/1024)} KB · Download</span></span></a>}{m.senderId!==userId&&!m.removedAt&&<button type="button" className="mt-1 inline-flex min-h-8 items-center gap-1 text-xs text-muted-foreground" disabled={reported.includes(m.id)||busy} onClick={()=>{setReportTarget(m.id);setReportReason('SPAM');setReportDetails('');setError('')}}><Flag className="size-3"/>{reported.includes(m.id)?'Reported':'Report'}</button>}<span className="mt-1 flex items-center justify-end gap-1 text-[10px] opacity-80">{relative(m.createdAt)}{m.senderId===userId&&(m.readAt?<CheckCheck className="size-3" aria-label="Read"/>:<Check className="size-3" aria-label="Sent"/>)}</span></div>)}
       <div ref={scrollEnd}/>
      </div>
+     {receiptStatus&&<p role="status" className="border-t px-3 py-2 text-xs text-muted-foreground">{receiptStatus}</p>}
+     {pendingText&&<div className="space-y-2 border-t bg-muted/30 p-3"><p className="text-xs font-semibold">Pending confirmation</p><p className="whitespace-pre-wrap break-words text-sm">{pendingText.body}</p><p className="text-xs text-muted-foreground">Keep this conversation open to retain the pending message.</p><div className="flex flex-wrap gap-2"><Button size="sm" variant="outline" disabled={busy} onClick={()=>void reconcileText(false)}>Check delivery</Button><Button size="sm" disabled={busy||!c.canSend} onClick={()=>void reconcileText(true)}>Retry</Button><Button size="sm" variant="ghost" disabled={busy} onClick={()=>setDiscardPending(true)}>Discard local copy</Button></div></div>}
      {c.canSend?<form className="border-t p-3" onSubmit={e=>{e.preventDefault();send()}}>
       {file&&<div className="mb-2 flex items-center justify-between gap-2 rounded-lg border p-2 text-xs"><span className="min-w-0 break-all">{file.name} · {Math.ceil(file.size/1024)} KB</span><Button type="button" size="sm" variant="ghost" disabled={busy} onClick={()=>{if(pendingFile.current){setError('Retry the pending attachment before removing it.');return}setFile(null);if(fileInput.current)fileInput.current.value=''}}>Remove</Button></div>}
-      {attachmentEnabled&&!file&&<div className="mb-2"><ChatVoiceRecorder disabled={busy} onFile={recorded=>{setFile(recorded);setError('')}} onError={setError}/></div>}
+      {attachmentEnabled&&!file&&<div className="mb-2"><ChatVoiceRecorder disabled={busy||!!pendingText} onFile={recorded=>{setFile(recorded);setError('')}} onError={setError}/></div>}
       <div className="flex items-end gap-2">
       {attachmentEnabled&&<><input ref={fileInput} type="file" hidden accept="image/jpeg,image/png,image/webp,application/pdf" onChange={e=>{const selected=e.target.files?.[0];if(!selected)return;if(selected.size>2097152||selected.size<1){setError('Choose a file no larger than 2 MB.');e.target.value='';return}setFile(selected);setError('')}}/><Button type="button" variant="outline" size="icon" className="size-11 shrink-0" aria-label="Attach file" disabled={busy||!!file||!!pending.current} onClick={()=>fileInput.current?.click()}><Paperclip className="size-4"/></Button></>}
-      <Textarea value={draft} onChange={e=>{setDraft(e.target.value);lastTyping.current=e.target.value.trim()?Date.now():0}} maxLength={4000} rows={2} placeholder="Write a message…" aria-label="Message" className="min-h-11 resize-none"/><Button size="icon" className="size-11 shrink-0 rounded-xl" aria-label="Send message" disabled={busy||(!file&&!draft.trim())}><Send className="size-4"/></Button></div></form>:<p className="border-t p-3 text-sm text-muted-foreground">Sending is unavailable for this contact.</p>}
+      <Textarea value={draft} disabled={busy||!!pendingText} onChange={e=>{setDraft(e.target.value);lastTyping.current=e.target.value.trim()?Date.now():0}} maxLength={4000} rows={2} placeholder="Write a message…" aria-label="Message" className="min-h-11 resize-none"/><Button size="icon" className="size-11 shrink-0 rounded-xl" aria-label="Send message" disabled={busy||!!pendingText||(!file&&!draft.trim())}><Send className="size-4"/></Button></div></form>:<p className="border-t p-3 text-sm text-muted-foreground">Sending is unavailable for this contact.</p>}
      </>}
     </>}
    </div>
   </div>
+  <Dialog open={discardPending} onOpenChange={setDiscardPending}><DialogContent className="max-w-sm"><DialogHeader><DialogTitle>Discard pending message?</DialogTitle><DialogDescription>This removes the local retry copy only. If the server already received the message, it will remain in the conversation. Check delivery first if you are unsure.</DialogDescription></DialogHeader><DialogFooter><Button variant="outline" onClick={()=>setDiscardPending(false)}>Cancel</Button><Button variant="destructive" disabled={busy} onClick={()=>{pending.current=null;setPendingText(null);setDraft('');setReceiptStatus('Local retry copy discarded.');setDiscardPending(false)}}>Discard local copy</Button></DialogFooter></DialogContent></Dialog>
   <Dialog open={!!safetyTarget} onOpenChange={open=>{if(!open)setSafetyTarget(null)}}>
    <DialogContent className="max-w-sm"><DialogHeader><DialogTitle>{safetyTarget==='block'?(c?.blockedByMe?'Unblock contact?':'Block contact?'):(c?.mutedByMe?'Unmute contact?':'Mute contact?')}</DialogTitle><DialogDescription>{safetyTarget==='block'?(c?.blockedByMe?'Remove your block. The other person may still have blocked you.':'Stop new private messages and chat activity with this contact. Existing history remains available.'):(c?.mutedByMe?'Resume eligible message alerts.':'Stop new message alerts from this contact without blocking messages.')}</DialogDescription></DialogHeader><DialogFooter><Button variant="outline" onClick={()=>setSafetyTarget(null)}>Cancel</Button><Button disabled={busy} onClick={()=>void toggleSafety()}>Confirm</Button></DialogFooter></DialogContent>
   </Dialog>
