@@ -116,6 +116,42 @@ async function main(){
     }
   }
   console.log('SHARED_PAGE_SHELL_BROWSER_PASS')
+  // Synthetic profile in the disposable CI database, never a live user.
+  const createdOrg=await page.request.post(base+'/api/v1/orgs',{data:{name:'Visual QA organizer',orgType:'INDIVIDUAL',tagline:'Initial profile'}})
+  assert(createdOrg.ok(),'Synthetic organizer created')
+  const org=(await createdOrg.json()).org
+  for(const width of [320,390,1440]){
+    await page.setViewportSize({width,height:width===1440?900:740})
+    await page.goto(base+'/#/org/'+org.slug,{waitUntil:'domcontentloaded'})
+    await page.getByRole('button',{name:'Edit profile',exact:true}).waitFor({state:'visible'})
+    await verifyShell(page,width,'organizer profile')
+    assert(await page.getByRole('button',{name:'Follow',exact:true}).count()===0,'Owner must not see Follow')
+    await page.getByRole('button',{name:'Edit profile picture'}).waitFor({state:'visible'})
+    await page.getByRole('button',{name:'Edit banner'}).waitFor({state:'visible'})
+    await page.screenshot({path:path.join(output,'org-profile-owner-'+width+'.png'),animations:'disabled'})
+  }
+  await page.getByRole('button',{name:'Edit profile',exact:true}).click()
+  const dialog=page.getByRole('dialog',{name:'Edit profile'})
+  await dialog.getByLabel('Short introduction').fill('Updated public profile')
+  await dialog.getByLabel('Website',{exact:true}).fill('invalid://')
+  await dialog.getByRole('button',{name:'Save profile'}).click()
+  const profileFeedback=dialog.locator('[data-submission-feedback][role=alert]')
+  await profileFeedback.waitFor({state:'visible'})
+  await page.waitForFunction(()=>document.activeElement?.hasAttribute('data-submission-feedback'))
+  assert(await dialog.getByLabel('Short introduction').inputValue()==='Updated public profile','Invalid submission retains profile data')
+  await dialog.getByLabel('Website',{exact:true}).fill('https://example.com')
+  await dialog.getByRole('button',{name:'Save profile'}).click()
+  await dialog.waitFor({state:'hidden'})
+  await page.getByText('Updated public profile',{exact:false}).first().waitFor({state:'visible'})
+  // New browser context without the owner session must not get editor controls.
+  const guest=await browser.newPage({viewport:{width:390,height:844},reducedMotion:'reduce'})
+  await guest.goto(base+'/#/org/'+org.slug,{waitUntil:'domcontentloaded'})
+  await guest.getByRole('heading',{name:org.name,exact:true}).waitFor({state:'visible'})
+  assert(await guest.getByRole('button',{name:'Edit profile',exact:true}).count()===0,'Guest cannot edit')
+  assert(await guest.getByRole('button',{name:'Edit profile picture'}).count()===0,'Guest cannot edit picture')
+  assert(await guest.getByRole('button',{name:'Edit banner'}).count()===0,'Guest cannot edit banner')
+  await guest.close()
+  console.log('ORGANIZER_PROFILE_OWNER_BROWSER_PASS')
   await page.close()
  }finally{await browser.close()}
 }
