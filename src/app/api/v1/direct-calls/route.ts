@@ -2,7 +2,7 @@ import {NextRequest} from 'next/server'
 import {errors,handle,jsonOk,rateLimit,readJson,requireSession} from '@/server/api'
 import {validDirectId} from '@/server/direct-message-policy'
 import {invitationPilotEnabled,type CallAction} from '@/server/direct-call-policy'
-import {startDirectCall,changeDirectCall,listDirectCalls} from '@/server/services/direct-calls'
+import {startDirectCall,changeDirectCall,listDirectCalls,directCallMediaGrant} from '@/server/services/direct-calls'
 const headers={'Cache-Control':'private, no-store'}
 export async function GET(req:NextRequest){
  return handle(async()=>{
@@ -22,6 +22,11 @@ export async function POST(req:NextRequest){
   const body=await readJson<Record<string,unknown>>(req)
   if(!body||body.expectedUserId!==user.id)throw errors.conflict('The signed-in account changed.')
   const actor={userId:user.id,sessionId}
+  if(body.action==='media-grant'){
+   await rateLimit(req,'direct-call-media-grant',15,60_000)
+   if(!validDirectId(body.id))throw errors.badRequest('Invalid call.')
+   return jsonOk(await directCallMediaGrant(body.id,actor),{headers})
+  }
   if(body.action==='start'){
    await rateLimit(req,'direct-call-start',10,60_000)
    if(!validDirectId(body.conversationId)||(body.kind!=='VOICE'&&body.kind!=='VIDEO')||typeof body.clientKey!=='string'||! /^[A-Za-z0-9_-]{16,128}$/.test(body.clientKey))throw errors.badRequest('Invalid call invitation.')
