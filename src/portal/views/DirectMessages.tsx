@@ -9,6 +9,7 @@ import {Dialog,DialogContent,DialogHeader,DialogTitle,DialogDescription,DialogFo
 import {Flag} from 'lucide-react'
 import ChatVoiceRecorder from '../components/ChatVoiceRecorder'
 import ChatVoicePlayer from '../components/ChatVoicePlayer'
+import DirectCallControls from '../components/DirectCallControls'
 import {api} from '../api'
 import {readTextRetry,saveTextRetry,clearTextRetry} from '../lib/direct-text-retry'
 import {validPendingText,type PendingText} from '../lib/direct-text-retry-policy'
@@ -230,6 +231,7 @@ function Inbox({userId,id}:{userId:string;id?:string}){
       <Button size="sm" variant="outline" disabled={busy} onClick={()=>setSafetyTarget('mute')}>{c.mutedByMe?'Unmute':'Mute'}</Button>
       <Button size="sm" variant="outline" disabled={busy} onClick={()=>setSafetyTarget('block')}>{c.blockedByMe?'Unblock':'Block'}</Button>
      </div>
+     {c.status==='ACCEPTED'&&<DirectCallControls key={userId+':'+c.id} conversationId={c.id} userId={userId} canSend={!!c.canSend}/> }
      {c.canSend&&<div className="flex items-center justify-between gap-2 border-b px-4 py-2 text-xs text-muted-foreground"><label className="flex min-h-9 items-center gap-2"><input type="checkbox" checked={shareActivity} onChange={e=>{setShareActivity(e.target.checked);lastTyping.current=0}}/> Share chat activity</label><span aria-live="polite">{peerActivity.typing?'Typing…':''}</span></div>}
      {c.status==='PENDING'?<div className="space-y-3 p-5 text-sm">{c.requesterId===userId?<p>Waiting for this person to accept your request.</p>:<><p>Accept this request to start a conversation.</p><div className="flex flex-wrap gap-2"><Button disabled={busy} onClick={()=>void mutate({action:'accept',id})}>Accept</Button><Button variant="outline" disabled={busy} onClick={()=>void mutate({action:'decline',id})}>Decline</Button></div></>}</div>:c.status==='DECLINED'?<p className="p-5 text-sm text-muted-foreground">This message request was declined.</p>:<>
      <div className="flex h-[min(54vh,500px)] min-h-52 flex-col gap-3 overflow-y-auto bg-muted/20 p-4">
