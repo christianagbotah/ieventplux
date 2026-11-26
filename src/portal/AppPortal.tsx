@@ -298,7 +298,7 @@ export default function AppPortal() {
               <Compass className="size-4" aria-hidden /> Browse events
             </button>
           )}
-          <div className={`ml-auto flex shrink-0 items-center gap-1 lg:gap-1.5 ${workspaceMode ? 'md:ml-2' : 'lg:ml-0'}`}>
+          <div className={`ml-auto flex shrink-0 items-center gap-1 lg:gap-1.5 ${workspaceMode ? 'md:ml-2' : ''}`}>
             <Button variant="ghost" size="icon" className="rounded-full xl:hidden" aria-label="Search events" onClick={() => navigate('/search')}>
               <Search className="h-5 w-5" aria-hidden />
             </Button>
@@ -425,7 +425,7 @@ export default function AppPortal() {
       </footer>
 
       {/* Mobile bottom navigation */}
-      <nav className={`${workspaceMode ? 'hidden' : 'fixed'} inset-x-0 bottom-0 z-30 border-t border-border/60 ievx-glass lg:hidden`} aria-label="Mobile primary">
+      <nav className={`${workspaceMode ? 'hidden' : 'fixed'} inset-x-0 bottom-0 z-30 border-t border-border bg-card shadow-[0_-3px_14px_rgb(16_35_51_/_0.06)] lg:hidden`} aria-label="Mobile primary">
         <div className="mx-auto flex min-h-16 max-w-lg items-center justify-around px-2 py-1 pb-[calc(0.25rem+env(safe-area-inset-bottom))]">
           {MOBILE_NAV.map((item) => {
             const active = item.path.startsWith('/me')
@@ -438,12 +438,12 @@ export default function AppPortal() {
                 onClick={() => navigate(item.path)}
                 aria-current={active ? 'page' : undefined}
                 aria-label={item.label}
-                className={`flex min-h-12 min-w-0 flex-1 flex-col items-center justify-center gap-1 ievx-mobile-nav-item rounded-2xl px-1 py-1.5 text-xs font-semibold transition-colors ievx-press ${
+                className={`flex min-h-12 min-w-0 flex-1 flex-col items-center justify-center gap-1 ievx-mobile-nav-item rounded-xl px-0.5 py-1.5 text-[10px] font-semibold transition-colors min-[360px]:text-[11px] sm:text-xs ievx-press ${
                   active ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
                 }`}
               >
                 <item.icon className="h-5 w-5" aria-hidden />
-                <span className="truncate">{item.label}</span>
+                <span className="max-w-full truncate">{item.label}</span>
               </button>
             )
           })}
