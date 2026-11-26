@@ -533,7 +533,7 @@ export default function Discover({ route }: { route: Route }) {
       )}
 
       {/* Search + filters */}
-      <section id="browse" className="ievx-discovery-search sticky top-[52px] z-20">
+      <section id="browse" className="ievx-discovery-search sticky top-16 z-20">
         <div className="mx-auto flex max-w-[1500px] flex-wrap items-center gap-2 px-3 py-2.5 sm:px-6 lg:px-8">
           <form
             className="flex min-w-0 flex-1 items-center"
@@ -556,14 +556,14 @@ export default function Discover({ route }: { route: Route }) {
                 type="search"
                 placeholder="Search events, organizers or cities"
                 aria-label="Search events"
-                className="h-10 w-full rounded-xl border border-border bg-card pl-10 pr-3 text-sm text-foreground outline-none transition-shadow focus:border-primary focus:ring-2 focus:ring-primary/15"
+                className="h-12 w-full rounded-xl border border-border bg-card pl-10 pr-3 text-base text-foreground outline-none transition-shadow focus:border-primary focus:ring-2 focus:ring-primary/15"
               />
             </div>
           </form>
 
           <div className="hidden sm:block">
             <Select value={filters.country || 'any'} onValueChange={(value) => applyFilter('country', value === 'any' ? '' : value)}>
-              <SelectTrigger className="h-10 w-[170px] rounded-xl" aria-label="Discover events by country">
+              <SelectTrigger className="h-12 w-[170px] rounded-xl" aria-label="Discover events by country">
                 <Globe2 className="mr-1 size-4 shrink-0" aria-hidden />
                 <SelectValue placeholder="Worldwide" />
               </SelectTrigger>
