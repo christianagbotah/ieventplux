@@ -38,6 +38,7 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
 export interface AuthUser {
   id: string
   email: string
+  emailVerifiedAt?: string | null
   displayName: string
   role: string
   avatarUrl: string | null
@@ -97,6 +98,7 @@ export async function getSession(): Promise<FullSession | null> {
     user: {
       id: session.user.id,
       email: session.user.email,
+      emailVerifiedAt: session.user.emailVerifiedAt?.toISOString() ?? null,
       displayName: session.user.displayName,
       role: session.user.role,
       avatarUrl: session.user.avatarUrl,

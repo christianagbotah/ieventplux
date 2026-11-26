@@ -6,6 +6,8 @@ import { otpCode } from '@/server/ids'
 import { audit } from '@/server/audit'
 import { queueMessage } from '@/server/services/notify'
 import { env } from '@/server/env'
+import { resolveSmtpConfig } from '@/server/communications-config'
+import { verificationEmailBody } from '@/server/email-verification'
 
 type RouteContext = { params: Promise<{ action: string }> }
 
@@ -100,8 +102,8 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
       // real status honest when SMTP is disabled or the outbox cannot be queued.
       let verificationQueued = false
       try {
-        await queueMessage({ channel: 'EMAIL', target: email, userId: user.id, template: 'verify_email', subject: 'Verify your iEventPlux account', body: `Your verification code is ${code}. It expires in 30 minutes.`, purpose: 'TRANSACTIONAL' })
-        verificationQueued = true
+        await queueMessage({ channel: 'EMAIL', target: email, userId: user.id, template: 'verify_email', subject: 'Verify your iEventPlux account', body: verificationEmailBody(env.appUrl, code), purpose: 'TRANSACTIONAL' })
+        verificationQueued = (await resolveSmtpConfig()).configured
       } catch (error) {
         console.error('[auth.register] could not queue verification email', error instanceof Error ? error.name : 'unknown error')
       }
@@ -110,7 +112,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
       const { token, expiresAt } = await createSession(user.id, req.headers.get('x-forwarded-for') ?? undefined, req.headers.get('user-agent') ?? undefined)
       await setSessionCookie(token, expiresAt)
       await audit({ actorUserId: user.id, actorLabel: email, action: 'auth.register', entityType: 'User', entityId: user.id })
-      return jsonOk({ user: { id: user.id, email: user.email, displayName: user.displayName, role: user.role }, devVerificationCode: devCode, verificationEmailAvailable: verificationQueued && Boolean(env.smtp.host && env.smtp.user), devNote: devCode ? 'DEV ONLY: verification code exposed because SMTP is not configured.' : null })
+      return jsonOk({ user: { id: user.id, email: user.email, displayName: user.displayName, role: user.role }, devVerificationCode: devCode, verificationEmailAvailable: verificationQueued, devNote: devCode ? 'DEV ONLY: verification code exposed because SMTP is not configured.' : null })
     }
 
     if (action === 'login') {
@@ -128,7 +130,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
       await setSessionCookie(token, expiresAt)
       await audit({ actorUserId: user.id, actorLabel: email, action: 'auth.login', entityType: 'User', entityId: user.id })
       const { membershipsOf } = await import('@/server/permissions')
-      return jsonOk({ user: { id: user.id, email: user.email, displayName: user.displayName, role: user.role, avatarUrl: user.avatarUrl }, memberships: await membershipsOf(user.id) })
+      return jsonOk({ user: { id: user.id, email: user.email, displayName: user.displayName, role: user.role, avatarUrl: user.avatarUrl, emailVerifiedAt: user.emailVerifiedAt?.toISOString() ?? null }, memberships: await membershipsOf(user.id) })
     }
 
     if (action === 'logout') {
@@ -156,6 +158,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
       const user = await requireUser()
       const body = await readJson<{ channel?: string; code?: string }>(req)
       const channel = body.channel === 'SMS' ? 'SMS' : 'EMAIL'
+      if (channel === 'EMAIL' && user.emailVerifiedAt) return jsonOk({ verified: true, channel })
       const target = channel === 'SMS' ? user.phone : user.email
       if (!target) throw errors.badRequest('No contact on file for that channel.')
       const record = await db.contactVerification.findFirst({
@@ -164,19 +167,38 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
       })
       if (!record) throw errors.badRequest('No active verification code. Request a new one.')
       if (record.attempts >= 5) throw errors.rateLimited('Too many attempts. Request a new code.')
-      await db.contactVerification.update({ where: { id: record.id }, data: { attempts: { increment: 1 } } })
-      if (record.codeHash !== sha256(String(body.code ?? '').trim())) throw errors.badRequest('Incorrect code.')
-      await db.contactVerification.update({ where: { id: record.id }, data: { consumedAt: new Date() } })
-      await db.user.update({ where: { id: user.id }, data: channel === 'SMS' ? { phoneVerifiedAt: new Date() } : { emailVerifiedAt: new Date() } })
+      const matches = record.codeHash === sha256(String(body.code ?? '').trim())
+      const now = new Date()
+      const claimed = await db.$transaction(async (tx) => {
+        const result = await tx.contactVerification.updateMany({
+          where: { id: record.id, consumedAt: null, expiresAt: { gt: now }, attempts: { lt: 5 } },
+          data: { attempts: { increment: 1 }, ...(matches ? { consumedAt: now } : {}) },
+        })
+        if (matches && result.count === 1) {
+          const updated = await tx.user.updateMany({
+            where: { id: user.id, status: 'ACTIVE', deletedAt: null, ...(channel === 'SMS' ? { phone: target } : { email: target }) },
+            data: channel === 'SMS' ? { phoneVerifiedAt: now } : { emailVerifiedAt: now },
+          })
+          if (updated.count !== 1) throw errors.conflict('Your contact changed. Request a new code.')
+        }
+        return result.count === 1
+      })
+      if (!claimed) throw errors.badRequest('This code is no longer active. Request a new one.')
+      if (!matches) throw errors.badRequest('Incorrect code.')
       return jsonOk({ verified: true, channel })
     }
 
     if (action === 'resend-code') {
       await rateLimit(req, 'verify', 5, 60_000)
       const user = await requireUser()
+      if (user.emailVerifiedAt) return jsonOk({ queued: false, alreadyVerified: true })
+      if (env.isProd && !(await resolveSmtpConfig()).configured) throw errors.unavailable('EMAIL_UNAVAILABLE', 'Email delivery is currently unavailable. Please try again later or contact support.')
       const code = otpCode()
-      await db.contactVerification.create({ data: { userId: user.id, channel: 'EMAIL', target: user.email, codeHash: sha256(code), purpose: 'VERIFY', expiresAt: new Date(Date.now() + 30 * 60_000) } })
-      await queueMessage({ channel: 'EMAIL', target: user.email, userId: user.id, template: 'verify_email', subject: 'Your new iEventPlux code', body: `Your verification code is ${code}.`, purpose: 'TRANSACTIONAL' })
+      await db.$transaction(async (tx) => {
+        await tx.contactVerification.updateMany({ where: { userId: user.id, channel: 'EMAIL', purpose: 'VERIFY', consumedAt: null }, data: { consumedAt: new Date() } })
+        await tx.contactVerification.create({ data: { userId: user.id, channel: 'EMAIL', target: user.email, codeHash: sha256(code), purpose: 'VERIFY', expiresAt: new Date(Date.now() + 30 * 60_000) } })
+      })
+      await queueMessage({ channel: 'EMAIL', target: user.email, userId: user.id, template: 'verify_email', subject: 'Your new iEventPlux code', body: verificationEmailBody(env.appUrl, code), purpose: 'TRANSACTIONAL' })
       return jsonOk({ queued: true, devVerificationCode: env.isProd ? null : code })
     }
 

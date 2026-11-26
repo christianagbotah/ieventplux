@@ -189,6 +189,11 @@ jobs:
           echo
           curl -sf http://localhost:3001/health | head -c 200
 
+      - name: Email verification link and account verification smoke (isolated database)
+        env:
+          IEVENTPLUX_ISOLATED_DB_TEST: "yes"
+        run: bun run scripts/email-verification-smoke.ts
+
       - name: Browser clarity and responsive screenshot acceptance
         run: |
           npm install --prefix "$RUNNER_TEMP/ievent-ui-qa" --no-audit --no-fund playwright@1.51.1
