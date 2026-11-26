@@ -1,5 +1,5 @@
 /** Always-visible, safe-area-aware mobile primary navigation. */
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native'
 import Svg, { Circle, Path, Rect } from 'react-native-svg'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { MAIN_TABS, type MainTabRoute } from '../lib/main-tabs'
@@ -34,16 +34,18 @@ function TabIcon({ name, selected }: { name: IconName; selected: boolean }) {
 
 export function AppTabBar({ active, onSelect }: { active: MainTabRoute; onSelect: (route: MainTabRoute) => void }) {
   const insets = useSafeAreaInsets()
-  return <View style={[styles.outer, { paddingBottom: Math.max(insets.bottom, 8) }]} accessibilityRole="tablist">
+  const {fontScale,width}=useWindowDimensions()
+  const expanded=fontScale>=1.3||width<330
+  return <View style={[styles.outer, expanded&&styles.outerExpanded, { paddingBottom: Math.max(insets.bottom, 8) }]} accessibilityRole="tablist">
     {MAIN_TABS.map(tab => {
       const selected = tab.route === active
       return <Pressable key={tab.route} accessibilityRole="tab" accessibilityLabel={tab.label}
         accessibilityState={{ selected }} onPress={() => onSelect(tab.route)}
-        style={({ pressed }) => [styles.tab, pressed && styles.pressed]}>
+        style={({ pressed }) => [styles.tab, expanded&&styles.tabExpanded, pressed && styles.pressed]}>
         <View style={[styles.iconBox, selected && styles.selectedIcon]}>
           <TabIcon name={tab.icon} selected={selected} />
         </View>
-        <Text allowFontScaling numberOfLines={1} style={[styles.label, selected && styles.selectedLabel]}>{tab.label}</Text>
+        <Text allowFontScaling style={[styles.label, selected && styles.selectedLabel]}>{tab.label}</Text>
         <View style={[styles.indicator,selected&&styles.indicatorActive]}/>
       </Pressable>
     })}
@@ -53,14 +55,16 @@ export function AppTabBar({ active, onSelect }: { active: MainTabRoute; onSelect
 const styles = StyleSheet.create({
   outer: {
     flexDirection:'row',alignItems:'center',backgroundColor:'#ffffff',
-    borderRadius:24,borderWidth:1,borderColor:theme.colors.border,
+    borderRadius:18,borderWidth:1,borderColor:theme.colors.border,
     paddingTop:8,paddingHorizontal:5,marginHorizontal:10,marginTop:5,marginBottom:4,
-    elevation:14,shadowColor:'#102f36',shadowOpacity:.13,shadowRadius:22,shadowOffset:{width:0,height:-3},
+    elevation:4,shadowColor:'#102f36',shadowOpacity:.06,shadowRadius:22,shadowOffset:{width:0,height:-3},
   },
-  tab:{flex:1,minHeight:59,alignItems:'center',justifyContent:'center',gap:2,paddingHorizontal:1},
+  outerExpanded:{flexWrap:'wrap'},
+  tabExpanded:{flex:0,width:'33.333%'},
+  tab:{flex:1,minHeight:64,alignItems:'center',justifyContent:'center',gap:2,paddingHorizontal:1},
   iconBox:{height:33,minWidth:42,alignItems:'center',justifyContent:'center',borderRadius:14},
   selectedIcon:{backgroundColor:'#e4f5ee'},
-  label:{fontSize:10,fontWeight:'700',color:theme.colors.textMuted,letterSpacing:-.1},
+  label:{fontSize:12,lineHeight:17,textAlign:'center',fontWeight:'600',color:theme.colors.textMuted,letterSpacing:-.1},
   selectedLabel:{color:theme.colors.primaryDark,fontWeight:'900'},
   indicator:{height:3,width:13,borderRadius:2,backgroundColor:'transparent',marginTop:2},
   indicatorActive:{backgroundColor:theme.colors.primary},
