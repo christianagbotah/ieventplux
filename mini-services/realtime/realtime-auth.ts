@@ -35,8 +35,8 @@ export async function activeUserId(cookieHeader: string | undefined): Promise<st
 }
 
 async function acceptedOrgMember(userId: string, orgId: string): Promise<boolean> {
-  const org = await db.organization.findUnique({ where: { id: orgId }, select: { ownerId: true } })
-  if (!org) return false
+  const org = await db.organization.findUnique({ where: { id: orgId }, select: { ownerId: true, status: true, deletedAt: true } })
+  if (!org || org.deletedAt || org.status !== 'ACTIVE') return false
   if (org.ownerId === userId) return true
   const member = await db.membership.findFirst({
     where: { userId, orgId, acceptedAt: { not: null } },
@@ -74,12 +74,13 @@ export async function mayJoinRealtimeRoom(rawRoom: unknown, cookieHeader: string
     if (!userId) return false
     const broadcast = await db.liveBroadcast.findUnique({
       where: { id: room.id },
-      select: { event: { select: { orgId: true } } },
+      select: { event: { select: { orgId: true, status: true, deletedAt: true, org: { select: { status: true, deletedAt: true } } } } },
     })
-    if (!broadcast) return false
+    if (!broadcast || broadcast.event.deletedAt || broadcast.event.org.deletedAt || broadcast.event.org.status !== 'ACTIVE') return false
     if (await acceptedOrgMember(userId, broadcast.event.orgId)) {
       return canJoinRoom(room, userId, { orgMember: true })
     }
+    if (!['PUBLISHED', 'LIVE', 'ENDED'].includes(broadcast.event.status)) return false
     const activePlayback = await db.playbackSession.findFirst({
       where: {
         broadcastId: room.id,
@@ -94,13 +95,14 @@ export async function mayJoinRealtimeRoom(rawRoom: unknown, cookieHeader: string
 
   const event = await db.event.findUnique({
     where: { id: room.id },
-    select: { orgId: true, visibility: true, status: true },
+    select: { orgId: true, visibility: true, status: true, deletedAt: true, org: { select: { status: true, deletedAt: true } } },
   })
-  if (!event) return false
+  if (!event || event.deletedAt || event.org.deletedAt || event.org.status !== 'ACTIVE') return false
   const publicEvent = event.visibility === 'PUBLIC' && ['PUBLISHED', 'LIVE', 'ENDED'].includes(event.status)
   if (publicEvent) return canJoinRoom(room, userId, { publicEvent: true })
   if (!userId) return false
   if (await acceptedOrgMember(userId, event.orgId)) return canJoinRoom(room, userId, { orgMember: true })
+  if (!['PUBLISHED', 'LIVE', 'ENDED', 'POSTPONED', 'CANCELLED'].includes(event.status)) return false
   const approvedRsvp = await db.rsvp.findFirst({
     where: { eventId: room.id, userId, status: 'APPROVED' },
     select: { id: true },
