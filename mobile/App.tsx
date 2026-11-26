@@ -31,6 +31,7 @@ import FollowingScreen from './src/screens/FollowingScreen'
 import ReelsScreen from './src/screens/ReelsScreen'
 import AccountScreen from './src/screens/AccountScreen'
 import NotificationsScreen from './src/screens/NotificationsScreen'
+import DirectMessagesScreen from './src/screens/DirectMessagesScreen'
 import ForegroundActivity from './src/components/ForegroundActivity'
 import OrganizerStudioScreen from './src/screens/OrganizerStudioScreen'
 import CreateOrganizerScreen from './src/screens/CreateOrganizerScreen'
@@ -130,6 +131,7 @@ function AppRoutes() {
       <Stack.Screen name="Reels" component={ReelsScreen} options={{ title: 'Reels' }} />
       <Stack.Screen name="Account" component={AccountScreen} options={{ title: 'Your space' }} />
       <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ title: 'Notifications' }} />
+      <Stack.Screen name="DirectMessages" component={DirectMessagesScreen} options={{title:'Messages'}}/>
       <Stack.Screen name="OrganizerStudio" component={OrganizerStudioScreen} options={{ title: 'Organizer Studio' }} />
       <Stack.Screen name="CreateOrganizer" component={CreateOrganizerScreen} options={{ title: 'Create organizer profile' }} />
       <Stack.Screen name="EventEditor" component={EventEditorScreen} options={{ title: 'Event editor' }} />

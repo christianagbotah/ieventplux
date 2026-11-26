@@ -14,6 +14,7 @@ export type RootStackParamList = {
   Reels: undefined
   Account: undefined
   Notifications: undefined
+  DirectMessages: {id?:string}|undefined
   OrganizerStudio: undefined
   CreateOrganizer: undefined
   EventEditor: {orgId:string;eventId?:string}

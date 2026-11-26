@@ -1,0 +1,132 @@
+import {useCallback,useRef,useState} from 'react'
+import {ActivityIndicator,AppState,FlatList,KeyboardAvoidingView,Platform,Pressable,RefreshControl,StyleSheet,Text,TextInput,View} from 'react-native'
+import {useFocusEffect} from '@react-navigation/native'
+import type {NativeStackScreenProps} from '@react-navigation/native-stack'
+import type {RootStackParamList} from '../navigation'
+import {api,formatDateTime,type DirectContact,type DirectConversation,type DirectDetail,type DirectMessage} from '../api/client'
+import {useSession} from '../store/session'
+import {mobileDesign} from '../ui/PremiumUI'
+import {subscribeActivity} from '../lib/activity-signal'
+
+type Props=NativeStackScreenProps<RootStackParamList,'DirectMessages'>
+export default function DirectMessagesScreen(props:Props){
+ const {status,user}=useSession()
+ if(status!=='authenticated'||!user)return <View style={styles.center}><Text style={styles.title}>Sign in to view messages.</Text><Action label="Sign in" onPress={()=>props.navigation.navigate('Login')}/></View>
+ return <Inbox key={user.id+':'+(props.route.params?.id??'inbox')} userId={user.id} {...props}/>
+}
+function Action({label,onPress,disabled=false,secondary=false}:{label:string;onPress:()=>void;disabled?:boolean;secondary?:boolean}){
+ return <Pressable accessibilityRole="button" disabled={disabled} style={[styles.button,secondary&&styles.secondary,disabled&&{opacity:.5}]} onPress={onPress}><Text style={[styles.buttonText,secondary&&styles.secondaryText]}>{label}</Text></Pressable>
+}
+function Inbox({userId,route,navigation}:Props&{userId:string}){
+ const id=route.params?.id
+ const [rows,setRows]=useState<DirectConversation[]>([])
+ const [contacts,setContacts]=useState<DirectContact[]|null>(null)
+ const [query,setQuery]=useState('')
+ const [detail,setDetail]=useState<DirectDetail|null>(null)
+ const [older,setOlder]=useState<DirectMessage[]>([])
+ const [cursor,setCursor]=useState<string|null>(null)
+ const [page,setPage]=useState(1)
+ const [hasMore,setHasMore]=useState(false)
+ const [draft,setDraft]=useState('')
+ const [error,setError]=useState('')
+ const [busy,setBusy]=useState(false)
+ const [loading,setLoading]=useState(false)
+ const [loaded,setLoaded]=useState(false)
+ const active=useRef(false)
+ const revision=useRef(0)
+ const loadingRef=useRef(false)
+ const pending=useRef<{body:string;key:string}|null>(null)
+ const lastRead=useRef('')
+ const historyStarted=useRef(false)
+ const load=useCallback(async(next=1)=>{
+  if(!active.current||loadingRef.current)return
+  loadingRef.current=true
+  const rev=++revision.current
+  setLoading(true)
+  const current=()=>active.current&&rev===revision.current
+  try{
+   if(id){
+    const result=await api.directMessages.detail(id)
+    if(!current())return
+    setDetail(result);if(!historyStarted.current)setCursor(result.nextCursor)
+    const unread=result.items.find(m=>m.senderId!==userId&&!m.readAt)
+    if(unread&&lastRead.current!==unread.id&&AppState.currentState==='active'){
+     lastRead.current=unread.id
+     void api.directMessages.mutate({action:'read',id,throughId:unread.id,expectedUserId:userId}).catch(()=>{lastRead.current=''})
+    }
+   }else{
+    const result=await api.directMessages.list(next)
+    if(!current())return
+    setRows(result.items);setPage(next);setHasMore(result.hasMore)
+   }
+   setLoaded(true)
+  }catch(err){if(current())setError(err instanceof Error?err.message:'Could not load messages.')}
+  finally{if(current()){setLoading(false);loadingRef.current=false}}
+ },[id,userId])
+ useFocusEffect(useCallback(()=>{
+  active.current=true;loadingRef.current=false
+  void load()
+  const refresh=()=>{if(AppState.currentState==='active')void load()}
+  const sub=subscribeActivity(userId,refresh)
+  const timer=setInterval(refresh,5000)
+  return()=>{active.current=false;revision.current++;loadingRef.current=false;sub();clearInterval(timer)}
+ },[load,userId]))
+ const mutate=async(data:Record<string,unknown>)=>{
+  if(!active.current||busy)return
+  setBusy(true);setError('')
+  try{
+   const result=await api.directMessages.mutate({...data,expectedUserId:userId})
+   if(!active.current)return
+   if(data.action==='request'&&result.conversation){navigation.push('DirectMessages',{id:result.conversation.id});return}
+   if(data.action==='send'){pending.current=null;setDraft('')}
+   await load()
+  }catch(err){if(active.current)setError(err instanceof Error?err.message:'Could not complete action.')}
+  finally{if(active.current)setBusy(false)}
+ }
+ const search=async()=>{
+  setBusy(true);setError('')
+  try{const result=await api.directMessages.contacts(query);if(active.current)setContacts(result.items)}
+  catch(err){if(active.current)setError(err instanceof Error?err.message:'Could not find contacts.')}
+  finally{if(active.current)setBusy(false)}
+ }
+ const send=async()=>{
+  const body=draft.trim()
+  if(!body||busy)return
+  if(pending.current&&pending.current.body!==body){setError('Retry the original message before changing its text.');return}
+  if(!pending.current){
+   const crypto=await import('expo-crypto')
+   pending.current={body,key:crypto.randomUUID()}
+  }
+  await mutate({action:'send',id,body:pending.current.body,clientKey:pending.current.key})
+ }
+ const more=async()=>{
+  if(!id||!cursor||busy)return
+  setBusy(true);setError('')
+  try{const result=await api.directMessages.detail(id,cursor);if(active.current){historyStarted.current=true;setOlder(v=>[...v,...result.items]);setCursor(result.nextCursor)}}
+  catch(err){if(active.current)setError(err instanceof Error?err.message:'Could not load history.')}
+  finally{if(active.current)setBusy(false)}
+ }
+ const feedback=error?<View style={styles.error}><Text accessibilityRole="alert" style={styles.errorText}>{error}</Text><Action secondary label="Refresh" onPress={()=>{setError('');void load(page)}}/></View>:null
+ if(!id)return <FlatList style={styles.screen} contentContainerStyle={styles.content} data={rows} keyExtractor={r=>r.id} refreshControl={<RefreshControl refreshing={loading} onRefresh={()=>void load()}/>}
+  ListHeaderComponent={<View style={styles.stack}><Text style={styles.heading}>Messages</Text><Text style={styles.muted}>Private conversations</Text>{feedback}<View style={styles.row}><TextInput style={[styles.input,{flex:1}]} value={query} onChangeText={setQuery} placeholder="Find a connection" placeholderTextColor={mobileDesign.inkMuted} accessibilityLabel="Find a connection"/><Action label="Search" secondary disabled={busy} onPress={()=>void search()}/></View>{contacts!==null&&<View style={styles.card}><Text style={styles.title}>Your connections</Text>{contacts.length===0?<Text style={styles.muted}>No matching connections.</Text>:contacts.map(p=><Pressable key={p.id} style={styles.contact} disabled={busy} onPress={()=>void mutate({action:'request',userId:p.id})}><Text style={styles.title}>{p.displayName}</Text><Text style={styles.link}>Message ›</Text></Pressable>)}</View>}</View>}
+  ListEmptyComponent={!loaded&&loading?<ActivityIndicator color={mobileDesign.emerald}/>:loaded?<Text style={styles.muted}>No conversations yet. Find a connection to start.</Text>:null}
+  renderItem={({item})=><Pressable style={styles.contact} accessibilityRole="button" onPress={()=>navigation.push('DirectMessages',{id:item.id})}><View style={styles.avatar}><Text style={styles.link}>{(item.peer?.displayName??'M').slice(0,1).toUpperCase()}</Text></View><View style={{flex:1}}><Text numberOfLines={1} style={styles.title}>{item.peer?.displayName??'Member'}</Text><Text style={styles.muted}>{item.status==='PENDING'?'Message request':item.status==='DECLINED'?'Request declined':'Private conversation'}</Text></View>{!!item.unread&&<View style={styles.badge}><Text style={styles.buttonText}>{item.unread}</Text></View>}</Pressable>}
+  ListFooterComponent={hasMore||page>1?<View style={styles.row}><Action label="Previous" secondary disabled={page<=1||loading} onPress={()=>void load(page-1)}/><Action label="Next" secondary disabled={!hasMore||loading} onPress={()=>void load(page+1)}/></View>:null}/>
+ const c=detail?.conversation
+ if(!c)return <View style={styles.center}>{feedback}{loading&&<ActivityIndicator color={mobileDesign.emerald}/>}<Text style={styles.muted}>Loading conversation…</Text></View>
+ const messages=Array.from(new Map([...older,...(detail?.items??[])].map(m=>[m.id,m])).values()).sort((a,b)=>b.createdAt.localeCompare(a.createdAt)||b.id.localeCompare(a.id))
+ return <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS==='ios'?'padding':undefined} keyboardVerticalOffset={Platform.OS==='ios'?85:0}>
+  <View style={styles.threadHeader}><Text numberOfLines={1} style={styles.heading}>{c.peer?.displayName??'Member'}</Text><Text style={styles.muted}>Private conversation</Text>{feedback}</View>
+  {c.status==='PENDING'?<View style={styles.content}><Text style={styles.title}>{c.requesterId===userId?'Waiting for acceptance':'Message request'}</Text>{c.requesterId!==userId&&<View style={styles.row}><Action label="Accept" disabled={busy} onPress={()=>void mutate({action:'accept',id})}/><Action label="Decline" secondary disabled={busy} onPress={()=>void mutate({action:'decline',id})}/></View>}</View>:c.status==='DECLINED'?<View style={styles.content}><Text style={styles.muted}>This request was declined.</Text></View>:<>
+  <FlatList inverted contentContainerStyle={styles.content} data={messages} keyExtractor={m=>m.id} keyboardShouldPersistTaps="handled" ListEmptyComponent={<Text style={styles.muted}>Start the conversation.</Text>} ListFooterComponent={cursor?<Action label="Load older messages" secondary disabled={busy} onPress={()=>void more()}/>:null} renderItem={({item})=>{const mine=item.senderId===userId;return <View style={[styles.bubble,mine&&styles.mine]}><Text style={[styles.message,mine&&styles.mineText]}>{item.body}</Text><Text style={[styles.timestamp,mine&&styles.mineText]}>{formatDateTime(item.createdAt)}{mine?(item.readAt?' · Read':' · Sent'):''}</Text></View>}}/>
+  {c.canSend?<View style={styles.composer}><TextInput accessibilityLabel="Message" style={[styles.input,{flex:1,maxHeight:100}]} multiline value={draft} onChangeText={setDraft} placeholder="Write a message…" placeholderTextColor={mobileDesign.inkMuted} maxLength={4000}/><Action label="Send" disabled={busy||!draft.trim()} onPress={()=>void send()}/></View>:<View style={styles.content}><Text style={styles.muted}>Sending is unavailable for this contact.</Text></View>}
+  </>}
+ </KeyboardAvoidingView>
+}
+const styles=StyleSheet.create({
+ screen:{flex:1,backgroundColor:mobileDesign.canvas},content:{padding:16,gap:10},center:{flex:1,justifyContent:'center',padding:20,gap:12},stack:{gap:10,marginBottom:12},
+ heading:{fontSize:21,fontWeight:'700',color:mobileDesign.ink},title:{fontSize:15,fontWeight:'700',color:mobileDesign.ink},muted:{fontSize:13,color:mobileDesign.inkMuted,lineHeight:19},link:{color:mobileDesign.emerald,fontWeight:'700',fontSize:13},
+ row:{flexDirection:'row',alignItems:'center',gap:8,marginTop:8},card:{padding:12,backgroundColor:'#fff',borderRadius:15,borderWidth:1,borderColor:mobileDesign.border,gap:6},contact:{flexDirection:'row',alignItems:'center',gap:10,padding:12,borderRadius:15,backgroundColor:'#fff',borderWidth:1,borderColor:mobileDesign.border,marginBottom:8},avatar:{width:42,height:42,borderRadius:21,backgroundColor:'#e4f5ed',alignItems:'center',justifyContent:'center'},badge:{backgroundColor:mobileDesign.emerald,borderRadius:20,paddingHorizontal:8,paddingVertical:4},
+ input:{backgroundColor:'#fff',borderWidth:1,borderColor:mobileDesign.border,borderRadius:13,minHeight:46,padding:11,color:mobileDesign.ink,fontSize:15},button:{minHeight:44,paddingHorizontal:15,borderRadius:12,backgroundColor:mobileDesign.emerald,justifyContent:'center',alignItems:'center'},buttonText:{fontWeight:'700',color:'#fff',fontSize:14},secondary:{backgroundColor:'#fff',borderWidth:1,borderColor:mobileDesign.border},secondaryText:{color:mobileDesign.emerald},
+ error:{backgroundColor:'#fdf2f2',padding:10,borderRadius:12,gap:8},errorText:{color:'#a73530',fontSize:13},threadHeader:{padding:16,backgroundColor:'#fff',borderBottomWidth:1,borderColor:mobileDesign.border,gap:4},composer:{flexDirection:'row',alignItems:'flex-end',padding:12,gap:8,backgroundColor:'#fff',borderTopWidth:1,borderColor:mobileDesign.border},bubble:{maxWidth:'85%',alignSelf:'flex-start',backgroundColor:'#fff',borderRadius:16,padding:12,marginVertical:4},mine:{alignSelf:'flex-end',backgroundColor:mobileDesign.emerald},message:{fontSize:15,lineHeight:21,color:mobileDesign.ink},mineText:{color:'#fff'},timestamp:{marginTop:5,fontSize:10,color:mobileDesign.inkMuted,textAlign:'right'}
+})

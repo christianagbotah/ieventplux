@@ -703,6 +703,10 @@ async function request<T>(
 
 // ────────────────────────────────────────────────── endpoint surface used ──
 
+export type DirectContact={id:string;displayName:string;avatarUrl:string|null}
+export type DirectConversation={id:string;status:string;requesterId:string;updatedAt?:string;peer:DirectContact|null;unread?:number;canSend?:boolean}
+export type DirectMessage={id:string;senderId:string;body:string;createdAt:string;readAt:string|null}
+export type DirectDetail={conversation:DirectConversation;items:DirectMessage[];nextCursor:string|null}
 export type SouvenirRequestItem={id:string;productName:string;productSku:string;quantity:number;totalMinor:number;status:string}
 export type ServiceProviderCategory={id:string;division:string;regulated:boolean}
 export type PublicServiceProvider={id:string;displayName:string;category:string;community:string;availability:string;lastConfirmedAt:string|null}
@@ -956,6 +960,12 @@ export const api = {
     /** Send a chat message (LIVE broadcasts only, server-enforced). */
     chatSend: (id: string, body: string) =>
       request<{ message: BroadcastChatMessage }>('POST', `/broadcasts/${encodeURIComponent(id)}/chat`, { body }),
+  },
+  directMessages: {
+    list: (page=1)=>request<{items:DirectConversation[];hasMore:boolean}>('GET','/direct-messages?page='+page),
+    contacts: (q:string)=>request<{items:DirectContact[]}>('GET','/direct-messages?contacts=1&q='+encodeURIComponent(q)),
+    detail: (id:string,before?:string)=>request<DirectDetail>('GET','/direct-messages?id='+encodeURIComponent(id)+(before?'&before='+encodeURIComponent(before):'')),
+    mutate: (data:Record<string,unknown>)=>request<{conversation?:DirectConversation;message?:DirectMessage;marked?:number;replayed?:boolean}>('POST','/direct-messages',data),
   },
   notifications: {
     list: (page=1) => request<NotificationsResponse>('GET','/notifications?page='+page+'&pageSize=20'),

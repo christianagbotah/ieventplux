@@ -78,6 +78,7 @@ function Inbox({navigation}:NotificationsScreenProps){
   const target=alertDestination(row?.link)
   if(target?.screen==='EventDetail')navigation.navigate('EventDetail',{eventId:target.eventId})
   else if(target?.screen==='MyTickets')navigation.navigate('MyTickets',{segment:target.segment})
+  else if(target?.screen==='DirectMessages')navigation.navigate('DirectMessages',{id:target.id})
   else if(target?.screen==='MarketplaceStore')navigation.navigate('MarketplaceStore',{slug:target.slug})
   else void load()
  }
@@ -97,7 +98,7 @@ function Inbox({navigation}:NotificationsScreenProps){
     disabled={busy||loading||!actionable} onPress={()=>void mark(item)} style={({pressed})=>[styles.card,!item.readAt&&styles.unread,pressed&&{opacity:.75}]}>
     <View style={[styles.dot,!!item.readAt&&styles.readDot]}/>
     <View style={styles.copy}><Text style={styles.title}>{item.title}</Text><Text style={styles.body}>{item.body}</Text><Text style={styles.meta}>{formatDateTime(item.createdAt)}</Text>
-     {target?<Text style={styles.link}>{target.screen==='EventDetail'?'View event ›':target.screen==='MarketplaceStore'?'View storefront ›':'Open wallet ›'}</Text>:!item.readAt?<Text style={styles.link}>Mark read</Text>:null}
+     {target?<Text style={styles.link}>{target.screen==='EventDetail'?'View event ›':target.screen==='MarketplaceStore'?'View storefront ›':target.screen==='DirectMessages'?'Open conversation ›':'Open wallet ›'}</Text>:!item.readAt?<Text style={styles.link}>Mark read</Text>:null}
     </View>
    </Pressable>
   }}
