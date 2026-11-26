@@ -22,6 +22,8 @@ export const theme = {
   },
   /** Synced with global.css web brand surface for app bars, pills and accent. */
   web: { tealSoft: '#e7f5f0', canvas: '#f5f7fa', brandMark: '#0b8878' },
+  typography: { caption: 13, label: 14, body: 16, bodyLine: 24, title: 24, titleLine: 32, heading: 30, headingLine: 38, action: 16 },
+  touch: { standard: 48, compact: 44 },
   spacing: { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 },
   radius: { sm: 9, md: 14, lg: 20 },
 } as const
