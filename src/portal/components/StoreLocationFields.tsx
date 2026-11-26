@@ -1,5 +1,5 @@
 'use client'
-import {useId,useRef,useState} from 'react'
+import {useEffect,useId,useRef,useState} from 'react'
 import {MapPin,LocateFixed,ExternalLink} from 'lucide-react'
 import {Button} from '@/components/ui/button'
 import {Input} from '@/components/ui/input'
@@ -22,7 +22,7 @@ export function StoreLocationFields({value,onChange,disabled=false,region}:{valu
  const [mapOpen,setMapOpen]=useState(false)
  const [attempt,setAttempt]=useState(0)
  const latest=useRef(value)
- latest.current=value
+ useEffect(()=>{latest.current=value},[value])
  const set=(key:keyof StoreLocationDraft,v:string)=>onChange({...value,[key]:v})
  const locate=()=>{
   setError('')
