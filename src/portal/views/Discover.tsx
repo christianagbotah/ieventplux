@@ -729,7 +729,7 @@ export default function Discover({ route }: { route: Route }) {
         {browsing ? (
           <section aria-label="Search results" aria-busy={loading}>
             <div className="mb-3 flex flex-wrap items-baseline justify-between gap-3">
-              <h2 className="text-lg font-bold">
+              <h2 className="text-xl font-bold sm:text-2xl">
                 {isSearch && searchQuery ? `Results for “${searchQuery}”` : browseAll && !filters.category && !filters.country && !filters.q ? 'Events worldwide' : 'Browse events'}
               </h2>
               <div className="flex items-center gap-3">
@@ -752,12 +752,12 @@ export default function Discover({ route }: { route: Route }) {
               </div>
             )}
             {loading && !items?.length ? (
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                 {Array.from({ length: 8 }).map((_, i) => <EventCardSkeleton key={i} />)}
               </div>
             ) : items && items.length > 0 ? (
               <>
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                   {items.map((event, i) => <EventCard key={event.id} event={event} index={i} compare={comparison(event)} />)}
                 </div>
                 {items.length < total && (
@@ -780,10 +780,10 @@ export default function Discover({ route }: { route: Route }) {
           <>
             {user && <ForYouRail />}
             {home?.liveNow && home.liveNow.length > 0 && (
-              <section className="mb-8" aria-label="Live now">
+              <section className="mb-10" aria-label="Live now">
                 <div className="mb-3 flex items-center gap-2">
                   <span className="ievx-live-dot" />
-                  <h2 className="text-lg font-bold">Happening live</h2>
+                  <h2 className="text-xl font-bold sm:text-2xl">Happening live</h2>
                   <button
                     type="button"
                     className="efx-underline-slide-link ml-auto"
@@ -799,9 +799,9 @@ export default function Discover({ route }: { route: Route }) {
               </section>
             )}
             {otherFeatured.length > 0 && (
-              <section className="mb-8" aria-label="Featured events">
-                <div className="mb-3 flex items-center justify-between">
-                  <h2 className="text-lg font-bold">Featured gatherings</h2>
+              <section className="mb-10" aria-label="Featured events">
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                  <h2 className="text-xl font-bold sm:text-2xl">Featured gatherings</h2>
                   <button
                     type="button"
                     className="efx-underline-slide-link"
@@ -816,9 +816,9 @@ export default function Discover({ route }: { route: Route }) {
                 </div>
               </section>
             )}
-            <section className="mb-8" aria-label="Upcoming events">
-              <div className="mb-3 flex items-center justify-between">
-                <h2 className="text-lg font-bold">Coming up</h2>
+            <section className="mb-10" aria-label="Upcoming events">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <h2 className="text-xl font-bold sm:text-2xl">Coming up</h2>
                 <div className="flex items-center gap-2">
                   {user && <Button variant="outline" size="sm" className="rounded-full" onClick={() => navigate('/me?tab=saved')}>Saved events</Button>}
                   <button
@@ -838,11 +838,11 @@ export default function Discover({ route }: { route: Route }) {
                   <Button variant="outline" className="rounded-full" onClick={() => setHomeRetry((value) => value + 1)}>Try again</Button>
                 </div>
               ) : home === null ? (
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                   {Array.from({ length: 8 }).map((_, i) => <EventCardSkeleton key={i} />)}
                 </div>
               ) : home.upcoming.length > 0 ? (
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                   {home.upcoming.map((event, i) => <EventCard key={event.id} event={event} index={i} compare={comparison(event)} />)}
                 </div>
               ) : (
@@ -856,9 +856,9 @@ export default function Discover({ route }: { route: Route }) {
 
         {/* Sponsored placements (labelled) — compact native-ad style promo rows */}
         {!browsing && sponsoredEvents.length > 0 && (
-          <section className="mb-8" aria-label="Sponsored events">
+          <section className="mb-10" aria-label="Sponsored events">
             <div className="mb-3 flex items-center gap-2">
-              <h2 className="text-lg font-bold">Promoted for you</h2>
+              <h2 className="text-xl font-bold sm:text-2xl">Promoted for you</h2>
               <Badge variant="secondary" className="text-[10px]">Sponsored</Badge>
             </div>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -871,10 +871,10 @@ export default function Discover({ route }: { route: Route }) {
 
 
             {/* How it works — reassurance for first-time buyers */}
-            <section className="mb-8" aria-label="How it works">
+            <section className="mb-10" aria-label="How it works">
               <div className="mb-3 flex items-center gap-2">
                 <CalendarCheck className="h-5 w-5 text-primary" aria-hidden />
-                <h2 className="text-lg font-bold">How iEventPlux works</h2>
+                <h2 className="text-xl font-bold sm:text-2xl">How iEventPlux works</h2>
               </div>
               <div className="grid gap-3 sm:grid-cols-3">
                 {HOW_IT_WORKS.map((step, i) => (
