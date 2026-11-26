@@ -705,7 +705,7 @@ async function request<T>(
 
 export type DirectContact={id:string;displayName:string;avatarUrl:string|null}
 export type DirectConversation={id:string;status:string;requesterId:string;updatedAt?:string;peer:DirectContact|null;unread?:number;canSend?:boolean}
-export type DirectMessage={id:string;senderId:string;body:string;createdAt:string;readAt:string|null}
+export type DirectMessage={id:string;senderId:string;body:string;createdAt:string;readAt:string|null;removedAt?:string|null}
 export type DirectDetail={conversation:DirectConversation;items:DirectMessage[];nextCursor:string|null}
 export type SouvenirRequestItem={id:string;productName:string;productSku:string;quantity:number;totalMinor:number;status:string}
 export type ServiceProviderCategory={id:string;division:string;regulated:boolean}

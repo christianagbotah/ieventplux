@@ -78,7 +78,37 @@ async function main(){
   check((await call(d,'',{action:'decline',id:decline})).status===200,'recipient declines contact')
   check((await call(a,'',{action:'request',userId:d.id})).body.conversation.status==='DECLINED','decline cannot be bypassed by repeated request')
   check((await call(b,'?id='+id+'&before=unrelated')).status===400,'foreign history cursor denied')
+  const reportBody={action:'report',id,messageId,reason:'OFFENSIVE'}
+  check((await call(c,'',reportBody)).status===404,'outsider cannot report private message')
+  check((await call(a,'',reportBody)).status===404,'sender cannot report own message')
+  check((await call(b,'',{...reportBody,reason:'INVALID'})).status===400,'invalid report reason rejected')
+  check((await call(b,'',reportBody)).body.reported===true,'recipient can report received message even after blocking')
+  check((await call(b,'',reportBody)).body.reported===true,'report retries are idempotent')
+  const cases=await db.moderationReport.findMany({where:{targetType:'DIRECT_MESSAGE',targetId:messageId,reporterId:b.id}})
+  check(cases.length===1&&!JSON.stringify(cases).includes(body),'only one report; no automatic message snapshot')
+  const reportId=cases[0].id
+  const moderator=await make(),finance=await make()
+  await db.user.update({where:{id:moderator.id},data:{role:'MODERATOR'}})
+  await db.user.update({where:{id:finance.id},data:{role:'FINANCE_ADMIN'}})
+  const admin=async(actor:typeof a,path:string,input?:object)=>{
+   const response=await fetch('http://127.0.0.1:3000/api/v1/admin/moderation/'+path,{method:input?'POST':'GET',headers:{Cookie:actor.cookie,'Content-Type':'application/json','x-forwarded-for':'192.0.2.96'},body:input?JSON.stringify(input):undefined})
+   return {status:response.status,body:await response.json(),headers:response.headers}
+  }
+  check((await admin(c,reportId+'/message')).status===403,'ordinary users cannot view report evidence')
+  check((await admin(finance,reportId+'/message')).status===403,'finance role cannot view report evidence')
+  check((await admin(moderator,'nonexistent/message')).status===404,'moderator cannot browse arbitrary messages')
+  const evidence=await admin(moderator,reportId+'/message')
+  check(evidence.status===200&&evidence.body.message.body===body&&evidence.headers.get('cache-control')?.includes('no-store'),'moderator accesses only reported message')
+  check(await db.auditLog.count({where:{entityId:reportId,action:'moderation.direct_message.view'}})===1,'evidence access audited')
+  check((await admin(moderator,reportId+'/action',{action:'REVIEWING'})).body.status==='REVIEWING','reviewing does not close case')
+  check((await admin(moderator,reportId+'/action',{action:'REMOVE_CONTENT'})).body.status==='ACTIONED','moderation removal persisted')
+  const removed=(await call(b,'?id='+id)).body.items.find((m:{id:string})=>m.id===messageId)
+  check(!!removed.removedAt&&removed.body!==body,'removed message redacted in private history')
+  check((await admin(moderator,reportId+'/message')).status===404,'closed evidence unavailable')
+  check((await admin(moderator,reportId+'/action',{action:'SUSPEND_USER'})).status===404,'closed case cannot be actioned twice')
+  check(await db.auditLog.count({where:{entityId:reportId,action:'moderation.direct_message.remove_content'}})===1,'moderator action audited')
+  await db.moderationReport.deleteMany({where:{id:reportId}})
   console.log('DIRECT_MESSAGING_SMOKE_PASS')
- }finally{await db.user.deleteMany({where:{id:{in:users}}})}
+ }finally{await db.moderationReport.deleteMany({where:{reporterId:{in:users},targetType:'DIRECT_MESSAGE'}});await db.user.deleteMany({where:{id:{in:users}}})}
 }
 main().catch(e=>{console.error(e instanceof Error?e.message:'Messaging smoke failed');process.exitCode=1}).finally(()=>db.$disconnect())

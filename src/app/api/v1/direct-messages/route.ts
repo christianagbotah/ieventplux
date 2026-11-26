@@ -2,7 +2,8 @@ import {NextRequest} from 'next/server'
 import {errors,handle,jsonOk,rateLimit,readJson,requireUser,requireSession} from '@/server/api'
 import {validDirectId,parseDirectMessage} from '@/server/direct-message-policy'
 import {parseActivity} from '@/server/direct-activity-policy'
-import {requestConversation,decideConversation,sendDirectMessage,readDirectMessages,listDirectConversations,getDirectConversation,listDirectContacts,directActivity} from '@/server/services/direct-messages'
+import {parseDirectReport} from '@/server/direct-report-policy'
+import {requestConversation,decideConversation,sendDirectMessage,readDirectMessages,listDirectConversations,getDirectConversation,listDirectContacts,directActivity,reportDirectMessage} from '@/server/services/direct-messages'
 const headers={'Cache-Control':'private, no-store'}
 const ok=(value:unknown)=>jsonOk(value,{headers})
 export async function GET(req:NextRequest){
@@ -32,6 +33,12 @@ export async function POST(req:NextRequest){
   }
   const id=body.id
   if(!validDirectId(id))throw errors.badRequest('Invalid conversation.')
+  if(body.action==='report'){
+   await rateLimit(req,'direct-report',10,60_000)
+   const input=parseDirectReport(body)
+   if(!input||!validDirectId(body.messageId))throw errors.badRequest('Choose a report reason and message.')
+   return ok(await reportDirectMessage(id,user.id,body.messageId,input))
+  }
   if(body.action==='activity'){
    const input=parseActivity(body)
    if(!input)throw errors.badRequest('Invalid chat activity.')

@@ -5,6 +5,8 @@ import {ArrowLeft,Check,CheckCheck,MessageCircle,Search,Send,UserPlus} from 'luc
 import {Button} from '@/components/ui/button'
 import {Input} from '@/components/ui/input'
 import {Textarea} from '@/components/ui/textarea'
+import {Dialog,DialogContent,DialogHeader,DialogTitle,DialogDescription,DialogFooter} from '@/components/ui/dialog'
+import {Flag} from 'lucide-react'
 import {api} from '../api'
 import {navigate} from '../router'
 import {usePortal} from '../store'
@@ -12,7 +14,7 @@ import {initials,relative} from '../format'
 
 type Contact={id:string;displayName:string;avatarUrl:string|null}
 type Conversation={id:string;status:string;requesterId:string;updatedAt?:string;peer:Contact|null;unread?:number;canSend?:boolean}
-type Message={id:string;senderId:string;body:string;createdAt:string;readAt:string|null}
+type Message={id:string;senderId:string;body:string;createdAt:string;readAt:string|null;removedAt?:string|null}
 type Detail={conversation:Conversation;items:Message[];nextCursor:string|null}
 function Avatar({contact}:{contact:Contact|null}){
  return <span className="grid size-10 shrink-0 place-items-center rounded-full bg-primary/10 text-sm font-bold text-primary">{initials(contact?.displayName??'Member')}</span>
@@ -31,6 +33,11 @@ function Inbox({userId,id}:{userId:string;id?:string}){
  const [older,setOlder]=useState<Message[]>([])
  const [cursor,setCursor]=useState<string|null>(null)
  const [draft,setDraft]=useState('')
+ const [reportTarget,setReportTarget]=useState<string|null>(null)
+ const [reportReason,setReportReason]=useState('SPAM')
+ const [reportDetails,setReportDetails]=useState('')
+ const [reportStatus,setReportStatus]=useState('')
+ const [reported,setReported]=useState<string[]>([])
  const [shareActivity,setShareActivity]=useState(false)
  const [peerActivity,setPeerActivity]=useState({active:false,typing:false})
  const lastTyping=useRef(0)
@@ -116,6 +123,15 @@ function Inbox({userId,id}:{userId:string;id?:string}){
   }catch(err){if(current())setError(err instanceof Error?err.message:'Could not complete action.')}
   finally{if(current())setBusy(false)}
  }
+ const submitReport=async()=>{
+  if(!reportTarget||busy||!current())return
+  setBusy(true);setError('')
+  try{
+   await api.post('/direct-messages',{action:'report',id,messageId:reportTarget,reason:reportReason,details:reportDetails,expectedUserId:userId})
+   if(current()){setReported(v=>[...v,reportTarget]);setReportStatus('Report submitted to moderation.');setReportTarget(null)}
+  }catch(err){if(current())setError(err instanceof Error?err.message:'Could not submit report.')}
+  finally{if(current())setBusy(false)}
+ }
  const send=()=>{
   const body=draft.trim()
   if(!body||busy)return
@@ -140,6 +156,7 @@ function Inbox({userId,id}:{userId:string;id?:string}){
  const c=detail?.conversation
  return <section className="mx-auto w-full max-w-6xl px-2 py-4 sm:px-0 sm:py-6">
   <header className="mb-4 flex items-center justify-between gap-3"><div><h1 className="text-2xl font-bold tracking-tight">Messages</h1><p className="text-sm text-muted-foreground">Private conversations</p></div><Button variant="outline" size="sm" onClick={()=>navigate('/me?tab=notifications')}>Activity</Button></header>
+  {reportStatus&&<p role="status" className="mb-3 rounded-xl border bg-card p-3 text-sm">{reportStatus}</p>}
   {error&&<div role="alert" className="mb-3 rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{error} <button className="underline" onClick={()=>{setError('');void load()}}>Refresh</button></div>}
   <div className="grid min-w-0 gap-4 md:grid-cols-[minmax(235px,1fr)_minmax(0,2fr)]">
    <aside className={`min-w-0 rounded-2xl border bg-card p-3 ${id?'hidden md:block':''}`}>
@@ -157,7 +174,7 @@ function Inbox({userId,id}:{userId:string;id?:string}){
      <div className="flex h-[min(54vh,500px)] min-h-52 flex-col gap-3 overflow-y-auto bg-muted/20 p-4">
       {cursor&&<Button variant="ghost" size="sm" className="self-center" disabled={busy} onClick={()=>void more()}>Load older messages</Button>}
       {items.length===0&&<p className="py-6 text-center text-sm text-muted-foreground">Start the conversation.</p>}
-      {items.map(m=><div key={m.id} className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${m.senderId===userId?'self-end bg-primary text-primary-foreground':'self-start border bg-card'}`}><p className="whitespace-pre-wrap [overflow-wrap:anywhere]">{m.body}</p><span className="mt-1 flex items-center justify-end gap-1 text-[10px] opacity-80">{relative(m.createdAt)}{m.senderId===userId&&(m.readAt?<CheckCheck className="size-3" aria-label="Read"/>:<Check className="size-3" aria-label="Sent"/>)}</span></div>)}
+      {items.map(m=><div key={m.id} className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${m.senderId===userId?'self-end bg-primary text-primary-foreground':'self-start border bg-card'}`}><p className="whitespace-pre-wrap [overflow-wrap:anywhere]">{m.removedAt?'Message removed by moderation':m.body}</p>{m.senderId!==userId&&!m.removedAt&&<button type="button" className="mt-1 inline-flex min-h-8 items-center gap-1 text-xs text-muted-foreground" disabled={reported.includes(m.id)||busy} onClick={()=>{setReportTarget(m.id);setReportReason('SPAM');setReportDetails('');setError('')}}><Flag className="size-3"/>{reported.includes(m.id)?'Reported':'Report'}</button>}<span className="mt-1 flex items-center justify-end gap-1 text-[10px] opacity-80">{relative(m.createdAt)}{m.senderId===userId&&(m.readAt?<CheckCheck className="size-3" aria-label="Read"/>:<Check className="size-3" aria-label="Sent"/>)}</span></div>)}
       <div ref={scrollEnd}/>
      </div>
      {c.canSend?<form className="flex items-end gap-2 border-t p-3" onSubmit={e=>{e.preventDefault();send()}}><Textarea value={draft} onChange={e=>{setDraft(e.target.value);lastTyping.current=e.target.value.trim()?Date.now():0}} maxLength={4000} rows={2} placeholder="Write a message…" aria-label="Message" className="min-h-11 resize-none"/><Button size="icon" className="size-11 shrink-0 rounded-xl" aria-label="Send message" disabled={busy||!draft.trim()}><Send className="size-4"/></Button></form>:<p className="border-t p-3 text-sm text-muted-foreground">Sending is unavailable for this contact.</p>}
@@ -165,5 +182,14 @@ function Inbox({userId,id}:{userId:string;id?:string}){
     </>}
    </div>
   </div>
+  <Dialog open={!!reportTarget} onOpenChange={open=>{if(!open&&!busy)setReportTarget(null)}}>
+   <DialogContent className="max-w-sm">
+    <DialogHeader><DialogTitle>Report message</DialogTitle><DialogDescription>Only the selected message will be available to authorized moderators.</DialogDescription></DialogHeader>
+    <label className="space-y-1 text-sm">Reason<select aria-label="Report reason" className="block min-h-11 w-full rounded-lg border bg-background px-3" value={reportReason} onChange={e=>setReportReason(e.target.value)}><option value="SPAM">Spam</option><option value="OFFENSIVE">Harassment or offensive content</option><option value="FRAUD">Fraud or scam</option><option value="OTHER">Other</option></select></label>
+    <Textarea aria-label="Report details" placeholder="Optional details" maxLength={1000} value={reportDetails} onChange={e=>setReportDetails(e.target.value)}/>
+    {error&&<p role="alert" className="text-sm text-destructive">{error}</p>}
+    <DialogFooter><Button variant="outline" disabled={busy} onClick={()=>setReportTarget(null)}>Cancel</Button><Button disabled={busy} onClick={()=>void submitReport()}>{busy?'Submitting…':'Submit report'}</Button></DialogFooter>
+   </DialogContent>
+  </Dialog>
  </section>
 }

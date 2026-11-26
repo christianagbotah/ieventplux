@@ -14,7 +14,7 @@ CREATE TABLE "Session" ("id" TEXT PRIMARY KEY);
 INSERT INTO "Session" VALUES ('session-a');
 INSERT INTO "User" VALUES ('a'),('b'),('c');
 SQL
-for attempt in 1 2; do sql -f ops/migrations/20261126_direct_messaging.sql; sql -f ops/migrations/20261126_direct_activity.sql; done
+for attempt in 1 2; do sql -f ops/migrations/20261126_direct_messaging.sql; sql -f ops/migrations/20261126_direct_activity.sql; sql -f ops/migrations/20261126_direct_message_moderation.sql; done
 sql <<'SQL'
 INSERT INTO "DirectConversation" ("id","participantLowId","participantHighId","requesterId","updatedAt") VALUES ('d','a','b','a',CURRENT_TIMESTAMP);
 INSERT INTO "DirectMessage" ("id","conversationId","senderId","clientKey","body") VALUES ('m','d','a','abcdefghijklmnop','Hello');
@@ -50,6 +50,8 @@ DO $$ BEGIN
   RAISE EXCEPTION 'empty message accepted';
  EXCEPTION WHEN check_violation THEN NULL;
  END;
+ UPDATE "DirectMessage" SET "removedAt"=CURRENT_TIMESTAMP,"body"='[Message removed by moderation]' WHERE id='m';
+ IF NOT EXISTS (SELECT 1 FROM "DirectMessage" WHERE id='m' AND "removedAt" IS NOT NULL) THEN RAISE EXCEPTION 'missing redaction'; END IF;
  DELETE FROM "User" WHERE id='a';
  IF EXISTS (SELECT 1 FROM "DirectConversation") OR EXISTS (SELECT 1 FROM "DirectMessage") OR EXISTS (SELECT 1 FROM "DirectActivity") THEN RAISE EXCEPTION 'orphan conversation or message'; END IF;
 END $$;
