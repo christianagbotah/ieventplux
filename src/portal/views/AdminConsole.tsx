@@ -625,12 +625,21 @@ function EventsAdmin() {
 
 function Moderation() {
   const { toast } = useToast()
+  const [evidence,setEvidence]=useState<{reportId:string;message:{body:string;createdAt:string;removedAt:string|null;sender:{displayName:string}}}|null>(null)
+  const [reviewBusy,setReviewBusy]=useState<string|null>(null)
+  const viewMessage=async(id:string)=>{
+    setReviewBusy(id);setEvidence(null)
+    try{const result=await api.get<{message:{body:string;createdAt:string;removedAt:string|null;sender:{displayName:string}}}>(`/admin/moderation/${id}/message`);setEvidence({reportId:id,message:result.message})}
+    catch(err){toast({description:err instanceof ApiClientError?err.message:'Could not view reported message.',variant:'destructive'})}
+    finally{setReviewBusy(null)}
+  }
   const [data, reload, loading] = useAdmin<{ items: { id: string; targetType: string; targetId: string; reason: string; details?: string | null; status: string; createdAt: string; reporter?: { displayName: string; email: string } | null }[] }>('/admin/moderation')
 
   const action = async (id: string, act: string) => {
     try {
       await api.post(`/admin/moderation/${id}/action`, { action: act })
-      toast({ title: `Report ${act === 'DISMISS' ? 'dismissed' : 'actioned'}` })
+      setEvidence(null)
+      toast({ title: `Report ${act === 'DISMISS' ? 'dismissed' : act==='REVIEWING'?'under review':'actioned'}` })
       reload()
     } catch (err) {
       toast({ description: err instanceof ApiClientError ? err.message : 'Action failed.', variant: 'destructive' })
@@ -638,7 +647,7 @@ function Moderation() {
   }
 
   if (loading) return <AdminLoader label="Loading reports…" />
-  if (!data || data.items.length === 0) return <EmptyState title="No open reports" description="User reports on events, comments and broadcasts land here." />
+  if (!data || data.items.length === 0) return <EmptyState title="No open reports" description="User reports on events, comments, broadcasts and private messages land here." />
   return (
     <div className="space-y-3">
       {data.items.map((r) => (
@@ -651,7 +660,13 @@ function Moderation() {
             </div>
             <p className="font-mono text-xs text-muted-foreground">target: {r.targetId}</p>
             {r.details && <p className="text-sm">{r.details}</p>}
-            <div className="flex gap-1.5 pt-1">
+            {r.targetType==='DIRECT_MESSAGE'&&<div className="space-y-2 rounded-xl border bg-muted/30 p-3">
+              <p className="text-xs text-muted-foreground">Access is limited to this reported message and recorded in the audit log.</p>
+              <Button size="sm" variant="outline" disabled={!!reviewBusy} onClick={()=>evidence?.reportId===r.id?setEvidence(null):void viewMessage(r.id)}>{evidence?.reportId===r.id?'Hide message':reviewBusy===r.id?'Loading…':'View reported message'}</Button>
+              {evidence?.reportId===r.id&&<div className="space-y-1"><p className="text-xs font-semibold">{evidence.message.sender.displayName} · {relative(evidence.message.createdAt)}</p><p className="whitespace-pre-wrap break-words text-sm">{evidence.message.body}</p></div>}
+            </div>}
+            <div className="flex flex-wrap gap-1.5 pt-1">
+              {r.targetType==='DIRECT_MESSAGE'&&<Button size="sm" variant="outline" className="rounded-full" disabled={r.status==='REVIEWING'} onClick={()=>void action(r.id,'REVIEWING')}>Mark reviewing</Button>}
               <Button size="sm" variant="destructive" className="rounded-full" onClick={() => void action(r.id, 'REMOVE_CONTENT')}>Remove content</Button>
               <Button size="sm" variant="outline" className="rounded-full" onClick={() => void action(r.id, 'SUSPEND_USER')}>Suspend user</Button>
               <Button size="sm" variant="ghost" className="rounded-full" onClick={() => void action(r.id, 'DISMISS')}>Dismiss</Button>

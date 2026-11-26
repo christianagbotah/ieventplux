@@ -100,6 +100,13 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
       return jsonList(items, total, page, pageSize)
     }
 
+    if (root === 'moderation' && sections[1] && sections[2] === 'message') {
+      if (!platformCan(user.role, 'admin:moderate')) throw errors.forbidden('Moderator role required.')
+      await rateLimit(req, 'direct-message-evidence', 30, 60_000)
+      const { viewReportedMessage } = await import('@/server/services/direct-moderation')
+      return jsonOk(await viewReportedMessage(sections[1], user), { headers: { 'Cache-Control': 'private, no-store' } })
+    }
+
     if (root === 'moderation') {
       if (!platformCan(user.role, 'admin:moderate')) throw errors.forbidden('Moderator role required.')
       const items = await db.moderationReport.findMany({ where: { status: { in: ['OPEN', 'REVIEWING'] } }, include: { reporter: { select: { displayName: true, email: true } } }, orderBy: { createdAt: 'asc' }, take: 100 })
@@ -341,6 +348,10 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
       if (!['DISMISS', 'REVIEWING', 'REMOVE_CONTENT', 'SUSPEND_USER'].includes(action)) throw errors.badRequest('Invalid moderation action.')
       const report = await db.moderationReport.findUnique({ where: { id } })
       if (!report) throw errors.notFound('Report not found.')
+      if (report.targetType === 'DIRECT_MESSAGE') {
+        const { resolveReportedMessage } = await import('@/server/services/direct-moderation')
+        return jsonOk(await resolveReportedMessage(id, user, action, sanitizeText(body.note, 500)), { headers: { 'Cache-Control': 'private, no-store' } })
+      }
       if (action === 'REMOVE_CONTENT') {
         if (report.targetType === 'EVENT') await db.event.updateMany({ where: { id: report.targetId }, data: { status: 'CANCELLED', cancelReason: 'Removed by moderation.' } })
         if (report.targetType === 'COMMENT') await db.comment.updateMany({ where: { id: report.targetId }, data: { status: 'REMOVED' } })

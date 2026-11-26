@@ -1,8 +1,10 @@
+import {createHash} from 'node:crypto'
 import {Prisma,type DirectConversation,type Notification} from '@prisma/client'
 import {db} from '../../lib/db'
 import {ApiError,errors} from '../api'
 import {canonicalPair,mayDecide} from '../direct-message-policy'
 import {activityWindow} from '../direct-activity-policy'
+import {removedMessageBody,type DirectReportReason} from '../direct-report-policy'
 import {publishNotification} from './notify'
 import {realtimeEmit} from './realtime'
 
@@ -80,6 +82,7 @@ export async function sendDirectMessage(id:string,actorId:string,input:{body:str
   await canContact(tx,actorId,other)
   const prior=await tx.directMessage.findUnique({where:{conversationId_senderId_clientKey:{conversationId:id,senderId:actorId,clientKey:input.clientKey}}})
   if(prior){
+   if(prior.removedAt) return {message:{...prior,body:removedMessageBody},conversation:c,notification:null,replayed:true}
    if(prior.body!==input.body)throw errors.conflict('This message key was already used.')
    return {message:prior,conversation:c,notification:null,replayed:true}
   }
@@ -112,10 +115,12 @@ export async function getDirectConversation(id:string,userId:string,before:strin
  const other=await db.user.findUnique({where:{id:otherId},select:profile})
  const block=await db.userBlock.findFirst({where:{OR:[{blockerId:userId,blockedId:otherId},{blockerId:otherId,blockedId:userId}]},select:{blockerId:true}})
  const active=await db.user.count({where:{id:otherId,status:'ACTIVE',deletedAt:null}})
+ const muted=await db.userMute.findUnique({where:{muterId_mutedId:{muterId:userId,mutedId:otherId}},select:{muterId:true}})
+ const blockedByMe=await db.userBlock.findUnique({where:{blockerId_blockedId:{blockerId:userId,blockedId:otherId}},select:{blockerId:true}})
  const anchor=before?await db.directMessage.findFirst({where:{id:before,conversationId:id},select:{id:true,createdAt:true}}):null
  if(before&&!anchor)throw errors.badRequest('Invalid message cursor.')
- const rows=await db.directMessage.findMany({where:{conversationId:id,...(anchor?{OR:[{createdAt:{lt:anchor.createdAt}},{createdAt:anchor.createdAt,id:{lt:anchor.id}}]}:{})},orderBy:[{createdAt:'desc'},{id:'desc'}],take:31,select:{id:true,senderId:true,body:true,createdAt:true,readAt:true}})
- return {conversation:{id:c.id,status:c.status,requesterId:c.requesterId,peer:other,canSend:c.status==='ACCEPTED'&&!block&&active===1},items:rows.slice(0,30),nextCursor:rows.length>30?rows[29]?.id??null:null}
+ const rows=await db.directMessage.findMany({where:{conversationId:id,...(anchor?{OR:[{createdAt:{lt:anchor.createdAt}},{createdAt:anchor.createdAt,id:{lt:anchor.id}}]}:{})},orderBy:[{createdAt:'desc'},{id:'desc'}],take:31,select:{id:true,senderId:true,body:true,createdAt:true,readAt:true,removedAt:true}})
+ return {conversation:{id:c.id,status:c.status,requesterId:c.requesterId,peer:other,canSend:c.status==='ACCEPTED'&&!block&&active===1,blockedByMe:!!blockedByMe,mutedByMe:!!muted},items:rows.slice(0,30).map(m=>m.removedAt?{...m,body:removedMessageBody}:m),nextCursor:rows.length>30?rows[29]?.id??null:null}
 }
 
 export async function listDirectContacts(userId:string,query:string){
@@ -152,4 +157,37 @@ export async function directActivity(id:string,actorId:string,sessionId:string,i
   const rows=await tx.directActivity.findMany({where:{conversationId:id,activeUntil:{gt:now},session:{userId:other,revokedAt:null,expiresAt:{gt:now},user:{status:'ACTIVE',deletedAt:null}}},select:{typingUntil:true}})
   return {active:rows.length>0,typing:rows.some(r=>r.typingUntil!==null&&r.typingUntil>now)}
  })
+}
+
+export async function reportDirectMessage(conversationId:string,actorId:string,messageId:string,input:{reason:DirectReportReason;details:string|null}){
+ return transaction(async tx=>{
+  await scoped(tx,conversationId,actorId)
+  const message=await tx.directMessage.findFirst({where:{id:messageId,conversationId,senderId:{not:actorId},removedAt:null},select:{id:true}})
+  if(!message)throw errors.notFound('This message cannot be reported.')
+  // The reporter may report only a received message. The stable key also prevents
+  // retries from creating duplicate moderation cases.
+  const id=createHash('sha256').update(JSON.stringify(['DIRECT_MESSAGE',actorId,messageId])).digest('hex')
+  await tx.moderationReport.createMany({data:[{id,reporterId:actorId,targetType:'DIRECT_MESSAGE',targetId:messageId,reason:input.reason,details:input.details}],skipDuplicates:true})
+  return {reported:true}
+ })
+}
+
+export async function setDirectSafety(id:string,actorId:string,kind:'block'|'mute',enabled:boolean){
+ const result=await transaction(async tx=>{
+  const c=await scoped(tx,id,actorId)
+  const other=peer(c,actorId)
+  if(kind==='block'){
+   if(enabled){
+    await tx.userBlock.upsert({where:{blockerId_blockedId:{blockerId:actorId,blockedId:other}},create:{blockerId:actorId,blockedId:other},update:{}})
+    await tx.directActivity.deleteMany({where:{conversationId:id}})
+   }else await tx.userBlock.deleteMany({where:{blockerId:actorId,blockedId:other}})
+  }else{
+   if(enabled)await tx.userMute.upsert({where:{muterId_mutedId:{muterId:actorId,mutedId:other}},create:{muterId:actorId,mutedId:other},update:{}})
+   else await tx.userMute.deleteMany({where:{muterId:actorId,mutedId:other}})
+  }
+  return c
+ })
+ // No notification reveals who blocked or muted whom. Both clients merely refetch.
+ await relay(result,null)
+ return {ok:true}
 }
