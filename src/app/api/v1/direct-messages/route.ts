@@ -1,13 +1,14 @@
 import {NextRequest} from 'next/server'
 import {errors,handle,jsonOk,rateLimit,readJson,requireUser} from '@/server/api'
 import {validDirectId,parseDirectMessage} from '@/server/direct-message-policy'
-import {requestConversation,decideConversation,sendDirectMessage,readDirectMessages,listDirectConversations,getDirectConversation} from '@/server/services/direct-messages'
+import {requestConversation,decideConversation,sendDirectMessage,readDirectMessages,listDirectConversations,getDirectConversation,listDirectContacts} from '@/server/services/direct-messages'
 const headers={'Cache-Control':'private, no-store'}
 const ok=(value:unknown)=>jsonOk(value,{headers})
 export async function GET(req:NextRequest){
  return handle(async()=>{
   const user=await requireUser()
   const query=req.nextUrl.searchParams
+  if(query.get('contacts')==='1')return ok(await listDirectContacts(user.id,(query.get('q')??'').trim().slice(0,80)))
   const id=query.get('id'),before=query.get('before')
   if(id!==null){
    if(!validDirectId(id)||(before!==null&&!validDirectId(before)))throw errors.badRequest('Invalid conversation or cursor.')

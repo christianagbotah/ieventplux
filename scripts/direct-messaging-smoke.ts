@@ -23,6 +23,10 @@ async function main(){
   check((await call(null)).status===401,'anonymous history denied')
   check((await call(a,'',{action:'request',userId:a.id})).status===400,'self request denied')
   check((await call(a,'',{action:'request',userId:b.id,expectedUserId:c.id})).status===409,'stale account mutation denied')
+  await db.follow.create({data:{followerId:a.id,userId:b.id}})
+  const contacts=await call(a,'?contacts=1')
+  check(contacts.body.items.length===1&&contacts.body.items[0].id===b.id&&!('email' in contacts.body.items[0]),'contact directory only exposes existing social connections and public fields')
+  check((await call(c,'?contacts=1')).body.items.length===0,'unconnected accounts cannot browse directory')
   const request=await call(a,'',{action:'request',userId:b.id})
   check(request.status===200&&request.body.conversation.status==='PENDING','private contact request persisted')
   const id=request.body.conversation.id
@@ -55,6 +59,7 @@ async function main(){
   await db.userBlock.create({data:{blockerId:b.id,blockedId:a.id}})
   check((await call(a,'',{action:'send',id,clientKey:key(),body:'blocked'})).status===403,'block stops new messages')
   check(!(await call(a,'?id='+id)).body.conversation.canSend,'blocked history indicates no sending')
+  check((await call(a,'?contacts=1')).body.items.length===0,'blocked contact removed from directory')
   const decline=(await call(a,'',{action:'request',userId:d.id})).body.conversation.id
   check((await call(d,'',{action:'decline',id:decline})).status===200,'recipient declines contact')
   check((await call(a,'',{action:'request',userId:d.id})).body.conversation.status==='DECLINED','decline cannot be bypassed by repeated request')

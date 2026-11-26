@@ -116,3 +116,14 @@ export async function getDirectConversation(id:string,userId:string,before:strin
  const rows=await db.directMessage.findMany({where:{conversationId:id,...(anchor?{OR:[{createdAt:{lt:anchor.createdAt}},{createdAt:anchor.createdAt,id:{lt:anchor.id}}]}:{})},orderBy:[{createdAt:'desc'},{id:'desc'}],take:31,select:{id:true,senderId:true,body:true,createdAt:true,readAt:true}})
  return {conversation:{id:c.id,status:c.status,requesterId:c.requesterId,peer:other,canSend:c.status==='ACCEPTED'&&!block&&active===1},items:rows.slice(0,30),nextCursor:rows.length>30?rows[29]?.id??null:null}
 }
+
+export async function listDirectContacts(userId:string,query:string){
+ const blocks=await db.userBlock.findMany({where:{OR:[{blockerId:userId},{blockedId:userId}]},select:{blockerId:true,blockedId:true}})
+ const excluded=[userId,...blocks.map(b=>b.blockerId===userId?b.blockedId:b.blockerId)]
+ return {items:await db.user.findMany({
+  where:{id:{notIn:excluded},status:'ACTIVE',deletedAt:null,
+   ...(query?{displayName:{contains:query,mode:'insensitive' as const}}:{}),
+   OR:[{followsGiven:{some:{userId}}},{followsReceived:{some:{followerId:userId}}}]},
+  orderBy:[{displayName:'asc'},{id:'asc'}],take:40,select:profile,
+ })}
+}
