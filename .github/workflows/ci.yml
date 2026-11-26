@@ -188,6 +188,21 @@ jobs:
           echo
           curl -sf http://localhost:3001/health | head -c 200
 
+      - name: Browser clarity and responsive screenshot acceptance
+        run: |
+          npm install --prefix "$RUNNER_TEMP/ievent-ui-qa" --no-audit --no-fund playwright@1.51.1
+          "$RUNNER_TEMP/ievent-ui-qa/node_modules/.bin/playwright" install --with-deps chromium
+          IEVX_PLAYWRIGHT_MODULE="$RUNNER_TEMP/ievent-ui-qa/node_modules/playwright" node scripts/clarity-browser-smoke.cjs
+
+      - name: Upload browser clarity screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: clarity-browser-screenshots
+          path: ui-qa/
+          retention-days: 7
+          if-no-files-found: ignore
+
       - name: Realtime access smoke (public event, private notification and broadcast)
         run: bun run scripts/realtime-smoke.ts
 
