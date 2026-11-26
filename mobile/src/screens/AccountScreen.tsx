@@ -50,7 +50,7 @@ export default function AccountScreen({ navigation }: AccountScreenProps) {
     <SectionHeading title="Your account"/>
     <View style={styles.quickGrid}>
       <QuickTile kind="ticket" title="My tickets" detail="Passes & QR codes" onPress={()=>navigation.navigate('MyTickets')}/>
-      <QuickTile kind="event" title="Discover" detail="Find experiences" onPress={()=>navigation.navigate('Discover')}/>
+      <QuickTile kind="spark" title="Notifications" detail="Reminders & updates" onPress={()=>navigation.navigate('Notifications')}/>
       <QuickTile kind="organizer" title="Organizer Studio" detail="Create & manage" onPress={()=>navigation.navigate('OrganizerStudio')}/>
       <QuickTile kind="store" title="Local services" detail="Find help & register" onPress={()=>navigation.navigate('Services')}/>
       <QuickTile kind="scanner" title="Check-in" detail="Scan event passes" onPress={()=>navigation.navigate('Checkin')}/>
