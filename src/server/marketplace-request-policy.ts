@@ -48,3 +48,13 @@ export function decisionAllowed(role:'seller'|'buyer',current:string,next:Purcha
  if(current===next)return true
  return current==='REQUESTED'||(current==='ACKNOWLEDGED'&&(next==='DECLINED'||next==='WITHDRAWN'))
 }
+
+/** Only the other participant receives a private in-app notification. */
+export function requestNotification(status:'REQUESTED'|PurchaseRequestDecision){
+ switch(status){
+  case 'REQUESTED':return {type:'MARKETPLACE_REQUEST',title:'New purchase request',body:'A customer has submitted a non-binding purchase request. Review the selection in your storefront.'}
+  case 'ACKNOWLEDGED':return {type:'MARKETPLACE_REQUEST',title:'Seller acknowledged your request',body:'The seller has reviewed your request. No order has been confirmed and no stock or payment is held.'}
+  case 'DECLINED':return {type:'MARKETPLACE_REQUEST',title:'Purchase request declined',body:'The seller declined your request. No payment or inventory reservation was created.'}
+  case 'WITHDRAWN':return {type:'MARKETPLACE_REQUEST',title:'Purchase request withdrawn',body:'The customer withdrew their request. No payment or inventory reservation was created.'}
+ }
+}
