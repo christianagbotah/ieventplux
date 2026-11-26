@@ -13,8 +13,8 @@ export const mobileDesign = {
   forest:'#073e3b', forestDeep:'#091f31', emerald:'#087a6d', mint:'#c6f6dd',
   mintSoft:'#e9f7f2', gold:'#f2c879', white:'#ffffff', canvas:'#f5f7fa',
   border:'#d7dfe7', shadow:'#11253f',
-  radius:{sm:13,md:18,lg:24,xl:30},
-  layout:{edge:20,section:32,card:20},
+  radius:{sm:10,md:14,lg:18,xl:24},
+  layout:{edge:16,section:24,card:14},
 } as const
 
 /** Decorative premium gradient is scalable SVG, independent of device pixel ratio. */
@@ -60,7 +60,7 @@ export function SectionHeading({eyebrow,title,subtitle,action,onAction}:{
   </View>
 }
 
-export function SurfaceCard({children,style,padding=20}:{children:ReactNode;style?:ViewStyle;padding?:number}){
+export function SurfaceCard({children,style,padding=14}:{children:ReactNode;style?:ViewStyle;padding?:number}){
   return <View style={[styles.card,{padding},style]}>{children}</View>
 }
 
@@ -96,18 +96,18 @@ export function TileGlyph({kind,size=46}:{kind:'ticket'|'event'|'organizer'|'sto
 
 const styles=StyleSheet.create({
   backdrop:{position:'absolute',top:0,left:0,right:0,bottom:0},
-  sectionHeading:{flexDirection:'row',alignItems:'flex-end',justifyContent:'space-between',gap:14,marginBottom:14},
+  sectionHeading:{flexDirection:'row',alignItems:'flex-end',justifyContent:'space-between',gap:10,marginBottom:10},
   sectionMain:{flex:1},eyebrow:{fontSize:theme.typography.caption,fontWeight:'700',letterSpacing:.65,color:mobileDesign.emerald,marginBottom:5},
-  sectionTitle:{fontSize:theme.typography.title,letterSpacing:-.4,lineHeight:theme.typography.titleLine,fontWeight:'800',color:mobileDesign.ink},
+  sectionTitle:{fontSize:theme.typography.title,letterSpacing:-.4,lineHeight:theme.typography.titleLine,fontWeight:'700',color:mobileDesign.ink},
   sectionSubtitle:{fontSize:theme.typography.body,lineHeight:theme.typography.bodyLine,color:mobileDesign.inkMuted,marginTop:5},
-  sectionAction:{paddingHorizontal:11,minHeight:theme.touch.standard,justifyContent:'center',backgroundColor:mobileDesign.mintSoft,borderRadius:13},
+  sectionAction:{paddingHorizontal:10,minHeight:theme.touch.compact,justifyContent:'center',backgroundColor:mobileDesign.mintSoft,borderRadius:13},
   sectionActionText:{color:mobileDesign.emerald,fontWeight:'700',fontSize:theme.typography.label},
   card:{backgroundColor:mobileDesign.white,borderRadius:mobileDesign.radius.lg,borderWidth:1,borderColor:mobileDesign.border,
     shadowColor:mobileDesign.shadow,shadowOpacity:.035,shadowOffset:{width:0,height:8},shadowRadius:20,elevation:2},
-  button:{minHeight:theme.touch.standard,borderRadius:15,backgroundColor:mobileDesign.emerald,paddingHorizontal:18,alignItems:'center',justifyContent:'center'},
+  button:{minHeight:theme.touch.standard,borderRadius:12,backgroundColor:mobileDesign.emerald,paddingHorizontal:16,alignItems:'center',justifyContent:'center'},
   buttonAlt:{backgroundColor:mobileDesign.mintSoft,borderWidth:1,borderColor:'#d1eadf'},buttonWide:{flex:1},
   buttonText:{color:'#fff',fontSize:theme.typography.action,fontWeight:'700',textAlign:'center'},buttonAltText:{color:mobileDesign.emerald},
-  label:{paddingHorizontal:11,paddingVertical:6,borderRadius:999,alignSelf:'flex-start'},
+  label:{paddingHorizontal:9,paddingVertical:4,borderRadius:999,alignSelf:'flex-start'},
   labelText:{fontSize:theme.typography.caption,fontWeight:'700',letterSpacing:.25},
   glyphBox:{backgroundColor:mobileDesign.mintSoft,alignItems:'center',justifyContent:'center',borderWidth:1,borderColor:'#d7ede4'},
 })
