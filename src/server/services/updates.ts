@@ -96,11 +96,14 @@ export async function postUpdate(input: PostUpdateInput): Promise<PostUpdateResu
     after: { title, important },
   })
 
-  // ── Audience: ticket holders ∪ fulfilled buyers ∪ followers (dedup by user) ──
-  const [holderRows, buyerRows, followerRows] = await Promise.all([
-    db.ticket.findMany({ where: { eventId: input.eventId, status: 'VALID' }, select: { userId: true }, distinct: ['userId'] }),
-    db.order.findMany({ where: { eventId: input.eventId, status: 'PAID' }, select: { userId: true } }),
-    db.follow.findMany({ where: { orgId: access.event.orgId }, select: { followerId: true } }),
+  // Invite-only content must not reach ordinary followers or obsolete orders.
+  const isPrivate = access.event.visibility === 'INVITE_ONLY'
+  // ── Audience: current entitlement, or public buyer/follower reach ──
+  const [holderRows, buyerRows, followerRows, approvedRows] = await Promise.all([
+    db.ticket.findMany({ where: { eventId: input.eventId, status: { in: ['VALID', 'CHECKED_IN'] } }, select: { userId: true }, distinct: ['userId'] }),
+    isPrivate ? Promise.resolve([]) : db.order.findMany({ where: { eventId: input.eventId, status: 'PAID' }, select: { userId: true } }),
+    isPrivate ? Promise.resolve([]) : db.follow.findMany({ where: { orgId: access.event.orgId }, select: { followerId: true } }),
+    isPrivate ? db.rsvp.findMany({ where: { eventId: input.eventId, status: 'APPROVED' }, select: { userId: true } }) : Promise.resolve([]),
   ])
   const audience = new Set<string>()
   for (const h of holderRows) if (h.userId) audience.add(h.userId)
@@ -110,10 +113,11 @@ export async function postUpdate(input: PostUpdateInput): Promise<PostUpdateResu
 
   const link = `#/event/${input.eventId}`
   let notified = 0
-  const notifyTitle = important ? `Important update — ${title}` : title
+  const notifyTitle = isPrivate ? (important ? 'Important private event update' : 'Private event update') : important ? `Important update — ${title}` : title
+  const notifyBody = isPrivate ? 'Sign in and open the event to view the latest update.' : body.slice(0, 200)
   for (const userId of audience) {
     if (notified >= MAX_AUDIENCE_NOTIFY) break
-    await notifyUser({ userId, type: 'EVENT_CHANGE', title: notifyTitle, body: body.slice(0, 200), link }).catch(() => {})
+    await notifyUser({ userId, type: 'EVENT_CHANGE', title: notifyTitle, body: notifyBody, link }).catch(() => {})
     notified += 1
   }
 
@@ -128,12 +132,12 @@ export async function postUpdate(input: PostUpdateInput): Promise<PostUpdateResu
     })
     for (const u of users) if (u.phone) smsTargets.set(u.phone, u.id)
     // Guest buyers (no account) who left a phone number — they cannot be reached in-app.
-    const guestBuyers = await db.order.findMany({
+    const guestBuyers = isPrivate ? [] : await db.order.findMany({
       where: { eventId: input.eventId, status: 'PAID', userId: null, buyerPhone: { not: null } },
       select: { buyerPhone: true },
     })
     for (const g of guestBuyers) if (g.buyerPhone) smsTargets.set(g.buyerPhone, '')
-    const smsBody = `iEventPlux — ${title}: ${body.slice(0, 120)}${body.length > 120 ? '…' : ''}`
+    const smsBody = isPrivate ? 'iEventPlux: Important private event update. Sign in to view it.' : `iEventPlux — ${title}: ${body.slice(0, 120)}${body.length > 120 ? '…' : ''}`
     for (const [phone, uid] of smsTargets) {
       const queued = await queueMessage({
         channel: 'SMS',
@@ -151,7 +155,8 @@ export async function postUpdate(input: PostUpdateInput): Promise<PostUpdateResu
   }
 
   // ── Realtime: anyone with the event page open sees it immediately ────────────
-  await realtimeEmit(`event:${input.eventId}`, 'update:new', { update: toView(update) }).catch(() => {})
+  // A socket may outlive its invitation. Never push private content to an event room.
+  if (!isPrivate) await realtimeEmit(`event:${input.eventId}`, 'update:new', { update: toView(update) }).catch(() => {})
 
   return { update: toView(update), reach: { audience: audience.size, notified, smsQueued } }
 }
