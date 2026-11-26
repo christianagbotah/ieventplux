@@ -3,7 +3,7 @@ import {errors,handle,jsonOk,rateLimit,readJson,requireUser,requireSession} from
 import {validDirectId,parseDirectMessage} from '@/server/direct-message-policy'
 import {parseActivity} from '@/server/direct-activity-policy'
 import {parseDirectReport} from '@/server/direct-report-policy'
-import {requestConversation,decideConversation,sendDirectMessage,readDirectMessages,listDirectConversations,getDirectConversation,listDirectContacts,directActivity,reportDirectMessage} from '@/server/services/direct-messages'
+import {requestConversation,decideConversation,sendDirectMessage,readDirectMessages,listDirectConversations,getDirectConversation,listDirectContacts,directActivity,reportDirectMessage,setDirectSafety} from '@/server/services/direct-messages'
 const headers={'Cache-Control':'private, no-store'}
 const ok=(value:unknown)=>jsonOk(value,{headers})
 export async function GET(req:NextRequest){
@@ -33,6 +33,11 @@ export async function POST(req:NextRequest){
   }
   const id=body.id
   if(!validDirectId(id))throw errors.badRequest('Invalid conversation.')
+  if(body.action==='safety'){
+   await rateLimit(req,'direct-safety',30,60_000)
+   if((body.kind!=='block'&&body.kind!=='mute')||typeof body.enabled!=='boolean')throw errors.badRequest('Invalid chat safety setting.')
+   return ok(await setDirectSafety(id,user.id,body.kind,body.enabled))
+  }
   if(body.action==='report'){
    await rateLimit(req,'direct-report',10,60_000)
    const input=parseDirectReport(body)

@@ -13,7 +13,7 @@ import {usePortal} from '../store'
 import {initials,relative} from '../format'
 
 type Contact={id:string;displayName:string;avatarUrl:string|null}
-type Conversation={id:string;status:string;requesterId:string;updatedAt?:string;peer:Contact|null;unread?:number;canSend?:boolean}
+type Conversation={id:string;status:string;requesterId:string;updatedAt?:string;peer:Contact|null;unread?:number;canSend?:boolean;blockedByMe?:boolean;mutedByMe?:boolean}
 type Message={id:string;senderId:string;body:string;createdAt:string;readAt:string|null;removedAt?:string|null}
 type Detail={conversation:Conversation;items:Message[];nextCursor:string|null}
 function Avatar({contact}:{contact:Contact|null}){
@@ -34,6 +34,7 @@ function Inbox({userId,id}:{userId:string;id?:string}){
  const [cursor,setCursor]=useState<string|null>(null)
  const [draft,setDraft]=useState('')
  const [reportTarget,setReportTarget]=useState<string|null>(null)
+ const [safetyTarget,setSafetyTarget]=useState<'block'|'mute'|null>(null)
  const [reportReason,setReportReason]=useState('SPAM')
  const [reportDetails,setReportDetails]=useState('')
  const [reportStatus,setReportStatus]=useState('')
@@ -154,6 +155,13 @@ function Inbox({userId,id}:{userId:string;id?:string}){
  const latest=detail?.items[0]?.id
  useEffect(()=>{if(latest)scrollEnd.current?.scrollIntoView({block:'nearest'})},[latest])
  const c=detail?.conversation
+ const toggleSafety=async()=>{
+  if(!safetyTarget||!c||busy)return
+  const kind=safetyTarget,enabled=kind==='block'?!c.blockedByMe:!c.mutedByMe
+  setSafetyTarget(null)
+  if(kind==='block'&&enabled){setShareActivity(false);lastTyping.current=0}
+  await mutate({action:'safety',id,kind,enabled})
+ }
  return <section className="mx-auto w-full max-w-6xl px-2 py-4 sm:px-0 sm:py-6">
   <header className="mb-4 flex items-center justify-between gap-3"><div><h1 className="text-2xl font-bold tracking-tight">Messages</h1><p className="text-sm text-muted-foreground">Private conversations</p></div><Button variant="outline" size="sm" onClick={()=>navigate('/me?tab=notifications')}>Activity</Button></header>
   {reportStatus&&<p role="status" className="mb-3 rounded-xl border bg-card p-3 text-sm">{reportStatus}</p>}
@@ -169,6 +177,10 @@ function Inbox({userId,id}:{userId:string;id?:string}){
    <div className={`min-w-0 overflow-hidden rounded-2xl border bg-card ${id?'':'hidden md:block'}`}>
     {!id?<div className="grid min-h-80 place-items-center p-8 text-center"><div><MessageCircle className="mx-auto mb-3 size-10 text-primary"/><p className="font-semibold">Choose a conversation</p><p className="text-sm text-muted-foreground">Your messages appear here.</p></div></div>:!c?<p className="p-5 text-sm text-muted-foreground">Loading conversation…</p>:<>
      <header className="flex items-center gap-3 border-b p-3"><Button variant="ghost" size="icon" className="md:hidden" aria-label="Back to conversations" onClick={()=>navigate('/messages')}><ArrowLeft className="size-5"/></Button><Avatar contact={c.peer}/><div className="min-w-0"><p className="truncate font-semibold">{c.peer?.displayName??'Member'}</p><p className="text-xs text-muted-foreground">{c.status==='ACCEPTED'?(c.canSend&&peerActivity.typing?'Typing…':c.canSend&&peerActivity.active?'Active in this chat':'Private conversation'):c.status==='PENDING'?'Message request':'Request declined'}</p></div></header>
+     <div className="flex flex-wrap gap-2 border-b px-3 py-2">
+      <Button size="sm" variant="outline" disabled={busy} onClick={()=>setSafetyTarget('mute')}>{c.mutedByMe?'Unmute':'Mute'}</Button>
+      <Button size="sm" variant="outline" disabled={busy} onClick={()=>setSafetyTarget('block')}>{c.blockedByMe?'Unblock':'Block'}</Button>
+     </div>
      {c.canSend&&<div className="flex items-center justify-between gap-2 border-b px-4 py-2 text-xs text-muted-foreground"><label className="flex min-h-9 items-center gap-2"><input type="checkbox" checked={shareActivity} onChange={e=>{setShareActivity(e.target.checked);lastTyping.current=0}}/> Share chat activity</label><span aria-live="polite">{peerActivity.typing?'Typing…':''}</span></div>}
      {c.status==='PENDING'?<div className="space-y-3 p-5 text-sm">{c.requesterId===userId?<p>Waiting for this person to accept your request.</p>:<><p>Accept this request to start a conversation.</p><div className="flex flex-wrap gap-2"><Button disabled={busy} onClick={()=>void mutate({action:'accept',id})}>Accept</Button><Button variant="outline" disabled={busy} onClick={()=>void mutate({action:'decline',id})}>Decline</Button></div></>}</div>:c.status==='DECLINED'?<p className="p-5 text-sm text-muted-foreground">This message request was declined.</p>:<>
      <div className="flex h-[min(54vh,500px)] min-h-52 flex-col gap-3 overflow-y-auto bg-muted/20 p-4">
@@ -182,6 +194,9 @@ function Inbox({userId,id}:{userId:string;id?:string}){
     </>}
    </div>
   </div>
+  <Dialog open={!!safetyTarget} onOpenChange={open=>{if(!open)setSafetyTarget(null)}}>
+   <DialogContent className="max-w-sm"><DialogHeader><DialogTitle>{safetyTarget==='block'?(c?.blockedByMe?'Unblock contact?':'Block contact?'):(c?.mutedByMe?'Unmute contact?':'Mute contact?')}</DialogTitle><DialogDescription>{safetyTarget==='block'?(c?.blockedByMe?'Remove your block. The other person may still have blocked you.':'Stop new private messages and chat activity with this contact. Existing history remains available.'):(c?.mutedByMe?'Resume eligible message alerts.':'Stop new message alerts from this contact without blocking messages.')}</DialogDescription></DialogHeader><DialogFooter><Button variant="outline" onClick={()=>setSafetyTarget(null)}>Cancel</Button><Button disabled={busy} onClick={()=>void toggleSafety()}>Confirm</Button></DialogFooter></DialogContent>
+  </Dialog>
   <Dialog open={!!reportTarget} onOpenChange={open=>{if(!open&&!busy)setReportTarget(null)}}>
    <DialogContent className="max-w-sm">
     <DialogHeader><DialogTitle>Report message</DialogTitle><DialogDescription>Only the selected message will be available to authorized moderators.</DialogDescription></DialogHeader>
