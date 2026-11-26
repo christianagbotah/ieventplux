@@ -165,6 +165,11 @@ jobs:
           IEVENTPLUX_ISOLATED_DB_TEST: "yes"
         run: bash scripts/verify-meeting-migration.sh
 
+      - name: Rehearse additive transport departure SQL and constraints twice
+        env:
+          IEVENTPLUX_ISOLATED_DB_TEST: "yes"
+        run: bash scripts/verify-transport-departure-migration.sh
+
       - name: Start the stack
         run: |
           (IEVENTPLUX_GROUP_MEETINGS_ENABLED=true bun run dev > dev.log 2>&1 &)
@@ -195,6 +200,11 @@ jobs:
         env:
           IEVENTPLUX_ISOLATED_DB_TEST: "yes"
         run: bun run scripts/marketplace-foundation-smoke.ts
+
+      - name: Transport departure ownership, historical inventory and allocation races
+        env:
+          IEVENTPLUX_ISOLATED_DB_TEST: "yes"
+        run: bun run scripts/transport-departure-smoke.ts
 
       - name: Check-in replay isolation with synthetic admission record
         run: bun run scripts/checkin-replay-scope-smoke.ts
