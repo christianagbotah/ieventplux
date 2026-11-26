@@ -4,7 +4,7 @@ import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleShee
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import {
   ACCESS_OPTIONS, countryName, DATE_WINDOWS, EMPTY_DISCOVERY_FILTERS,
-  PRICE_OPTIONS, type DiscoveryFilters,
+  PRICE_OPTIONS, DISCOVERY_SORT_OPTIONS, type DiscoveryFilters,
 } from '../lib/discovery-filters'
 import { theme } from '../theme'
 
@@ -56,6 +56,8 @@ export function DiscoverFilterSheet({ visible, filters, categories, countries, o
         <ScrollView style={styles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
           <ChoiceGroup title="When" options={DATE_WINDOWS} selected={draft.when} onSelect={value=>set('when',value)}/>
           <ChoiceGroup title="Access" options={ACCESS_OPTIONS} selected={draft.mode} onSelect={value=>set('mode',value)}/>
+          <ChoiceGroup title="Sort" options={DISCOVERY_SORT_OPTIONS} selected={draft.sort??''} onSelect={value=>set('sort',value)}/>
+          {draft.sort?.startsWith('price:')&&<Text style={styles.note}>Only events with active ticket types in the selected currency are included.</Text>}
           <ChoiceGroup title="Entry" options={PRICE_OPTIONS} selected={draft.price} onSelect={value=>set('price',value)}/>
           <ChoiceGroup title="Category" options={[{value:'',label:'All categories'},...categories.map(c=>({value:c.slug,label:c.name}))]} selected={draft.category} onSelect={value=>set('category',value)}/>
           <View style={styles.group}>

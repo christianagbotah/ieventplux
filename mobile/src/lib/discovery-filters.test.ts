@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { buildDiscoveryQuery, countryName, EMPTY_DISCOVERY_FILTERS, isDiscoveryFiltered } from './discovery-filters'
+import { buildDiscoveryQuery, countryName, discoveryPriceLabel, EMPTY_DISCOVERY_FILTERS, isDiscoveryFiltered } from './discovery-filters'
 
 test('public discover query uses web mode/access semantics and all filters', () => {
   const q = new URLSearchParams(buildDiscoveryQuery({
@@ -21,4 +21,13 @@ test('physical access uses mode and empty filters never submit blank search term
 })
 test('country labels degrade to original ISO code when Intl is missing', () => {
   expect(countryName('GH').length).toBeGreaterThan(0)
+})
+
+test('price ranking sends explicit currency and native cards never relabel USD as cedis',()=>{
+ const q=new URLSearchParams(buildDiscoveryQuery({...EMPTY_DISCOVERY_FILTERS,sort:'price:USD',when:'LIVE_NOW',mode:'VIRTUAL'}))
+ expect(q.get('sort')).toBe('price');expect(q.get('currency')).toBe('USD')
+ expect(q.get('when')).toBe('LIVE_NOW');expect(q.get('mode')).toBe('VIRTUAL')
+ const fmt=(n:number,c:string)=>c+' '+n
+ expect(discoveryPriceLabel([{priceMinor:100,currency:'USD'}],fmt)).toBe('from USD 100')
+ expect(discoveryPriceLabel([{priceMinor:100,currency:'USD'},{priceMinor:1,currency:'GHS'}],fmt)).toBe('View ticket prices')
 })
