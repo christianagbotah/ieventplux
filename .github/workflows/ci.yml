@@ -215,6 +215,7 @@ jobs:
         env:
           IEVENTPLUX_ISOLATED_DB_TEST: "yes"
         run: |
+          bash scripts/verify-direct-messaging-migration.sh
           bun test src/server/direct-message-policy.test.ts
           bun run scripts/direct-messaging-smoke.ts
 
