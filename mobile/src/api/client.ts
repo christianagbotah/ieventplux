@@ -712,7 +712,13 @@ export type DriverAssignment={id:string;state:string;expiresAt:string;isExpired:
 export type CharterPlan={id:string;title:string;origin:ServiceArea;destination:ServiceArea;departureAt:string;returnAt:string|null;passengers:number;state:string;capacityEstimate:{illustrativeSeats:number;vehicles:number}[]}
 export type CharterDraft={title:string;originAreaId:string;destinationAreaId:string;departureAt:string;returnAt:string|null;passengers:number;requestKey:string}
 export type TransportRouteDraft={id:string;label:string;origin:ServiceArea;destination:ServiceArea;departureMinute:number;operatingDays:number[];estimatedMinutes:number;state:string}
+export type DepartureDraft={id:string;state:string;departureAt:string;arrivalAt:string;allocatedSeats:number;route:{label:string};vehicle:{label:string;passengerSeats:number}}
 export const api = {
+  transportDepartures:{
+    list:(id:string)=>request<{items:DepartureDraft[]}>('GET','/service-providers/'+encodeURIComponent(id)+'/departures'),
+    create:(id:string,body:{routeId:string;vehicleId:string;date:string;allocatedSeats:number})=>request<{item:DepartureDraft}>('POST','/service-providers/'+encodeURIComponent(id)+'/departures',body),
+    cancel:(id:string,departureId:string)=>request<{state:string}>('PATCH','/service-providers/'+encodeURIComponent(id)+'/departures/'+encodeURIComponent(departureId),{action:'CANCEL'}),
+  },
   transportRoutes:{
     list:(id:string)=>request<{items:TransportRouteDraft[]}>('GET','/service-providers/'+encodeURIComponent(id)+'/transport-routes'),
     create:(id:string,body:{label:string;originAreaId:string;destinationAreaId:string;departureTime:string;operatingDays:number[];estimatedMinutes:number})=>request<{item:TransportRouteDraft}>('POST','/service-providers/'+encodeURIComponent(id)+'/transport-routes',body),

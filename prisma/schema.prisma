@@ -1997,6 +1997,7 @@ model TransportVehicle {
   provider ServiceProviderProfile @relation(fields:[providerId],references:[id],onDelete:Restrict)
   stationArea ServiceArea? @relation(fields:[stationAreaId],references:[id],onDelete:Restrict)
   driverAssignments TransportDriverAssignment[]
+  departures TransportDepartureDraft[]
   @@unique([providerId,labelKey])
   @@index([providerId,state])
 }
@@ -2056,6 +2057,24 @@ model TransportRouteDraft {
   provider ServiceProviderProfile @relation(fields:[providerId],references:[id],onDelete:Restrict)
   origin ServiceArea @relation("TransportRouteOrigin",fields:[originAreaId],references:[id],onDelete:Restrict)
   destination ServiceArea @relation("TransportRouteDestination",fields:[destinationAreaId],references:[id],onDelete:Restrict)
+  departures TransportDepartureDraft[]
   @@unique([providerId,labelKey])
   @@index([providerId,state])
+}
+
+// Private inventory allocation, not a passenger reservation or public timetable.
+model TransportDepartureDraft {
+  id String @id @default(cuid())
+  routeId String
+  vehicleId String
+  departureAt DateTime
+  arrivalAt DateTime
+  allocatedSeats Int
+  state String @default("DRAFT")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  route TransportRouteDraft @relation(fields:[routeId],references:[id],onDelete:Restrict)
+  vehicle TransportVehicle @relation(fields:[vehicleId],references:[id],onDelete:Restrict)
+  @@unique([routeId,vehicleId,departureAt])
+  @@index([vehicleId,state,departureAt,arrivalAt])
 }
