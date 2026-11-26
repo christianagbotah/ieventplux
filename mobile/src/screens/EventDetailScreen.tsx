@@ -44,6 +44,7 @@ import {
 import { theme } from '../theme'
 import {PremiumBackdrop,SectionHeading,TileGlyph,mobileDesign} from '../ui/PremiumUI'
 import { EventProgrammeSections } from '../components/EventProgrammeSections'
+import { EventDemandCard } from '../components/EventDemandCard'
 import { eventTimeLabel } from '../lib/event-programme'
 import type { EventDetailScreenProps } from '../navigation'
 
@@ -207,6 +208,7 @@ export default function EventDetailScreen({ navigation, route }: EventDetailScre
       </View>
 
       <EventProgrammeSections event={event} onOpenProgramme={path => void openProgramme(path)} />
+      <EventDemandCard key={event.id} event={event} canManage={canManage} />
 
       <View style={styles.engageSection}>
         <SectionHeading eyebrow="BEYOND THE TICKET" title="Experience together" subtitle="Meet people, join conversations and be part of the event."/>
