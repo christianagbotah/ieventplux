@@ -23,7 +23,8 @@ on:
 
 jobs:
   web:
-    runs-on: ubuntu-latest
+    # Pinned supported browser runner; ubuntu-latest moved to 26.04.
+    runs-on: ubuntu-24.04
     services:
       postgres:
         image: postgres:16-alpine
