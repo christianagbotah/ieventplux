@@ -9,12 +9,12 @@ import Svg, { Circle, Defs, LinearGradient, Path, Rect, Stop } from 'react-nativ
 import { theme } from '../theme'
 
 export const mobileDesign = {
-  ink:'#142231', inkMuted:'#5c6d7e', inkSoft:'#8090a0',
+  ink:'#142231', inkMuted:'#5c6d7e', inkSoft:'#59697b',
   forest:'#073e3b', forestDeep:'#091f31', emerald:'#087a6d', mint:'#c6f6dd',
   mintSoft:'#e9f7f2', gold:'#f2c879', white:'#ffffff', canvas:'#f5f7fa',
-  border:'#e5eaef', shadow:'#11253f',
+  border:'#d7dfe7', shadow:'#11253f',
   radius:{sm:13,md:18,lg:24,xl:30},
-  layout:{edge:18,section:28,card:16},
+  layout:{edge:20,section:32,card:20},
 } as const
 
 /** Decorative premium gradient is scalable SVG, independent of device pixel ratio. */
@@ -60,14 +60,14 @@ export function SectionHeading({eyebrow,title,subtitle,action,onAction}:{
   </View>
 }
 
-export function SurfaceCard({children,style,padding=16}:{children:ReactNode;style?:ViewStyle;padding?:number}){
+export function SurfaceCard({children,style,padding=20}:{children:ReactNode;style?:ViewStyle;padding?:number}){
   return <View style={[styles.card,{padding},style]}>{children}</View>
 }
 
 export function PremiumButton({label,onPress,secondary=false,disabled=false,wide=false}:{
   label:string;onPress:()=>void;secondary?:boolean;disabled?:boolean;wide?:boolean
 }){
-  return <Pressable accessibilityRole="button" disabled={disabled} accessibilityLabel={label} onPress={onPress}
+  return <Pressable accessibilityRole="button" disabled={disabled} accessibilityLabel={label} accessibilityState={{disabled}} onPress={onPress}
     style={({pressed})=>[styles.button,secondary&&styles.buttonAlt,wide&&styles.buttonWide,(disabled||pressed)&&{opacity:.72}]}>
     <Text style={[styles.buttonText,secondary&&styles.buttonAltText]}>{label}</Text>
   </Pressable>
@@ -97,17 +97,17 @@ export function TileGlyph({kind,size=46}:{kind:'ticket'|'event'|'organizer'|'sto
 const styles=StyleSheet.create({
   backdrop:{position:'absolute',top:0,left:0,right:0,bottom:0},
   sectionHeading:{flexDirection:'row',alignItems:'flex-end',justifyContent:'space-between',gap:14,marginBottom:14},
-  sectionMain:{flex:1},eyebrow:{fontSize:10,fontWeight:'900',letterSpacing:1.35,color:mobileDesign.emerald,marginBottom:5},
-  sectionTitle:{fontSize:23,letterSpacing:-.7,lineHeight:29,fontWeight:'900',color:mobileDesign.ink},
-  sectionSubtitle:{fontSize:12,lineHeight:19,color:mobileDesign.inkMuted,marginTop:5},
-  sectionAction:{paddingHorizontal:11,minHeight:38,justifyContent:'center',backgroundColor:mobileDesign.mintSoft,borderRadius:13},
-  sectionActionText:{color:mobileDesign.emerald,fontWeight:'900',fontSize:12},
+  sectionMain:{flex:1},eyebrow:{fontSize:theme.typography.caption,fontWeight:'700',letterSpacing:.65,color:mobileDesign.emerald,marginBottom:5},
+  sectionTitle:{fontSize:theme.typography.title,letterSpacing:-.4,lineHeight:theme.typography.titleLine,fontWeight:'800',color:mobileDesign.ink},
+  sectionSubtitle:{fontSize:theme.typography.body,lineHeight:theme.typography.bodyLine,color:mobileDesign.inkMuted,marginTop:5},
+  sectionAction:{paddingHorizontal:11,minHeight:theme.touch.standard,justifyContent:'center',backgroundColor:mobileDesign.mintSoft,borderRadius:13},
+  sectionActionText:{color:mobileDesign.emerald,fontWeight:'700',fontSize:theme.typography.label},
   card:{backgroundColor:mobileDesign.white,borderRadius:mobileDesign.radius.lg,borderWidth:1,borderColor:mobileDesign.border,
-    shadowColor:mobileDesign.shadow,shadowOpacity:.06,shadowOffset:{width:0,height:8},shadowRadius:20,elevation:2},
-  button:{minHeight:48,borderRadius:15,backgroundColor:mobileDesign.emerald,paddingHorizontal:18,alignItems:'center',justifyContent:'center'},
+    shadowColor:mobileDesign.shadow,shadowOpacity:.035,shadowOffset:{width:0,height:8},shadowRadius:20,elevation:2},
+  button:{minHeight:theme.touch.standard,borderRadius:15,backgroundColor:mobileDesign.emerald,paddingHorizontal:18,alignItems:'center',justifyContent:'center'},
   buttonAlt:{backgroundColor:mobileDesign.mintSoft,borderWidth:1,borderColor:'#d1eadf'},buttonWide:{flex:1},
-  buttonText:{color:'#fff',fontSize:13,fontWeight:'900'},buttonAltText:{color:mobileDesign.emerald},
+  buttonText:{color:'#fff',fontSize:theme.typography.action,fontWeight:'700',textAlign:'center'},buttonAltText:{color:mobileDesign.emerald},
   label:{paddingHorizontal:11,paddingVertical:6,borderRadius:999,alignSelf:'flex-start'},
-  labelText:{fontSize:10,fontWeight:'900',letterSpacing:.25},
+  labelText:{fontSize:theme.typography.caption,fontWeight:'700',letterSpacing:.25},
   glyphBox:{backgroundColor:mobileDesign.mintSoft,alignItems:'center',justifyContent:'center',borderWidth:1,borderColor:'#d7ede4'},
 })
