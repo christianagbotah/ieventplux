@@ -95,7 +95,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setUser(null)
     setMemberships([])
     setStatus('anonymous')
-  }, [user?.id])
+  }, [user])
 
   const value = useMemo<SessionContextValue>(
     () => ({ status, user, memberships, error, signIn, refresh, signOut }),
