@@ -1,4 +1,4 @@
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { handle, jsonOk, requireUser, readJson, errors, rateLimit, sanitizeText, jsonList, pagination } from '@/server/api'
 import { db } from '@/lib/db'
 import { platformCan } from '@/server/permissions'
@@ -105,7 +105,7 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
       await rateLimit(req, 'direct-message-evidence-file', 15, 60_000)
       const { downloadReportedAttachment } = await import('@/server/services/direct-moderation')
       const file = await downloadReportedAttachment(sections[1], user)
-      return new Response(new Uint8Array(file.bytes), {headers: {'Cache-Control':'private, no-store','Content-Type':file.mime,'Content-Length':String(file.size),'Content-Disposition':'attachment; filename="'+file.filename+'"','X-Content-Type-Options':'nosniff','Cross-Origin-Resource-Policy':'same-origin','Content-Security-Policy':"default-src 'none'; sandbox"}})
+      return new NextResponse(new Uint8Array(file.bytes), {headers: {'Cache-Control':'private, no-store','Content-Type':file.mime,'Content-Length':String(file.size),'Content-Disposition':'attachment; filename="'+file.filename+'"','X-Content-Type-Options':'nosniff','Cross-Origin-Resource-Policy':'same-origin','Content-Security-Policy':"default-src 'none'; sandbox"}})
     }
 
     if (root === 'moderation' && sections[1] && sections[2] === 'message') {
