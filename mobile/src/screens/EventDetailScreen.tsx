@@ -185,8 +185,7 @@ export default function EventDetailScreen({ navigation, route }: EventDetailScre
         {event.coverImageUrl && absoluteUrl(event.coverImageUrl) ?
           <Image source={{uri:absoluteUrl(event.coverImageUrl)!}} style={styles.cover} resizeMode="cover" accessibilityLabel={event.title+' event artwork'}/>:
           <View style={[styles.cover,styles.coverPlaceholder]}><PremiumBackdrop mode="midnight"/><Text style={styles.coverPlaceholderText} numberOfLines={3}>{event.title}</Text></View>}
-        <View style={styles.coverRibbon}><Text style={styles.coverRibbonText}>✦  iEVENTPLUX EXPERIENCE</Text></View>
-        <View style={styles.coverCaption}><Text style={styles.coverCaptionText}>BE PART OF SOMETHING</Text></View>
+        
       </View>
 
       <View style={styles.eventHeading}>
@@ -212,7 +211,7 @@ export default function EventDetailScreen({ navigation, route }: EventDetailScre
       <EventProgrammeSections event={event} onOpenProgramme={path => void openProgramme(path)} />
 
       <View style={styles.engageSection}>
-        <SectionHeading eyebrow="BEYOND THE TICKET" title="Experience together" subtitle="Meet people, join conversations and be part of the event."/>
+        <SectionHeading title="Join the experience"/>
         <View style={[styles.socialButtons, stackSocial && styles.socialButtonsStacked]}>
           <SocialShortcut title="Group meetings" detail="Camera, mic & live rooms" kind="event" stacked={stackSocial}
             accessibilityLabel="Open this event's group meeting and device permissions"
@@ -229,7 +228,7 @@ export default function EventDetailScreen({ navigation, route }: EventDetailScre
         </View>
       </View>
 
-      <View style={styles.ticketsHeading}><SectionHeading eyebrow="SAVE YOUR PLACE" title="Tickets & entry" subtitle="Choose your pass to join this event"/></View>
+      <View style={styles.ticketsHeading}><SectionHeading title="Tickets & entry"/></View>
       {event.ticketTypes.length === 0 ? (
         <Text style={styles.muted}>No ticket types are on sale for this event yet.</Text>
       ) : (
@@ -265,9 +264,7 @@ export default function EventDetailScreen({ navigation, route }: EventDetailScre
         )}
       </Pressable>
       <Text style={styles.footnote}>
-        Paid checkout opens Hubtel's hosted page in your browser. The app returns via
-        ieventplux://order/{`{reference}`} — payment confirmation always comes from the
-        server (provider callbacks), never from the return link alone.
+        Paid checkout opens securely in your browser. Tickets appear once payment is confirmed.
       </Text>
 
       {canManage ? (
@@ -308,7 +305,7 @@ function TicketTypeRow({ticketType,qty,onDecrement,onIncrement}:{ticketType:Tick
         <Text style={styles.ticketName}>{ticketType.name}</Text>
         {ticketType.description?<Text style={styles.ticketDescription}>{ticketType.description}</Text>:null}
       </View>
-      <View style={styles.ticketTypeBadge}><Text style={styles.ticketTypeBadgeText}>PASS</Text></View>
+      
     </View>
     <View style={styles.ticketBottom}>
       <View style={styles.ticketPriceBlock}>
@@ -331,62 +328,62 @@ function TicketTypeRow({ticketType,qty,onDecrement,onIncrement}:{ticketType:Tick
 }
 
 const styles=StyleSheet.create({
-  screen:{backgroundColor:mobileDesign.canvas,flex:1},content:{paddingHorizontal:20,paddingTop:18,paddingBottom:44},
+  screen:{backgroundColor:mobileDesign.canvas,flex:1},content:{paddingHorizontal:16,paddingTop:12,paddingBottom:44},
   center:{flex:1,alignItems:'center',justifyContent:'center',padding:24,backgroundColor:mobileDesign.canvas},
-  coverShell:{aspectRatio:16/10,borderRadius:27,backgroundColor:mobileDesign.forestDeep,overflow:'hidden',position:'relative',
+  coverShell:{aspectRatio:16/10,borderRadius:20,backgroundColor:mobileDesign.forestDeep,overflow:'hidden',position:'relative',
     shadowColor:mobileDesign.shadow,shadowOpacity:.13,shadowRadius:20,shadowOffset:{width:0,height:10},elevation:5},
   cover:{width:'100%',height:'100%'},coverPlaceholder:{alignItems:'center',justifyContent:'center',padding:23,overflow:'hidden'},
-  coverPlaceholderText:{color:'#fff',fontSize:24,lineHeight:32,fontWeight:'900',textAlign:'center',letterSpacing:-.7},
+  coverPlaceholderText:{color:'#fff',fontSize:24,lineHeight:32,fontWeight:'700',textAlign:'center',letterSpacing:-.7},
   coverRibbon:{position:'absolute',top:15,left:15,backgroundColor:'#102637bb',borderRadius:13,paddingVertical:9,paddingHorizontal:12,borderWidth:1,borderColor:'#ffffff66'},
-  coverRibbonText:{fontSize:14,color:'#fff',fontWeight:'900',letterSpacing:.9},
+  coverRibbonText:{fontSize:14,color:'#fff',fontWeight:'700',letterSpacing:.9},
   coverCaption:{position:'absolute',bottom:15,right:15,backgroundColor:'#102637b0',paddingVertical:9,paddingHorizontal:12,borderRadius:12},
-  coverCaptionText:{fontSize:14,color:'#e6f9eb',fontWeight:'900',letterSpacing:1},
-  eventHeading:{marginTop:22},eventBadges:{flexDirection:'row',flexWrap:'wrap',gap:8},
-  statusBadge:{backgroundColor:mobileDesign.mintSoft,borderRadius:12,paddingHorizontal:12,paddingVertical:8},
-  statusBadgeText:{fontSize:14,fontWeight:'900',color:mobileDesign.emerald,letterSpacing:.4},
+  coverCaptionText:{fontSize:14,color:'#e6f9eb',fontWeight:'700',letterSpacing:1},
+  eventHeading:{marginTop:16},eventBadges:{flexDirection:'row',flexWrap:'wrap',gap:8},
+  statusBadge:{backgroundColor:mobileDesign.mintSoft,borderRadius:12,paddingHorizontal:9,paddingVertical:5},
+  statusBadgeText:{fontSize:11,fontWeight:'700',color:mobileDesign.emerald,letterSpacing:.4},
   modeBadge:{backgroundColor:'#eff2f8',borderRadius:12,paddingHorizontal:12,paddingVertical:8},
-  modeBadgeText:{fontSize:14,fontWeight:'900',color:mobileDesign.inkMuted,letterSpacing:.3},
-  title:{marginTop:13,fontSize:29,lineHeight:37,fontWeight:'900',color:mobileDesign.ink,letterSpacing:-1},
-  eventOrganizer:{marginTop:11,fontSize:14,color:mobileDesign.inkMuted,lineHeight:19},organizerName:{fontWeight:'900',color:mobileDesign.emerald},
-  infoCard:{marginTop:22,backgroundColor:'#fff',borderRadius:23,paddingHorizontal:18,paddingVertical:9,borderWidth:1,borderColor:mobileDesign.border,
+  modeBadgeText:{fontSize:11,fontWeight:'700',color:mobileDesign.inkMuted,letterSpacing:.3},
+  title:{marginTop:10,fontSize:24,lineHeight:31,fontWeight:'700',color:mobileDesign.ink,letterSpacing:-1},
+  eventOrganizer:{marginTop:7,fontSize:13,color:mobileDesign.inkMuted,lineHeight:19},organizerName:{fontWeight:'700',color:mobileDesign.emerald},
+  infoCard:{marginTop:16,backgroundColor:'#fff',borderRadius:18,paddingHorizontal:14,paddingVertical:9,borderWidth:1,borderColor:mobileDesign.border,
     shadowColor:mobileDesign.shadow,shadowOpacity:.04,shadowRadius:13,shadowOffset:{width:0,height:7},elevation:2},
-  infoRow:{flexDirection:'row',alignItems:'center',gap:12,paddingVertical:16},
-  infoIcon:{width:37,fontSize:23,fontWeight:'900',color:mobileDesign.emerald,textAlign:'center'},
-  infoBody:{flex:1,gap:4},infoLabel:{fontSize:14,color:mobileDesign.inkMuted,fontWeight:'900',letterSpacing:1},
-  infoValue:{fontSize:16,color:mobileDesign.ink,fontWeight:'900',lineHeight:20},infoSub:{fontSize:14,color:mobileDesign.inkMuted,lineHeight:21},
+  infoRow:{flexDirection:'row',alignItems:'center',gap:10,paddingVertical:12},
+  infoIcon:{width:37,fontSize:23,fontWeight:'700',color:mobileDesign.emerald,textAlign:'center'},
+  infoBody:{flex:1,gap:4},infoLabel:{fontSize:11,color:mobileDesign.inkMuted,fontWeight:'700',letterSpacing:.3},
+  infoValue:{fontSize:14,color:mobileDesign.ink,fontWeight:'700',lineHeight:20},infoSub:{fontSize:12,color:mobileDesign.inkMuted,lineHeight:18},
   infoDivider:{height:1,backgroundColor:mobileDesign.border},
   meta:{marginTop:4,color:mobileDesign.inkMuted,fontSize:14},
-  summary:{marginTop:23,color:mobileDesign.ink,fontSize:16,lineHeight:24,fontWeight:'800'},
-  description:{marginTop:12,color:mobileDesign.inkMuted,fontSize:16,lineHeight:25},
-  engageSection:{marginTop:32},socialButtons:{flexDirection:'row',flexWrap:'wrap',justifyContent:'space-between',gap:12},
-  socialTile:{width:'47.5%',padding:15,minHeight:158,backgroundColor:'#fff',borderWidth:1,borderColor:mobileDesign.border,borderRadius:23,
+  summary:{marginTop:16,color:mobileDesign.ink,fontSize:14,lineHeight:21,fontWeight:'600'},
+  description:{marginTop:8,color:mobileDesign.inkMuted,fontSize:14,lineHeight:21},
+  engageSection:{marginTop:24},socialButtons:{flexDirection:'row',flexWrap:'wrap',justifyContent:'space-between',gap:12},
+  socialTile:{width:'47.5%',padding:12,minHeight:112,backgroundColor:'#fff',borderWidth:1,borderColor:mobileDesign.border,borderRadius:18,
     shadowColor:mobileDesign.shadow,shadowOpacity:.05,shadowRadius:12,shadowOffset:{width:0,height:6},elevation:2},
   socialButtonsStacked:{flexDirection:'column'},socialTileStacked:{width:'100%',minHeight:0},
-  socialTileTop:{flexDirection:'row',alignItems:'flex-start',justifyContent:'space-between',marginBottom:17},socialTileArrow:{fontSize:20,color:mobileDesign.emerald,fontWeight:'900'},
-  socialTileTitle:{fontSize:17,lineHeight:23,fontWeight:'900',color:mobileDesign.ink},
-  socialTileDetail:{fontSize:14,lineHeight:21,color:mobileDesign.inkMuted,marginTop:6},
-  ticketsHeading:{marginTop:35},sectionTitle:{fontSize:21,fontWeight:'900',color:mobileDesign.ink},
-  ticketRow:{backgroundColor:'#fff',borderWidth:1,borderColor:mobileDesign.border,borderRadius:23,padding:17,marginBottom:13,
+  socialTileTop:{flexDirection:'row',alignItems:'flex-start',justifyContent:'space-between',marginBottom:9},socialTileArrow:{fontSize:20,color:mobileDesign.emerald,fontWeight:'700'},
+  socialTileTitle:{fontSize:14,lineHeight:20,fontWeight:'700',color:mobileDesign.ink},
+  socialTileDetail:{fontSize:12,lineHeight:18,color:mobileDesign.inkMuted,marginTop:6},
+  ticketsHeading:{marginTop:24},sectionTitle:{fontSize:21,fontWeight:'700',color:mobileDesign.ink},
+  ticketRow:{backgroundColor:'#fff',borderWidth:1,borderColor:mobileDesign.border,borderRadius:18,padding:14,marginBottom:10,
     shadowColor:mobileDesign.shadow,shadowOpacity:.045,shadowRadius:12,shadowOffset:{width:0,height:7},elevation:1},
   ticketMain:{flexDirection:'row',alignItems:'flex-start',gap:12},ticketInfo:{flex:1},
-  ticketName:{fontSize:17,fontWeight:'900',color:mobileDesign.ink,lineHeight:21},ticketDescription:{fontSize:16,lineHeight:24,color:mobileDesign.inkMuted,marginTop:5},
+  ticketName:{fontSize:15,fontWeight:'700',color:mobileDesign.ink,lineHeight:21},ticketDescription:{fontSize:13,lineHeight:19,color:mobileDesign.inkMuted,marginTop:5},
   ticketTypeBadge:{backgroundColor:mobileDesign.mintSoft,paddingHorizontal:9,paddingVertical:6,borderRadius:10},
-  ticketTypeBadgeText:{fontSize:14,color:mobileDesign.emerald,fontWeight:'900',letterSpacing:.4},
+  ticketTypeBadgeText:{fontSize:14,color:mobileDesign.emerald,fontWeight:'700',letterSpacing:.4},
   ticketBottom:{flexWrap:'wrap',marginTop:18,paddingTop:14,borderTopWidth:1,borderTopColor:mobileDesign.border,flexDirection:'row',alignItems:'center',justifyContent:'space-between',gap:12},
-  ticketPriceBlock:{flex:1},ticketPrice:{fontSize:20,fontWeight:'900',color:mobileDesign.emerald},ticketLowStock:{fontSize:14,fontWeight:'800',color:'#b25a24',marginTop:3},
-  ticketUnit:{fontSize:14,color:mobileDesign.inkMuted,marginTop:3},
+  ticketPriceBlock:{flex:1},ticketPrice:{fontSize:18,fontWeight:'700',color:mobileDesign.emerald},ticketLowStock:{fontSize:12,fontWeight:'800',color:'#b25a24',marginTop:3},
+  ticketUnit:{fontSize:12,color:mobileDesign.inkMuted,marginTop:3},
   qtyControls:{flexDirection:'row',alignItems:'center',gap:5},
   qtyButton:{width:48,height:48,borderRadius:14,backgroundColor:mobileDesign.mintSoft,borderWidth:1,borderColor:'#c6e6da',alignItems:'center',justifyContent:'center'},
   qtyDisabled:{opacity:.45},qtyButtonText:{fontSize:23,color:mobileDesign.emerald,fontWeight:'800'},
-  qtyValue:{minWidth:31,fontSize:16,fontWeight:'900',color:mobileDesign.ink,textAlign:'center'},
+  qtyValue:{minWidth:31,fontSize:16,fontWeight:'700',color:mobileDesign.ink,textAlign:'center'},
   totalSummary:{backgroundColor:'#fff',borderRadius:17,padding:15,flexDirection:'row',justifyContent:'space-between',alignItems:'center',borderWidth:1,borderColor:mobileDesign.border,marginTop:9},
-  totalSummaryText:{fontSize:14,color:mobileDesign.inkMuted,fontWeight:'700'},totalSummaryAmount:{fontSize:16,fontWeight:'900',color:mobileDesign.ink},
-  buyButton:{backgroundColor:mobileDesign.emerald,borderRadius:17,minHeight:55,paddingHorizontal:15,alignItems:'center',justifyContent:'center',marginTop:17},
-  buyButtonDisabled:{opacity:.52},buyButtonText:{fontWeight:'700',fontSize:16,color:'#fff'},
+  totalSummaryText:{fontSize:14,color:mobileDesign.inkMuted,fontWeight:'700'},totalSummaryAmount:{fontSize:16,fontWeight:'700',color:mobileDesign.ink},
+  buyButton:{backgroundColor:mobileDesign.emerald,borderRadius:17,minHeight:48,paddingHorizontal:15,alignItems:'center',justifyContent:'center',marginTop:17},
+  buyButtonDisabled:{opacity:.52},buyButtonText:{fontWeight:'600',fontSize:14,color:'#fff'},
   staffButton:{marginTop:20,borderWidth:1,borderColor:'#c4e2d5',borderRadius:15,padding:14,alignItems:'center',backgroundColor:mobileDesign.mintSoft},
-  staffButtonText:{fontWeight:'900',fontSize:14,color:mobileDesign.emerald},
-  footnote:{marginTop:13,fontSize:14,color:mobileDesign.inkMuted,lineHeight:21,textAlign:'center',marginHorizontal:6},
-  errorTitle:{fontSize:19,fontWeight:'900',color:mobileDesign.ink,marginBottom:11},muted:{fontSize:14,color:mobileDesign.inkMuted,lineHeight:21},
+  staffButtonText:{fontWeight:'700',fontSize:14,color:mobileDesign.emerald},
+  footnote:{marginTop:10,fontSize:12,color:mobileDesign.inkMuted,lineHeight:18,textAlign:'center',marginHorizontal:6},
+  errorTitle:{fontSize:19,fontWeight:'700',color:mobileDesign.ink,marginBottom:11},muted:{fontSize:14,color:mobileDesign.inkMuted,lineHeight:21},
   mutedCenter:{fontSize:14,color:mobileDesign.inkMuted,textAlign:'center',lineHeight:21},
-  retryButton:{marginTop:20,backgroundColor:mobileDesign.emerald,borderRadius:15,paddingHorizontal:24,minHeight:48,justifyContent:'center'},retryButtonText:{color:'#fff',fontWeight:'900'},
+  retryButton:{marginTop:20,backgroundColor:mobileDesign.emerald,borderRadius:15,paddingHorizontal:24,minHeight:48,justifyContent:'center'},retryButtonText:{color:'#fff',fontWeight:'700'},
 })
