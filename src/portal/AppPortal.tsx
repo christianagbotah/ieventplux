@@ -1,7 +1,7 @@
 'use client'
 
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react'
-import { Compass, Radio, Film, UsersRound, ShoppingBag, Search, Ticket, LayoutDashboard, ShieldCheck, LogOut, Bell, Sparkles, UserRound, Command as CommandIcon } from 'lucide-react'
+import { Compass, Radio, Film, UsersRound, ShoppingBag, Search, Ticket, LayoutDashboard, ShieldCheck, LogOut, Bell, MessageCircle, Sparkles, UserRound, Command as CommandIcon } from 'lucide-react'
 import { connectRealtime } from './realtime'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -39,6 +39,7 @@ const OrgProfile = lazy(() => import('./views/OrgProfile'))
 const AuthView = lazy(() => import('./views/AuthView'))
 const VerifyEmail = lazy(() => import('./views/VerifyEmail'))
 const Me = lazy(() => import('./views/Me'))
+const DirectMessages=lazy(()=>import('./views/DirectMessages'))
 const OrderView = lazy(() => import('./views/OrderView'))
 const BroadcastView = lazy(() => import('./views/BroadcastView'))
 const MeetingView = lazy(() => import('./views/MeetingView'))
@@ -145,6 +146,7 @@ export default function AppPortal() {
       void refresh()
     })
     socket.on('notification:read', () => void refresh())
+    socket.on('direct:changed',()=>{if(active)window.dispatchEvent(new Event('ievx:direct-changed'))})
     const onVisible = () => { if (document.visibilityState === 'visible') void refresh() }
     const interval = window.setInterval(onVisible, 15000)
     document.addEventListener('visibilitychange', onVisible)
@@ -229,6 +231,8 @@ export default function AppPortal() {
         return <AuthView mode={head === 'register' ? 'register' : 'signin'} />
       case 'verify-email':
         return <VerifyEmail />
+      case 'messages':
+        return <DirectMessages id={param}/>
       case 'me':
         return <Me key={user?.id ?? "anonymous"} route={route} />
       case 'order':
@@ -352,6 +356,7 @@ export default function AppPortal() {
             <div className="hidden sm:block"><ThemeToggle /></div>
             {user ? (
               <>
+                <Button variant="ghost" size="icon" className="hidden rounded-lg xl:inline-flex" aria-label="Messages" onClick={()=>navigate('/messages')}><MessageCircle className="size-5"/></Button>
                 <Button variant="ghost" size="icon" className="relative rounded-lg" aria-label={`Notifications${unread ? ` (${unread} unread)` : ''}`} onClick={() => navigate('/me?tab=notifications')}>
                   <Bell className="h-5 w-5" />
                   {/* Effects Studio: badge-ping ring behind the unread counter. */}
@@ -381,6 +386,7 @@ export default function AppPortal() {
                     </DropdownMenuLabel>
                     <DropdownMenuSeparator />
                     {!user.emailVerifiedAt && <DropdownMenuItem onClick={() => navigate('/verify-email')}>Verify email address</DropdownMenuItem>}
+                    <DropdownMenuItem onClick={() => navigate('/messages')}><MessageCircle className="h-4 w-4" /> Messages</DropdownMenuItem>
                     <DropdownMenuItem onClick={() => navigate('/me?tab=tickets')}>
                       <Ticket className="h-4 w-4" /> My Tickets
                     </DropdownMenuItem>

@@ -58,6 +58,7 @@ export default function ForegroundActivity({userId,visible,onOpen}:{userId:strin
    wake()
   })
   socket?.on('notification',wake)
+  socket?.on('direct:changed',wake)
   socket?.on('notification:read',wake)
   socket?.on('disconnect',()=>{joined=false})
   socket?.on('room:denied',()=>{joined=false;socket.disconnect()})
