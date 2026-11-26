@@ -239,7 +239,7 @@ export default function AppPortal() {
       </button>
 
       <header className="ievx-application-bar sticky top-0 z-30">
-        <div className="mx-auto flex h-[52px] max-w-[1600px] items-center gap-2 px-3 sm:px-5 lg:px-7">
+        <div className="mx-auto flex h-16 max-w-[1600px] items-center gap-2 px-3 sm:px-5 lg:px-7">
           <button type="button" className="flex shrink-0 items-center gap-2.5 ievx-press" onClick={() => navigate('/')} aria-label="iEventPlux home">
             <span className="ievx-brand-mark flex h-8 w-8 items-center justify-center rounded-lg">
               <Ticket className="h-5 w-5" aria-hidden />
@@ -265,7 +265,7 @@ export default function AppPortal() {
                 {/* md–lg band runs icon-only (round 18): full pill labels + the
                     account group overflowed 768px tablets by ~49px; labels
                     return at lg where the row has room again. */}
-                <span className="hidden lg:inline">{item.label}</span>
+                <span className="hidden xl:inline">{item.label}</span>
               </button>
             ))}
           </nav>
@@ -286,7 +286,7 @@ export default function AppPortal() {
                 type="search"
                 placeholder="Search events, organizers…"
                 aria-label="Search events"
-                className="h-10 w-full rounded-xl border border-input bg-card pl-10 pr-4 text-sm outline-none shadow-sm transition-[border-color,box-shadow] hover:border-primary/35 focus-visible:border-primary focus-visible:ring-[3px] focus-visible:ring-primary/15"
+                className="h-12 w-full rounded-xl border border-input bg-card pl-10 pr-4 text-base outline-none shadow-sm transition-[border-color,box-shadow] hover:border-primary/35 focus-visible:border-primary focus-visible:ring-[3px] focus-visible:ring-primary/15"
               />
             </div>
           </form>
@@ -404,7 +404,7 @@ export default function AppPortal() {
         <ConnectionStatus />
       </header>
 
-      <main id="main" tabIndex={-1} ref={viewRef} className={`min-w-0 flex-1 outline-none ${workspaceMode ? 'ievx-workspace pb-6 md:h-[calc(100dvh-3.25rem)] md:min-h-0 md:flex-none md:overflow-hidden md:pb-0' : 'ievx-public pb-24 md:pb-10'}`}>
+      <main id="main" tabIndex={-1} ref={viewRef} className={`min-w-0 flex-1 outline-none ${workspaceMode ? 'ievx-workspace pb-6 md:h-[calc(100dvh-4rem)] md:min-h-0 md:flex-none md:overflow-hidden md:pb-0' : 'ievx-public pb-24 md:pb-10'}`}>
         <Suspense fallback={<ViewFallback />}>
           <div key={route.path} className={`ievx-view-enter ${workspaceMode ? 'md:h-full' : ''}`}>{view}</div>
         </Suspense>
@@ -427,7 +427,7 @@ export default function AppPortal() {
 
       {/* Mobile bottom navigation */}
       <nav className={`${workspaceMode ? 'hidden' : 'fixed'} inset-x-0 bottom-0 z-30 border-t border-border/60 ievx-glass md:hidden`} aria-label="Mobile primary">
-        <div className="mx-auto flex h-16 max-w-lg items-center justify-around px-2 pb-[env(safe-area-inset-bottom)]">
+        <div className="mx-auto flex min-h-16 max-w-lg items-center justify-around px-2 py-1 pb-[calc(0.25rem+env(safe-area-inset-bottom))]">
           {MOBILE_NAV.map((item) => {
             const active = item.path.startsWith('/me')
               ? route.segments[0] === 'me' && (route.query.get('tab') ?? 'tickets') === item.tab
@@ -439,7 +439,7 @@ export default function AppPortal() {
                 onClick={() => navigate(item.path)}
                 aria-current={active ? 'page' : undefined}
                 aria-label={item.label}
-                className={`flex min-h-12 min-w-0 flex-1 flex-col items-center justify-center gap-1 ievx-mobile-nav-item rounded-2xl px-1 py-1.5 text-[11px] font-semibold transition-colors ievx-press ${
+                className={`flex min-h-12 min-w-0 flex-1 flex-col items-center justify-center gap-1 ievx-mobile-nav-item rounded-2xl px-1 py-1.5 text-xs font-semibold transition-colors ievx-press ${
                   active ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
                 }`}
               >
