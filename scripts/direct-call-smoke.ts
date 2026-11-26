@@ -6,18 +6,19 @@ if(!['localhost','127.0.0.1'].includes(url.hostname)||url.port!=='5432'||url.pat
 const key=()=>randomBytes(24).toString('hex')
 const check=(v:unknown,label:string)=>{if(!v)throw new Error(label);console.log('PASS '+label)}
 const users:string[]=[]
-type Actor={id:string;cookie:string}
+type Actor={id:string;cookie:string;ip:string}
+let nextIp=100
 async function device(id:string){
  const token=key()
  await db.session.create({data:{userId:id,tokenHash:createHash('sha256').update(token).digest('hex'),expiresAt:new Date(Date.now()+600000)}})
- return {id,cookie:'ievx_session='+token}
+ return {id,cookie:'ievx_session='+token,ip:'192.0.2.'+(nextIp++)}
 }
 async function make(){
  const u=await db.user.create({data:{email:key()+'@example.invalid',displayName:'Synthetic call contact',passwordHash:'synthetic'}})
  users.push(u.id);return device(u.id)
 }
 async function api(actor:Actor|null,route:string,body?:object){
- const res=await fetch('http://127.0.0.1:3000/api/v1/'+route,{method:body?'POST':'GET',headers:{'Content-Type':'application/json','x-forwarded-for':'192.0.2.98',...(actor?{Cookie:actor.cookie}:{})},body:body?JSON.stringify({expectedUserId:actor?.id,...body}):undefined})
+ const res=await fetch('http://127.0.0.1:3000/api/v1/'+route,{method:body?'POST':'GET',headers:{'Content-Type':'application/json','x-forwarded-for':actor?.ip??'192.0.2.98',...(actor?{Cookie:actor.cookie}:{})},body:body?JSON.stringify({expectedUserId:actor?.id,...body}):undefined})
  return {status:res.status,data:await res.json(),headers:res.headers}
 }
 async function conversation(a:Actor,b:Actor,accept=true){
@@ -63,7 +64,25 @@ async function main(){
   check((await act(b,missed,'accept')).data.call.status==='MISSED','expired ring cannot be accepted')
   check((await list(b,ab)).data.items.some((row:{id:string;status:string})=>row.id===missed&&row.status==='MISSED'),'missed invitation visible in history')
   check(await db.notification.count({where:{userId:b.id,type:'DIRECT_CALL_MISSED'}})===1,'missed call alert exactly once')
+  const workerMissed=(await start(a,ab)).data.call.id
+  await db.directCall.update({where:{id:workerMissed},data:{createdAt:new Date(Date.now()-60000),expiresAt:new Date(Date.now()-1000)}})
+  const {sweepDirectCalls}=await import('../src/server/services/direct-calls')
+  check(await sweepDirectCalls()>=1,'periodic sweep expires unanswered calls without recipient polling')
+  check((await db.directCall.findUniqueOrThrow({where:{id:workerMissed}})).status==='MISSED','worker records missed invitation')
+  check(await db.directCallSlot.count({where:{callId:workerMissed}})===0,'worker releases expired slots')
+  await sweepDirectCalls()
+  check(await db.notification.count({where:{userId:b.id,type:'DIRECT_CALL_MISSED'}})===2,'worker retries do not duplicate missed alert')
+  const revoked=(await start(a2,ab)).data.call.id
+  const revokedSession=(await db.directCall.findUniqueOrThrow({where:{id:revoked}})).callerSessionId
+  await db.session.update({where:{id:revokedSession},data:{revokedAt:new Date()}})
+  await sweepDirectCalls()
+  check((await db.directCall.findUniqueOrThrow({where:{id:revoked}})).status==='CANCELLED','revoked caller session cancels ringing')
+  const blocked=(await start(a,ab)).data.call.id
+  await act(b,blocked,'accept')
   await api(b,'direct-messages',{action:'safety',id:ab,kind:'block',enabled:true})
+  await sweepDirectCalls()
+  check((await db.directCall.findUniqueOrThrow({where:{id:blocked}})).status==='ENDED','block terminates accepted invitation')
+  check(await db.directCallSlot.count({where:{callId:blocked}})===0,'block releases active call slots')
   check((await start(a,ab)).status===403,'blocked contact cannot call')
   console.log('DIRECT_CALL_INVITATION_SMOKE_PASS')
  }finally{await db.user.deleteMany({where:{id:{in:users}}})}

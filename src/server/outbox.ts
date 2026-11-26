@@ -20,6 +20,7 @@ export type OutboxJobType =
   | 'WAITLIST_PROMOTE'
   | 'WAITLIST_SWEEP'
   | 'DIRECT_ACTIVITY_CLEANUP'
+  | 'DIRECT_CALL_SWEEP'
 
 export async function enqueue(type: OutboxJobType, payload: Record<string, unknown>, options?: { runAt?: Date; maxAttempts?: number }) {
   const job = await db.outboxJob.create({
