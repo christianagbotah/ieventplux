@@ -16,6 +16,7 @@ import { navigate, type Route } from '../router'
 import { usePortal } from '../store'
 import { money, dateLong, relative, humanize, statusTone, initials, countdown } from '../format'
 import { EmptyState } from '../components/EventCard'
+import PushDeviceManager from '../components/PushDeviceManager'
 import { cacheTicketList, cacheTicketDetail, readCachedTicketList, readCachedTicketDetail, type CachedTicketDetail, type CachedTicketRow } from '../lib/ticket-cache'
 
 interface TicketRow {
@@ -74,6 +75,7 @@ export default function Me({ route }: { route: Route }) {
   const [copiedCode, setCopiedCode] = useState(false)
   const [profile, setProfile] = useState({ displayName: '', phone: '', city: '', bio: '' })
   const [prefs, setPrefs] = useState<Record<string, boolean>>({})
+  const preferenceBaseline=useRef<Record<string,boolean>>({})
   const [savingProfile, setSavingProfile] = useState(false)
   const [elevated, setElevated] = useState(false)
   const [elevPassword, setElevPassword] = useState('')
@@ -102,7 +104,8 @@ export default function Me({ route }: { route: Route }) {
       return
     }
     setProfile({ displayName: user.displayName, phone: user.phone ?? '', city: user.city ?? '', bio: '' })
-    setPrefs({ email: true, push: true, sms: Boolean(user.phone), marketing: false, ...user.notifPrefs })
+    const next={ email: true, push: false, sms: Boolean(user.phone), marketing: false, ...user.notifPrefs }
+    preferenceBaseline.current=next;setPrefs(next)
   }, [user, booted])
 
   const loadTickets = useCallback(async () => {
@@ -221,7 +224,9 @@ export default function Me({ route }: { route: Route }) {
   const saveProfile = async () => {
     setSavingProfile(true)
     try {
-      await api.post('/auth/profile', { displayName: profile.displayName, phone: profile.phone || null, city: profile.city || null, bio: profile.bio, notifPrefs: prefs })
+      const changed=Object.fromEntries(Object.entries(prefs).filter(([key,value])=>preferenceBaseline.current[key]!==value))
+      await api.post('/auth/profile', { expectedUserId:user?.id,displayName: profile.displayName, phone: profile.phone || null, city: profile.city || null, bio: profile.bio, notifPrefs: changed })
+      preferenceBaseline.current={...prefs}
       await api.post('/messages/consent', { channel: 'SMS', grant: prefs.marketing }).catch(() => {})
       toast({ title: 'Profile saved', description: prefs.marketing ? undefined : 'Marketing SMS unsubscribed.' })
     } catch (err) {
@@ -546,6 +551,7 @@ export default function Me({ route }: { route: Route }) {
                 {[
                   { key: 'email', label: 'Email notifications', desc: 'Receipts, reminders and account emails' },
                   { key: 'sms', label: 'Transactional SMS', desc: 'Ticket access and critical updates to your phone' },
+                  { key: 'push', label: 'Phone notifications', desc: 'Allow registered phones to receive activity alerts when delivery is available' },
                   { key: 'marketing', label: 'Marketing SMS', desc: 'Offers and event suggestions (unsubscribe anytime)' },
                 ].map((row) => (
                   <div key={row.key} className="flex items-center justify-between gap-4">
@@ -557,6 +563,7 @@ export default function Me({ route }: { route: Route }) {
                   </div>
                 ))}
               </div>
+              <PushDeviceManager key={user.id} userId={user.id}/>
               <div className="space-y-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
                 <p className="text-sm font-semibold text-amber-800">Security</p>
                 <p className="text-xs text-muted-foreground">Privileged actions (payouts, refunds) require a recent password confirmation.</p>

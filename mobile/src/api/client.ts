@@ -646,7 +646,8 @@ export async function storeSessionToken(token: string | null): Promise<void> {
 async function request<T>(
   method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
   path: string,
-  body?: unknown
+  body?: unknown,
+  signal?:AbortSignal
 ): Promise<T> {
   const base = resolveBaseUrl()
   if (!base) {
@@ -674,6 +675,7 @@ async function request<T>(
       // Cookie-jar layer: React Native persists Set-Cookie (ievx_session)
       // natively; 'include' makes the intent explicit for typed RequestInit.
       credentials: 'include',
+      signal,
     })
   } catch (err) {
     throw new ApiClientError(
@@ -704,6 +706,7 @@ async function request<T>(
 
 // ────────────────────────────────────────────────── endpoint surface used ──
 
+export type PushDevice={id:string;platform:string;lastUpdatedAt:string;leaseUntil:string|null;currentSession:boolean;registrationCurrent:boolean}
 export type DirectCall={id:string;conversationId:string;callerId:string;callerName?:string|null;calleeId:string;kind:'VOICE'|'VIDEO';status:string;createdAt:string;expiresAt:string;thisDevice:boolean;mediaConnected:boolean}
 export type DirectContact={id:string;displayName:string;avatarUrl:string|null}
 export type DirectConversation={id:string;status:string;requesterId:string;updatedAt?:string;peer:DirectContact|null;unread?:number;canSend?:boolean;blockedByMe?:boolean;mutedByMe?:boolean}
@@ -981,13 +984,15 @@ export const api = {
     activity: (data:{id:string;expectedUserId:string;share:boolean;typing:boolean})=>request<{active:boolean;typing:boolean}>('POST','/direct-messages',{action:'activity',...data}),
   },
   notifications: {
+    devices: (userId:string)=>request<{accountEnabled:boolean;deliveryEnabled:boolean;hasMore:boolean;items:PushDevice[]}>('GET','/notifications/devices/manage?expectedUserId='+encodeURIComponent(userId)),
+    removeDevice: (userId:string,id:string)=>request<{ok:boolean}>('POST','/notifications/devices/manage',{expectedUserId:userId,id}),
     list: (page=1) => request<NotificationsResponse>('GET','/notifications?page='+page+'&pageSize=20'),
     mark: (id:string) => request<{ok:boolean}>('POST','/notifications',{id}),
     markAll: () => request<{ok:boolean}>('POST','/notifications',{all:true}),
-    registerDevice: (data:{installationKey:string;providerToken:string;platform:'ANDROID'|'IOS';permissionGranted:true;expectedUserId:string}) =>
-      request<{registered:boolean;deliveryEnabled:boolean}>('POST','/notifications/devices',data),
-    revokeDevice: (installationKey:string,expectedUserId:string) =>
-      request<{registered:boolean;deliveryEnabled:boolean}>('DELETE','/notifications/devices',{installationKey,expectedUserId}),
+    registerDevice: (data:{installationKey:string;providerToken:string;platform:'ANDROID'|'IOS';permissionGranted:true;expectedUserId:string;enableAccountPush?:boolean},signal?:AbortSignal) =>
+      request<{registered:boolean;deliveryEnabled:boolean;leaseUntil?:string|null}>('POST','/notifications/devices',data,signal),
+    revokeDevice: (installationKey:string,expectedUserId:string,signal?:AbortSignal) =>
+      request<{registered:boolean;deliveryEnabled:boolean;leaseUntil?:string|null}>('DELETE','/notifications/devices',{installationKey,expectedUserId},signal),
   },
 }
 

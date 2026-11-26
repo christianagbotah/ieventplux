@@ -1,3 +1,4 @@
+export const PUSH_DEVICE_LEASE_MS = 24 * 60 * 60_000
 export const PUSH_TTL_MS = 5 * 60_000
 export const RECEIPT_DELAY_MS = 15 * 60_000
 export const RECEIPT_DEADLINE_MS = 23 * 60 * 60_000
@@ -8,8 +9,14 @@ export function pushTransportConfigured(env: Record<string,string|undefined>) {
 export function optedIn(raw: string) {
  try {const p=JSON.parse(raw);return !!p&&p.push===true}catch{return false}
 }
-export function genericEnvelope(token:string) {
- return {to:token,title:'iEventPlux',body:'You have new activity. Open iEventPlux to view it.',channelId:'activity',data:{kind:'activity'},ttl:300,priority:'default' as const}
+export const PUSH_LEDGER_RETENTION_MS=7*24*60*60_000
+export function remainingPushSeconds(createdAt:Date,leaseUntil:Date,now:Date){
+ // Leave a small buffer for the provider request, and never extend an alert
+ // past its original freshness window or the device's eligibility lease.
+ return Math.max(0,Math.min(300,Math.floor((Math.min(+createdAt+PUSH_TTL_MS,+leaseUntil)-+now)/1000)-8))
+}
+export function genericEnvelope(token:string,ttl=300) {
+ return {to:token,title:'iEventPlux',body:'You have new activity. Open iEventPlux to view it.',channelId:'activity',data:{kind:'activity'},ttl:Math.max(0,Math.min(300,Math.floor(ttl)||0)),priority:'default' as const}
 }
 const allowedErrors = new Set(['DeviceNotRegistered','MessageRateExceeded','MessageTooBig','MismatchSenderId','InvalidCredentials'])
 export type SendResult =

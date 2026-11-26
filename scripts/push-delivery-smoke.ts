@@ -1,6 +1,6 @@
 import {randomBytes,createHash} from 'node:crypto'
 import {db} from '../src/lib/db'
-import {discoverPushDeliveries,processPushDeliveries,checkPushReceipts,createExpoPushTransport,type PushTransport} from '../src/server/services/push-delivery'
+import {discoverPushDeliveries,processPushDeliveries,checkPushReceipts,prunePushLedger,createExpoPushTransport,type PushTransport} from '../src/server/services/push-delivery'
 import type {SendResult,ReceiptResult} from '../src/server/push-delivery-policy'
 if(process.env.CI!=='true'||process.env.NODE_ENV==='production'||process.env.IEVENTPLUX_ISOLATED_DB_TEST!=='yes')throw new Error('Isolated CI only.')
 const url=new URL(process.env.DATABASE_URL??'')
@@ -15,20 +15,25 @@ async function main(){
   const user=await db.user.create({data:{email:key()+'@example.invalid',displayName:'Synthetic push recipient',passwordHash:'synthetic',notifPrefs:JSON.stringify({push})}})
   users.push(user.id)
   const session=await db.session.create({data:{userId:user.id,tokenHash:hash(key()),expiresAt:new Date(Date.now()+600000)}})
-  const installation=await db.pushInstallation.create({data:{keyHash:hash(key()),sessionId:session.id,providerToken:'ExpoPushToken['+key()+']',platform:'ANDROID',activatedAt:new Date(Date.now()-30_000)}})
+  const installation=await db.pushInstallation.create({data:{keyHash:hash(key()),sessionId:session.id,providerToken:'ExpoPushToken['+key()+']',platform:'ANDROID',activatedAt:new Date(Date.now()-30_000),leaseUntil:new Date(Date.now()+60_000)}})
   return {user,session,installation}
  }
  const notice=(userId:string,createdAt=new Date())=>db.notification.create({data:{userId,type:'SYSTEM',title:'Sensitive synthetic subject',body:'Sensitive synthetic body',link:'#/private',createdAt}})
  const get=(notificationId:string)=>db.pushDelivery.findFirstOrThrow({where:{notificationId}})
  const sends:string[]=[]
+ const ttls:number[]=[]
  let sendResult:SendResult={kind:'accepted',ticketId:'synthetic-ticket'}
  let receipt:ReceiptResult={kind:'ok'}
- const transport:PushTransport={send:async token=>{sends.push(token);return sendResult},receipts:async ids=>Object.fromEntries(ids.map(id=>[id,receipt]))}
+ const transport:PushTransport={send:async (token,ttl)=>{sends.push(token);ttls.push(ttl);return sendResult},receipts:async ids=>Object.fromEntries(ids.map(id=>[id,receipt]))}
  try{
-  const a=await make(),b=await make(false),c=await make(),d=await make(),e=await make()
+  const a=await make(),b=await make(false),c=await make(),d=await make(),e=await make(),f=await make(),g=await make()
   const n=await notice(a.user.id),old=await notice(a.user.id,new Date(Date.now()-60_000))
   const optout=await notice(b.user.id),read=await notice(c.user.id),revoked=await notice(d.user.id),rotated=await notice(e.user.id)
+  const expired=await notice(f.user.id),unleased=await notice(g.user.id)
+  await db.pushInstallation.update({where:{keyHash:g.installation.keyHash},data:{leaseUntil:null}})
   await Promise.all([discoverPushDeliveries(),discoverPushDeliveries()])
+  check(await db.pushDelivery.count({where:{notificationId:unleased.id}})===0,'unleased device excluded at discovery')
+  await db.pushInstallation.update({where:{keyHash:f.installation.keyHash},data:{leaseUntil:new Date(0)}})
   check(await db.pushDelivery.count({where:{notificationId:n.id}})===1,'concurrent discovery creates one delivery per installation')
   check(await db.pushDelivery.count({where:{notificationId:old.id}})===0,'pre-registration notification is never replayed')
   await db.notification.update({where:{id:read.id},data:{readAt:new Date()}})
@@ -36,7 +41,8 @@ async function main(){
   await db.pushInstallation.update({where:{keyHash:e.installation.keyHash},data:{activatedAt:new Date(Date.now()+1000),providerToken:'ExpoPushToken['+key()+']'}})
   await Promise.all([processPushDeliveries(transport),processPushDeliveries(transport)])
   check(sends.length===1&&sends[0]===a.installation.providerToken,'only eligible account gets one provider submission')
-  for(const blocked of [optout,read,revoked,rotated])check((await get(blocked.id)).status==='SUPPRESSED','ineligible delivery suppressed')
+  check(ttls[0]!>0&&ttls[0]!<=60,'provider TTL bounded by installation lease')
+  for(const blocked of [optout,read,revoked,rotated,expired])check((await get(blocked.id)).status==='SUPPRESSED','ineligible delivery suppressed')
   let row=await get(n.id)
   check(row.status==='ACCEPTED'&&row.providerTicketId==='synthetic-ticket','ticket acceptance not treated as receipt')
   await db.pushDelivery.update({where:{id:row.id},data:{nextAttemptAt:new Date(0)}})
@@ -69,6 +75,14 @@ async function main(){
   await discoverPushDeliveries();await processPushDeliveries(transport)
   check(!!(await db.pushInstallation.findUniqueOrThrow({where:{keyHash:c.installation.keyHash}})).revokedAt,'current invalid token revoked')
   check((await get(invalid.id)).status==='FAILED','invalid device failure persisted')
+  const oldDate=new Date(Date.now()-8*86400000)
+  await db.notification.update({where:{id:n.id},data:{createdAt:oldDate}})
+  await db.pushDelivery.update({where:{id:(await get(n.id)).id},data:{updatedAt:oldDate}})
+  check(await prunePushLedger()>=1,'old terminal ledger rows pruned')
+  check(await db.pushDelivery.count({where:{notificationId:n.id}})===0,'old receipt record removed')
+  await discoverPushDeliveries()
+  check(await db.pushDelivery.count({where:{notificationId:n.id}})===0,'pruned record cannot rediscover expired notification')
+  check((await get(invalid.id)).status==='FAILED','recent failure retained')
   console.log('PUSH_DELIVERY_SMOKE_PASS')
  }finally{await db.user.deleteMany({where:{id:{in:users}}})}
 }

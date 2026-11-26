@@ -1,5 +1,5 @@
 import {expect,test} from 'bun:test'
-import {classifyTicket,classifyReceipt,genericEnvelope,optedIn,pushTransportConfigured} from './push-delivery-policy'
+import {classifyTicket,classifyReceipt,genericEnvelope,optedIn,pushTransportConfigured,remainingPushSeconds} from './push-delivery-policy'
 test('push remains disabled without both explicit flag and access token',()=>{
  expect(pushTransportConfigured({})).toBe(false)
  expect(pushTransportConfigured({IEVENTPLUX_PUSH_DELIVERY_ENABLED:'true'})).toBe(false)
@@ -24,4 +24,14 @@ test('provider acceptance is distinct from provider receipt',()=>{
  expect(classifyReceipt({status:'error',message:'secret token',details:{error:'arbitrary'}})).toEqual({kind:'failed',code:'PROVIDER_REJECTED'})
  expect(classifyReceipt(undefined)).toEqual({kind:'pending'})
  expect(classifyReceipt({status:'ok'})).toEqual({kind:'ok'})
+})
+
+test('provider TTL cannot outlive notification freshness or device lease',()=>{
+ const now=new Date(1000000)
+ expect(remainingPushSeconds(now,new Date(+now+600000),now)).toBe(292)
+ expect(remainingPushSeconds(new Date(+now-290000),new Date(+now+600000),now)).toBe(2)
+ expect(remainingPushSeconds(now,new Date(+now+30000),now)).toBe(22)
+ expect(remainingPushSeconds(now,new Date(+now+7000),now)).toBe(0)
+ expect(genericEnvelope('synthetic',22).ttl).toBe(22)
+ expect(genericEnvelope('synthetic',600).ttl).toBe(300)
 })

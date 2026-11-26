@@ -78,14 +78,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [])
 
   useEffect(()=>{
-    if(status!=='authenticated'||!user?.id)return
+    if(status!=='authenticated'||!user?.id){allowPushAccount(null);return}
     const id=user.id
     allowPushAccount(id)
     void refreshPush(id).catch(()=>{})
     const sub=AppState.addEventListener('change',state=>{
       if(state==='active')void refreshPush(id).catch(()=>{})
     })
-    return()=>sub.remove()
+    const timer=setInterval(()=>{if(AppState.currentState==='active')void refreshPush(id).catch(()=>{})},6*60*60_000)
+    return()=>{sub.remove();clearInterval(timer)}
   },[status,user?.id])
 
   const signOut = useCallback(async () => {
