@@ -255,6 +255,56 @@ async function main() {
   } finally {
     await db.event.delete({ where: { id: draft.id } })
   }
+  // Synthetic invite-only content fixture, limited to the disposable CI DB.
+  if (process.env.CI === 'true' && process.env.IEVENTPLUX_ISOLATED_DB_TEST === 'yes') {
+    const target = new URL(process.env.DATABASE_URL ?? 'postgresql://invalid/invalid')
+    assert(['localhost','127.0.0.1'].includes(target.hostname) && target.port === '5432' && target.pathname === '/ieventplux', 'isolated privacy fixture database')
+    const secret = 'CI-PRIVATE-CONTENT-' + Date.now()
+    const fixture = await db.event.create({ data: {
+      orgId: chapel.id, seriesId: seriesParent.seriesId, title: 'CI invitation-only landing',
+      slug: 'ci-private-content-' + Date.now(), description: 'Public invitation landing fixture.',
+      categorySlug: 'community', status: 'PUBLISHED', visibility: 'INVITE_ONLY',
+      startsAt: new Date(Date.now()+86400000), endsAt: new Date(Date.now()+90000000),
+    } })
+    try {
+      await db.agendaItem.create({ data: { eventId: fixture.id, title: secret, startsAt: fixture.startsAt } })
+      await db.eventContributor.create({ data: { eventId: fixture.id, name: secret } })
+      await db.eventUpdate.create({ data: { eventId: fixture.id, orgId: chapel.id, title: secret, body: secret } })
+      await db.mediaAsset.create({ data: { eventId: fixture.id, linksToEventId: fixture.id, orgId: chapel.id, kind: 'GALLERY', url: '/ci-synthetic.png', caption: secret } })
+      const fixturePath = base + '/events/' + fixture.id
+      const read = (action: string, cookie?: string) => fetch(fixturePath+action,{headers:cookie?{Cookie:cookie}:{}})
+      for (const cookie of [undefined, attendee]) {
+        const response = await read('',cookie)
+        const payload = await response.json()
+        assert(response.status===200 && !JSON.stringify(payload).includes(secret) &&
+          payload.event.agenda.length===0 && payload.event.contributors.length===0 &&
+          payload.event.updates.length===0 && payload.event.gallery.length===0 &&
+          payload.event.series===null && payload.event.seriesId===null &&
+          response.headers.get('cache-control')?.includes('no-store'),
+          'unapproved invitation landing redacts protected relations and forbids caching')
+        for (const action of ['/agenda','/series','/media','/updates','/review-digest']) {
+          assert((await read(action,cookie)).status===403,'unapproved viewer denied '+action)
+        }
+      }
+      const hostDetail = await read('',pastor).then(r=>r.json())
+      assert(JSON.stringify(hostDetail).includes(secret),'accepted organizer sees private content')
+      const rsvp = await db.rsvp.create({data:{eventId:fixture.id,userId:ama.id,name:'CI synthetic',status:'PENDING'}})
+      assert((await read('/agenda',attendee)).status===403,'pending RSVP grants no content access')
+      await db.rsvp.update({where:{id:rsvp.id},data:{status:'APPROVED'}})
+      const approved = await read('',attendee).then(r=>r.json())
+      assert(JSON.stringify(approved.event.agenda).includes(secret) &&
+        JSON.stringify(approved.event.updates).includes(secret),'approved RSVP unlocks private content')
+      for(const action of ['/agenda','/series','/media','/updates']) {
+        assert((await read(action,attendee)).status===200,'approved guest can read '+action)
+      }
+      await db.rsvp.update({where:{id:rsvp.id},data:{status:'DECLINED'}})
+      assert((await read('/updates',attendee)).status===403,'revoked approval removes private content access')
+    } finally {
+      await db.mediaAsset.deleteMany({where:{eventId:fixture.id}})
+      await db.event.delete({where:{id:fixture.id}})
+    }
+  }
+
 }
 
 main().catch((err) => {
