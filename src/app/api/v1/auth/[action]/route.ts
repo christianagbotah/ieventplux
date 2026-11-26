@@ -77,7 +77,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
               passwordHash,
               displayName,
               phone,
-              notifPrefs: JSON.stringify({ email: true, sms: Boolean(phone), push: true, marketing: Boolean(body.marketingSms) }),
+              notifPrefs: JSON.stringify({ email: true, sms: Boolean(phone), push: false, marketing: Boolean(body.marketingSms) }),
             },
           })
           await tx.contactVerification.create({
@@ -256,7 +256,8 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
 
     if (action === 'profile') {
       const user = await requireUser()
-      const body = await readJson<{ displayName?: string; phone?: string; city?: string; country?: string; timezone?: string; notifPrefs?: Record<string, boolean>; bio?: string }>(req)
+      const body = await readJson<{ displayName?: string; phone?: string; city?: string; country?: string; timezone?: string; notifPrefs?: Record<string, boolean>; expectedUserId?:string; bio?: string }>(req)
+      if(body.expectedUserId!==undefined&&body.expectedUserId!==user.id)throw errors.conflict('The signed-in account changed.')
       const data: Record<string, unknown> = {}
       if (body.displayName) data.displayName = String(body.displayName).slice(0, 80)
       if (body.bio !== undefined) data.bio = String(body.bio ?? '').slice(0, 300)
@@ -264,13 +265,20 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
       if (body.city !== undefined) data.city = String(body.city ?? '').slice(0, 60)
       if (body.country) data.country = String(body.country).slice(0, 2).toUpperCase()
       if (body.timezone) data.timezone = String(body.timezone).slice(0, 60)
-      if (body.notifPrefs) data.notifPrefs = JSON.stringify(body.notifPrefs)
+      const patch=body.notifPrefs
+      if(patch!==undefined&&(!patch||typeof patch!=='object'||Array.isArray(patch)||Object.entries(patch).some(([k,v])=>!['email','sms','push','marketing'].includes(k)||typeof v!=='boolean')))throw errors.badRequest('Invalid notification preferences.')
       await db.$transaction(async tx=>{
+        if(patch&&Object.keys(patch).length){
+          const current=await tx.user.findUniqueOrThrow({where:{id:user.id},select:{notifPrefs:true}})
+          let prior:Record<string,unknown>={}
+          try{const parsed=JSON.parse(current.notifPrefs);if(parsed&&typeof parsed==='object'&&!Array.isArray(parsed))prior=parsed}catch{}
+          data.notifPrefs=JSON.stringify({...prior,...patch})
+        }
         await tx.user.update({ where: { id: user.id }, data })
-        if(body.notifPrefs&&body.notifPrefs.push!==true){
+        if(patch?.push===false){
           await tx.pushInstallation.updateMany({where:{session:{userId:user.id},revokedAt:null},data:{revokedAt:new Date(),leaseUntil:null}})
         }
-      })
+      },{isolationLevel:"Serializable"})
       return jsonOk({ ok: true })
     }
 

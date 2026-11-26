@@ -1,8 +1,8 @@
 import {db} from '../../lib/db'
-import {PUSH_TTL_MS, RECEIPT_DELAY_MS, RECEIPT_DEADLINE_MS, MAX_PUSH_ATTEMPTS, pushTransportConfigured, optedIn, genericEnvelope, classifyTicket, classifyReceipt, type SendResult, type ReceiptResult} from '../push-delivery-policy'
+import {PUSH_TTL_MS, RECEIPT_DELAY_MS, RECEIPT_DEADLINE_MS, MAX_PUSH_ATTEMPTS, PUSH_LEDGER_RETENTION_MS, remainingPushSeconds, pushTransportConfigured, optedIn, genericEnvelope, classifyTicket, classifyReceipt, type SendResult, type ReceiptResult} from '../push-delivery-policy'
 
 export interface PushTransport {
- send(token:string):Promise<SendResult>
+ send(token:string,ttlSeconds:number):Promise<SendResult>
  receipts(ids:string[]):Promise<Record<string,ReceiptResult>>
 }
 export function createExpoPushTransport():PushTransport|null{
@@ -10,9 +10,9 @@ export function createExpoPushTransport():PushTransport|null{
  const headers={'Content-Type':'application/json','Authorization':'Bearer '+process.env.EXPO_PUSH_ACCESS_TOKEN!.trim()}
  const endpoint='https://exp.host/--/api/v2/push/'
  return {
-  async send(token){
+  async send(token,ttlSeconds){
    try{
-    const res=await fetch(endpoint+'send',{method:'POST',headers,body:JSON.stringify([genericEnvelope(token)]),signal:AbortSignal.timeout(7000),redirect:'error'})
+    const res=await fetch(endpoint+'send',{method:'POST',headers,body:JSON.stringify([genericEnvelope(token,ttlSeconds)]),signal:AbortSignal.timeout(7000),redirect:'error'})
     const body=await res.json().catch(()=>null)
     return classifyTicket(res.status,body)
    }catch{return {kind:'unknown',code:'TRANSPORT_AMBIGUOUS'}}
@@ -71,8 +71,13 @@ export async function processPushDeliveries(transport:PushTransport,now=new Date
    await db.pushDelivery.updateMany({where:{id,status:'SENDING'},data:{status:'SUPPRESSED',failureCode:'INELIGIBLE'}});continue
   }
   // Transport handles its own timeout and never logs raw tokens or responses.
+  const ttl=i.leaseUntil?remainingPushSeconds(n.createdAt,i.leaseUntil,new Date()):0
+  if(ttl<1){
+   await db.pushDelivery.updateMany({where:{id,status:'SENDING'},data:{status:'SUPPRESSED',failureCode:'EXPIRED'}})
+   continue
+  }
   let result:SendResult
-  try{result=await transport.send(i.providerToken)}catch{result={kind:'unknown',code:'TRANSPORT_AMBIGUOUS'}}
+  try{result=await transport.send(i.providerToken,ttl)}catch{result={kind:'unknown',code:'TRANSPORT_AMBIGUOUS'}}
   if(result.kind==='accepted'){
    await db.pushDelivery.updateMany({where:{id,status:'SENDING'},data:{status:'ACCEPTED',providerTicketId:result.ticketId,nextAttemptAt:new Date(Date.now()+RECEIPT_DELAY_MS),failureCode:null}})
   }else{
@@ -97,10 +102,24 @@ export async function checkPushReceipts(transport:PushTransport,now=new Date()){
  return rows.length
 }
 
+export async function prunePushLedger(now=new Date()){
+ const cutoff=new Date(+now-PUSH_LEDGER_RETENTION_MS)
+ // Only delete terminal delivery records for notifications already outside
+ // the discovery horizon. Never remove queued/sending or receipt-pending work.
+ return db.$executeRaw`
+ DELETE FROM "PushDelivery" WHERE id IN (
+ SELECT d.id FROM "PushDelivery" d JOIN "Notification" n ON n.id=d."notificationId"
+ WHERE d.status IN ('RECEIPT_OK','FAILED','UNKNOWN','SUPPRESSED')
+ AND d."updatedAt"<${cutoff} AND n."createdAt"<${cutoff}
+ ORDER BY d."updatedAt",d.id LIMIT 1000
+ ) AND status IN ('RECEIPT_OK','FAILED','UNKNOWN','SUPPRESSED') AND "updatedAt"<${cutoff}`
+}
+let lastPrune=0
 export async function runPushDeliveryTick(){
  const transport=createExpoPushTransport()
  if(!transport)return
  await discoverPushDeliveries()
  await processPushDeliveries(transport)
  await checkPushReceipts(transport)
+ if(Date.now()-lastPrune>=60*60_000){await prunePushLedger();lastPrune=Date.now()}
 }

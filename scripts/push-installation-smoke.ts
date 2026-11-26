@@ -61,6 +61,9 @@ async function main(){
   check(!!(await db.pushInstallation.findUniqueOrThrow({where:{keyHash:hash(newDevice.installationKey)}})).revokedAt,'account opt-out revokes registered devices')
   check((await call('POST',{notifPrefs:{push:true,email:true}},a.cookie,'/auth/profile')).status===200,'account push preference re-enabled')
   check((await call('POST',newDevice,a.cookie)).status===403,'revoked device cannot silently reactivate after account opt-in')
+  check((await call('POST',{notifPrefs:{email:false}},a.cookie,'/auth/profile')).status===200,'partial preference update accepted')
+  check(JSON.parse((await db.user.findUniqueOrThrow({where:{id:a.user.id}})).notifPrefs).push===true,'email change preserves push consent')
+  check((await call('POST',{notifPrefs:{push:'true'}},a.cookie,'/auth/profile')).status===400,'nonboolean push consent rejected')
   console.log('PUSH_INSTALLATION_SMOKE_PASS')
  }finally{await db.user.deleteMany({where:{id:{in:[a.user.id,b.user.id]}}})}
 }
