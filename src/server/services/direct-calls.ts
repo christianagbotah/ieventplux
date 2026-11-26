@@ -3,6 +3,7 @@ import {db} from '../../lib/db'
 import {ApiError,errors} from '../api'
 import {RING_MS,ACCEPTED_INVITATION_MS,nextCallState,type CallAction,type CallKind} from '../direct-call-policy'
 import {publishNotification} from './notify'
+import {callMediaFixture,callMediaAdmission,signDirectCallMedia} from '../direct-call-media'
 import {realtimeEmit} from './realtime'
 type Tx=Prisma.TransactionClient
 type Actor={userId:string;sessionId:string}
@@ -134,4 +135,23 @@ export async function listDirectCalls(actor:Actor,conversationId:string|null){
  if(conversationId&&!await db.directConversation.findFirst({where:{id:conversationId,...participant(actor.userId)},select:{id:true}}))throw errors.notFound('Conversation not found.')
  const rows=await db.directCall.findMany({where:{conversation:participant(actor.userId),...(conversationId?{conversationId}:{status:{in:['RINGING','ACCEPTED']},expiresAt:{gt:new Date()}})},orderBy:[{createdAt:'desc'},{id:'desc'}],take:50})
  return {items:rows.map(c=>publicCall(c,actor)),mediaAvailable:false}
+}
+
+/** This is a CI-only admission contract. No real provider endpoint is exposed. */
+export async function directCallMediaGrant(id:string,actor:Actor){
+ const config=callMediaFixture(process.env)
+ if(!config)throw errors.unavailable('CALL_MEDIA_NOT_AVAILABLE','Personal call media is not enabled.')
+ return transaction(async tx=>{
+  const now=new Date()
+  await validSession(tx,actor,now)
+  const c=await tx.directCall.findFirst({where:{id,conversation:{status:'ACCEPTED',...participant(actor.userId)}}})
+  if(!c)throw errors.notFound('Call not found.')
+  const admission=callMediaAdmission(c,actor,now)
+  if(!admission)throw errors.forbidden('This device is not admitted to the call.')
+  await validContact(tx,c.callerId,c.calleeId)
+  await validSession(tx,{userId:c.callerId,sessionId:c.callerSessionId},now)
+  await validSession(tx,{userId:c.calleeId,sessionId:c.acceptedSessionId!},now)
+  if(await tx.directCallSlot.count({where:{callId:c.id,userId:{in:[c.callerId,c.calleeId]}}})!==2)throw errors.forbidden('This call is no longer active.')
+  return {...await signDirectCallMedia(config,admission),testOnly:true,mediaConnected:false}
+ })
 }
