@@ -10,8 +10,9 @@ test('push remains disabled without both explicit flag and access token',()=>{
 })
 test('lock-screen payload is generic and has no user, notification or route data',()=>{
  const payload=genericEnvelope('synthetic-token')
- expect(Object.keys(payload).sort()).toEqual(['body','channelId','priority','title','to','ttl'])
+ expect(Object.keys(payload).sort()).toEqual(['body','channelId','data','priority','title','to','ttl'])
  expect(payload.body).toBe('You have new activity. Open iEventPlux to view it.')
+ expect(payload.data).toEqual({kind:'activity'})
 })
 test('provider acceptance is distinct from provider receipt',()=>{
  expect(classifyTicket(200,{data:[{status:'ok',id:'synthetic-ticket'}]})).toEqual({kind:'accepted',ticketId:'synthetic-ticket'})

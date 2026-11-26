@@ -9,7 +9,7 @@ export function optedIn(raw: string) {
  try {const p=JSON.parse(raw);return !!p&&p.push===true}catch{return false}
 }
 export function genericEnvelope(token:string) {
- return {to:token,title:'iEventPlux',body:'You have new activity. Open iEventPlux to view it.',channelId:'activity',ttl:300,priority:'default' as const}
+ return {to:token,title:'iEventPlux',body:'You have new activity. Open iEventPlux to view it.',channelId:'activity',data:{kind:'activity'},ttl:300,priority:'default' as const}
 }
 const allowedErrors = new Set(['DeviceNotRegistered','MessageRateExceeded','MessageTooBig','MismatchSenderId','InvalidCredentials'])
 export type SendResult =

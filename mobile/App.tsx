@@ -17,7 +17,7 @@
 
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
 import Constants, { ExecutionEnvironment } from 'expo-constants'
-import { lazy, Suspense, useState } from 'react'
+import { lazy, Suspense, useCallback, useState } from 'react'
 import { NavigationContainer, createNavigationContainerRef, type LinkingOptions } from '@react-navigation/native'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
@@ -32,6 +32,8 @@ import ReelsScreen from './src/screens/ReelsScreen'
 import AccountScreen from './src/screens/AccountScreen'
 import NotificationsScreen from './src/screens/NotificationsScreen'
 import ForegroundActivity from './src/components/ForegroundActivity'
+import PushActivityBridge from './src/components/PushActivityBridge'
+import {activityDestination} from './src/lib/push-activity-policy'
 import OrganizerStudioScreen from './src/screens/OrganizerStudioScreen'
 import CreateOrganizerScreen from './src/screens/CreateOrganizerScreen'
 import EventEditorScreen from './src/screens/EventEditorScreen'
@@ -156,6 +158,9 @@ function AppNavigation() {
   const { status, user } = useSession()
   const [currentRoute, setCurrentRoute] = useState<string | undefined>()
   const syncRoute = () => setCurrentRoute(navigationRef.getCurrentRoute()?.name)
+  const openPushActivity=useCallback(()=>{
+    if(navigationRef.isReady())navigationRef.navigate(activityDestination(status==='authenticated'))
+  },[status])
   const navigateTab = (route: MainTabRoute) => {
     if (!navigationRef.isReady() || navigationRef.getCurrentRoute()?.name === route) return
     if (status !== 'authenticated' && requiresAuthentication(route)) {
@@ -167,6 +172,7 @@ function AppNavigation() {
   return <NavigationContainer ref={navigationRef} linking={linking} onReady={syncRoute} onStateChange={syncRoute}>
     <View style={styles.appContainer}>
       <AppRoutes />
+      <PushActivityBridge ready={!!currentRoute&&(status==='authenticated'||status==='anonymous')} userId={status==='authenticated'?user?.id:undefined} onOpen={openPushActivity}/>
       {status === 'authenticated' && user ? <ForegroundActivity key={user.id} userId={user.id}
         visible={currentRoute !== 'Notifications' && currentRoute !== 'NativeMeeting' && currentRoute !== 'Broadcast' && currentRoute !== 'Login'}
         onOpen={() => { if (navigationRef.isReady()) navigationRef.navigate('Notifications') }} /> : null}
