@@ -171,6 +171,11 @@ jobs:
           IEVENTPLUX_ISOLATED_DB_TEST: "yes"
         run: bash scripts/verify-transport-departure-migration.sh
 
+      - name: Rehearse additive push registry SQL twice
+        env:
+          IEVENTPLUX_ISOLATED_DB_TEST: "yes"
+        run: bash scripts/verify-push-installation-migration.sh
+
       - name: Sandbox payment identity concurrency (no provider calls)
         env:
           IEVENTPLUX_ISOLATED_DB_TEST: "yes"
@@ -198,6 +203,13 @@ jobs:
         env:
           IEVENTPLUX_ISOLATED_DB_TEST: "yes"
         run: bun run scripts/activity-notification-smoke.ts
+
+      - name: Push installation registry privacy and revocation (no provider calls)
+        env:
+          IEVENTPLUX_ISOLATED_DB_TEST: "yes"
+        run: |
+          bun test src/server/push-installation-policy.test.ts
+          bun run scripts/push-installation-smoke.ts
 
       - name: Browser clarity and responsive screenshot acceptance
         run: |
