@@ -83,7 +83,7 @@ export default function AdminConsole({ route }: { route: Route }) {
   }
 
   return (
-    <div className="ievx-workspace-shell mx-auto max-w-[1600px] px-3 py-3 sm:px-5 md:gap-4 md:overflow-hidden md:px-5 md:py-4">
+    <div className="ievx-workspace-shell mx-auto max-w-[1440px] px-3 py-3 sm:px-5 md:gap-4 md:overflow-hidden md:px-6 md:py-4">
 
       {/* Fourteen admin sections require a usable mobile chooser, not a
           horizontally-scrolling row whose most important actions are hidden. */}
@@ -122,7 +122,7 @@ export default function AdminConsole({ route }: { route: Route }) {
           <p className="mt-1 text-[10px]">Secure administrative actions are logged.</p>
         </div>}
       </aside>
-      <div ref={contentRef} className="ievx-workspace-content ievx-scrollbar min-w-0 flex-1 px-1 pb-8 md:px-1 md:pb-8">
+      <div ref={contentRef} className="ievx-workspace-content ievx-scrollbar min-w-0 flex-1 px-1 pb-8 md:px-3 md:pb-8">
         <div className="ievx-workspace-toolbar">
           <div className="min-w-0">
             <p className="ievx-workspace-eyebrow">Platform administration / {humanize(user.role)}</p>
