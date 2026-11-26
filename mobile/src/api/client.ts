@@ -31,6 +31,7 @@ import * as SecureStore from 'expo-secure-store'
 export interface User {
   id: string
   email: string
+  emailVerifiedAt?: string | null
   displayName: string
   role: string
   avatarUrl?: string | null
@@ -567,6 +568,7 @@ export interface NotificationsResponse {
   unread: number
   page?: number
   pageSize?: number
+  hasMore?: boolean
 }
 
 // ──────────────────────────────────────────────────────────── error type ───
@@ -785,6 +787,8 @@ export const api = {
       request<{ devResetCode?: string | null }>('POST', '/auth/password-reset', { email }),
     confirmReset: (email: string, code: string, password: string) =>
       request<{ message?: string }>('POST', '/auth/password-reset-confirm', { email, code, password }),
+    resendVerification: () => request<{queued: boolean; alreadyVerified?: boolean; devVerificationCode?: string | null}>('POST', '/auth/resend-code', {}),
+    verifyEmail: (code: string) => request<{verified: boolean}>('POST', '/auth/verify-contact', { channel: 'EMAIL', code }),
     me: () => request<MeResponse>('GET', '/auth/me'),
     logout: () => request<{ ok: boolean }>('POST', '/auth/logout'),
   },
@@ -954,7 +958,9 @@ export const api = {
       request<{ message: BroadcastChatMessage }>('POST', `/broadcasts/${encodeURIComponent(id)}/chat`, { body }),
   },
   notifications: {
-    list: () => request<NotificationsResponse>('GET', '/notifications'),
+    list: (page=1) => request<NotificationsResponse>('GET','/notifications?page='+page+'&pageSize=20'),
+    mark: (id:string) => request<{ok:boolean}>('POST','/notifications',{id}),
+    markAll: () => request<{ok:boolean}>('POST','/notifications',{all:true}),
   },
 }
 

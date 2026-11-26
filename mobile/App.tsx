@@ -30,6 +30,8 @@ import LiveHubScreen from './src/screens/LiveHubScreen'
 import FollowingScreen from './src/screens/FollowingScreen'
 import ReelsScreen from './src/screens/ReelsScreen'
 import AccountScreen from './src/screens/AccountScreen'
+import NotificationsScreen from './src/screens/NotificationsScreen'
+import ForegroundActivity from './src/components/ForegroundActivity'
 import OrganizerStudioScreen from './src/screens/OrganizerStudioScreen'
 import CreateOrganizerScreen from './src/screens/CreateOrganizerScreen'
 import EventEditorScreen from './src/screens/EventEditorScreen'
@@ -127,6 +129,7 @@ function AppRoutes() {
       <Stack.Screen name="Following" component={FollowingScreen} options={{ title: 'Following' }} />
       <Stack.Screen name="Reels" component={ReelsScreen} options={{ title: 'Reels' }} />
       <Stack.Screen name="Account" component={AccountScreen} options={{ title: 'Your space' }} />
+      <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ title: 'Notifications' }} />
       <Stack.Screen name="OrganizerStudio" component={OrganizerStudioScreen} options={{ title: 'Organizer Studio' }} />
       <Stack.Screen name="CreateOrganizer" component={CreateOrganizerScreen} options={{ title: 'Create organizer profile' }} />
       <Stack.Screen name="EventEditor" component={EventEditorScreen} options={{ title: 'Event editor' }} />
@@ -150,7 +153,7 @@ function AppRoutes() {
 }
 
 function AppNavigation() {
-  const { status } = useSession()
+  const { status, user } = useSession()
   const [currentRoute, setCurrentRoute] = useState<string | undefined>()
   const syncRoute = () => setCurrentRoute(navigationRef.getCurrentRoute()?.name)
   const navigateTab = (route: MainTabRoute) => {
@@ -164,6 +167,9 @@ function AppNavigation() {
   return <NavigationContainer ref={navigationRef} linking={linking} onReady={syncRoute} onStateChange={syncRoute}>
     <View style={styles.appContainer}>
       <AppRoutes />
+      {status === 'authenticated' && user ? <ForegroundActivity key={user.id}
+        visible={currentRoute !== 'Notifications' && currentRoute !== 'NativeMeeting' && currentRoute !== 'Broadcast' && currentRoute !== 'Login'}
+        onOpen={() => { if (navigationRef.isReady()) navigationRef.navigate('Notifications') }} /> : null}
       {(status === 'authenticated' || status === 'anonymous') && isMainTabRoute(currentRoute) ?
         <AppTabBar active={currentRoute} onSelect={navigateTab} /> : null}
       <AndroidUpdateNotice />

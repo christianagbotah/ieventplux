@@ -13,6 +13,7 @@ export type RootStackParamList = {
   Following: undefined
   Reels: undefined
   Account: undefined
+  Notifications: undefined
   OrganizerStudio: undefined
   CreateOrganizer: undefined
   EventEditor: {orgId:string;eventId?:string}
@@ -22,7 +23,7 @@ export type RootStackParamList = {
    *  deep link (payment return) — the screen then surfaces a status banner and
    *  refreshes. The offline wallet (cached tickets + opened QR credentials)
    *  keeps the door credential alive without connectivity. */
-  MyTickets: { orderRef?: string } | undefined
+  MyTickets: { orderRef?: string; segment?: 'tickets'|'orders' } | undefined
   /** Venue check-in scanner. `eventId` comes from the event detail screen for
    *  staff (canManage) or is entered manually on the scanner itself. */
   Checkin: { eventId?: string } | undefined
@@ -71,6 +72,7 @@ export type MarketplaceScreenProps = NativeStackScreenProps<RootStackParamList, 
 export type MarketplaceStoreScreenProps = NativeStackScreenProps<RootStackParamList, 'MarketplaceStore'>
 
 export type LiveHubScreenProps = NativeStackScreenProps<RootStackParamList, 'LiveHub'>
+export type NotificationsScreenProps = NativeStackScreenProps<RootStackParamList, 'Notifications'>
 export type AccountScreenProps = NativeStackScreenProps<RootStackParamList, 'Account'>
 
 export type FollowingScreenProps = NativeStackScreenProps<RootStackParamList, 'Following'>

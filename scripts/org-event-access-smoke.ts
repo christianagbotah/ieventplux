@@ -4,6 +4,10 @@
  * No mutations or financial provider calls.
  */
 import { db } from '../src/lib/db'
+import { randomUUID } from 'node:crypto'
+import { unlink } from 'node:fs/promises'
+import sharp from 'sharp'
+import { mediaFilePath, isPublicUploadName } from '../src/server/media-storage'
 
 if (process.env.NODE_ENV === 'production') throw new Error('Development seed smoke must never run in production.')
 const base = (process.env.SMOKE_BASE_URL ?? 'http://localhost:3000/api/v1').replace(/\/$/, '')
@@ -60,6 +64,78 @@ async function main() {
   }
 
   const pastor = await auth('pastor@lightworld.dev')
+  // Notification inbox: isolated synthetic records; no external delivery.
+  if (process.env.IEVENTPLUX_ISOLATED_DB_TEST === 'yes') {
+    const owner = await db.user.findUniqueOrThrow({ where: { email: 'pastor@lightworld.dev' } })
+    const createdAt = new Date(Date.now() + 60_000)
+    const own = await db.notification.create({ data: { userId: ama.id, type: 'REMINDER', title: 'Synthetic attendee alert', body: 'Test only', link: '#/me?tab=tickets', createdAt } })
+    const other = await db.notification.create({ data: { userId: owner.id, type: 'SYSTEM', title: 'Synthetic organizer alert', body: 'Test only', createdAt } })
+    try {
+      const anon = await fetch(base + '/notifications')
+      const anonData = await anon.json()
+      assert(anon.ok && anonData.items.length === 0 && anon.headers.get('cache-control')?.includes('no-store'), 'anonymous inbox is empty and never cached')
+      const response = await fetch(base + '/notifications?pageSize=50', { headers: { Cookie: attendee } })
+      const inbox = await response.json()
+      assert(response.ok && response.headers.get('cache-control')?.includes('no-store') && inbox.items.some((n: {id:string}) => n.id === own.id) &&
+        !inbox.items.some((n: {id:string}) => n.id === other.id), 'notification inbox is private to the signed-in account')
+      const first = await fetch(base + '/notifications?page=1&pageSize=1', { headers: { Cookie: attendee } }).then(r => r.json())
+      assert(first.items.length === 1 && first.items[0].id === own.id && typeof first.hasMore === 'boolean', 'notification pagination returns stable page and hasMore')
+      const mark = (id: string) => fetch(base + '/notifications', { method: 'POST', headers: { Cookie: attendee, 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
+      assert((await mark(other.id)).ok && !(await db.notification.findUniqueOrThrow({ where: { id: other.id } })).readAt, 'guessing another account alert ID never marks it read')
+      const acknowledged = await mark(own.id)
+      assert(acknowledged.ok && acknowledged.headers.get('cache-control')?.includes('no-store') && !!(await db.notification.findUniqueOrThrow({ where: { id: own.id } })).readAt, 'own notification read is server acknowledged')
+      console.log('NATIVE_NOTIFICATION_INBOX_SCOPE_PASS')
+    } finally {
+      await db.notification.deleteMany({ where: { id: { in: [own.id, other.id] } } })
+    }
+  }
+  if(process.env.IEVENTPLUX_ISOLATED_DB_TEST==='yes'){
+    const owner=await db.user.findUniqueOrThrow({where:{email:'pastor@lightworld.dev'}})
+    const org=await db.organization.create({data:{name:'Synthetic organizer profile',slug:'profile-qa-'+randomUUID(),ownerId:owner.id,orgType:'COMPANY',status:'ACTIVE',verifiedAt:new Date(),profileDetails:JSON.stringify({registrationNumber:'TEST-PRIVATE',industry:'Initial'})}})
+    const files:string[]=[]
+    const endpoint=base+'/orgs/'+org.slug+'/profile'
+    const get=(cookie?:string)=>fetch(endpoint,{headers:cookie?{Cookie:cookie}:{}})
+    const patch=(cookie:string,data:unknown)=>fetch(endpoint,{method:'PATCH',headers:{Cookie:cookie,'Content-Type':'application/json'},body:JSON.stringify(data)})
+    const brand=async(cookie:string,purpose:string)=>{
+      const bytes=await sharp({create:{width:32,height:32,channels:3,background:'#08796c'}}).png().toBuffer()
+      const form=new FormData()
+      form.append('file',new Blob([Uint8Array.from(bytes)],{type:'image/png'}),'synthetic.png');form.append('purpose',purpose)
+      const response=await fetch(base+'/orgs/'+org.id+'/branding',{method:'POST',headers:{Cookie:cookie},body:form})
+      const result=await response.json()
+      if(response.ok&&typeof result.url==='string'&&result.url.startsWith('/uploads/')){
+        const filename=result.url.slice('/uploads/'.length)
+        if(isPublicUploadName(filename))files.push(filename)
+      }
+      return {status:response.status,result}
+    }
+    try{
+      const ownerResponse=await get(pastor), ownerProfile=await ownerResponse.json()
+      assert(ownerProfile.myOrg&&ownerProfile.canEdit&&!ownerProfile.following&&ownerResponse.headers.get('cache-control')?.includes('no-store'),'owner access resolved independently of membership and not cached')
+      const anonymousProfile=await get().then(r=>r.json())
+      assert(!anonymousProfile.canEdit&&!anonymousProfile.myOrg&&!anonymousProfile.org.profileDetails.registrationNumber,'public profile hides edit access and private registration number')
+      assert((await patch(attendee,{tagline:'Unauthorized'})).status===403,'outsider cannot edit profile')
+      assert((await brand(attendee,'logo')).status===403,'outsider cannot upload branding')
+      const member=await db.membership.create({data:{orgId:org.id,userId:ama.id,role:'ADMIN'}})
+      assert(!(await get(attendee).then(r=>r.json())).canEdit,'pending admin cannot edit')
+      await db.membership.update({where:{id:member.id},data:{acceptedAt:new Date(),role:'EVENT_MANAGER'}})
+      const staff=await get(attendee).then(r=>r.json())
+      assert(staff.myOrg&&!staff.canEdit&&(await patch(attendee,{tagline:'Staff'})).status===403,'event manager cannot edit profile')
+      await db.membership.update({where:{id:member.id},data:{role:'ADMIN'}})
+      assert((await get(attendee).then(r=>r.json())).canEdit,'accepted admin can edit')
+      assert((await patch(pastor,{name:'Unreviewed new identity'})).status===403,'verified name is protected')
+      assert((await patch(pastor,{tagline:'Updated public profile',profileDetails:{industry:'Technology',registrationNumber:'attempted overwrite'}})).ok,'owner saves public profile')
+      const picture=await brand(pastor,'logo'),banner=await brand(attendee,'cover')
+      assert(picture.status===201&&banner.status===201&&picture.result.url!==banner.result.url,'owner picture and authorized admin banner uploads succeed')
+      const updated=await db.organization.findUniqueOrThrow({where:{id:org.id}})
+      assert(updated.tagline==='Updated public profile'&&updated.logoUrl===picture.result.url&&updated.coverUrl===banner.result.url&&JSON.parse(updated.profileDetails).registrationNumber==='TEST-PRIVATE','profile, images and private registration preservation verified')
+      await db.organization.update({where:{id:org.id},data:{status:'SUSPENDED'}})
+      assert(!(await get(pastor).then(r=>r.json())).canEdit&&(await patch(pastor,{tagline:'Suspended edit'})).status===403,'suspended organizer cannot edit')
+      console.log('ORGANIZER_PROFILE_EDIT_SCOPE_PASS')
+    }finally{
+      await db.organization.delete({where:{id:org.id}})
+      for(const filename of files)await unlink(mediaFilePath(filename)).catch(()=>{})
+    }
+  }
   const own = await list(pastor, 'mine=1&orgId=' + chapel.id + '&pageSize=50')
   assert(own.status === 200 && own.data.total > 0, 'organizer accesses own organization')
   assert(own.data.items.every((item: any) => item.org.id === chapel.id), 'requested org listing is tenant scoped')

@@ -1,7 +1,7 @@
 /** Premium, native account hub with clear web-only advanced handoffs. */
 import { useState } from 'react'
-import { ActivityIndicator, Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
-import { absoluteUrl } from '../api/client'
+import { ActivityIndicator, Image, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
+import { absoluteUrl, api } from '../api/client'
 import { clearTicketWallet } from '../lib/ticket-wallet'
 import { useSession } from '../store/session'
 import { theme } from '../theme'
@@ -10,7 +10,23 @@ import type { AccountScreenProps } from '../navigation'
 
 type Glyph = 'ticket'|'event'|'organizer'|'store'|'scanner'|'settings'|'spark'
 export default function AccountScreen({ navigation }: AccountScreenProps) {
-  const { user, memberships, signOut } = useSession()
+  const { user, memberships, signOut, refresh } = useSession()
+  const [verifyOpen, setVerifyOpen] = useState(false)
+  const [verifyCode, setVerifyCode] = useState('')
+  const [verifyBusy, setVerifyBusy] = useState(false)
+  const [verifyNotice, setVerifyNotice] = useState('')
+  const verify = async (resend: boolean) => {
+    if (verifyBusy) return
+    setVerifyBusy(true); setVerifyNotice('')
+    try {
+      if (resend) {
+        const result = await api.auth.resendVerification()
+        if (result.alreadyVerified) await refresh()
+        else { setVerifyCode(''); setVerifyNotice('New code requested. Check your inbox and spam folder shortly.') }
+      } else { await api.auth.verifyEmail(verifyCode); await refresh(); setVerifyNotice('Email verification completed.') }
+    } catch (err) { setVerifyNotice(err instanceof Error ? err.message : 'Please try again.') }
+    finally { setVerifyBusy(false) }
+  }
   const [busy, setBusy] = useState(false)
   const [linkError, setLinkError] = useState('')
   const initials = (user?.displayName || user?.email || 'U').trim().split(/\s+/).slice(0, 2).map(s => s[0]?.toUpperCase()).join('')
@@ -47,10 +63,23 @@ export default function AccountScreen({ navigation }: AccountScreenProps) {
       </View>
     </View>
 
+    {user && <View style={[styles.menu, {padding:14, marginBottom:20, gap:10}]}>
+      <Text style={styles.rowTitle}>{user.emailVerifiedAt ? '✓ Email verified' : 'Verify your email'}</Text>
+      {!user.emailVerifiedAt && <>
+        <Pressable accessibilityRole="button" onPress={()=>setVerifyOpen(v=>!v)}><Text style={{color:mobileDesign.emerald,fontWeight:'700',paddingVertical:8}}>{verifyOpen ? 'Hide verification' : 'Verify email address ›'}</Text></Pressable>
+        {verifyOpen && <>
+          <Text style={styles.rowDetail}>Enter the six-digit code from your email, or request a new one.</Text>
+          <TextInput accessibilityLabel="Verification code" keyboardType="number-pad" autoComplete="one-time-code" maxLength={6} value={verifyCode} onChangeText={v=>setVerifyCode(v.replace(/\D/g,''))} placeholder="000000" placeholderTextColor={mobileDesign.inkMuted} style={{borderWidth:1,borderColor:mobileDesign.border,borderRadius:12,padding:12,color:mobileDesign.ink}}/>
+          <Pressable accessibilityRole="button" accessibilityState={{disabled:verifyBusy||verifyCode.length!==6}} disabled={verifyBusy||verifyCode.length!==6} onPress={()=>void verify(false)} style={{backgroundColor:mobileDesign.emerald,borderRadius:12,padding:13,opacity:(verifyBusy || verifyCode.length !== 6) ? 0.5 : 1}}><Text style={{color:'#fff',fontWeight:'700',textAlign:'center'}}>Verify email</Text></Pressable>
+          <Pressable accessibilityRole="button" disabled={verifyBusy} onPress={()=>void verify(true)} style={{paddingVertical:10}}><Text style={{color:mobileDesign.emerald,fontWeight:'700'}}>Send a new code</Text></Pressable>
+        </>}
+      </>}
+      {verifyNotice ? <Text accessibilityLiveRegion="polite" style={styles.rowDetail}>{verifyNotice}</Text> : null}
+    </View>}
     <SectionHeading title="Your account"/>
     <View style={styles.quickGrid}>
       <QuickTile kind="ticket" title="My tickets" detail="Passes & QR codes" onPress={()=>navigation.navigate('MyTickets')}/>
-      <QuickTile kind="event" title="Discover" detail="Find experiences" onPress={()=>navigation.navigate('Discover')}/>
+      <QuickTile kind="spark" title="Notifications" detail="Reminders & updates" onPress={()=>navigation.navigate('Notifications')}/>
       <QuickTile kind="organizer" title="Organizer Studio" detail="Create & manage" onPress={()=>navigation.navigate('OrganizerStudio')}/>
       <QuickTile kind="store" title="Local services" detail="Find help & register" onPress={()=>navigation.navigate('Services')}/>
       <QuickTile kind="scanner" title="Check-in" detail="Scan event passes" onPress={()=>navigation.navigate('Checkin')}/>
