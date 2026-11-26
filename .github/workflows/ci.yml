@@ -82,7 +82,7 @@ jobs:
         run: bun test src/server/event-network-policy.test.ts
 
       - name: Event community privacy, moderation and reply authorization
-        run: bun test src/server/community-policy.test.ts
+        run: bun test src/server/community-policy.test.ts src/server/event-update-delivery-policy.test.ts
 
       - name: Awards, pageants and supporter-voting policy regression
         run: bun test src/server/competition-policy.test.ts
@@ -207,7 +207,9 @@ jobs:
       - name: Atomic check-in races across scanners and refund
         run: bun run scripts/checkin-concurrent-admission-smoke.ts
 
-      - name: Organizer event tenant privacy regression (seeded users)
+      - name: Organizer event tenant and invitation content privacy regression (seeded users)
+        env:
+          IEVENTPLUX_ISOLATED_DB_TEST: "yes"
         run: bun run scripts/org-event-access-smoke.ts
 
       - name: Concierge capability status and real-catalogue fallback
