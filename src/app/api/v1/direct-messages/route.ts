@@ -3,7 +3,7 @@ import {errors,handle,jsonOk,rateLimit,readJson,requireUser,requireSession} from
 import {validDirectId,parseDirectMessage} from '@/server/direct-message-policy'
 import {parseActivity} from '@/server/direct-activity-policy'
 import {parseDirectReport} from '@/server/direct-report-policy'
-import {requestConversation,decideConversation,sendDirectMessage,readDirectMessages,listDirectConversations,getDirectConversation,listDirectContacts,directActivity,reportDirectMessage,setDirectSafety} from '@/server/services/direct-messages'
+import {requestConversation,decideConversation,sendDirectMessage,readDirectMessages,listDirectConversations,getDirectConversation,listDirectContacts,directActivity,reportDirectMessage,setDirectSafety,directSendStatus} from '@/server/services/direct-messages'
 const headers={'Cache-Control':'private, no-store'}
 const ok=(value:unknown)=>jsonOk(value,{headers})
 export async function GET(req:NextRequest){
@@ -33,6 +33,11 @@ export async function POST(req:NextRequest){
   }
   const id=body.id
   if(!validDirectId(id))throw errors.badRequest('Invalid conversation.')
+  if(body.action==='send-status'){
+   await rateLimit(req,'direct-send-status',60,60_000)
+   if(typeof body.clientKey!=='string'||! /^[A-Za-z0-9_-]{16,128}$/.test(body.clientKey))throw errors.badRequest('Invalid message key.')
+   return ok(await directSendStatus(id,user.id,body.clientKey))
+  }
   if(body.action==='safety'){
    await rateLimit(req,'direct-safety',30,60_000)
    if((body.kind!=='block'&&body.kind!=='mute')||typeof body.enabled!=='boolean')throw errors.badRequest('Invalid chat safety setting.')

@@ -204,3 +204,11 @@ export async function setDirectSafety(id:string,actorId:string,kind:'block'|'mut
  await relay(result,null)
  return {ok:true}
 }
+
+// Reconciliation is deliberately read-only and remains available after a block.
+// Only the original sender can resolve their own client key; never expose body.
+export async function directSendStatus(id:string,actorId:string,clientKey:string){
+ await scoped(db,id,actorId)
+ const row=await db.directMessage.findUnique({where:{conversationId_senderId_clientKey:{conversationId:id,senderId:actorId,clientKey}},select:{id:true,createdAt:true,readAt:true,removedAt:true}})
+ return {committed:!!row,message:row}
+}
