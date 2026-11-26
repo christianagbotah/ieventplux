@@ -1,4 +1,5 @@
 import { db } from '../../lib/db'
+import type { Notification } from '@prisma/client'
 import { env } from '../env'
 import { enqueue } from '../outbox'
 import { estimateSegments } from '../hubtel/sms'
@@ -14,8 +15,19 @@ export async function notifyUser(params: { userId: string; type: string; title: 
     data: { userId: params.userId, type: params.type, title: params.title.slice(0, 160), body: params.body.slice(0, 800), link: params.link ?? null },
   })
   // Realtime push (best-effort; the notification remains in the DB either way).
-  await realtimeEmit(`user:${params.userId}`, 'notification', { id: row.id, type: row.type, title: row.title, body: row.body, link: row.link })
+  await publishNotification(row)
   return row
+}
+
+// Call only after the surrounding business transaction commits.
+export async function publishNotification(row: Notification) {
+  await realtimeEmit(`user:${row.userId}`, 'notification', {
+    id: row.id, type: row.type, title: row.title, body: row.body, link: row.link,
+  })
+}
+
+export async function publishNotificationRead(userId: string) {
+  await realtimeEmit(`user:${userId}`, 'notification:read', {})
 }
 
 export interface QueueMessageInput {
