@@ -81,7 +81,7 @@ export function EventProgrammeSections({ event, onOpenProgramme }: {
         onPress={()=>onOpenProgramme(programmeDocumentPath(event.id,document.id))}
         style={({pressed})=>[styles.document,pressed && {opacity:.75}]}>
         <Text style={styles.fileIcon}>▤</Text>
-        <Text style={styles.documentName} numberOfLines={3}>{document.title}</Text>
+        <Text style={styles.documentName}>{document.title}</Text>
         <Text style={styles.documentAction}>View PDF ›</Text>
       </Pressable>)}
       <Text style={styles.hint}>Private programme documents are shown only when the server allows access. A browser sign-in may be required.</Text>
@@ -132,37 +132,37 @@ export function EventProgrammeSections({ event, onOpenProgramme }: {
 }
 
 const styles=StyleSheet.create({
-  section:{marginTop:23,padding:16,backgroundColor:theme.colors.card,borderWidth:1,borderColor:theme.colors.border,borderRadius:20},
+  section:{marginTop:28,padding:18,backgroundColor:theme.colors.card,borderWidth:1,borderColor:theme.colors.border,borderRadius:20},
   headingRow:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',gap:10},
-  heading:{flex:1,fontSize:17,fontWeight:'900',lineHeight:23,color:theme.colors.text},
+  heading:{flex:1,fontSize:20,fontWeight:'800',lineHeight:28,color:theme.colors.text},
   count:{backgroundColor:theme.web.tealSoft,color:theme.colors.primary,fontSize:12,fontWeight:'900',paddingHorizontal:11,paddingVertical:5,borderRadius:14,overflow:'hidden'},
-  subtitle:{fontSize:12,lineHeight:19,color:theme.colors.textMuted,marginTop:7},
+  subtitle:{fontSize:16,lineHeight:24,color:theme.colors.textMuted,marginTop:7},
   sectionContent:{marginTop:14,gap:12},
   profile:{padding:13,borderWidth:1,borderColor:theme.colors.border,borderRadius:14,backgroundColor:'#fff',gap:9},
   profileHeader:{flexDirection:'row',alignItems:'center',gap:12},
   thumb:{width:59,height:59,borderRadius:12,backgroundColor:theme.web.tealSoft},
   thumbPlaceholder:{alignItems:'center',justifyContent:'center'},
   thumbInitial:{fontSize:16,color:theme.colors.primary,fontWeight:'900',textAlign:'center'},
-  profileHeading:{flex:1,gap:4},profileName:{fontSize:14,fontWeight:'900',color:theme.colors.text,lineHeight:19,flexShrink:1},
-  role:{fontSize:12,fontWeight:'800',color:theme.colors.primary,marginTop:3},
-  topic:{fontSize:13,fontWeight:'800',color:theme.colors.text},
-  secondary:{fontSize:11,color:theme.colors.textMuted,lineHeight:18},
-  body:{fontSize:12,lineHeight:20,color:theme.colors.text,marginTop:3},
+  profileHeading:{flex:1,gap:4},profileName:{fontSize:17,fontWeight:'700',color:theme.colors.text,lineHeight:24,flexShrink:1},
+  role:{fontSize:14,fontWeight:'800',color:theme.colors.primary,marginTop:3},
+  topic:{fontSize:16,fontWeight:'800',color:theme.colors.text},
+  secondary:{fontSize:14,color:theme.colors.textMuted,lineHeight:21},
+  body:{fontSize:16,lineHeight:24,color:theme.colors.text,marginTop:3},
   document:{flexDirection:'row',alignItems:'center',gap:12,borderWidth:1,borderColor:theme.colors.border,borderRadius:12,padding:13,minHeight:56},
-  fileIcon:{fontSize:21,fontWeight:'900',color:theme.colors.primary},documentName:{flex:1,color:theme.colors.text,fontSize:12,fontWeight:'800'},
-  documentAction:{fontSize:11,fontWeight:'800',color:theme.colors.primary},hint:{fontSize:11,lineHeight:18,color:theme.colors.textMuted},
+  fileIcon:{fontSize:21,fontWeight:'900',color:theme.colors.primary},documentName:{flex:1,color:theme.colors.text,fontSize:16,fontWeight:'800'},
+  documentAction:{fontSize:14,fontWeight:'800',color:theme.colors.primary},hint:{fontSize:14,lineHeight:21,color:theme.colors.textMuted},
   product:{padding:13,borderWidth:1,borderColor:theme.colors.border,borderRadius:14,gap:8},
   productHeader:{flexDirection:'row',alignItems:'center',gap:12},productHeading:{flex:1,gap:4},
-  productPrice:{fontSize:14,fontWeight:'900',color:theme.colors.primary},
+  productPrice:{fontSize:17,fontWeight:'900',color:theme.colors.primary},
   agendaRow:{flexDirection:'row',alignItems:'stretch',gap:10},timeline:{width:11,alignItems:'center',paddingTop:15},
   timelineDot:{height:11,width:11,backgroundColor:theme.colors.primary,borderRadius:6},
   timelineLine:{width:2,flex:1,backgroundColor:'#d2e9e0',marginTop:4},
   agendaCard:{flex:1,backgroundColor:theme.colors.bg,borderRadius:13,borderWidth:1,borderColor:theme.colors.border,padding:12,gap:5},
   agendaHeader:{flexDirection:'row',alignItems:'center',gap:9},agendaNumber:{fontSize:11,fontWeight:'900',color:theme.colors.primary,backgroundColor:theme.web.tealSoft,padding:8,overflow:'hidden',borderRadius:9},
-  agendaTitle:{fontSize:14,fontWeight:'900',color:theme.colors.text,flex:1},
-  policy:{gap:4,marginBottom:5},policyLabel:{fontSize:12,color:theme.colors.primary,fontWeight:'900'},
+  agendaTitle:{fontSize:17,fontWeight:'900',color:theme.colors.text,flex:1},
+  policy:{gap:4,marginBottom:5},policyLabel:{fontSize:14,color:theme.colors.primary,fontWeight:'900'},
   update:{backgroundColor:theme.colors.bg,padding:12,borderRadius:12,gap:4},
   important:{fontSize:9,fontWeight:'900',color:theme.colors.primary},
   galleryContent:{gap:12,paddingRight:12},galleryItem:{width:225},galleryImage:{width:225,height:145,borderRadius:12,backgroundColor:theme.colors.border},
-  galleryCaption:{fontSize:11,color:theme.colors.textMuted,marginTop:6},
+  galleryCaption:{fontSize:14,color:theme.colors.textMuted,marginTop:6},
 })
