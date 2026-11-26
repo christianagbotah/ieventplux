@@ -58,6 +58,10 @@ model User {
   comments            Comment[]
   reactions           Reaction[]
   notifications       Notification[]
+  directConversationsLow DirectConversation[] @relation("DirectParticipantLow")
+  directConversationsHigh DirectConversation[] @relation("DirectParticipantHigh")
+  directRequests DirectConversation[] @relation("DirectRequester")
+  directMessages DirectMessage[]
   messageDeliveries   MessageDelivery[]
   eventReminders      EventReminder[]
   blocksMade          UserBlock[]            @relation("Blocker")
@@ -1205,6 +1209,42 @@ model MeetingMessage {
 }
 
 // ─────────────────────────────── Messaging & notifications ───────────────────────────────
+
+// Canonical pair; only participants can access history. Request acceptance is
+// explicit, and a declined request cannot be recreated to spam its recipient.
+model DirectConversation {
+  id           String   @id @default(cuid())
+  participantLowId String
+  participantHighId String
+  requesterId String
+  status       String   @default("PENDING")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  participantLow User @relation("DirectParticipantLow", fields: [participantLowId], references: [id], onDelete: Cascade)
+  participantHigh User @relation("DirectParticipantHigh", fields: [participantHighId], references: [id], onDelete: Cascade)
+  requester User @relation("DirectRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  messages DirectMessage[]
+
+  @@unique([participantLowId, participantHighId], map: "DirectConversation_pair_key")
+  @@index([participantLowId, updatedAt])
+  @@index([participantHighId, updatedAt])
+}
+
+model DirectMessage {
+  id             String   @id @default(cuid())
+  conversationId String
+  senderId       String
+  clientKey      String
+  body           String
+  createdAt      DateTime @default(now())
+  readAt         DateTime?
+  conversation DirectConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender User @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, senderId, clientKey], map: "DirectMessage_client_key")
+  @@index([conversationId, createdAt, id])
+  @@index([conversationId, readAt])
+}
 
 model Notification {
   id        String    @id @default(cuid())

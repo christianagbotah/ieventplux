@@ -211,6 +211,13 @@ jobs:
           bun test src/server/push-installation-policy.test.ts
           bun run scripts/push-installation-smoke.ts
 
+      - name: Private direct messaging access and durable read receipts
+        env:
+          IEVENTPLUX_ISOLATED_DB_TEST: "yes"
+        run: |
+          bun test src/server/direct-message-policy.test.ts
+          bun run scripts/direct-messaging-smoke.ts
+
       - name: Browser clarity and responsive screenshot acceptance
         run: |
           npm install --prefix "$RUNNER_TEMP/ievent-ui-qa" --no-audit --no-fund playwright@1.51.1
