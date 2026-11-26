@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Ticket, ShoppingBag, Heart, Bell, UserRound, Share2, Check, RefreshCw, Loader2, Sparkles, CalendarPlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -62,6 +62,12 @@ export default function Me({ route }: { route: Route }) {
   const [following, setFollowing] = useState<{ orgId: string; org: { name: string; slug: string } }[] | null>(null)
   const [notifications, setNotifications] = useState<NotificationRow[] | null>(null)
   const [notificationError, setNotificationError] = useState('')
+  const [notificationBusy, setNotificationBusy] = useState(false)
+  const [nextNotificationCursor, setNextNotificationCursor] = useState<string | null>(null)
+  const [notificationHistory, setNotificationHistory] = useState<(string | null)[]>([null])
+  const notificationHistoryRef = useRef<(string | null)[]>([null])
+  const notificationRevision = useRef(0)
+  const notificationLoading = useRef(false)
   const [selectedTicket, setSelectedTicket] = useState<{ row: TicketRow; qrSvg: string; qrPayload: string; offlineCopy?: boolean; savedAt?: string } | null>(null)
   const [ticketsOffline, setTicketsOffline] = useState(false)
   const [transferUrl, setTransferUrl] = useState<string | null>(null)
@@ -96,7 +102,7 @@ export default function Me({ route }: { route: Route }) {
       return
     }
     setProfile({ displayName: user.displayName, phone: user.phone ?? '', city: user.city ?? '', bio: '' })
-    setPrefs({ email: true, push: true, sms: Boolean(user.phone), marketing: Boolean(user.notifPrefs?.marketing) })
+    setPrefs({ email: true, push: true, sms: Boolean(user.phone), marketing: false, ...user.notifPrefs })
   }, [user, booted])
 
   const loadTickets = useCallback(async () => {
@@ -141,22 +147,37 @@ export default function Me({ route }: { route: Route }) {
   }, [tab, user, tickets, orders, loadTickets, loadOrders, loadOthers])
 
   const notificationUserId = user?.id
-  const loadNotifications = useCallback(async () => {
+  const loadNotifications = useCallback(async (history = notificationHistoryRef.current) => {
     if (!notificationUserId) return
+    const revision = ++notificationRevision.current
+    notificationLoading.current = true
+    setNotificationBusy(true)
+    const cursor = history[history.length - 1]
+    const path = '/notifications?pageSize=20' + (cursor ? '&before=' + encodeURIComponent(cursor) : '')
+    const current = () => revision === notificationRevision.current && usePortal.getState().user?.id === notificationUserId
     try {
-      const result = await api.get<{ items: NotificationRow[]; unread: number }>('/notifications')
-      if (usePortal.getState().user?.id !== notificationUserId) return
+      const result = await api.get<{ items: NotificationRow[]; unread: number; nextCursor?: string | null }>(path)
+      if (!current()) return
+      notificationHistoryRef.current = history
+      setNotificationHistory(history)
+      setNextNotificationCursor(result.nextCursor ?? null)
       setNotifications(result.items); setUnread(result.unread); setNotificationError('')
     } catch (err) {
-      if (usePortal.getState().user?.id === notificationUserId) setNotificationError(err instanceof Error ? err.message : 'Could not load notifications.')
+      if (current()) setNotificationError(err instanceof Error ? err.message : 'Could not load notifications.')
+    } finally {
+      if (current()) { notificationLoading.current = false; setNotificationBusy(false) }
     }
   }, [notificationUserId, setUnread])
   useEffect(() => {
     if (!notificationUserId || tab !== 'notifications') return
-    const refresh = () => { void loadNotifications() }
+    const refresh = () => { if (!notificationLoading.current) void loadNotifications() }
     refresh()
     window.addEventListener('ievx:notifications-changed', refresh)
-    return () => window.removeEventListener('ievx:notifications-changed', refresh)
+    return () => {
+      window.removeEventListener('ievx:notifications-changed', refresh)
+      notificationRevision.current++
+      notificationLoading.current = false
+    }
   }, [notificationUserId, tab, loadNotifications])
 
   const openTicket = async (row: TicketRow) => {
@@ -456,9 +477,10 @@ export default function Me({ route }: { route: Route }) {
         <TabsContent value="notifications" className="space-y-3">
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">{unread} unread</p>
-            <Button variant="outline" size="sm" className="rounded-full" onClick={() => void markAllRead()} disabled={unread === 0}><Check className="mr-1 h-3.5 w-3.5" /> Mark all read</Button>
+            <Button variant="outline" size="sm" className="rounded-full" onClick={() => void markAllRead()} disabled={unread === 0 || notificationBusy}><Check className="mr-1 h-3.5 w-3.5" /> Mark all read</Button>
           </div>
           {notificationError && <p role="alert" className="text-sm text-destructive">{notificationError} <button className="underline" onClick={() => void loadNotifications()}>Retry</button></p>}
+          {notificationHistory.length > 1 && <Button variant="ghost" size="sm" className="rounded-full" disabled={notificationBusy} onClick={() => void loadNotifications([null])}>Back to newest</Button>}
           {notifications === null ? (
             Array.from({ length: 3 }).map((_, i) => <div key={i} className="ievx-skeleton h-16 rounded-xl" />)
           ) : notifications.length === 0 ? (
@@ -489,6 +511,11 @@ export default function Me({ route }: { route: Route }) {
               </button>
             ))
           )}
+          {notifications !== null && <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-3">
+            <Button variant="outline" size="sm" className="rounded-full" disabled={notificationBusy || notificationHistory.length <= 1} onClick={() => void loadNotifications(notificationHistory.slice(0, -1))}>Newer</Button>
+            <span className="text-xs text-muted-foreground" aria-live="polite">{notificationBusy ? 'Updating…' : 'Page ' + notificationHistory.length}</span>
+            <Button variant="outline" size="sm" className="rounded-full" disabled={notificationBusy || !nextNotificationCursor} onClick={() => nextNotificationCursor && void loadNotifications([...notificationHistory, nextNotificationCursor])}>Older</Button>
+          </div>}
         </TabsContent>
 
         {/* Profile */}
