@@ -342,6 +342,11 @@ export interface EventDetail {
   feeNote?: string | null
 }
 
+export interface EventReminderState { active: boolean; holdingTicket: boolean; upcoming: boolean }
+export interface EventWaitlistState {
+  count: number
+  mine: null | { position: number; status: string; partySize: number; notifiedAt: string | null }
+}
 export interface EventDetailResponse {
   event: EventDetail
   stats: { followers: number; going: number; comments: number }
@@ -800,6 +805,11 @@ export const api = {
     /** `idOrSlug` — the server accepts the event slug or the internal id. */
     get: (idOrSlug: string) =>
       request<EventDetailResponse>('GET', `/events/${encodeURIComponent(idOrSlug)}`),
+    reminder: (id: string) => request<EventReminderState>('GET', '/events/'+encodeURIComponent(id)+'/reminder'),
+    setReminder: (id: string, active: boolean) => request<{active:boolean}>('POST', '/events/'+encodeURIComponent(id)+(active?'/reminder':'/reminder-cancel'), {}),
+    waitlist: (id: string) => request<EventWaitlistState>('GET', '/events/'+encodeURIComponent(id)+'/waitlist'),
+    joinWaitlist: (id: string, body: {name:string;contact:string;partySize:number}) => request<{position:number;reactivated:boolean;status:string}>('POST','/events/'+encodeURIComponent(id)+'/waitlist',body),
+    leaveWaitlist: (id: string) => request<{left:boolean}>('POST','/events/'+encodeURIComponent(id)+'/waitlist-leave',{}),
   },
   organizer: {
     memberships: () => request<{ items: Membership[] }>('GET','/orgs'),
