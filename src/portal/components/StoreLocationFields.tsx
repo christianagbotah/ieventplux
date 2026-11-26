@@ -4,6 +4,8 @@ import {MapPin,LocateFixed,ExternalLink} from 'lucide-react'
 import {Button} from '@/components/ui/button'
 import {Input} from '@/components/ui/input'
 import {Label} from '@/components/ui/label'
+import {VenueMapPicker} from './VenueMapPicker'
+import {validPin} from '../lib/venue-locations'
 import {SubmissionFeedback} from '@/components/ui/submission-feedback'
 export type StoreLocationDraft={gpsAddress:string;latitude:string;longitude:string}
 export const emptyStoreLocation:StoreLocationDraft={gpsAddress:'',latitude:'',longitude:''}
@@ -13,10 +15,11 @@ export function locationPayload(value:StoreLocationDraft){
  if(!lat||!lng||!Number.isFinite(Number(lat))||!Number.isFinite(Number(lng))||Math.abs(Number(lat))>90||Math.abs(Number(lng))>180)throw new Error('Enter valid latitude and longitude together.')
  return {gpsAddress:value.gpsAddress.trim()||null,latitude:Number(lat),longitude:Number(lng)}
 }
-export function StoreLocationFields({value,onChange,disabled=false}:{value:StoreLocationDraft;onChange:(v:StoreLocationDraft)=>void;disabled?:boolean}){
+export function StoreLocationFields({value,onChange,disabled=false,region}:{value:StoreLocationDraft;onChange:(v:StoreLocationDraft)=>void;disabled?:boolean;region?:string}){
  const id=useId()
  const [error,setError]=useState('')
  const [busy,setBusy]=useState(false)
+ const [mapOpen,setMapOpen]=useState(false)
  const [attempt,setAttempt]=useState(0)
  const latest=useRef(value)
  latest.current=value
@@ -39,7 +42,9 @@ export function StoreLocationFields({value,onChange,disabled=false}:{value:Store
    <Button type="button" variant="outline" size="sm" className="h-auto min-h-11 min-w-0 py-2" onClick={locate}><LocateFixed className="size-4"/>{busy?'Locating…':'Use my location'}</Button>
    <Button type="button" variant="outline" size="sm" className="h-auto min-h-11 min-w-0 py-2" asChild><a href={'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(mapsQuery)} target="_blank" rel="noopener noreferrer"><ExternalLink className="size-4"/>Google Maps</a></Button>
   </div>
+  <Button type="button" variant="outline" className="w-full" onClick={()=>setMapOpen(open=>!open)} aria-expanded={mapOpen}><MapPin className="size-4"/>{mapOpen?'Close map':'Pick location on map'}</Button>
+  {mapOpen&&<VenueMapPicker initialPin={value.latitude.trim()&&value.longitude.trim()?validPin(Number(value.latitude),Number(value.longitude)):null} country="GH" region={region} onCancel={()=>setMapOpen(false)} onPick={pin=>{onChange({...latest.current,latitude:pin.lat.toFixed(6),longitude:pin.lng.toFixed(6)});setMapOpen(false)}}/>}
   <SubmissionFeedback message={error} attempt={attempt}/>
-  <p className="text-xs leading-relaxed text-muted-foreground">Choose your business location in Google Maps and copy its latitude and longitude, or use your current location while at the store. GPS codes are saved as addresses; coordinates are required for nearby searches. Use a public business location, not a private home address unless you intend it to be discoverable.</p>
+  <p className="text-xs leading-relaxed text-muted-foreground">Pick your business on the interactive map, paste a Google Maps link containing coordinates, or use your current location while at the store. GPS codes are saved as addresses; coordinates are required for nearby searches. Use a public business location, not a private home address unless you intend it to be discoverable.</p>
  </fieldset>
 }
