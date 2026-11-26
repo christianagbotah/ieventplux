@@ -13,6 +13,8 @@ import { api, ApiClientError } from '../api'
 import { navigate } from '../router'
 import { usePortal } from '../store'
 import { MARKETPLACE_CATEGORIES, GHANA_REGIONS } from '@/lib/marketplace-options'
+import { StoreLocationFields,emptyStoreLocation,locationPayload } from '../components/StoreLocationFields'
+import { SubmissionFeedback } from '@/components/ui/submission-feedback'
 import { MarketplaceSelect } from '../components/MarketplaceSelect'
 
 type StoreRow={id:string;slug:string;name:string;tagline:string|null;category:string;status:string;verificationState:string;productCount:number}
@@ -34,6 +36,9 @@ export default function MarketplaceSellerStudio(){
   const [region,setRegion]=useState('')
   const [address,setAddress]=useState('')
   const [website,setWebsite]=useState('')
+  const [location,setLocation]=useState(emptyStoreLocation)
+  const [submitError,setSubmitError]=useState('')
+  const [attempt,setAttempt]=useState(0)
   const refresh=useCallback(async()=>{
     try{
       const result=await api.get<{stores:StoreRow[]}>('/marketplace/stores?mine=1')
@@ -50,17 +55,17 @@ export default function MarketplaceSellerStudio(){
   }
   async function createStore(){
     if(busy)return
-    setBusy(true)
+    setBusy(true);setSubmitError('')
     try{
       const result=await api.post<{store:{slug:string}}>('/marketplace/stores',{
-        name,slug,tagline,category,description,country:country==='Ghana'?'GH':'',region,city,pickupAddress:address,website:website.trim()||null,
+        name,slug,tagline,category,description,country:country==='Ghana'?'GH':'',region,city,pickupAddress:address,website:website.trim()||null,...locationPayload(location),
       })
       setOpen(false)
       await refresh()
       toast({title:'Your storefront is created',description:'Add products, receive stock and publish your store when ready.'})
       navigate('/shop/'+result.store.slug)
     }catch(e){
-      toast({title:'Store was not created',description:e instanceof ApiClientError?e.message:'Check your store information.',variant:'destructive'})
+      const message=e instanceof Error?e.message:'Check your store information.';setSubmitError(message);setAttempt(n=>n+1);toast({title:'Store was not created',description:message,variant:'destructive',duration:10000})
     }finally{setBusy(false)}
   }
   if(!booted)return <div className="mx-auto max-w-5xl px-4 py-16"><Loader2 className="size-7 animate-spin text-primary"/></div>
@@ -78,7 +83,7 @@ export default function MarketplaceSellerStudio(){
         <p className="mt-2 max-w-2xl text-sm leading-7 text-muted-foreground">Create independent stores, list detailed products and variants, and manage physical inventory. Commerce and delivery activation follow verified payment and fulfilment certification.</p>
       </div>
       <div className="flex gap-2"><Button variant="outline" onClick={()=>navigate('/shop')}>Browse marketplace</Button>
-        <Button onClick={()=>{setName('');setSlug('');setCategory('');setTagline('');setDescription('');setWebsite('');setCity('');setCountry('Ghana');setRegion('');setAddress('');setOpen(true)}}><Plus className="mr-2 size-4"/>New store</Button>
+        <Button onClick={()=>{setName('');setSlug('');setCategory('');setTagline('');setDescription('');setWebsite('');setCity('');setCountry('Ghana');setRegion('');setAddress('');setLocation(emptyStoreLocation);setSubmitError('');setOpen(true)}}><Plus className="mr-2 size-4"/>New store</Button>
       </div>
     </div>
     <div className="grid gap-4 sm:grid-cols-3">
@@ -110,13 +115,14 @@ export default function MarketplaceSellerStudio(){
       <DialogContent className="flex max-h-[calc(100dvh-1.5rem)] max-w-xl flex-col gap-3 overflow-hidden rounded-2xl" onOpenAutoFocus={e=>e.preventDefault()}>
         <DialogHeader><DialogTitle>Open your new storefront</DialogTitle></DialogHeader>
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-1 py-1">
+          <SubmissionFeedback message={submitError} attempt={attempt}/>
           <div><Label htmlFor="seller-name">Store name</Label><Input id="seller-name" value={name} maxLength={100} onChange={e=>{setName(e.target.value);setSlug(createSlug(e.target.value))}} placeholder="e.g. Ghana Cultural Crafts"/></div>
           <div><Label htmlFor="seller-slug">Store URL address</Label><Input id="seller-slug" value={slug} maxLength={60} onChange={e=>setSlug(e.target.value)} aria-describedby="seller-url"/><p id="seller-url" className="mt-1 break-all text-xs text-muted-foreground">ieventplux.lightworldtech.com/#/shop/{slug||'your-store'}</p></div>
           <div><Label htmlFor="seller-category">Business category</Label><MarketplaceSelect id="seller-category" value={category} onChange={setCategory} options={MARKETPLACE_CATEGORIES} placeholder="Choose business category"/></div>
           <div><Label htmlFor="seller-tagline">Tagline</Label><Input id="seller-tagline" value={tagline} maxLength={180} onChange={e=>setTagline(e.target.value)}/></div>
           <div><Label htmlFor="seller-description">What does your store do?</Label><Textarea id="seller-description" rows={3} value={description} maxLength={2400} onChange={e=>setDescription(e.target.value)}/></div>
           <div className="grid gap-3 sm:grid-cols-2"><div><Label htmlFor="seller-country">Country</Label><MarketplaceSelect id="seller-country" value={country} onChange={v=>{setCountry(v);setRegion('')}} options={['Ghana']} placeholder="Choose country"/></div><div><Label htmlFor="seller-region">Region</Label><MarketplaceSelect id="seller-region" value={region} onChange={setRegion} options={GHANA_REGIONS} disabled={!country} placeholder="Choose region"/></div></div><div><Label htmlFor="seller-city">City</Label><Input id="seller-city" value={city} maxLength={90} onChange={e=>setCity(e.target.value)} placeholder="e.g. Accra"/></div>
-          <div><Label htmlFor="seller-address">Business / pickup address</Label><Textarea id="seller-address" rows={2} maxLength={350} value={address} onChange={e=>setAddress(e.target.value)} placeholder="Street, landmark or GhanaPost GPS address"/></div><div><Label htmlFor="seller-website">Existing website (optional HTTPS)</Label><Input id="seller-website" value={website} onChange={e=>setWebsite(e.target.value)} placeholder="https://yourdomain.com"/></div>
+          <div><Label htmlFor="seller-address">Business / pickup address</Label><Textarea id="seller-address" rows={2} maxLength={350} value={address} onChange={e=>setAddress(e.target.value)} placeholder="Street, landmark or GhanaPost GPS address"/></div><StoreLocationFields value={location} onChange={setLocation} disabled={busy}/><div><Label htmlFor="seller-website">Existing website (optional HTTPS)</Label><Input id="seller-website" value={website} onChange={e=>setWebsite(e.target.value)} placeholder="https://yourdomain.com"/></div>
         </div>
         <DialogFooter className="shrink-0 border-t pt-3"><Button variant="outline" onClick={()=>setOpen(false)} disabled={busy}>Cancel</Button><Button disabled={busy||name.trim().length<3||slug.trim().length<4||category.trim().length<2||!country||!region||!city.trim()||!address.trim()} onClick={()=>void createStore()}>{busy&&<Loader2 className="mr-2 size-4 animate-spin"/>}Create store draft</Button></DialogFooter>
       </DialogContent>
