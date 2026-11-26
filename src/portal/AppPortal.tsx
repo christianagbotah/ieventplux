@@ -356,7 +356,7 @@ export default function AppPortal() {
             <div className="hidden sm:block"><ThemeToggle /></div>
             {user ? (
               <>
-                <Button variant="ghost" size="icon" className="rounded-lg" aria-label="Messages" onClick={()=>navigate('/messages')}><MessageCircle className="size-5"/></Button>
+                <Button variant="ghost" size="icon" className="hidden rounded-lg xl:inline-flex" aria-label="Messages" onClick={()=>navigate('/messages')}><MessageCircle className="size-5"/></Button>
                 <Button variant="ghost" size="icon" className="relative rounded-lg" aria-label={`Notifications${unread ? ` (${unread} unread)` : ''}`} onClick={() => navigate('/me?tab=notifications')}>
                   <Bell className="h-5 w-5" />
                   {/* Effects Studio: badge-ping ring behind the unread counter. */}
@@ -386,6 +386,7 @@ export default function AppPortal() {
                     </DropdownMenuLabel>
                     <DropdownMenuSeparator />
                     {!user.emailVerifiedAt && <DropdownMenuItem onClick={() => navigate('/verify-email')}>Verify email address</DropdownMenuItem>}
+                    <DropdownMenuItem onClick={() => navigate('/messages')}><MessageCircle className="h-4 w-4" /> Messages</DropdownMenuItem>
                     <DropdownMenuItem onClick={() => navigate('/me?tab=tickets')}>
                       <Ticket className="h-4 w-4" /> My Tickets
                     </DropdownMenuItem>
