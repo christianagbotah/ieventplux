@@ -15,11 +15,12 @@ INSERT INTO "Session" VALUES ('s');
 INSERT INTO "Notification" ("id") VALUES ('n');
 SQL
 sql -f ops/migrations/20261126_push_installations.sql
-for attempt in 1 2; do sql -f ops/migrations/20261126_push_delivery.sql; done
+for attempt in 1 2; do sql -f ops/migrations/20261126_push_delivery.sql; sql -f ops/migrations/20261126_push_lease.sql; done
 sql <<'SQL'
 INSERT INTO "PushInstallation" ("keyHash","sessionId","providerToken","platform","updatedAt") VALUES (repeat('a',64),'s','ExpoPushToken[synthetic_token]','ANDROID',CURRENT_TIMESTAMP);
 INSERT INTO "PushDelivery" ("id","notificationId","installationKeyHash","sessionId","activationAt","updatedAt") VALUES ('d','n',repeat('a',64),'s',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP);
 DO $$ BEGIN
+ IF EXISTS (SELECT 1 FROM "PushInstallation" WHERE "leaseUntil" IS NOT NULL) THEN RAISE EXCEPTION 'legacy row unexpectedly leased'; END IF;
  BEGIN
   INSERT INTO "PushDelivery" ("id","notificationId","installationKeyHash","sessionId","activationAt","updatedAt") VALUES ('duplicate','n',repeat('a',64),'s',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP);
   RAISE EXCEPTION 'duplicate delivery accepted';

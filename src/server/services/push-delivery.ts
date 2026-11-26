@@ -42,7 +42,7 @@ export async function discoverPushDeliveries(now=new Date()){
  JOIN "PushInstallation" i ON i."sessionId"=s.id
  WHERE n."createdAt">=${cutoff} AND n."createdAt"<=${now}
  AND n."readAt" IS NULL AND n."createdAt">=i."activatedAt"
- AND i."revokedAt" IS NULL AND s."revokedAt" IS NULL
+ AND i."revokedAt" IS NULL AND i."leaseUntil">=${now} AND s."revokedAt" IS NULL
  AND s."expiresAt">${now} AND u.status='ACTIVE' AND u."deletedAt" IS NULL
  AND NOT EXISTS(SELECT 1 FROM "PushDelivery" d WHERE d."notificationId"=n.id AND d."installationKeyHash"=i."keyHash")
  ORDER BY n."createdAt",n.id,i."keyHash" LIMIT 100`
@@ -51,7 +51,7 @@ export async function discoverPushDeliveries(now=new Date()){
 }
 async function invalidateDevice(row:{installationKeyHash:string;sessionId:string;activationAt:Date}){
  // A delayed receipt from an earlier token/session must never revoke a new binding.
- await db.pushInstallation.updateMany({where:{keyHash:row.installationKeyHash,sessionId:row.sessionId,activatedAt:row.activationAt,revokedAt:null},data:{revokedAt:new Date()}})
+ await db.pushInstallation.updateMany({where:{keyHash:row.installationKeyHash,sessionId:row.sessionId,activatedAt:row.activationAt,revokedAt:null},data:{revokedAt:new Date(),leaseUntil:null}})
 }
 export async function processPushDeliveries(transport:PushTransport,now=new Date()){
  const cutoff=new Date(+now-PUSH_TTL_MS)
@@ -66,7 +66,7 @@ export async function processPushDeliveries(transport:PushTransport,now=new Date
   if(!row)continue
   const i=row.installation,s=i.session,n=row.notification
   const checkTime=new Date()
-  const eligible=i.revokedAt===null&&s.revokedAt===null&&s.expiresAt>checkTime&&s.id===row.sessionId&&+i.activatedAt===+row.activationAt&&s.userId===n.userId&&s.user.status==='ACTIVE'&&!s.user.deletedAt&&optedIn(s.user.notifPrefs)&&n.readAt===null&&n.createdAt>=i.activatedAt&&+n.createdAt>=+checkTime-PUSH_TTL_MS
+  const eligible=i.revokedAt===null&&i.leaseUntil!==null&&i.leaseUntil>checkTime&&s.revokedAt===null&&s.expiresAt>checkTime&&s.id===row.sessionId&&+i.activatedAt===+row.activationAt&&s.userId===n.userId&&s.user.status==='ACTIVE'&&!s.user.deletedAt&&optedIn(s.user.notifPrefs)&&n.readAt===null&&n.createdAt>=i.activatedAt&&+n.createdAt>=+checkTime-PUSH_TTL_MS
   if(!eligible){
    await db.pushDelivery.updateMany({where:{id,status:'SENDING'},data:{status:'SUPPRESSED',failureCode:'INELIGIBLE'}});continue
   }

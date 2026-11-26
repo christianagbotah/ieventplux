@@ -119,6 +119,7 @@ model PushInstallation {
   sessionId    String
   providerToken String   @unique
   activatedAt  DateTime  @default(now())
+  leaseUntil   DateTime?
   platform     String
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt

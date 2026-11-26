@@ -1,3 +1,4 @@
+export const PUSH_DEVICE_LEASE_MS = 24 * 60 * 60_000
 export const PUSH_TTL_MS = 5 * 60_000
 export const RECEIPT_DELAY_MS = 15 * 60_000
 export const RECEIPT_DEADLINE_MS = 23 * 60 * 60_000

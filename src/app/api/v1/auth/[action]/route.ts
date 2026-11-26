@@ -265,7 +265,12 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
       if (body.country) data.country = String(body.country).slice(0, 2).toUpperCase()
       if (body.timezone) data.timezone = String(body.timezone).slice(0, 60)
       if (body.notifPrefs) data.notifPrefs = JSON.stringify(body.notifPrefs)
-      await db.user.update({ where: { id: user.id }, data })
+      await db.$transaction(async tx=>{
+        await tx.user.update({ where: { id: user.id }, data })
+        if(body.notifPrefs&&body.notifPrefs.push!==true){
+          await tx.pushInstallation.updateMany({where:{session:{userId:user.id},revokedAt:null},data:{revokedAt:new Date(),leaseUntil:null}})
+        }
+      })
       return jsonOk({ ok: true })
     }
 

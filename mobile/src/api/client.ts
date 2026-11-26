@@ -646,7 +646,8 @@ export async function storeSessionToken(token: string | null): Promise<void> {
 async function request<T>(
   method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
   path: string,
-  body?: unknown
+  body?: unknown,
+  signal?:AbortSignal
 ): Promise<T> {
   const base = resolveBaseUrl()
   if (!base) {
@@ -674,6 +675,7 @@ async function request<T>(
       // Cookie-jar layer: React Native persists Set-Cookie (ievx_session)
       // natively; 'include' makes the intent explicit for typed RequestInit.
       credentials: 'include',
+      signal,
     })
   } catch (err) {
     throw new ApiClientError(
@@ -983,10 +985,10 @@ export const api = {
     list: (page=1) => request<NotificationsResponse>('GET','/notifications?page='+page+'&pageSize=20'),
     mark: (id:string) => request<{ok:boolean}>('POST','/notifications',{id}),
     markAll: () => request<{ok:boolean}>('POST','/notifications',{all:true}),
-    registerDevice: (data:{installationKey:string;providerToken:string;platform:'ANDROID'|'IOS';permissionGranted:true;expectedUserId:string}) =>
-      request<{registered:boolean;deliveryEnabled:boolean}>('POST','/notifications/devices',data),
-    revokeDevice: (installationKey:string,expectedUserId:string) =>
-      request<{registered:boolean;deliveryEnabled:boolean}>('DELETE','/notifications/devices',{installationKey,expectedUserId}),
+    registerDevice: (data:{installationKey:string;providerToken:string;platform:'ANDROID'|'IOS';permissionGranted:true;expectedUserId:string;enableAccountPush?:boolean},signal?:AbortSignal) =>
+      request<{registered:boolean;deliveryEnabled:boolean;leaseUntil?:string|null}>('POST','/notifications/devices',data,signal),
+    revokeDevice: (installationKey:string,expectedUserId:string,signal?:AbortSignal) =>
+      request<{registered:boolean;deliveryEnabled:boolean;leaseUntil?:string|null}>('DELETE','/notifications/devices',{installationKey,expectedUserId},signal),
   },
 }
 
