@@ -1,3 +1,4 @@
+import {bindSandboxTransaction} from './sandbox-transaction-binding'
 import {createHash} from 'node:crypto'
 import {db} from '@/lib/db'
 import {prepareSandboxAttempt} from './platform-sandbox-attempts'
@@ -33,9 +34,7 @@ export async function reconcilePreparedSandboxCollection(intentId:string,email:s
  if(!checkout||checkout.requestHash!==createHash('sha256').update(JSON.stringify(plan)).digest('hex'))throw new Error('Matching initialized request required.')
  const verified=await verifyTestCollection(plan,key)
  return db.$transaction(async tx=>{
-  // Acquire the same attempt row lock used by notification intake before reading/writing evidence.
-  const locked=await tx.platformSandboxAttempt.updateMany({where:{id:attemptId,OR:[{providerTransactionId:null},{providerTransactionId:verified.providerTransactionId}]},data:{updatedAt:new Date()}})
-  if(locked.count!==1)throw new Error('Notification and verification identity mismatch.')
+  await bindSandboxTransaction(tx,attemptId,verified.providerTransactionId)
   const data={attemptId,providerTransactionId:verified.providerTransactionId,amountMinor:verified.amountMinor,currency:verified.currency,recipientCode:plan.subaccount??null,allocation:verified.allocation}
   const existing=await tx.platformSandboxCollectionEvidence.upsert({where:{attemptId},create:data,update:{}})
   if(existing.providerTransactionId!==data.providerTransactionId||existing.amountMinor!==data.amountMinor||existing.currency!==data.currency||existing.recipientCode!==data.recipientCode||existing.allocation!==data.allocation)throw new Error('Conflicting collection evidence.')
