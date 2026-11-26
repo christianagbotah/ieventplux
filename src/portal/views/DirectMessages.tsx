@@ -31,6 +31,34 @@ function Inbox({userId,id}:{userId:string;id?:string}){
  const [older,setOlder]=useState<Message[]>([])
  const [cursor,setCursor]=useState<string|null>(null)
  const [draft,setDraft]=useState('')
+ const [shareActivity,setShareActivity]=useState(false)
+ const [peerActivity,setPeerActivity]=useState({active:false,typing:false})
+ const lastTyping=useRef(0)
+ const heartbeatRevision=useRef(0)
+ const canShare=detail?.conversation.canSend===true
+ useEffect(()=>{
+  if(!id||!canShare)return
+  let alive=true
+  let inFlight=false
+  const tick=async()=>{
+   if(!alive||inFlight||document.visibilityState!=='visible'||!document.hasFocus())return
+   if(usePortal.getState().user?.id!==userId)return
+   inFlight=true
+   const rev=++heartbeatRevision.current
+   try{
+    const result=await api.post<{active:boolean;typing:boolean}>('/direct-messages',{action:'activity',id,expectedUserId:userId,share:shareActivity,typing:shareActivity&&Date.now()-lastTyping.current<6000})
+    if(alive&&rev===heartbeatRevision.current&&usePortal.getState().user?.id===userId)setPeerActivity(result)
+   }catch{if(alive&&rev===heartbeatRevision.current)setPeerActivity({active:false,typing:false})}
+   finally{inFlight=false}
+  }
+  void tick()
+  const timer=window.setInterval(()=>void tick(),4000)
+  const resume=()=>void tick()
+  document.addEventListener('visibilitychange',resume)
+  window.addEventListener('focus',resume)
+  return()=>{alive=false;heartbeatRevision.current++;window.clearInterval(timer);document.removeEventListener('visibilitychange',resume);window.removeEventListener('focus',resume)}
+ },[id,canShare,shareActivity,userId])
+
  const [error,setError]=useState('')
  const [busy,setBusy]=useState(false)
  const [page,setPage]=useState(1)
@@ -83,7 +111,7 @@ function Inbox({userId,id}:{userId:string;id?:string}){
    const result=await api.post<{conversation?:Conversation}>('/direct-messages',{...payload,expectedUserId:userId})
    if(!current())return
    if(payload.action==='request'&&result.conversation)navigate('/messages/'+result.conversation.id)
-   if(payload.action==='send'){pending.current=null;setDraft('')}
+   if(payload.action==='send'){pending.current=null;lastTyping.current=0;setDraft('')}
    await load()
   }catch(err){if(current())setError(err instanceof Error?err.message:'Could not complete action.')}
   finally{if(current())setBusy(false)}
@@ -123,7 +151,8 @@ function Inbox({userId,id}:{userId:string;id?:string}){
    </aside>
    <div className={`min-w-0 overflow-hidden rounded-2xl border bg-card ${id?'':'hidden md:block'}`}>
     {!id?<div className="grid min-h-80 place-items-center p-8 text-center"><div><MessageCircle className="mx-auto mb-3 size-10 text-primary"/><p className="font-semibold">Choose a conversation</p><p className="text-sm text-muted-foreground">Your messages appear here.</p></div></div>:!c?<p className="p-5 text-sm text-muted-foreground">Loading conversation…</p>:<>
-     <header className="flex items-center gap-3 border-b p-3"><Button variant="ghost" size="icon" className="md:hidden" aria-label="Back to conversations" onClick={()=>navigate('/messages')}><ArrowLeft className="size-5"/></Button><Avatar contact={c.peer}/><div className="min-w-0"><p className="truncate font-semibold">{c.peer?.displayName??'Member'}</p><p className="text-xs text-muted-foreground">{c.status==='ACCEPTED'?'Private conversation':c.status==='PENDING'?'Message request':'Request declined'}</p></div></header>
+     <header className="flex items-center gap-3 border-b p-3"><Button variant="ghost" size="icon" className="md:hidden" aria-label="Back to conversations" onClick={()=>navigate('/messages')}><ArrowLeft className="size-5"/></Button><Avatar contact={c.peer}/><div className="min-w-0"><p className="truncate font-semibold">{c.peer?.displayName??'Member'}</p><p className="text-xs text-muted-foreground">{c.status==='ACCEPTED'?(c.canSend&&peerActivity.typing?'Typing…':c.canSend&&peerActivity.active?'Active in this chat':'Private conversation'):c.status==='PENDING'?'Message request':'Request declined'}</p></div></header>
+     {c.canSend&&<div className="flex items-center justify-between gap-2 border-b px-4 py-2 text-xs text-muted-foreground"><label className="flex min-h-9 items-center gap-2"><input type="checkbox" checked={shareActivity} onChange={e=>{setShareActivity(e.target.checked);lastTyping.current=0}}/> Share chat activity</label><span aria-live="polite">{peerActivity.typing?'Typing…':''}</span></div>}
      {c.status==='PENDING'?<div className="space-y-3 p-5 text-sm">{c.requesterId===userId?<p>Waiting for this person to accept your request.</p>:<><p>Accept this request to start a conversation.</p><div className="flex flex-wrap gap-2"><Button disabled={busy} onClick={()=>void mutate({action:'accept',id})}>Accept</Button><Button variant="outline" disabled={busy} onClick={()=>void mutate({action:'decline',id})}>Decline</Button></div></>}</div>:c.status==='DECLINED'?<p className="p-5 text-sm text-muted-foreground">This message request was declined.</p>:<>
      <div className="flex h-[min(54vh,500px)] min-h-52 flex-col gap-3 overflow-y-auto bg-muted/20 p-4">
       {cursor&&<Button variant="ghost" size="sm" className="self-center" disabled={busy} onClick={()=>void more()}>Load older messages</Button>}
@@ -131,7 +160,7 @@ function Inbox({userId,id}:{userId:string;id?:string}){
       {items.map(m=><div key={m.id} className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${m.senderId===userId?'self-end bg-primary text-primary-foreground':'self-start border bg-card'}`}><p className="whitespace-pre-wrap [overflow-wrap:anywhere]">{m.body}</p><span className="mt-1 flex items-center justify-end gap-1 text-[10px] opacity-80">{relative(m.createdAt)}{m.senderId===userId&&(m.readAt?<CheckCheck className="size-3" aria-label="Read"/>:<Check className="size-3" aria-label="Sent"/>)}</span></div>)}
       <div ref={scrollEnd}/>
      </div>
-     {c.canSend?<form className="flex items-end gap-2 border-t p-3" onSubmit={e=>{e.preventDefault();send()}}><Textarea value={draft} onChange={e=>setDraft(e.target.value)} maxLength={4000} rows={2} placeholder="Write a message…" aria-label="Message" className="min-h-11 resize-none"/><Button size="icon" className="size-11 shrink-0 rounded-xl" aria-label="Send message" disabled={busy||!draft.trim()}><Send className="size-4"/></Button></form>:<p className="border-t p-3 text-sm text-muted-foreground">Sending is unavailable for this contact.</p>}
+     {c.canSend?<form className="flex items-end gap-2 border-t p-3" onSubmit={e=>{e.preventDefault();send()}}><Textarea value={draft} onChange={e=>{setDraft(e.target.value);lastTyping.current=e.target.value.trim()?Date.now():0}} maxLength={4000} rows={2} placeholder="Write a message…" aria-label="Message" className="min-h-11 resize-none"/><Button size="icon" className="size-11 shrink-0 rounded-xl" aria-label="Send message" disabled={busy||!draft.trim()}><Send className="size-4"/></Button></form>:<p className="border-t p-3 text-sm text-muted-foreground">Sending is unavailable for this contact.</p>}
      </>}
     </>}
    </div>

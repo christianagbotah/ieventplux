@@ -2,6 +2,7 @@ import {Prisma,type DirectConversation,type Notification} from '@prisma/client'
 import {db} from '../../lib/db'
 import {ApiError,errors} from '../api'
 import {canonicalPair,mayDecide} from '../direct-message-policy'
+import {activityWindow} from '../direct-activity-policy'
 import {publishNotification} from './notify'
 import {realtimeEmit} from './realtime'
 
@@ -126,4 +127,29 @@ export async function listDirectContacts(userId:string,query:string){
    OR:[{followsGiven:{some:{userId}}},{followsReceived:{some:{followerId:userId}}}]},
   orderBy:[{displayName:'asc'},{id:'asc'}],take:40,select:profile,
  })}
+}
+
+/** Presence is "active in this chat", not a global online/last-seen tracker.
+ * Sessions may independently stop sharing. No activity is returned on a
+ * pending, declined, blocked or suspended conversation. */
+export async function directActivity(id:string,actorId:string,sessionId:string,input:{share:boolean;typing:boolean}){
+ return transaction(async tx=>{
+  const c=await scoped(tx,id,actorId)
+  if(c.status!=='ACCEPTED')throw errors.forbidden('Accept this conversation before sharing activity.')
+  const other=peer(c,actorId)
+  await canContact(tx,actorId,other)
+  const now=new Date()
+  const session=await tx.session.findFirst({where:{id:sessionId,userId:actorId,revokedAt:null,expiresAt:{gt:now}},select:{id:true}})
+  if(!session)throw errors.unauthorized()
+  // Bound storage: remove expired signals for this conversation as it is used.
+  await tx.directActivity.deleteMany({where:{conversationId:id,activeUntil:{lte:now}}})
+  if(input.share){
+   const window=activityWindow(now,input.typing)
+   await tx.directActivity.upsert({where:{conversationId_sessionId:{conversationId:id,sessionId}},create:{conversationId:id,sessionId,...window},update:window})
+  }else{
+   await tx.directActivity.deleteMany({where:{conversationId:id,sessionId}})
+  }
+  const rows=await tx.directActivity.findMany({where:{conversationId:id,activeUntil:{gt:now},session:{userId:other,revokedAt:null,expiresAt:{gt:now},user:{status:'ACTIVE',deletedAt:null}}},select:{typingUntil:true}})
+  return {active:rows.length>0,typing:rows.some(r=>r.typingUntil!==null&&r.typingUntil>now)}
+ })
 }

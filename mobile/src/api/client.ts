@@ -966,6 +966,7 @@ export const api = {
     contacts: (q:string)=>request<{items:DirectContact[]}>('GET','/direct-messages?contacts=1&q='+encodeURIComponent(q)),
     detail: (id:string,before?:string)=>request<DirectDetail>('GET','/direct-messages?id='+encodeURIComponent(id)+(before?'&before='+encodeURIComponent(before):'')),
     mutate: (data:Record<string,unknown>)=>request<{conversation?:DirectConversation;message?:DirectMessage;marked?:number;replayed?:boolean}>('POST','/direct-messages',data),
+    activity: (data:{id:string;expectedUserId:string;share:boolean;typing:boolean})=>request<{active:boolean;typing:boolean}>('POST','/direct-messages',{action:'activity',...data}),
   },
   notifications: {
     list: (page=1) => request<NotificationsResponse>('GET','/notifications?page='+page+'&pageSize=20'),
