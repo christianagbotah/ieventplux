@@ -11,6 +11,8 @@ on:
       - 'next.config.*'
       - 'src/**'
       - 'mini-services/worker/**'
+      - 'mini-services/realtime/**'
+      - 'scripts/realtime-artifact-smoke.ts'
       - 'scripts/verify-worker-package.py'
       - 'prisma/**'
       - 'package.json'
@@ -20,6 +22,8 @@ on:
     paths:
       - 'src/**'
       - 'mini-services/worker/**'
+      - 'mini-services/realtime/**'
+      - 'scripts/realtime-artifact-smoke.ts'
       - 'scripts/verify-worker-package.py'
       - 'prisma/**'
       - 'public/**'
@@ -236,5 +240,108 @@ jobs:
         with:
           name: ieventplux-worker-candidate-${{ env.CANDIDATE_SOURCE_SHA }}
           path: dist-worker/
+          retention-days: 7
+          if-no-files-found: error
+
+  build-realtime-artifact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ieventplux_realtime_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ieventplux_realtime_ci
+      APP_URL: https://ci.example.invalid
+      NODE_ENV: production
+      PAYMENTS_SIMULATOR: auto
+      SMS_SIMULATOR: auto
+      REALTIME_PORT: '3103'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SOURCE_SHA }}
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.14'
+      - name: Verify revision and initialize disposable schema
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SOURCE_SHA"
+          for key in APP_SECRET WORKER_SECRET REALTIME_SECRET; do
+            value="$(openssl rand -hex 48)"
+            echo "::add-mask::$value"
+            printf '%s=%s\n' "$key" "$value" >> "$GITHUB_ENV"
+          done
+          bun install --frozen-lockfile
+          (cd mini-services/realtime && bun install --frozen-lockfile)
+          bunx prisma generate
+          bunx prisma db push
+      - name: Bundle realtime with runtime-only Prisma files
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p realtime-runtime/node_modules/@prisma realtime-runtime/node_modules/.prisma
+          bun build mini-services/realtime/index.ts --target=bun --format=esm --external '@prisma/client' --external '@prisma/client/*' --outfile realtime-runtime/realtime.mjs
+          cp -aL node_modules/@prisma/client realtime-runtime/node_modules/@prisma/client
+          cp -aL node_modules/.prisma/client realtime-runtime/node_modules/.prisma/client
+          for secret in "$APP_SECRET" "$WORKER_SECRET" "$REALTIME_SECRET"; do
+            if grep -R -q -F -- "$secret" realtime-runtime; then
+              echo "HOLD: CI secret embedded in realtime runtime" >&2
+              exit 1
+            fi
+          done
+          mkdir -p dist-realtime
+          printf '%s\n' "$CANDIDATE_SOURCE_SHA" > dist-realtime/SOURCE_SHA
+          printf '%s\n' "$GITHUB_RUN_ID" > dist-realtime/CI_RUN_ID
+          tar -C realtime-runtime -czf "dist-realtime/ieventplux-realtime-$CANDIDATE_SOURCE_SHA.tar.gz" realtime.mjs node_modules
+          python3 scripts/verify-worker-package.py "dist-realtime/ieventplux-realtime-$CANDIDATE_SOURCE_SHA.tar.gz" realtime.mjs
+          (cd dist-realtime && sha256sum "ieventplux-realtime-$CANDIDATE_SOURCE_SHA.tar.gz" > SHA256SUMS && sha256sum -c SHA256SUMS)
+      - name: Boot extracted runtime and exercise real socket access
+        shell: bash
+        env:
+          IEVENTPLUX_ISOLATED_DB_TEST: "yes"
+        run: |
+          set -euo pipefail
+          scratch="$(mktemp -d)"
+          tar -xzf "dist-realtime/ieventplux-realtime-$CANDIDATE_SOURCE_SHA.tar.gz" -C "$scratch"
+          (
+            cd "$scratch"
+            exec bun realtime.mjs
+          ) > realtime-artifact.log 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true; rm -rf -- "$scratch"' EXIT
+          for i in $(seq 1 30); do
+            if curl -fsS --max-time 2 http://127.0.0.1:3103/health > /dev/null 2>&1; then break; fi
+            kill -0 "$pid"
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:3103/health | python3 -c 'import json,sys; x=json.load(sys.stdin); assert x["status"]=="healthy" and x["service"]=="ieventplux-realtime"'
+          bun run scripts/realtime-artifact-smoke.ts
+      - name: Upload realtime diagnostic logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: realtime-artifact-diagnostics
+          path: realtime-artifact.log
+          retention-days: 3
+          if-no-files-found: ignore
+      - name: Publish checksum-verified realtime runtime
+        uses: actions/upload-artifact@v4
+        with:
+          name: ieventplux-realtime-candidate-${{ env.CANDIDATE_SOURCE_SHA }}
+          path: dist-realtime/
           retention-days: 7
           if-no-files-found: error
