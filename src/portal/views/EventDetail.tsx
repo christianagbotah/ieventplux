@@ -432,13 +432,13 @@ export default function EventDetail({ slug }: { slug: string }) {
 
       <div className="relative">
         <figure className="relative mx-4 overflow-hidden rounded-2xl sm:mx-6 lg:mx-8">
-          <div className="relative h-52 w-full overflow-hidden sm:h-72 md:h-[380px]">
+          <div className="relative aspect-[16/9] w-full overflow-hidden sm:aspect-auto sm:h-72 md:h-[380px]">
             {event.coverImageUrl ? (
               <img src={event.coverImageUrl} alt={`${event.title} artwork`} className="h-full w-full object-cover" />
             ) : (
               <div className="h-full w-full bg-gradient-to-br from-primary/20 to-accent/20" />
             )}
-            <div className="absolute inset-0 z-10 bg-gradient-to-t from-background via-background/20 to-transparent" />
+            <div className="absolute inset-0 z-10 hidden bg-gradient-to-t from-background via-background/20 to-transparent sm:block" />
             {statusBadge && <span className={`absolute left-4 top-4 z-20 rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide shadow ${statusBadge.className}`}>{statusBadge.label}</span>}
             {event.visibility !== 'PUBLIC' && (
               <span className="absolute right-4 top-4 z-20 rounded-full bg-black/55 px-3 py-1 text-xs font-semibold text-white backdrop-blur">{event.visibility === 'UNLISTED' ? 'Unlisted (link only)' : 'Invitation only'}</span>
@@ -447,16 +447,16 @@ export default function EventDetail({ slug }: { slug: string }) {
         </figure>
 
         {/* relative + z-10 keeps the title above the ken-burns image's compositing layer */}
-        <div className="relative z-10 mx-auto -mt-16 max-w-5xl px-4">
+        <div className="relative z-10 mx-auto mt-4 max-w-5xl px-4 sm:-mt-16">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="min-w-0">
               <div className="mb-2 flex flex-wrap items-center gap-2">
                 <Badge variant="secondary" className="capitalize">{humanize(event.categorySlug)}</Badge>
                 <Badge variant="outline" className="gap-1 capitalize">{event.mode === 'VIRTUAL' ? <Monitor className="h-3 w-3" /> : <MapPin className="h-3 w-3" />}{humanize(event.mode)}</Badge>
               </div>
-              <h1 className="max-w-3xl text-[1.7rem] font-extrabold leading-[1.12] tracking-tight sm:text-4xl">{event.title}</h1>
+              <h1 className="max-w-3xl text-[1.625rem] font-bold leading-tight tracking-tight sm:text-4xl">{event.title}</h1>
               {event.summary && (
-                <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base">{event.summary}</p>
+                <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base">{event.summary}</p>
               )}
               <button className="mt-3 flex items-center gap-2 text-sm font-medium text-primary" onClick={() => navigate(`/org/${event.org.slug}`)}>
                 <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10"><Church className="h-4 w-4 text-primary" aria-hidden /></span>
@@ -464,7 +464,7 @@ export default function EventDetail({ slug }: { slug: string }) {
                 {event.org.verifiedAt && <ShieldCheck className="h-4 w-4 text-primary" aria-label="Verified organizer" />}
               </button>
               {nextOccurrence && (
-                <button type="button" onClick={() => navigate(`/event/${nextOccurrence.slug}`)} className="efx-badge-ping mt-2 inline-flex w-fit items-center gap-2 rounded-full border border-primary/40 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary">
+                <button type="button" onClick={() => navigate(`/event/${nextOccurrence.slug}`)} className="efx-badge-ping mt-2 inline-flex w-fit items-center gap-2 rounded-full border border-primary/40 bg-primary/10 px-3 py-1.5 text-sm font-semibold text-primary">
                   <Repeat className="h-3.5 w-3.5" aria-hidden />
                   Weekly series — next date {dateLong(nextOccurrence.startsAt, event.timezone)}
                 </button>
@@ -504,7 +504,7 @@ export default function EventDetail({ slug }: { slug: string }) {
             </div>
           </div>
 
-          <div className="mt-6 grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-7">
+          <div className="mt-8 grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_380px] xl:gap-8">
             {/* Left column */}
             <div className="order-2 min-w-0 space-y-5 lg:order-1">
               {['LIVE', 'PUBLISHED', 'ENDED'].includes(event.status) && user && (
@@ -518,22 +518,22 @@ export default function EventDetail({ slug }: { slug: string }) {
                   <div className="flex items-start gap-3">
                     <CalendarDays className="mt-0.5 h-5 w-5 text-primary" aria-hidden />
                     <div>
-                      <p className="text-xs uppercase tracking-wide text-muted-foreground">Date</p>
+                      <p className="text-sm font-medium text-muted-foreground">Date</p>
                       <p className="font-semibold">{dateLong(event.startsAt, event.timezone)}</p>
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
                     <Clock className="mt-0.5 h-5 w-5 text-primary" aria-hidden />
                     <div>
-                      <p className="text-xs uppercase tracking-wide text-muted-foreground">Time ({event.timezone.replace('_', ' ')})</p>
+                      <p className="text-sm font-medium text-muted-foreground">Time ({event.timezone.replace('_', ' ')})</p>
                       <p className="font-semibold">{timeRange(event.startsAt, event.endsAt, event.timezone)}</p>
-                      <p className="mt-1 text-xs text-muted-foreground">Times shown in the organizer's timezone</p>
+                      <p className="mt-1 text-sm text-muted-foreground">Times shown in the organizer's timezone</p>
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
                     <MapPin className="mt-0.5 h-5 w-5 text-primary" aria-hidden />
                     <div>
-                      <p className="text-xs uppercase tracking-wide text-muted-foreground">Venue</p>
+                      <p className="text-sm font-medium text-muted-foreground">Venue</p>
                       <p className="font-semibold">{event.venue?.name ?? (event.mode === 'VIRTUAL' ? 'Online event' : 'Venue to be announced')}</p>
                       {!event.venue?.name && event.mode !== 'VIRTUAL' && (event.city || event.country) && <p className="text-sm text-muted-foreground">{[event.city, event.country ? countryLabel(event.country) : null].filter(Boolean).join(', ')}</p>}
                       {event.venue?.address && <p className="text-sm text-muted-foreground">{event.venue.address}{event.venue.city ? `, ${event.venue.city}` : ''}</p>}
@@ -548,7 +548,7 @@ export default function EventDetail({ slug }: { slug: string }) {
                   <div className="flex items-start gap-3">
                     <Users className="mt-0.5 h-5 w-5 text-primary" aria-hidden />
                     <div>
-                      <p className="text-xs uppercase tracking-wide text-muted-foreground">Interest</p>
+                      <p className="text-sm font-medium text-muted-foreground">Interest</p>
                       <p className="font-semibold">{data.stats.going} going · {data.stats.followers} followers</p>
                       {event.ageGuidance && <p className="text-sm text-muted-foreground">{event.ageGuidance}</p>}
                     </div>
@@ -557,7 +557,7 @@ export default function EventDetail({ slug }: { slug: string }) {
                     <div className="flex items-start gap-3">
                       <Star className="mt-0.5 h-5 w-5 fill-accent text-accent" aria-hidden />
                       <div>
-                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Attendee rating</p>
+                        <p className="text-sm font-medium text-muted-foreground">Attendee rating</p>
                         <p className="flex items-center gap-1.5 font-semibold">
                           {data.stats.ratingAvg}
                           <span className="flex text-accent" aria-hidden>
@@ -576,7 +576,7 @@ export default function EventDetail({ slug }: { slug: string }) {
               <Card className="rounded-2xl">
                 <CardHeader className="pb-2"><CardTitle className="text-base">About this event</CardTitle></CardHeader>
                 <CardContent>
-                  <div className="space-y-4 whitespace-pre-line text-sm leading-relaxed text-foreground/90">{event.description}</div>
+                  <div className="space-y-4 whitespace-pre-line text-base leading-[1.65] text-foreground">{event.description}</div>
                   {event.tags.length > 0 && (
                     <div className="mt-4 flex flex-wrap gap-1.5">
                       {event.tags.map((tag) => <Badge key={tag} variant="secondary" className="text-[11px]">#{tag}</Badge>)}
@@ -594,7 +594,7 @@ export default function EventDetail({ slug }: { slug: string }) {
                         <figure key={g.id} className="overflow-hidden rounded-xl">
                           { }
                           <img src={g.url} alt={g.caption ?? 'Event photo'} className="aspect-square w-full object-cover transition-transform duration-300 hover:scale-105" loading="lazy" />
-                          {g.caption && <figcaption className="truncate p-2 text-xs text-muted-foreground">{g.caption}</figcaption>}
+                          {g.caption && <figcaption className="break-words p-3 text-sm text-muted-foreground">{g.caption}</figcaption>}
                         </figure>
                       ))}
                     </div>
@@ -609,7 +609,7 @@ export default function EventDetail({ slug }: { slug: string }) {
                       <CardTitle className="flex items-center gap-2 text-base"><Mic2 className="size-4 text-primary" /> Artists, invited guests &amp; speakers</CardTitle>
                       <Badge variant="secondary">{event.contributors.length} listed</Badge>
                     </div>
-                    <p className="text-xs leading-relaxed text-muted-foreground">Meet the people appearing at this event and explore their roles, topics and scheduled appearances.</p>
+                    <p className="text-sm leading-relaxed text-muted-foreground">Meet the people appearing at this event and explore their roles, topics and scheduled appearances.</p>
                   </CardHeader>
                   <CardContent className="grid gap-3 sm:grid-cols-2">
                     {event.contributors.map((person) => (
@@ -617,11 +617,11 @@ export default function EventDetail({ slug }: { slug: string }) {
                         <OrganizerEventCover src={person.photoUrl} title={person.name} />
                         <div className="min-w-0 self-center">
                           <h3 className="text-sm font-bold leading-snug [overflow-wrap:break-word]">{person.name}</h3>
-                          <p className="mt-1 text-xs font-medium text-primary">{({ HEADLINER: 'Headline artist', ARTIST: 'Performer', MAIN_SPEAKER: 'Main speaker', ASSISTANT_SPEAKER: 'Assistant speaker', GUEST_SPEAKER: 'Invited speaker', SPECIAL_GUEST: 'Special guest', PANELIST: 'Panelist', MC: 'Master of ceremonies', DJ: 'DJ', HOST: 'Host' } as Record<string, string>)[person.role] ?? humanize(person.role)}</p>
+                          <p className="mt-1 text-sm font-medium text-primary">{({ HEADLINER: 'Headline artist', ARTIST: 'Performer', MAIN_SPEAKER: 'Main speaker', ASSISTANT_SPEAKER: 'Assistant speaker', GUEST_SPEAKER: 'Invited speaker', SPECIAL_GUEST: 'Special guest', PANELIST: 'Panelist', MC: 'Master of ceremonies', DJ: 'DJ', HOST: 'Host' } as Record<string, string>)[person.role] ?? humanize(person.role)}</p>
                         </div>
                         {person.topic && <p className="col-span-2 text-sm font-semibold">Topic / appearance: {person.topic}</p>}
-                        {person.startsAt && <p className="col-span-2 flex items-start gap-1.5 text-xs text-muted-foreground"><CalendarDays className="mt-0.5 size-3.5 shrink-0 text-primary" aria-hidden /> Scheduled: {dateLong(person.startsAt, event.timezone)}</p>}
-                        {person.bio && <p className="col-span-2 whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground">{person.bio}</p>}
+                        {person.startsAt && <p className="col-span-2 flex items-start gap-1.5 text-sm text-muted-foreground"><CalendarDays className="mt-0.5 size-3.5 shrink-0 text-primary" aria-hidden /> Scheduled: {dateLong(person.startsAt, event.timezone)}</p>}
+                        {person.bio && <p className="col-span-2 whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">{person.bio}</p>}
                       </article>
                     ))}
                   </CardContent>
@@ -632,7 +632,7 @@ export default function EventDetail({ slug }: { slug: string }) {
                 <Card className="rounded-2xl" id="event-programmes">
                   <CardHeader className="pb-2">
                     <CardTitle className="flex items-center gap-2 text-base"><FileText className="size-4 text-primary" /> Event programme &amp; outlines</CardTitle>
-                    <p className="text-xs leading-relaxed text-muted-foreground">Browse the official programme documents shared by the organizer.</p>
+                    <p className="text-sm leading-relaxed text-muted-foreground">Browse the official programme documents shared by the organizer.</p>
                   </CardHeader>
                   <CardContent className="space-y-2">
                     {event.programmes.map((document) => (
@@ -648,13 +648,13 @@ export default function EventDetail({ slug }: { slug: string }) {
                 <Card className="rounded-2xl" id="event-souvenirs">
                   <CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-base"><ShoppingBag className="size-4 text-primary" /> Event souvenirs & merchandise</CardTitle></CardHeader>
                   <CardContent className="space-y-3">
-                    <p className="text-xs leading-relaxed text-muted-foreground">The organizer's current product catalogue is displayed below. You can submit a non-binding purchase request when signed in. Payment and collection QR codes are not yet active.</p>
+                    <p className="text-sm leading-relaxed text-muted-foreground">The organizer's current product catalogue is displayed below. You can submit a non-binding purchase request when signed in. Payment and collection QR codes are not yet active.</p>
                     <div className="grid gap-3 sm:grid-cols-2">
                       {event.souvenirs.map((product) => (
                         <article key={product.id} className="grid grid-cols-[64px_minmax(0,1fr)] items-center gap-x-3 gap-y-2 rounded-xl border border-border/70 p-3">
                           <OrganizerEventCover src={product.imageUrl} title={product.name} />
-                          <div className="min-w-0"><h3 className="text-sm font-bold [overflow-wrap:break-word]">{product.name}</h3>{product.variantLabel && <p className="text-xs text-muted-foreground">{product.variantLabel}</p>}<p className="mt-1 text-sm font-bold text-primary">{money(product.priceMinor)}</p></div>
-                          {product.description && <p className="col-span-2 text-xs leading-relaxed text-muted-foreground">{product.description}</p>}
+                          <div className="min-w-0"><h3 className="text-sm font-bold [overflow-wrap:break-word]">{product.name}</h3>{product.variantLabel && <p className="text-sm text-muted-foreground">{product.variantLabel}</p>}<p className="mt-1 text-sm font-bold text-primary">{money(product.priceMinor)}</p></div>
+                          {product.description && <p className="col-span-2 text-sm leading-relaxed text-muted-foreground">{product.description}</p>}
                           <p className="col-span-2 text-[11px] font-medium text-muted-foreground">{product.available > 0 ? `${product.available} listed in stock` : 'Currently out of stock'} · Product code: {product.sku}</p>
                         </article>
                       ))}
@@ -672,7 +672,7 @@ export default function EventDetail({ slug }: { slug: string }) {
                       </CardTitle>
                       <Badge variant="secondary">{event.agenda.length} {event.agenda.length === 1 ? 'session' : 'sessions'}</Badge>
                     </div>
-                    <p className="text-xs leading-relaxed text-muted-foreground">
+                    <p className="text-sm leading-relaxed text-muted-foreground">
                       Your event programme, including speakers and performances. All times are shown in the event's timezone ({event.timezone.replaceAll('_', ' ')}).
                     </p>
                   </CardHeader>
@@ -685,11 +685,11 @@ export default function EventDetail({ slug }: { slug: string }) {
                             <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary/10 text-xs font-extrabold tabular-nums text-primary">{String(index + 1).padStart(2, '0')}</span>
                             <div className="min-w-0 flex-1">
                               <h3 className="break-words text-sm font-bold leading-snug sm:text-base">{item.title}</h3>
-                              <p className="mt-1 text-xs font-medium text-muted-foreground">
+                              <p className="mt-1 text-sm font-medium text-muted-foreground">
                                 <time dateTime={item.startsAt}>{dateLong(item.startsAt, event.timezone)}</time>
                                 {item.endsAt && <> – <time dateTime={item.endsAt}>{dateLong(item.endsAt, event.timezone)}</time></>}
                               </p>
-                              {item.speaker && <p className="mt-2 text-xs font-semibold text-primary">Presenter: {item.speaker}</p>}
+                              {item.speaker && <p className="mt-2 text-sm font-semibold text-primary">Presenter: {item.speaker}</p>}
                               {item.description && <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-foreground/80">{item.description}</p>}
                             </div>
                           </div>
@@ -748,7 +748,7 @@ export default function EventDetail({ slug }: { slug: string }) {
                         <TriangleAlert className="h-4 w-4 text-amber-600 dark:text-amber-400" aria-hidden />
                         AI triage — {triage.flagged} of {triage.scanned} item{triage.scanned === 1 ? '' : 's'} flagged
                       </p>
-                      <p className="mt-1 text-xs text-muted-foreground">
+                      <p className="mt-1 text-sm text-muted-foreground">
                         Advisory only — nothing was hidden or removed. Moderate with the controls below and in Reviews.
                       </p>
                       {triage.items.length > 0 && (
@@ -758,7 +758,7 @@ export default function EventDetail({ slug }: { slug: string }) {
                               <div className="flex flex-wrap items-center gap-2">
                                 <Badge variant="outline" className="text-[10px]">{humanize(item.kind)}</Badge>
                                 <Badge variant="outline" className="border-amber-500/50 text-[10px] text-amber-700 dark:text-amber-400">{humanize(item.verdict)}</Badge>
-                                <span className="text-xs text-muted-foreground">{item.reason}</span>
+                                <span className="text-sm text-muted-foreground">{item.reason}</span>
                               </div>
                               <p className="mt-1.5 line-clamp-2 text-sm text-foreground/80">“{item.excerpt}”</p>
                             </li>
@@ -829,7 +829,7 @@ export default function EventDetail({ slug }: { slug: string }) {
                       <p className="rounded-xl bg-muted p-3 text-sm text-muted-foreground">
                         {event.ticketTypes.length === 0 ? 'Tickets have not been published yet.' : upcomingTicketTypes.length > 0 ? 'Ticket sales are scheduled to open soon.' : soldOutTypes.length > 0 ? 'All currently available tickets are sold out.' : 'Ticket sales are currently closed.'}
                       </p>
-                      {upcomingTicketTypes.length > 0 && <div className="space-y-1 rounded-xl border border-primary/20 bg-primary/5 p-3 text-sm"><p className="font-semibold">Upcoming ticket releases</p>{upcomingTicketTypes.map((type) => <p key={type.id} className="text-xs text-muted-foreground">{type.name} · opens {new Date(type.saleStartsAt!).toLocaleString()}</p>)}</div>}
+                      {upcomingTicketTypes.length > 0 && <div className="space-y-1 rounded-xl border border-primary/20 bg-primary/5 p-3 text-sm"><p className="font-semibold">Upcoming ticket releases</p>{upcomingTicketTypes.map((type) => <p key={type.id} className="text-sm text-muted-foreground">{type.name} · opens {new Date(type.saleStartsAt!).toLocaleString()}</p>)}</div>}
                       {soldOutTypes.length > 0 && !['CANCELLED', 'ENDED', 'POSTPONED'].includes(event.status) && new Date(event.startsAt).getTime() > salesClock && (
                         <div className="rounded-xl border border-border bg-muted/30 p-4">
                           <p className="flex items-center gap-2 text-sm font-semibold">
@@ -842,23 +842,23 @@ export default function EventDetail({ slug }: { slug: string }) {
                           </p>
                           {waitlist?.mine ? (
                             <div className="mt-2 space-y-2">
-                              <p className="text-xs text-muted-foreground">
+                              <p className="text-sm text-muted-foreground">
                                 {waitlist.mine.status === 'WAITING' && <>You are <span className="font-bold text-amber-700 dark:text-amber-300">#{waitlist.mine.position}</span> in line ({waitlist.mine.partySize} {waitlist.mine.partySize === 1 ? 'seat' : 'seats'}). We will alert you when tickets open up.</>}
                                 {waitlist.mine.status === 'NOTIFIED' && <><span className="font-semibold text-primary">Tickets opened up — check your alerts!</span> First come, first served.</>}
                                 {waitlist.mine.status === 'LEFT' && 'You left the waitlist. You can re-join below.'}
                               </p>
                               {waitlist.mine.status !== 'LEFT' && (
-                                <button type="button" className="text-xs font-semibold text-primary underline underline-offset-4" onClick={() => void leaveWaitlist()}>
+                                <button type="button" className="text-sm font-semibold text-primary underline underline-offset-4" onClick={() => void leaveWaitlist()}>
                                   Leave the waitlist
                                 </button>
                               )}
                             </div>
                           ) : (
                             <div className="mt-2 space-y-2.5">
-                              <p className="text-xs text-muted-foreground">
+                              <p className="text-sm text-muted-foreground">
                                 {waitlist && waitlist.count > 0 ? `${waitlist.count} ${waitlist.count === 1 ? 'person is' : 'people are'} waiting.` : 'Be first in line when someone cancels or the organizer adds seats.'}
                               </p>
-                              <button type="button" className="min-h-11 w-full rounded-xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:opacity-50" onClick={() => openWaitlist()}>
+                              <button type="button" className="min-h-12 w-full rounded-xl bg-primary px-4 py-3 text-base font-bold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:opacity-50" onClick={() => openWaitlist()}>
                                 Join the waitlist
                               </button>
                             </div>
@@ -868,7 +868,7 @@ export default function EventDetail({ slug }: { slug: string }) {
                     </div>
                   ) : (
                     <>
-                      {upcomingTicketTypes.length > 0 && <div className="rounded-xl border border-primary/20 bg-primary/5 p-3 text-xs text-muted-foreground"><p className="mb-1 font-semibold text-foreground">More tickets opening soon</p>{upcomingTicketTypes.map((type) => <p key={type.id}>{type.name} · {new Date(type.saleStartsAt!).toLocaleString()}</p>)}</div>}
+                      {upcomingTicketTypes.length > 0 && <div className="rounded-xl border border-primary/20 bg-primary/5 p-3 text-sm text-muted-foreground"><p className="mb-1 font-semibold text-foreground">More tickets opening soon</p>{upcomingTicketTypes.map((type) => <p key={type.id}>{type.name} · {new Date(type.saleStartsAt!).toLocaleString()}</p>)}</div>}
                       {saleable.map((tt) => {
                         const remaining = tt.quota > 0 ? tt.quota - tt.soldCount - tt.reservedCount : null
                         return (
@@ -876,7 +876,7 @@ export default function EventDetail({ slug }: { slug: string }) {
                             <div className="flex items-start justify-between gap-2">
                               <div className="min-w-0">
                                 <p className="font-semibold">{tt.name}</p>
-                                <p className="text-xs text-muted-foreground">{tt.description}</p>
+                                <p className="text-sm text-muted-foreground">{tt.description}</p>
                                 <div className="mt-1.5 flex flex-wrap gap-1.5">
                                   <Badge variant="outline" className="text-[10px] capitalize">{humanize(tt.kind)}</Badge>
                                   {tt.includesVirtualAccess && <Badge variant="secondary" className="text-[10px]">+ online access</Badge>}
@@ -903,29 +903,29 @@ export default function EventDetail({ slug }: { slug: string }) {
                           {mine.rsvpStatus === 'PENDING' ? (
                             <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 text-center">
                               <p className="text-sm font-semibold text-amber-700 dark:text-amber-300">Invitation awaiting approval</p>
-                              <p className="mt-0.5 text-xs text-muted-foreground">The organizer is reviewing your RSVP — you will be notified when they decide.</p>
+                              <p className="mt-0.5 text-sm text-muted-foreground">The organizer is reviewing your RSVP — you will be notified when they decide.</p>
                             </div>
                           ) : mine.rsvpStatus === 'DECLINED' ? (
                             <div className="rounded-xl border border-destructive/25 bg-destructive/5 p-3 text-center">
                               <p className="text-sm font-semibold text-destructive">RSVP declined</p>
-                              <p className="mt-0.5 text-xs text-muted-foreground">The organizer was unable to accommodate this RSVP.</p>
+                              <p className="mt-0.5 text-sm text-muted-foreground">The organizer was unable to accommodate this RSVP.</p>
                             </div>
                           ) : (
                             <>
                               <div className="space-y-1.5">
-                                <label htmlFor="invite-code" className="text-xs font-semibold text-foreground">Invitation code</label>
+                                <label htmlFor="invite-code" className="text-sm font-semibold text-foreground">Invitation code</label>
                                 <input
                                   id="invite-code"
                                   value={inviteCode}
                                   onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
                                   placeholder="e.g. DONOR2026"
                                   autoComplete="off"
-                                  className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                                  className="h-12 w-full rounded-xl border border-border bg-background px-3 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
                                 />
                               </div>
                               <button
                                 type="button"
-                                className="min-h-11 w-full rounded-xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:opacity-50"
+                                className="min-h-12 w-full rounded-xl bg-primary px-4 py-3 text-base font-bold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:opacity-50"
                                 onClick={() => {
                                   const trimmed = inviteCode.trim()
                                   if (!trimmed) {
@@ -937,14 +937,14 @@ export default function EventDetail({ slug }: { slug: string }) {
                               >
                                 Redeem invitation
                               </button>
-                              <p className="text-center text-xs leading-relaxed text-muted-foreground">Approved invitations unlock the private address and tickets.</p>
+                              <p className="text-center text-sm leading-relaxed text-muted-foreground">Approved invitations unlock the private address and tickets.</p>
                             </>
                           )}
                         </div>
                       ) : (
                         <>
                           {event.visibility === 'INVITE_ONLY' && mine.rsvpStatus === 'APPROVED' && (
-                            <p className="rounded-xl border border-primary/25 bg-primary/5 px-3 py-2 text-center text-xs font-semibold text-primary">
+                            <p className="rounded-xl border border-primary/25 bg-primary/5 px-3 py-2 text-center text-sm font-semibold text-primary">
                               Invitation approved — private address unlocked{mine.rsvpGuests ? ` · ${mine.rsvpGuests} ${mine.rsvpGuests === 1 ? 'place' : 'places'}` : ''}
                             </p>
                           )}
@@ -953,7 +953,7 @@ export default function EventDetail({ slug }: { slug: string }) {
                             <Ticket className="size-4" aria-hidden />
                             {supportedSaleable.some((t) => t.priceMinor > 0) ? 'Choose tickets' : 'Register for free'}
                           </Button> : <p className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 text-sm text-foreground">Online payment for these ticket currencies is not available yet. Contact the organizer for alternatives.</p>}
-                          {checkoutAvailable && <p className="text-center text-xs leading-relaxed text-muted-foreground">{supportedSaleable.some((t) => t.priceMinor > 0) ? 'Final payment methods are shown at checkout.' : 'Free registration is confirmed when your tickets are issued.'}</p>}
+                          {checkoutAvailable && <p className="text-center text-sm leading-relaxed text-muted-foreground">{supportedSaleable.some((t) => t.priceMinor > 0) ? 'Final payment methods are shown at checkout.' : 'Free registration is confirmed when your tickets are issued.'}</p>}
                         </>
                       )}
                     </>
@@ -976,7 +976,7 @@ export default function EventDetail({ slug }: { slug: string }) {
                       <div key={e.id} className="flex items-center justify-between gap-2 rounded-lg border border-border/60 px-3 py-2 text-sm">
                         <div className="min-w-0">
                           <p className="truncate font-medium">{e.name} <span className="text-muted-foreground">· {e.partySize}</span></p>
-                          <p className="truncate text-xs text-muted-foreground">{e.contact}{e.ticketType ? ` · ${e.ticketType}` : ''}</p>
+                          <p className="truncate text-sm text-muted-foreground">{e.contact}{e.ticketType ? ` · ${e.ticketType}` : ''}</p>
                         </div>
                         <Badge variant={e.status === 'WAITING' ? 'secondary' : e.status === 'NOTIFIED' ? 'default' : 'outline'} className="shrink-0 text-[10px]">{humanize(e.status)}</Badge>
                       </div>
@@ -1025,7 +1025,7 @@ export default function EventDetail({ slug }: { slug: string }) {
           <DialogHeader className="shrink-0 border-b border-border/70 bg-card px-4 py-4 text-left sm:px-5">
             <p className="flex items-center gap-2 pr-9 text-[11px] font-bold uppercase tracking-[0.12em] text-primary"><Ticket className="size-4" aria-hidden /> Secure event registration</p>
             <DialogTitle className="pr-8 text-xl font-extrabold tracking-tight">Choose your tickets</DialogTitle>
-            <p className="text-xs leading-relaxed text-muted-foreground">Select an available ticket type and quantity. The server confirms the final amount and availability before issuing tickets.</p>
+            <p className="text-sm leading-relaxed text-muted-foreground">Select an available ticket type and quantity. The server confirms the final amount and availability before issuing tickets.</p>
           </DialogHeader>
           <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4 ievx-scrollbar sm:px-5">
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1042,7 +1042,7 @@ export default function EventDetail({ slug }: { slug: string }) {
                   <div className="flex flex-wrap items-center justify-between gap-3 sm:flex-nowrap">
                     <div className="min-w-0 flex-1">
                       <p className="break-words text-sm font-bold tracking-tight">{tt.name}</p>
-                      {tt.description && <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-muted-foreground">{tt.description}</p>}
+                      {tt.description && <p className="mt-1 line-clamp-2 text-sm leading-relaxed text-muted-foreground">{tt.description}</p>}
                       <p className="mt-1 text-sm font-extrabold tabular-nums text-primary">{tt.priceMinor === 0 ? 'Free' : money(tt.priceMinor, tt.currency)} <span className="text-xs font-normal text-muted-foreground">per ticket</span></p>
                       <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] text-muted-foreground">
                         {tt.quota > 0 && <span className="rounded-full bg-secondary px-2 py-1">{Math.max(0, tt.quota - tt.soldCount - tt.reservedCount)} remaining</span>}
@@ -1081,7 +1081,7 @@ export default function EventDetail({ slug }: { slug: string }) {
           <DialogFooter className="shrink-0 flex-col gap-3 border-t border-border/70 bg-card/95 px-4 py-4 backdrop-blur-sm sm:flex-col sm:px-5">
             <div className="flex w-full items-center justify-between gap-3 text-sm">
               <div className="min-w-0">
-                <p className="text-xs text-muted-foreground">Estimated ticket subtotal</p>
+                <p className="text-sm text-muted-foreground">Estimated ticket subtotal</p>
                 <p className="text-xs font-semibold text-foreground">{selectionQuote.count} {selectionQuote.count === 1 ? 'ticket' : 'tickets'}</p>
               </div>
               <span className="text-xl font-extrabold tabular-nums text-primary" aria-live="polite">{selectedTotal === 0 ? 'Free' : money(selectedTotal, 'GHS')}</span>
@@ -1091,7 +1091,7 @@ export default function EventDetail({ slug }: { slug: string }) {
               <ShieldCheck className="size-4" aria-hidden />
               {selectedPaidAdmission ? 'Continue to secure checkout' : 'Confirm free registration'}
             </Button>
-            <p className="flex items-start gap-2 text-left text-xs leading-relaxed text-muted-foreground">
+            <p className="flex items-start gap-2 text-left text-sm leading-relaxed text-muted-foreground">
               <ShieldCheck className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />
               <span>{selectedPaidAdmission
                 ? 'Final total, any promo discount and processing fees are calculated by the server before payment. Reservations expire if payment is not completed.'

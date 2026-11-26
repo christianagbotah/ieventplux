@@ -34,7 +34,8 @@ export function DiscoverFilterSheet({ visible, filters, categories, countries, o
   onClose: () => void
 }) {
   const insets = useSafeAreaInsets()
-  const {height} = useWindowDimensions()
+  const {height,width,fontScale} = useWindowDimensions()
+  const stackActions=fontScale>=1.3||width<360
   const [draft, setDraft] = useState<DiscoveryFilters>(filters)
   const [countrySearch, setCountrySearch] = useState('')
   useEffect(() => { if (visible) {setDraft(filters);setCountrySearch('')} }, [visible,filters])
@@ -49,7 +50,7 @@ export function DiscoverFilterSheet({ visible, filters, categories, countries, o
       <View style={[styles.sheet,{maxHeight:Math.max(350,height-60),paddingBottom:Math.max(insets.bottom,13)}]}>
         <View style={styles.handle} />
         <View style={styles.heading}>
-          <View style={{flex:1}}><Text style={styles.eyebrow}>FIND YOUR NEXT EXPERIENCE</Text><Text style={styles.title}>Discover filters</Text></View>
+          <View style={{flex:1}}><Text style={styles.title}>Discover filters</Text></View>
           <Pressable accessibilityRole="button" accessibilityLabel="Close filters" onPress={onClose} style={styles.close}><Text style={styles.closeText}>×</Text></Pressable>
         </View>
         <ScrollView style={styles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
@@ -76,7 +77,7 @@ export function DiscoverFilterSheet({ visible, filters, categories, countries, o
             <TextInput value={draft.city} onChangeText={value=>set('city',value)} placeholder="Any city" placeholderTextColor={theme.colors.textMuted} style={styles.input} accessibilityLabel="Filter by city" autoCapitalize="words"/>
           </View>
         </ScrollView>
-        <View style={styles.footer}>
+        <View style={[styles.footer,stackActions&&styles.footerStacked]}>
           <Pressable accessibilityRole="button" style={styles.clear} onPress={()=>setDraft({...EMPTY_DISCOVERY_FILTERS})}><Text style={styles.clearText}>Clear all</Text></Pressable>
           <Pressable accessibilityRole="button" style={styles.apply} onPress={()=>onApply(draft)}><Text style={styles.applyText}>Show events  →</Text></Pressable>
         </View>
@@ -89,14 +90,15 @@ const styles=StyleSheet.create({
   sheet:{width:'100%',backgroundColor:theme.colors.card,borderTopLeftRadius:25,borderTopRightRadius:25,paddingHorizontal:18},
   handle:{width:42,height:5,backgroundColor:'#ccd8de',borderRadius:5,alignSelf:'center',marginTop:9,marginBottom:17},
   heading:{flexDirection:'row',gap:12,alignItems:'center',paddingBottom:14,borderBottomWidth:1,borderBottomColor:theme.colors.border},
-  eyebrow:{fontSize:10,color:theme.colors.primary,fontWeight:'900',letterSpacing:1.1},title:{fontSize:24,fontWeight:'900',color:theme.colors.text,marginTop:5},
-  close:{width:42,height:42,borderRadius:15,backgroundColor:theme.colors.bg,alignItems:'center',justifyContent:'center'},closeText:{fontSize:26,color:theme.colors.text},
-  scroll:{flexShrink:1},content:{paddingBottom:26,paddingTop:14},group:{marginBottom:21},groupTitle:{fontSize:14,fontWeight:'900',color:theme.colors.text,marginBottom:11},
-  options:{flexDirection:'row',flexWrap:'wrap',gap:8},chip:{minHeight:41,borderRadius:14,paddingHorizontal:13,paddingVertical:10,backgroundColor:theme.colors.bg,borderWidth:1,borderColor:theme.colors.border,justifyContent:'center'},activeChip:{backgroundColor:theme.web.tealSoft,borderColor:theme.colors.primary},
-  chipText:{fontSize:12,fontWeight:'700',color:theme.colors.textMuted},activeChipText:{color:theme.colors.primary},pressed:{opacity:.75},
+  eyebrow:{fontSize:13,color:theme.colors.primary,fontWeight:'900',letterSpacing:1.1},title:{fontSize:20,fontWeight:'700',color:theme.colors.text,marginTop:5},
+  close:{width:48,height:48,borderRadius:15,backgroundColor:theme.colors.bg,alignItems:'center',justifyContent:'center'},closeText:{fontSize:26,color:theme.colors.text},
+  scroll:{flexShrink:1},content:{paddingBottom:26,paddingTop:14},group:{marginBottom:16},groupTitle:{fontSize:14,fontWeight:'700',color:theme.colors.text,marginBottom:11},
+  options:{flexDirection:'row',flexWrap:'wrap',gap:8},chip:{minHeight:44,borderRadius:12,paddingHorizontal:13,paddingVertical:10,backgroundColor:theme.colors.bg,borderWidth:1,borderColor:theme.colors.border,justifyContent:'center'},activeChip:{backgroundColor:theme.web.tealSoft,borderColor:theme.colors.primary},
+  chipText:{fontSize:13,fontWeight:'600',color:theme.colors.textMuted},activeChipText:{color:theme.colors.primary},pressed:{opacity:.75},
   input:{borderWidth:1,borderColor:theme.colors.border,borderRadius:13,minHeight:48,paddingHorizontal:14,fontSize:14,color:theme.colors.text,backgroundColor:'#fff',marginBottom:10},
-  note:{fontSize:12,color:theme.colors.textMuted,lineHeight:19,marginTop:9},
+  note:{fontSize:13,color:theme.colors.textMuted,lineHeight:19,marginTop:9},
   footer:{borderTopWidth:1,borderTopColor:theme.colors.border,flexDirection:'row',gap:10,paddingTop:14},
-  clear:{minHeight:49,flex:1,backgroundColor:theme.colors.bg,borderRadius:13,alignItems:'center',justifyContent:'center'},clearText:{fontWeight:'800',color:theme.colors.text},
-  apply:{minHeight:49,flex:2,backgroundColor:theme.colors.primary,borderRadius:13,alignItems:'center',justifyContent:'center'},applyText:{fontWeight:'900',fontSize:14,color:'#fff'},
+  footerStacked:{flexDirection:'column'},
+  clear:{minHeight:49,flex:1,backgroundColor:theme.colors.bg,borderRadius:13,alignItems:'center',justifyContent:'center'},clearText:{fontSize:14,fontWeight:'600',color:theme.colors.text},
+  apply:{minHeight:49,flex:2,backgroundColor:theme.colors.primary,borderRadius:13,alignItems:'center',justifyContent:'center'},applyText:{fontWeight:'600',fontSize:14,color:'#fff'},
 })

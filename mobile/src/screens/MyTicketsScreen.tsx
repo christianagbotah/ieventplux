@@ -194,10 +194,8 @@ export default function MyTicketsScreen({ navigation, route }: MyTicketsScreenPr
     <View style={styles.screen}>
       <View style={styles.walletHero}>
         <PremiumBackdrop mode="midnight"/>
-        <View style={styles.walletHeroTop}><Text style={styles.walletEyebrow}>YOUR DIGITAL EVENT WALLET</Text><Text style={styles.walletHeroIcon}>✦</Text></View>
-        <Text style={styles.walletTitle}>Your moments, saved.</Text>
-        <Text style={styles.walletDescription}>All your tickets, entry credentials and purchases in one beautiful place.</Text>
-        <View style={styles.walletHeroMeta}><Text style={styles.walletHeroMetaText}>▤  OFFLINE PASSES</Text><Text style={styles.walletHeroMetaText}>✓  SECURE ENTRY</Text></View>
+        <Text style={styles.walletTitle}>My tickets</Text>
+        <Text style={styles.walletDescription}>Passes, QR codes and orders</Text>
       </View>
       {orderRef ? (
         <View style={styles.returnBanner}>
@@ -474,17 +472,17 @@ function TicketQrModal({ ticketId, onClose }: { ticketId: string | null; onClose
 }
 
 const styles = StyleSheet.create({
-  walletHero: { backgroundColor: '#082e36', overflow:'hidden', paddingHorizontal: 22, paddingTop: 24,paddingBottom:23, marginHorizontal: 17, marginTop: 16, marginBottom: 16, borderRadius: 28,shadowColor:'#082e36',shadowOpacity:.18,shadowRadius:16,shadowOffset:{width:0,height:10},elevation:5 },
+  walletHero: { backgroundColor: '#082e36', overflow:'hidden', paddingHorizontal: 16, paddingTop: 16,paddingBottom:16, marginHorizontal: 17, marginTop: 16, marginBottom: 16, borderRadius: 18,shadowColor:'#082e36',shadowOpacity:.06,shadowRadius:16,shadowOffset:{width:0,height:10},elevation:5 },
   walletHeroTop:{flexDirection:'row',alignItems:'center',justifyContent:'space-between'},
   walletHeroIcon:{fontSize:25,color:'#e9d49c'},
   walletHeroMeta:{marginTop:19,flexDirection:'row',flexWrap:'wrap',gap:8},
   walletHeroMetaText:{fontSize:9,color:'#daf6e8',fontWeight:'800',letterSpacing:.7,backgroundColor:'#ffffff1b',overflow:'hidden',borderRadius:10,paddingHorizontal:10,paddingVertical:9},
   walletEyebrow: { color: '#c4f7e4', fontSize: 10, fontWeight: '900', letterSpacing: 1.4, marginBottom: 8 },
-  walletTitle: { color: '#fff', fontWeight: '900', fontSize: 29, letterSpacing: -1.1 },
-  walletDescription: { color: '#e2f4ed', fontSize: 13, lineHeight: 21, marginTop: 10 },
+  walletTitle: { color: '#fff', fontWeight: '700', fontSize: 22, letterSpacing: -1.1 },
+  walletDescription: { color: '#e2f4ed', fontSize: 13, lineHeight: 19, marginTop: 4 },
   screen: { flex: 1, backgroundColor: theme.colors.bg },
   list: { flex: 1 },
-  listContent: { paddingHorizontal: 18,paddingVertical:18 },
+  listContent: { paddingHorizontal: 16,paddingVertical:12 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: theme.spacing.xl },
   headerActionText: { color: '#ffffff', fontWeight: '600', fontSize: 14 },
   segmentRow: { flexDirection: 'row', paddingHorizontal: 18, paddingTop: 10, gap: 9 },
@@ -525,20 +523,20 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.card,
     borderWidth: 1,
     borderColor: theme.colors.border,
-    borderRadius: 24,
-    padding: 17,
-    marginBottom: 15,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 10,
     shadowColor:mobileDesign.shadow,shadowOpacity:.06,shadowRadius:12,shadowOffset:{width:0,height:7},elevation:2,
   },
   cardPressed: { opacity: 0.85 },
   cardTop: { flexDirection: 'row', alignItems: 'center',gap:10 },
   ticketGlyph:{marginRight:2},
-  ticketStub:{marginTop:17,paddingTop:14,borderTopWidth:1,borderTopColor:mobileDesign.border,borderStyle:'dashed',flexDirection:'row',alignItems:'center',justifyContent:'space-between',gap:10},
+  ticketStub:{marginTop:12,paddingTop:10,borderTopWidth:1,borderTopColor:mobileDesign.border,borderStyle:'dashed',flexDirection:'row',alignItems:'center',justifyContent:'space-between',gap:10},
   ticketCodeBlock:{flex:1},ticketCodeLabel:{fontSize:9,fontWeight:'900',letterSpacing:1,color:mobileDesign.inkSoft},
-  ticketQrAction:{alignItems:'center',borderRadius:13,paddingHorizontal:11,paddingVertical:8,backgroundColor:mobileDesign.mintSoft},
+  ticketQrAction:{minHeight:44,justifyContent:'center',alignItems:'center',borderRadius:13,paddingHorizontal:11,paddingVertical:8,backgroundColor:mobileDesign.mintSoft},
   ticketQrIcon:{fontSize:21,color:mobileDesign.emerald,fontWeight:'800'},
   cardTitleBlock: { flex: 1, paddingRight: theme.spacing.sm },
-  cardTitle: { color: theme.colors.text, fontSize: 15, fontWeight: '900',lineHeight:20 },
+  cardTitle: { color: theme.colors.text, fontSize: 15, fontWeight: '700',lineHeight:20 },
   cardMeta: { marginTop: theme.spacing.xs, color: theme.colors.textMuted, fontSize: 12 },
   statusChip: {
     borderWidth: 1,

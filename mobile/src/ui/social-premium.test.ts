@@ -25,14 +25,14 @@ test('account switches clear private following data and avoid stale request upda
   expect(following).toContain('request!==revision.current')
   expect(following).toContain('api.social.feed(next)')
 })
-test('event details retain original server-mediated orders and 44px quantity controls',()=>{
+test('event details retain original server-mediated orders and 48px quantity controls',()=>{
   const detail=screen('EventDetailScreen')
   expect(detail).toContain('api.orders.create(')
   expect(detail).toContain('api.payments.initiate(')
   expect(detail).toContain("navigation.navigate('EventCommunity'")
   expect(detail).toContain("navigation.navigate('EventCompetitions'")
   expect(detail).toContain("navigation.navigate('MeetingAccess'")
-  expect(detail).toContain('qtyButton:{width:44,height:44')
+  expect(detail).toContain('qtyButton:{width:48,height:48')
   expect(detail).toContain('formatMinor(estimatedMinor,currency)')
 })
 test('live hub only displays server-reported active broadcasts',()=>{

@@ -120,12 +120,9 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
           <View style={styles.brandBlock}>
             <PremiumBackdrop mode="midnight"/>
             <View style={styles.brandTop}><AppBrand inverted /></View>
-            <Text style={styles.brandHero}>Experience the world,{'\n'}together.</Text>
-            <Text style={styles.brandSub}>Explore events. Join communities. Make memories.</Text>
-            <View style={styles.brandChips}><Text style={styles.brandChip}>◉  LIVE</Text><Text style={styles.brandChip}>✦  EVENTS</Text><Text style={styles.brandChip}>▣  TICKETS</Text></View>
           </View>
           <Text style={styles.formTitle}>{resetMode ? 'Reset your password' : 'Welcome back'}</Text>
-          <Text style={styles.formSub}>{resetMode ? 'Securely regain access to your account.' : 'Sign in to continue your experiences.'}</Text>
+          <Text style={styles.formSub}>{resetMode ? 'Enter your registered email.' : 'Sign in to your account.'}</Text>
 
           {!isBaseUrlConfigured() ? (
             <View style={styles.warningBox}>
@@ -241,7 +238,6 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
           )}
 
           <Text style={styles.footnote}>
-            Your event experiences and tickets stay connected across devices.
             Powered by Lightworld Technologies.
           </Text>
         </ScrollView>
@@ -253,9 +249,9 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.colors.bg },
   flex: { flex: 1 },
-  container: { flexGrow: 1, paddingHorizontal: 19, paddingTop: 21, paddingBottom: 34, justifyContent: 'center', maxWidth: 560, alignSelf: 'center', width: '100%' },
-  brandBlock: { backgroundColor: mobileDesign.forestDeep, padding: 25, borderRadius: 29, marginBottom: 30, overflow:'hidden',shadowColor:mobileDesign.forestDeep,shadowOpacity:.23,shadowRadius:22,shadowOffset:{width:0,height:13},elevation:6 },
-  brandTop: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 24 },
+  container: { flexGrow: 1, paddingHorizontal: 20, paddingTop: 16, paddingBottom: 34, justifyContent: 'center', maxWidth: 560, alignSelf: 'center', width: '100%' },
+  brandBlock: { backgroundColor: mobileDesign.forestDeep, padding: 18, borderRadius: 18, marginBottom: 22, overflow:'hidden',shadowColor:mobileDesign.forestDeep,shadowOpacity:.08,shadowRadius:22,shadowOffset:{width:0,height:13},elevation:6 },
+  brandTop: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   brandIcon: { width: 37, height: 37, borderRadius: 12, backgroundColor: '#d8f6e5', justifyContent: 'center', alignItems: 'center' },
   brandIconText: { color: '#0d6345', fontWeight: '900', fontSize: 24 },
   brandMark: { fontSize: 23, fontWeight: '900', color: '#ffffff', letterSpacing: -0.7 },
@@ -263,7 +259,7 @@ const styles = StyleSheet.create({
   brandSub: { marginTop: 12, color: '#e5f4eb', fontSize: 13, lineHeight: 21 },
   brandChips: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 20, gap: 8 },
   brandChip: { backgroundColor: '#ffffff20', color: '#e6faed', fontSize: 9, fontWeight: '900', paddingVertical: 9, paddingHorizontal: 11, borderRadius: 12, letterSpacing: .7,overflow:'hidden' },
-  formTitle: { fontSize: 28, color: theme.colors.text, fontWeight: '900', letterSpacing: -.75, marginBottom: 7 },
+  formTitle: { fontSize: 24, color: theme.colors.text, fontWeight: '700', letterSpacing: -.75, marginBottom: 7 },
   formSub: { color: theme.colors.textMuted, fontSize: 13, marginBottom: 21 },
   warningBox: {
     backgroundColor: '#fef3c7',
@@ -280,17 +276,18 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.card,
     borderWidth: 1,
     borderColor: theme.colors.border,
-    borderRadius: 17,
+    borderRadius: 12,
     padding: theme.spacing.lg,
     marginBottom: theme.spacing.lg,
     color: theme.colors.text,
-    fontSize: 16,
+    fontSize: 14,
+    minHeight:48,
   },
   error: { color: theme.colors.danger, fontSize: 13, marginBottom: theme.spacing.lg },
   success: { color: theme.colors.primaryDark, fontSize: 13, marginBottom: theme.spacing.lg, lineHeight: 19 },
   resetHint: { color: theme.colors.textMuted, fontSize: 13, lineHeight: 20, marginBottom: theme.spacing.lg },
   passwordWrap: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.colors.card, borderRadius: 17, borderWidth: 1, borderColor: theme.colors.border, marginBottom: theme.spacing.md },
-  passwordField: { flex: 1, padding: theme.spacing.lg, color: theme.colors.text, fontSize: 16, minHeight: 52 },
+  passwordField: { flex: 1, padding: theme.spacing.lg, color: theme.colors.text, fontSize: 14, minHeight: 48 },
   eyeButton: { minWidth: 55, minHeight: 52, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10 },
   eyeText: { color: theme.colors.primaryDark, fontWeight: '800', fontSize: 12 },
   forgotButton: { alignSelf: 'flex-end', minHeight: 44, justifyContent: 'center', marginBottom: theme.spacing.sm },
@@ -300,12 +297,13 @@ const styles = StyleSheet.create({
   button: {
     backgroundColor: theme.colors.primary,
     borderRadius: 17,
-    minHeight: 55,
-    padding: theme.spacing.lg,
+    minHeight: 48,
+    justifyContent:'center',
+    paddingHorizontal: theme.spacing.lg,
     alignItems: 'center',
   },
   buttonDisabled: { opacity: 0.6 },
-  buttonText: { color: '#ffffff', fontWeight: '800', fontSize: 15 },
+  buttonText: { color: '#ffffff', fontWeight: '600', fontSize: 14 },
   footnote: {
     marginTop: theme.spacing.xl,
     color: theme.colors.textMuted,

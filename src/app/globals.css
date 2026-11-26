@@ -1482,3 +1482,65 @@ body {
   [data-slot="select-trigger"], [data-slot="dialog-content"],
   [data-slot="dropdown-menu-content"] { animation: none !important; transition: none !important; transform-style: flat; }
 }
+
+/* Clarity-first design system — readable, solid surfaces on both themes.
+   Explicitly scoped to app UI; not a global zoom or a typography override
+   of the Effects Studio catalog. Keep workspace split-scroll ownership. */
+:root {
+  --ievx-type-body: 1rem;
+  --ievx-type-label: .875rem;
+  --ievx-type-title: 1.5rem;
+  --ievx-touch-standard: 3rem;
+}
+.ievx-public .ievx-event-card h3 { font-size: 1.125rem; line-height: 1.4; letter-spacing: -.015em; }
+.ievx-public .ievx-discovery-search :is(input, select) { font-size: var(--ievx-type-body); min-height: var(--ievx-touch-standard); }
+.ievx-public .ievx-home-hero .ievx-hero-copy { font-size: var(--ievx-type-body); line-height: 1.6; }
+.ievx-public .ievx-home-hero .ievx-hero-kicker { font-size: .8125rem; }
+.ievx-public .ievx-home-hero .ievx-hero-action { min-height: var(--ievx-touch-standard); font-size: .9375rem; }
+.ievx-public .ievx-home-hero .ievx-hero-quick button { min-height: 44px; font-size: var(--ievx-type-label); }
+.ievx-hero-story-controls > button { min-height: 44px; min-width: 44px; }
+.ievx-primary-nav-item { min-height: 44px; font-size: var(--ievx-type-label); }
+.ievx-workspace-nav-item { min-height: 48px; font-size: .9375rem; line-height: 1.4; }
+.ievx-workspace :is(th, thead td) { font-size: .8125rem; letter-spacing: .035em; }
+.ievx-workspace table tbody td { font-size: .875rem; line-height: 1.5; }
+.ievx-workspace-metric-label, .ievx-workspace-metric-foot { font-size: .875rem; line-height: 1.5; }
+.ievx-workspace .ievx-section-description { font-size: 1rem; }
+.ievx-mobile-booking-bar { bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px)); }
+@media (max-width: 639px) {
+  .ievx-public .ievx-home-hero .ievx-hero-title { line-height: 1.2; }
+  .ievx-public .ievx-home-hero .ievx-hero-action { flex: 1 1 135px; white-space: normal; text-align: center; }
+  .ievx-public .ievx-home-hero .ievx-hero-quick { margin-right: 0; padding-right: 0; }
+}
+
+/* Mobile and tablet discovery: search first, compact editorial feature.
+   Keep the desktop feature panel and all real event/filter actions. */
+@media (max-width: 1023px) {
+  .ievx-public .ievx-home-hero .ievx-hero-panel {
+    padding: 18px;
+    border-radius: 18px;
+  }
+  .ievx-public .ievx-home-hero .ievx-hero-kicker,
+  .ievx-public .ievx-home-hero .ievx-hero-desktop-quick {
+    display: none;
+  }
+  .ievx-public .ievx-home-hero .ievx-hero-title {
+    font-size: clamp(24px, 4vw, 32px);
+    line-height: 1.25;
+    letter-spacing: -.035em;
+  }
+  .ievx-public .ievx-home-hero .ievx-hero-action {
+    min-height: 44px;
+    padding: 8px 12px;
+    font-size: .875rem;
+    flex: 1 1 125px;
+    white-space: normal;
+    text-align: center;
+  }
+  .ievx-hero-cta { margin-top: 12px; }
+  .ievx-hero-story-controls { margin-top: 6px; }
+  .ievx-public .ievx-home-hero .ievx-hero-copy { display: none; }
+  .ievx-public .ievx-event-card h3 { font-size: 1.0625rem; line-height: 1.4; }
+  .ievx-public .ievx-discovery-search { min-width: 0; }
+  .ievx-public .ievx-real-activity > button { display: none; }
+  .ievx-public .ievx-home-hero .ievx-hero-action { align-self: stretch; }
+}

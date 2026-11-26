@@ -234,51 +234,9 @@ export default function DiscoverScreen({ navigation }: DiscoverScreenProps) {
         <View>
           {!filtered ? <>
           <View style={styles.introRow}>
-            <View><Text style={styles.introLabel}>DISCOVER iEVENTPLUX</Text><Text style={styles.introTitle}>Experience more.</Text></View>
-            <Pressable style={styles.liveShortcut} accessibilityRole="button" accessibilityLabel="Open live events" onPress={() => navigation.navigate('LiveHub')}>
-              <Text style={styles.liveShortcutText}>● {state.home.stats.liveNow} LIVE  ›</Text>
-            </Pressable>
+            <View style={{flex:1}}><Text style={styles.introTitle}>Discover</Text></View>
+            {state.home.stats.liveNow > 0 ? <Text style={styles.liveShortcutText}>{state.home.stats.liveNow} live now</Text> : null}
           </View>
-          <View style={styles.hero} accessibilityLabel="Discover events worldwide">
-            <PremiumBackdrop mode="emerald" />
-            <View style={styles.heroEyebrowRow}><View style={styles.heroDot} /><Text style={styles.heroKicker}>{story.kicker}</Text></View>
-            <Text style={styles.heroTitle}>{story.line}</Text>
-            <Text style={styles.heroAccent}>{story.accent}</Text>
-            <Text style={styles.heroBody}>{story.description}</Text>
-            <View style={styles.heroActions}>
-              <Pressable accessibilityRole="button" accessibilityLabel="Explore events" style={styles.shopHeroButton}
-                onPress={() => listRef.current?.scrollToOffset({offset: 400, animated: true})}>
-                <Text style={styles.shopHeroText}>Explore events  →</Text>
-              </Pressable>
-              <Pressable accessibilityRole="button" accessibilityLabel="Watch live events" style={styles.organizerButton}
-                onPress={() => navigation.navigate('LiveHub')}><Text style={styles.organizerButtonText}>◉  Watch live</Text></Pressable>
-            </View>
-            <Pressable accessibilityRole="button" accessibilityLabel="Host an event" style={styles.hostAction}
-              onPress={() => navigation.navigate(status === 'authenticated' ? 'OrganizerStudio' : 'Login')}>
-              <Text style={styles.hostText}>Host an event  ↗</Text>
-            </Pressable>
-            <View style={styles.heroControls}>
-              {HOME_STORIES.map((story, index) => <Pressable key={story.label} accessibilityRole="button"
-                accessibilityLabel={'Show highlight ' + (index + 1) + ': ' + story.label}
-                accessibilityState={{selected:index===heroIndex}} onPress={() => setHeroIndex(index)} style={styles.heroControlTouch}>
-                <View style={[styles.heroControlDot,index===heroIndex && styles.heroControlActive]} />
-              </Pressable>)}
-              <Pressable accessibilityRole="button" accessibilityLabel={heroPlaying ? 'Pause rotating highlights' : 'Resume rotating highlights'}
-                onPress={() => setHeroPlaying(value => !value)} style={styles.heroPause}>
-                <Text style={styles.heroPauseText}>{heroPlaying ? 'Ⅱ  Pause' : '▶  Play'}</Text>
-              </Pressable>
-            </View>
-            {heroIndex === 0 && featured ? <Pressable accessibilityRole="button" accessibilityLabel={'Open featured event: '+featured.title}
-              style={styles.heroFeatured} onPress={() => navigation.navigate('EventDetail',{eventId:featured.id})}>
-              {featured.coverImageUrl ? <Image source={{uri:featured.coverImageUrl}} style={styles.heroFeaturedImage} /> : <View style={styles.heroFeaturedImage} />}
-              <View style={styles.heroFeaturedText}><Text style={styles.heroFeaturedLabel}>IN THE SPOTLIGHT</Text><Text numberOfLines={1} style={styles.heroFeaturedTitle}>{featured.title}</Text></View>
-              <Text style={styles.heroFeaturedArrow}>›</Text>
-            </Pressable> : heroIndex === 1 ? <Pressable accessibilityRole="button" style={styles.heroFeatured}
-              onPress={() => navigation.navigate('LiveHub')}><Text style={styles.heroFeatureSymbol}>◎</Text><View style={styles.heroFeaturedText}><Text style={styles.heroFeaturedLabel}>EXPLORE ONLINE</Text><Text style={styles.heroFeaturedTitle}>Experiences from anywhere</Text></View><Text style={styles.heroFeaturedArrow}>›</Text></Pressable>
-              : <Pressable accessibilityRole="button" style={styles.heroFeatured}
-                  onPress={() => navigation.navigate(status === 'authenticated' ? 'OrganizerStudio' : 'Login')}><Text style={styles.heroFeatureSymbol}>✦</Text><View style={styles.heroFeaturedText}><Text style={styles.heroFeaturedLabel}>FOR EVENT CREATORS</Text><Text style={styles.heroFeaturedTitle}>Create your own gathering</Text></View><Text style={styles.heroFeaturedArrow}>›</Text></Pressable>}
-          </View>
-
           </> : null}
           <View style={styles.searchField}>
             <Text style={styles.searchIcon} accessibilityElementsHidden>⌕</Text>
@@ -286,11 +244,11 @@ export default function DiscoverScreen({ navigation }: DiscoverScreenProps) {
               style={styles.searchInput}
               value={search}
               onChangeText={setSearch}
-              placeholder="Search upcoming events or cities"
+              placeholder="Search events or cities"
               placeholderTextColor={theme.colors.textMuted}
               autoCorrect={false}
               returnKeyType="search"
-              accessibilityLabel="Search upcoming events"
+              accessibilityLabel="Search events"
             />
             {search ? (
               <Pressable onPress={() => setSearch('')} accessibilityRole="button" accessibilityLabel="Clear search" style={styles.clearSearch}>
@@ -318,8 +276,30 @@ export default function DiscoverScreen({ navigation }: DiscoverScreenProps) {
               </Pressable>)}
             </ScrollView>
           </View>
+          {!filtered ? (
+          <View style={styles.hero} accessibilityLabel="Discover events worldwide">
+            <PremiumBackdrop mode="emerald" />
+            <Text style={styles.heroTitle}>{story.line} <Text style={styles.heroAccent}>{story.accent}</Text></Text>
+            <View style={styles.heroActions}>
+              {heroIndex===0 && featured ? <Pressable accessibilityRole="button" accessibilityLabel={'Open featured event: '+featured.title} style={styles.shopHeroButton} onPress={()=>navigation.navigate('EventDetail',{eventId:featured.id})}><Text style={styles.shopHeroText}>View event ›</Text></Pressable> : heroIndex===1 ? <Pressable accessibilityRole="button" style={styles.shopHeroButton} onPress={()=>navigation.navigate('LiveHub')}><Text style={styles.shopHeroText}>Watch live ›</Text></Pressable> : <Pressable accessibilityRole="button" style={styles.shopHeroButton} onPress={() => navigation.navigate(status === 'authenticated' ? 'OrganizerStudio' : 'Login')}><Text style={styles.shopHeroText}>Host an event ›</Text></Pressable>}
+              {heroIndex!==2 ? <Pressable accessibilityRole="button" style={styles.organizerButton} onPress={() => navigation.navigate(status === 'authenticated' ? 'OrganizerStudio' : 'Login')}><Text style={styles.organizerButtonText}>Host event</Text></Pressable> : <Pressable accessibilityRole="button" style={styles.organizerButton} onPress={()=>navigation.navigate('LiveHub')}><Text style={styles.organizerButtonText}>Watch live</Text></Pressable>}
+            </View>
+            <View style={styles.heroControls}>
+              {HOME_STORIES.map((story, index) => <Pressable key={story.label} accessibilityRole="button"
+                accessibilityLabel={'Show highlight ' + (index + 1) + ': ' + story.label}
+                accessibilityState={{selected:index===heroIndex}} onPress={() => setHeroIndex(index)} style={styles.heroControlTouch}>
+                <View style={[styles.heroControlDot,index===heroIndex && styles.heroControlActive]} />
+              </Pressable>)}
+              <Pressable accessibilityRole="button" accessibilityLabel={heroPlaying ? 'Pause rotating highlights' : 'Resume rotating highlights'}
+                onPress={() => setHeroPlaying(value => !value)} style={styles.heroPause}>
+                <Text style={styles.heroPauseText}>{heroPlaying ? 'Ⅱ  Pause' : '▶  Play'}</Text>
+              </Pressable>
+            </View>
+          </View>
+
+          ) : null}
           {filtered ? <View style={styles.activeFilterBanner}>
-            <Text style={styles.activeFilterLabel}>Filtering the full event catalogue · {activeCount} active</Text>
+            <Text style={styles.activeFilterLabel}>{activeCount} active</Text>
             <Pressable accessibilityRole="button" accessibilityLabel="Clear all event filters" onPress={resetFilters}><Text style={styles.clearFilterLabel}>Clear all</Text></Pressable>
           </View> : null}
 
@@ -340,14 +320,14 @@ export default function DiscoverScreen({ navigation }: DiscoverScreenProps) {
 
           {featured && !filtered ? (
             <View style={styles.sectionBlock}>
-              <SectionHeading eyebrow="HANDPICKED HIGHLIGHTS" title="In the spotlight" />
+              <SectionHeading title="Featured" />
               <FeaturedEventCard event={featured} onPress={() => navigation.navigate('EventDetail', { eventId: featured.id })} />
             </View>
           ) : null}
 
           {liveNow.length > 0 && !filtered ? (
             <View style={styles.liveSection}>
-              <SectionHeading eyebrow="HAPPENING RIGHT NOW" title="Live experiences" action="Watch live" onAction={()=>navigation.navigate('LiveHub')} />
+              <SectionHeading title="Live now" action="Watch live" onAction={()=>navigation.navigate('LiveHub')} />
               <FlatList
                 horizontal
                 showsHorizontalScrollIndicator={false}
@@ -366,9 +346,8 @@ export default function DiscoverScreen({ navigation }: DiscoverScreenProps) {
             </View>
           ) : null}
 
-          <SectionHeading eyebrow={filtered?'YOUR SEARCH RESULTS':'CURATED FOR DISCOVERY'}
-            title={filtered?'Matching events':'Explore what’s next'}
-            subtitle={`${filtered && searchTotal!==null ? searchTotal : visibleUpcoming.length} published events to explore`} />
+          <SectionHeading title={filtered?'Matching events':'Upcoming events'}
+            subtitle={`${filtered && searchTotal!==null ? searchTotal : visibleUpcoming.length} events`} />
           {filtered && searchBusy ? (
             <View style={styles.searchStatus}>
               <ActivityIndicator color={theme.colors.primary} size="small" />
@@ -422,12 +401,10 @@ function FeaturedEventCard({ event, onPress }: { event: DiscoveryEventCard; onPr
     onPress={onPress} accessibilityRole="button" accessibilityLabel={'View featured event ' + event.title}>
     {event.coverImageUrl ? <Image source={{uri:event.coverImageUrl}} style={styles.featuredImage} accessibilityLabel={event.title+' event artwork'} />
       : <View style={[styles.featuredImage,styles.posterPlaceholder]} />}
-    <View style={styles.featuredTint} />
-    <View style={styles.featuredChip}><Text style={styles.featuredLabel}>FEATURED EVENT</Text></View>
     <View style={styles.featuredBody}>
       <Text style={styles.featuredMeta}>{formatDate(event.startsAt)} · {event.city ?? 'See event details'}</Text>
-      <Text style={styles.featuredTitle} numberOfLines={2}>{event.title}</Text>
-      <Text style={styles.featuredOrg} numberOfLines={1}>{event.org.name}</Text>
+      <Text style={styles.featuredTitle}>{event.title}</Text>
+      <Text style={styles.featuredOrg}>{event.org.name}</Text>
       <View style={styles.featuredBottom}><Text style={styles.featuredAction}>View details & tickets  →</Text><Text style={styles.featuredPrice}>{minPriceLabel((event.ticketTypes ?? []).map(t=>t.priceMinor))}</Text></View>
     </View>
   </Pressable>
@@ -474,15 +451,14 @@ function EventRow({ event, onPress }: { event: DiscoveryEventCard; onPress: () =
     <View style={styles.eventPosterWrap}>
       {event.coverImageUrl ? <Image source={{uri:event.coverImageUrl}} style={styles.poster} accessibilityLabel={event.title+' artwork'} />
         : <View style={[styles.poster,styles.posterPlaceholder]}><Text style={styles.posterPlaceholderText} numberOfLines={2}>{event.title}</Text></View>}
-      <View style={styles.eventPosterShade} />
-      <View style={styles.posterTopLabel}><Text style={styles.posterTopText}>iEVENTPLUX  ·  EXPERIENCE</Text></View>
-      <View style={styles.eventPosterInfo}><Text style={styles.eventPosterInfoText}>{formatDate(event.startsAt)} · {event.city || (event.mode === 'VIRTUAL' || event.mode === 'ONLINE' ? 'Online' : 'Location TBA')}</Text></View>
+
     </View>
     <View style={styles.cardBody}>
+      <Text style={styles.eventDate}>{formatDate(event.startsAt)} · {event.city || (event.mode === 'VIRTUAL' || event.mode === 'ONLINE' ? 'Online' : 'Location TBA')}</Text>
       <View style={styles.eventTextRow}>
         <View style={{flex:1}}>
-          <Text style={styles.title} numberOfLines={2}>{event.title}</Text>
-          <Text style={styles.meta} numberOfLines={1}>By {event.org.name}</Text>
+          <Text style={styles.title}>{event.title}</Text>
+          <Text style={styles.meta}>By {event.org.name}</Text>
         </View>
         <View style={styles.arrowBox}><Text style={styles.arrowText}>↗</Text></View>
       </View>
@@ -496,94 +472,94 @@ function EventRow({ event, onPress }: { event: DiscoveryEventCard; onPress: () =
 
 const styles = StyleSheet.create({
   list: { backgroundColor: theme.colors.bg },
-  listContent: { paddingHorizontal: 18, paddingTop: 15, paddingBottom: 38 },
-  introRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 },
-  introLabel: { color: theme.colors.primary, fontSize: 10, letterSpacing: 1.7, fontWeight: '900', marginBottom: 6 },
-  introTitle: { color: theme.colors.text, fontSize: 28, fontWeight: '900', letterSpacing: -1.0 },
-  liveShortcut: { backgroundColor: '#f9eeee', borderRadius: 100, paddingHorizontal: 13, minHeight: 37, justifyContent: 'center' },
-  liveShortcutText: { color: '#a73530', fontSize: 10, fontWeight: '900', letterSpacing: .2 },
-  hero: { backgroundColor: '#073e3b', borderRadius: 30, paddingHorizontal: 23, paddingTop: 30, paddingBottom: 19, marginBottom: 26, overflow: 'hidden', shadowColor: '#053a39', shadowOpacity:.24, shadowOffset:{width:0,height:13}, shadowRadius:20, elevation:7 },
+  listContent: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 38 },
+  introRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  introLabel: { color: theme.colors.primary, fontSize: 12, letterSpacing: 1.7, fontWeight: '700', marginBottom: 6 },
+  introTitle: { color: theme.colors.text, fontSize: 24, fontWeight: '700', letterSpacing: -1.0 },
+  liveShortcut: { backgroundColor: '#f9eeee', borderRadius: 100, paddingHorizontal: 13, minHeight: 44, justifyContent: 'center' },
+  liveShortcutText: { color: '#a73530', fontSize: 12, fontWeight: '700', letterSpacing: .2 },
+  hero: { backgroundColor: '#073e3b', borderRadius: 20, paddingHorizontal: 16, paddingTop: 18, paddingBottom: 12, marginBottom: 18, overflow: 'hidden', shadowColor: '#053a39', shadowOpacity:.10, shadowOffset:{width:0,height:13}, shadowRadius:20, elevation:7 },
   heroEyebrowRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
   heroDot: { width: 7, height: 7, backgroundColor: '#f3c464', borderRadius: 4 },
-  heroKicker: { color: '#d8fbe9', fontSize: 10, fontWeight: '900', letterSpacing: 1.15, flexShrink: 1 },
-  heroTitle: { color: '#ffffff', fontSize: 34, fontWeight: '900', letterSpacing: -1.5, lineHeight: 40, maxWidth:320 },
-  heroAccent: { color: '#caf8dc', fontSize: 34, fontWeight: '900', letterSpacing: -1.5, lineHeight: 40 },
-  heroBody: { color: '#e2f2ee', fontSize: 14, lineHeight: 22, marginTop: 17, maxWidth:340 },
-  heroStatsRow: { flexDirection: 'row', alignItems: 'center', marginTop: 17, gap: 18 },
+  heroKicker: { color: '#d8fbe9', fontSize: 12, fontWeight: '700', letterSpacing: 1.15, flexShrink: 1 },
+  heroTitle: { color: '#ffffff', fontSize: 22, fontWeight: '700', letterSpacing: -.4, lineHeight: 28, maxWidth:320 },
+  heroAccent: { color: '#caf8dc', fontSize: 22, fontWeight: '700', letterSpacing: -.4, lineHeight: 28 },
+  heroBody: { color: '#e2f2ee', fontSize: 13, lineHeight: 19, marginTop: 9, maxWidth:340 },
+  heroStatsRow: { flexDirection: 'row', flexWrap:'wrap', alignItems: 'center', marginTop: 17, gap: 18 },
   heroStat: { alignItems: 'flex-start' },
-  heroStatValue: { color: '#ffffff', fontWeight: '900', fontSize: 20 },
-  heroStatLabel: { color: '#b9dccd', fontSize: 10, fontWeight: '600', marginTop: 2 },
+  heroStatValue: { color: '#ffffff', fontWeight: '700', fontSize: 20 },
+  heroStatLabel: { color: '#b9dccd', fontSize: 12, fontWeight: '600', marginTop: 2 },
   heroStatDivider: { height: 25, borderLeftWidth: 1, borderLeftColor: '#7caf9f' },
-  heroActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 9, marginTop: 18 },
-  shopHeroButton: { flex: 1, minWidth: 120, minHeight: 51, borderRadius: 15, backgroundColor: '#e7faed', justifyContent: 'center', alignItems: 'center' },
+  heroActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
+  shopHeroButton: { flex: 1, minWidth: 120, minHeight: 48, borderRadius: 12, backgroundColor: '#e7faed', justifyContent: 'center', alignItems: 'center' },
   shopHeroText: { fontSize: 12, fontWeight: '800', color: '#075c3d' },
-  organizerButton: { flex: 1, minWidth: 120, minHeight: 51, borderRadius: 15, borderWidth: 1, borderColor: '#8bc7b5', backgroundColor:'#ffffff12', justifyContent: 'center', alignItems: 'center' },
+  organizerButton: { flex: 1, minWidth: 120, minHeight: 48, borderRadius: 12, borderWidth: 1, borderColor: '#8bc7b5', backgroundColor:'#ffffff12', justifyContent: 'center', alignItems: 'center' },
   organizerButtonText: { color: '#e3f7ed', fontSize: 12, fontWeight: '800' },
-  hostAction: { alignSelf:'flex-start', minHeight:42, justifyContent:'center', marginTop:4 },
-  hostText: { color:'#e5f8f2',fontSize:12,fontWeight:'800' },
-  heroControls: { flexDirection:'row',alignItems:'center',marginTop:7,gap:2 },
-  heroControlTouch:{width:32,height:35,justifyContent:'center',alignItems:'center'},
+  hostAction: { alignSelf:'flex-start', minHeight:44, justifyContent:'center', marginTop:0 },
+  hostText: { color:'#e5f8f2',fontSize: 12,fontWeight:'800' },
+  heroControls: { flexDirection:'row',alignItems:'center',marginTop:0,gap:2 },
+  heroControlTouch:{width:44,height:44,justifyContent:'center',alignItems:'center'},
   heroControlDot:{width:9,height:6,borderRadius:4,backgroundColor:'#63988c'},
   heroControlActive:{width:23,backgroundColor:'#b2e7d5'},
-  heroPause:{minHeight:36,marginLeft:5,justifyContent:'center',paddingHorizontal:6},
-  heroPauseText:{fontWeight:'800',color:'#d2e9e5',fontSize:10},
+  heroPause:{minHeight:44,marginLeft:5,justifyContent:'center',paddingHorizontal:6},
+  heroPauseText:{fontWeight:'800',color:'#d2e9e5',fontSize: 12},
   heroFeatured:{marginTop:17,borderRadius:17,backgroundColor:'#ffffff22',borderWidth:1,borderColor:'#ffffff44',padding:10,flexDirection:'row',alignItems:'center',gap:10},
   heroFeaturedImage:{height:43,width:43,borderRadius:9,backgroundColor:'#30685a'},
-  heroFeaturedText:{flex:1},heroFeaturedLabel:{color:'#abddce',fontSize:10,fontWeight:'800',letterSpacing:1.0},
-  heroFeaturedTitle:{color:'#ffffff',fontSize:12,fontWeight:'800',marginTop:3},
+  heroFeaturedText:{flex:1},heroFeaturedLabel:{color:'#abddce',fontSize: 12,fontWeight:'800',letterSpacing:1.0},
+  heroFeaturedTitle:{color:'#ffffff',fontSize: 12,fontWeight:'800',marginTop:3},
   heroFeaturedArrow:{color:'#d5f3e5',fontSize:22,fontWeight:'700'},
   heroFeatureSymbol:{height:43,width:43,overflow:'hidden',backgroundColor:'#ffffff18',borderRadius:10,textAlign:'center',textAlignVertical:'center',color:'#d5f3e5',fontSize:23},
-  searchField: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.colors.card, borderRadius: 19, borderWidth: 1, borderColor: theme.colors.border, minHeight: 58, marginBottom: 14, paddingHorizontal: 15, shadowColor:mobileDesign.shadow,shadowOpacity:.04,shadowRadius:10,shadowOffset:{width:0,height:4},elevation:1 },
+  searchField: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.colors.card, borderRadius: 19, borderWidth: 1, borderColor: theme.colors.border, minHeight: 48, marginBottom: 10, paddingHorizontal: 15, shadowColor:mobileDesign.shadow,shadowOpacity:.04,shadowRadius:10,shadowOffset:{width:0,height:4},elevation:1 },
   searchIcon: { fontSize: 26, color: theme.colors.primary, marginRight: 8 },
-  searchInput: { flex: 1, fontSize: 14, color: theme.colors.text, paddingVertical: 12 },
+  searchInput: { flex: 1, fontSize: 14, color: theme.colors.text, paddingVertical: 9 },
   clearSearch: { minWidth: 36, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   clearSearchText: { color: theme.colors.textMuted, fontSize: 25 },
   filterControls:{flexDirection:'row',alignItems:'center',gap:9,marginBottom:12},
   filterButton:{minHeight:42,borderRadius:12,backgroundColor:theme.web.tealSoft,borderColor:theme.colors.primary,borderWidth:1,paddingHorizontal:14,justifyContent:'center'},
-  filterButtonText:{fontSize:12,fontWeight:'900',color:theme.colors.primary},
+  filterButtonText:{fontSize: 12,fontWeight: '700',color:theme.colors.primary},
   quickFilters:{alignItems:'center',gap:7,paddingRight:12},
-  quickChip:{minHeight:40,borderRadius:13,borderWidth:1,borderColor:theme.colors.border,backgroundColor:'#fff',paddingHorizontal:12,justifyContent:'center'},
+  quickChip:{minHeight:44,borderRadius:13,borderWidth:1,borderColor:theme.colors.border,backgroundColor:'#fff',paddingHorizontal:12,justifyContent:'center'},
   quickSelected:{backgroundColor:theme.colors.primary,borderColor:theme.colors.primary},
-  quickText:{fontSize:11,color:theme.colors.text,fontWeight:'700'},
+  quickText:{fontSize: 12,color:theme.colors.text,fontWeight:'700'},
   quickTextSelected:{color:'#fff'},
   activeFilterBanner:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',gap:10,marginBottom:12},
-  activeFilterLabel:{color:theme.colors.textMuted,fontSize:11,flex:1},
-  clearFilterLabel:{color:theme.colors.primary,fontWeight:'800',fontSize:12},
-  searchError:{fontSize:12,color:theme.colors.danger,marginBottom:9},
+  activeFilterLabel:{color:theme.colors.textMuted,fontSize: 12,flex:1},
+  clearFilterLabel:{color:theme.colors.primary,fontWeight:'800',fontSize: 12},
+  searchError:{fontSize: 12,color:theme.colors.danger,marginBottom:9},
   searchRetry:{minHeight:42,alignSelf:'flex-start',paddingHorizontal:15,backgroundColor:theme.web.tealSoft,borderRadius:12,justifyContent:'center',marginBottom:15},
-  searchRetryText:{fontSize:12,fontWeight:'800',color:theme.colors.primary},
+  searchRetryText:{fontSize: 12,fontWeight:'800',color:theme.colors.primary},
   loadMore:{minHeight:47,borderWidth:1,borderColor:theme.colors.border,borderRadius:14,backgroundColor:'#fff',marginTop:7,alignItems:'center',justifyContent:'center'},
-  loadMoreText:{fontSize:13,color:theme.colors.primary,fontWeight:'800'},
-  categoryScroll: { marginBottom: 27 },
+  loadMoreText:{fontSize: 12,color:theme.colors.primary,fontWeight:'800'},
+  categoryScroll: { marginBottom: 18 },
   searchStatus: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12 },
   searchStatusText: { color: theme.colors.textMuted, fontSize: 12, lineHeight: 19, marginBottom: 10 },
   categoryRow: { gap: 8, paddingBottom: 3 },
-  categoryPill: { borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.card, borderRadius: 99, paddingHorizontal: 15, paddingVertical: 10, minHeight: 42, justifyContent: 'center' },
+  categoryPill: { borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.card, borderRadius: 99, paddingHorizontal: 15, paddingVertical: 10, minHeight: 44, justifyContent: 'center' },
   categoryPillSelected: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
   categoryText: { color: theme.colors.textMuted, fontWeight: '700', fontSize: 12 },
   categoryTextSelected: { color: '#ffffff' },
-  sectionBlock: { marginBottom: 29 },
+  sectionBlock: { marginBottom: 22 },
   sectionHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
-  sectionTitle: { color: theme.colors.text, fontSize: 20, fontWeight: '800', letterSpacing: -0.25 },
+  sectionTitle: { color: theme.colors.text, fontSize: 18, fontWeight: '700', letterSpacing: -0.25 },
   sectionCount: { color: theme.colors.textMuted, fontSize: 12, fontWeight: '600' },
-  livePill: { color: theme.colors.danger, fontWeight: '800', fontSize: 10 },
-  featuredCard: { borderRadius: 26, backgroundColor: '#061b28', overflow: 'hidden', elevation: 5, minHeight:250, shadowColor:mobileDesign.shadow,shadowOpacity:.13,shadowRadius:16,shadowOffset:{width:0,height:10} },
-  featuredImage: { width: '100%',height: 274,resizeMode: 'cover' },
+  livePill: { color: theme.colors.danger, fontWeight: '800', fontSize: 12 },
+  featuredCard: { borderRadius: 18, backgroundColor: '#fff', borderWidth:1,borderColor:theme.colors.border, overflow: 'hidden' },
+  featuredImage: { width: '100%',aspectRatio:16/9,resizeMode: 'cover' },
   featuredTint: { position:'absolute',left:0,right:0,top:0,bottom:0,backgroundColor:'rgba(3,20,29,.56)' },
   featuredChip:{position:'absolute',top:14,left:14,backgroundColor:'#101b25bf',borderRadius:18,paddingHorizontal:12,paddingVertical:8,borderWidth:1,borderColor:'#ffffff55'},
-  featuredBody: {position:'absolute',left:0,right:0,bottom:0,padding:16},
-  featuredLabel: {fontSize:10,fontWeight:'900',color:'#fff',letterSpacing:1.1},
-  featuredTitle: {color:'#fff',fontWeight:'900',fontSize:24,lineHeight:30,marginTop:8,letterSpacing:-.5},
-  featuredMeta:{color:'#e4eee9',fontSize:12,marginTop:3},
-  featuredOrg:{color:'#e3e9eb',fontSize:12,marginTop:4},
-  featuredBottom:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',borderTopWidth:1,borderTopColor:'#ffffff55',marginTop:12,paddingTop:11},
-  featuredPrice:{color:'#b6f4dc',fontWeight:'900',fontSize:13},
-  featuredAction:{color:'#fff',fontWeight:'800',fontSize:12},
+  featuredBody: {padding:14},
+  featuredLabel: {fontSize: 12,fontWeight: '700',color:'#fff',letterSpacing:1.1},
+  featuredTitle: {color:theme.colors.text,fontWeight:'700',fontSize:17,lineHeight:23,marginTop:5},
+  featuredMeta:{color:theme.colors.primaryDark,fontSize: 12,marginTop:3},
+  featuredOrg:{color:theme.colors.textMuted,fontSize: 12,marginTop:4},
+  featuredBottom:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',borderTopWidth:1,borderTopColor:theme.colors.border,marginTop:10,paddingTop:9},
+  featuredPrice:{color:theme.colors.primaryDark,fontWeight: '700',fontSize: 12},
+  featuredAction:{color:theme.colors.primaryDark,fontWeight:'800',fontSize: 12},
   filterEmpty: { alignItems: 'center', padding: theme.spacing.xxl, backgroundColor: theme.colors.card, borderRadius: theme.radius.lg },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: theme.spacing.xl, backgroundColor: theme.colors.bg },
   headerActions: { flexDirection: 'row', alignItems: 'center' },
   headerAction: { paddingHorizontal: theme.spacing.sm, minHeight: 44, justifyContent: 'center' },
-  headerActionText: { color: theme.colors.primaryDark, fontWeight: '700', fontSize: 13 },
+  headerActionText: { color: theme.colors.primaryDark, fontWeight: '700', fontSize: 12 },
   liveSection: { marginBottom: theme.spacing.lg },
   liveSectionTitle: { color: theme.colors.text, fontSize: 19, fontWeight: '800', marginBottom: theme.spacing.sm },
   liveCard: {
@@ -605,42 +581,43 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.sm,
     paddingVertical: 2,
   },
-  liveBadgeText: { color: '#ffffff', fontSize: 9, fontWeight: '800', letterSpacing: 0.5 },
+  liveBadgeText: { color: '#ffffff', fontSize: 12, fontWeight: '800', letterSpacing: 0.5 },
   livePoster: { width: '100%', height: 96, resizeMode: 'cover' },
   liveCardBody: { padding: theme.spacing.md },
-  liveCardTitle: { color: theme.colors.text, fontSize: 13, fontWeight: '700' },
-  liveCardMeta: { color: theme.colors.textMuted, fontSize: 11, marginTop: 2 },
+  liveCardTitle: { color: theme.colors.text, fontSize: 12, fontWeight: '700' },
+  liveCardMeta: { color: theme.colors.textMuted, fontSize: 12, marginTop: 2 },
   liveWatch: { color: theme.colors.primaryDark, fontWeight: '700', fontSize: 12, marginTop: theme.spacing.xs },
   card: {
     backgroundColor: theme.colors.card,
-    borderRadius: 24,
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: theme.colors.border,
     marginBottom: theme.spacing.lg,
     overflow: 'hidden',
   },
   cardPressed: { opacity: 0.85 },
-  poster: { width: '100%',height: 206,resizeMode: 'cover' },
+  poster: { width: '100%',aspectRatio: 16/9,resizeMode: 'cover' },
   posterTopLabel:{position:'absolute',top:13,left:13,backgroundColor:'#091c2fae',borderRadius:10,paddingHorizontal:10,paddingVertical:7,borderWidth:1,borderColor:'#ffffff3c'},
-  posterTopText:{fontSize:9,color:'#ffffff',fontWeight:'900',letterSpacing:1},
+  posterTopText:{fontSize: 12,color:'#ffffff',fontWeight: '700',letterSpacing:1},
   eventTextRow:{flexDirection:'row',alignItems:'center',gap:10},
   arrowBox:{width:38,height:38,borderRadius:13,backgroundColor:mobileDesign.mintSoft,justifyContent:'center',alignItems:'center'},
   arrowText:{fontSize:21,fontWeight:'800',color:mobileDesign.emerald},
   eventPosterWrap: {position:'relative',backgroundColor:'#0d5349'},
   eventPosterShade:{position:'absolute',left:0,right:0,bottom:0,height:46,backgroundColor:'#091b28a8'},
   eventPosterInfo:{position:'absolute',left:12,bottom:11},
-  eventPosterInfoText:{color:'#fff',fontWeight:'800',fontSize:12},
+  eventPosterInfoText:{color:'#fff',fontWeight:'800',fontSize: 12},
   posterPlaceholder: { backgroundColor: theme.colors.primaryDark, alignItems: 'center', justifyContent: 'center', padding: theme.spacing.sm },
-  posterPlaceholderText: { color: '#ffffff', fontSize: 11, fontWeight: '600', textAlign: 'center' },
-  cardBody:{padding:17},
-  cardFooter:{flexDirection:'row',justifyContent:'space-between',alignItems:'center',marginTop:18},
+  posterPlaceholderText: { color: '#ffffff', fontSize: 12, fontWeight: '600', textAlign: 'center' },
+  cardBody:{padding:14},
+  eventDate:{color:theme.colors.primaryDark,fontSize:12,fontWeight:'600',lineHeight:18,marginBottom:6},
+  cardFooter:{flexDirection:'row',flexWrap:'wrap',gap:10,justifyContent:'space-between',alignItems:'center',marginTop:10},
   modeBadge:{backgroundColor:'#edf7f4',paddingHorizontal:11,paddingVertical:7,borderRadius:18,borderWidth:1,borderColor:theme.colors.border},
-  modeText:{fontSize:11,color:theme.colors.primary,fontWeight:'800'},
-  title: { color: theme.colors.text, fontSize: 16, fontWeight: '800', lineHeight: 22 },
+  modeText:{fontSize: 12,color:theme.colors.primary,fontWeight:'800'},
+  title: { color: theme.colors.text, fontSize: 16, fontWeight: '700', lineHeight: 22 },
   meta: { color: theme.colors.textMuted, fontSize: 12, marginTop: theme.spacing.xs },
-  price: { color: theme.colors.primaryDark, fontWeight: '900', marginTop: theme.spacing.sm, fontSize: 14 },
+  price: { color: theme.colors.primaryDark, fontWeight: '700', marginTop: theme.spacing.sm, fontSize: 14 },
   errorTitle: { color: theme.colors.text, fontSize: 17, fontWeight: '700', marginBottom: theme.spacing.sm },
-  errorBody: { color: theme.colors.textMuted, fontSize: 13, textAlign: 'center' },
+  errorBody: { color: theme.colors.textMuted, fontSize: 12, textAlign: 'center' },
   retryButton: {
     marginTop: theme.spacing.xl,
     backgroundColor: theme.colors.primary,

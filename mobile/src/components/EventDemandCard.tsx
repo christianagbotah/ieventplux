@@ -63,7 +63,7 @@ function DemandControls({event,user}:{event:EventDetail;user:User}){
  const showReminder=state.kind==='ready'&&(state.reminder.active||(state.reminder.upcoming&&!state.reminder.holdingTicket))
  if(state.kind==='ready'&&!showReminder&&!join&&!leave&&!feedback&&!failure)return null
  return <View style={styles.section}>
-  <SectionHeading eyebrow="STAY CONNECTED" title="Never miss out" subtitle="Manage event reminders and sold-out ticket alerts."/>
+  <SectionHeading title="Event alerts"/>
   <View style={styles.card}>
    {feedback?<Text style={styles.success} accessibilityLiveRegion="polite">{feedback}</Text>:null}
    {failure?<Text style={styles.error} accessibilityLiveRegion="polite">{failure}</Text>:null}
@@ -72,14 +72,14 @@ function DemandControls({event,user}:{event:EventDetail;user:User}){
    {state.kind==='ready'?<>
     {showReminder?<View style={styles.block}>
      <Text style={styles.heading}>{state.reminder.active?'Reminder is on':'Remind me'}</Text>
-     <Text style={styles.body}>Receive an in-app alert before this event starts.</Text>
+     <Text style={styles.body}>Get an in-app alert before the event.</Text>
      <Pressable accessibilityRole="button" accessibilityState={{disabled:busy}} disabled={busy} style={state.reminder.active?styles.secondary:styles.primary} onPress={()=>void act(()=>api.events.setReminder(event.id,!state.reminder.active),state.reminder.active?'Reminder removed.':'Reminder saved.')}>
       <Text style={state.reminder.active?styles.secondaryText:styles.primaryText}>{state.reminder.active?'Remove reminder':'Set reminder'}</Text>
      </Pressable>
     </View>:null}
     {join||leave?<View style={[styles.block,showReminder?styles.divider:null]}>
      <Text style={styles.heading}>{mine?.status==='WAITING'?'You are on the waitlist':mine?.status==='NOTIFIED'?'Tickets may be available':'Join the waitlist'}</Text>
-     <Text style={styles.body}>{mine?.status==='WAITING'?('Position '+mine.position+' · '+mine.partySize+' '+(mine.partySize===1?'pass':'passes')):'We will alert you when tickets become available. No ticket is reserved.'}</Text>
+     <Text style={styles.body}>{mine?.status==='WAITING'?('Position '+mine.position+' · '+mine.partySize+' '+(mine.partySize===1?'pass':'passes')):'Get notified when passes become available. Joining does not reserve a ticket.'}</Text>
      {join?<><Text style={styles.label}>Contact email or phone</Text>
       <TextInput value={contact} onChangeText={setContact} editable={!busy} autoCapitalize="none" autoCorrect={false} style={styles.input} accessibilityLabel="Waitlist contact"/>
       <Text style={styles.label}>Number of passes (1–10)</Text>
@@ -93,18 +93,18 @@ function DemandControls({event,user}:{event:EventDetail;user:User}){
  </View>
 }
 const styles=StyleSheet.create({
- section:{marginTop:28},
- card:{borderRadius:24,borderWidth:1,borderColor:mobileDesign.border,backgroundColor:'#fff',padding:18,gap:12},
+ section:{marginTop:24},
+ card:{borderRadius:16,borderWidth:1,borderColor:mobileDesign.border,backgroundColor:'#fff',padding:14,gap:10},
  block:{gap:10},
  divider:{borderTopWidth:1,borderTopColor:mobileDesign.border,paddingTop:16,marginTop:5},
- heading:{fontSize:16,fontWeight:'900',color:mobileDesign.ink},
+ heading:{fontSize:15,fontWeight:'700',color:mobileDesign.ink},
  body:{fontSize:13,lineHeight:20,color:mobileDesign.inkMuted},
- label:{fontSize:12,fontWeight:'800',color:mobileDesign.ink},
- input:{minHeight:48,paddingHorizontal:13,borderRadius:14,borderWidth:1,borderColor:mobileDesign.border,color:mobileDesign.ink,backgroundColor:'#fff',fontSize:15},
+ label:{fontSize:13,fontWeight:'600',color:mobileDesign.ink},
+ input:{minHeight:48,paddingHorizontal:13,borderRadius:14,borderWidth:1,borderColor:mobileDesign.border,color:mobileDesign.ink,backgroundColor:'#fff',fontSize:14},
  primary:{minHeight:48,borderRadius:15,backgroundColor:mobileDesign.emerald,alignItems:'center',justifyContent:'center',padding:12},
- primaryText:{fontSize:14,fontWeight:'800',color:'#fff'},
- secondary:{minHeight:46,borderRadius:14,borderWidth:1,borderColor:mobileDesign.border,alignItems:'center',justifyContent:'center',padding:11},
- secondaryText:{fontSize:14,fontWeight:'800',color:mobileDesign.emerald},
+ primaryText:{fontSize:14,fontWeight:'600',color:'#fff'},
+ secondary:{minHeight:48,borderRadius:14,borderWidth:1,borderColor:mobileDesign.border,alignItems:'center',justifyContent:'center',padding:11},
+ secondaryText:{fontSize:14,fontWeight:'600',color:mobileDesign.emerald},
  success:{fontSize:13,lineHeight:20,color:mobileDesign.emerald,fontWeight:'700'},
  error:{fontSize:13,lineHeight:20,color:'#b42318'},
  disabled:{opacity:.45},

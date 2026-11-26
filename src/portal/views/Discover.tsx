@@ -381,162 +381,11 @@ export default function Discover({ route }: { route: Route }) {
 
   return (
     <div>
-      {/* Public entry: real-world discovery first, real featured media second. */}
-      {!browsing && (
-        <section className="ievx-home-hero" aria-label="Discover events worldwide">
-          <div className="mx-auto max-w-[1500px] px-3 pt-3 pb-3 sm:px-6 sm:pt-5 sm:pb-5 lg:px-8 lg:pt-7 lg:pb-6">
-            <div className="ievx-hero-panel" data-hero-story={heroIndex}
-              onMouseEnter={() => setHeroPausedByInteraction(true)}
-              onMouseLeave={() => setHeroPausedByInteraction(false)}
-              onFocusCapture={() => setHeroPausedByInteraction(true)}
-              onBlurCapture={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setHeroPausedByInteraction(false) }}>
-              <div className="ievx-hero-layout">
-                <div className="ievx-hero-intro">
-                  <div key={heroIndex} className="ievx-hero-story-enter" aria-live="off">
-                    <span className="ievx-hero-kicker">
-                      <span className="size-2 rounded-full bg-[#7cdec4]" aria-hidden />
-                      {heroStory.kicker}
-                    </span>
-                    <h1 className="ievx-hero-title">
-                      {heroStory.line}
-                      <span className="block text-[#b2e7d5]">{heroStory.accent}</span>
-                    </h1>
-                    <p className="ievx-hero-copy">{heroStory.description}</p>
-                  </div>
-                  <div className="ievx-hero-cta flex flex-wrap items-center gap-2.5">
-                    <button type="button" className="ievx-hero-action"
-                      onClick={() => {
-                        setBrowseAll(true)
-                        setPage(1)
-                        document.getElementById('browse')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                      }}>
-                      Explore events <ArrowRight className="size-4" aria-hidden />
-                    </button>
-                    <button type="button" className="ievx-hero-action ievx-hero-action-secondary" onClick={() => navigate('/live')}>
-                      <Radio className="size-4" aria-hidden /> Watch live
-                    </button>
-                    <button type="button" className="ievx-hero-text-action" onClick={() => navigate(user ? '/create-org' : '/register')}>
-                      Host an event <ArrowUpRight className="size-4" aria-hidden />
-                    </button>
-                  </div>
-
-                  <div className="ievx-hero-story-controls" role="group" aria-label="Homepage highlights">
-                    {HERO_STORIES.map((story, i) => (
-                      <button key={story.label} type="button" className={i === heroIndex ? 'is-active' : ''}
-                        aria-label={'Show highlight ' + (i + 1) + ': ' + story.label}
-                        aria-current={i === heroIndex ? 'true' : undefined}
-                        onClick={() => setHeroIndex(i)}>
-                        <span className="sr-only">{story.label}</span>
-                      </button>
-                    ))}
-                    <button type="button" className="ievx-hero-play-toggle"
-                      aria-label={heroPlaying ? 'Pause rotating highlights' : 'Resume rotating highlights'}
-                      aria-pressed={!heroPlaying} onClick={() => setHeroPlaying((playing) => !playing)}>
-                      {heroPlaying ? <Pause className="size-3.5" aria-hidden /> : <Play className="size-3.5" aria-hidden />}
-                    </button>
-                  </div>
-
-                  {heroIndex === 0 && primaryEvent ? (
-                    <button type="button" className="ievx-hero-mobile-feature lg:hidden"
-                      onClick={() => navigate('/event/' + primaryEvent.slug)}
-                      aria-label={'See featured event ' + primaryEvent.title}>
-                      {primaryEvent.coverImageUrl ? (
-                        <img src={primaryEvent.coverImageUrl} loading="lazy" alt=""
-                          className="size-11 shrink-0 rounded-lg object-cover" />
-                      ) : (
-                        <span className="grid size-11 shrink-0 place-items-center rounded-lg bg-white/10"><CalendarDays className="size-5" aria-hidden /></span>
-                      )}
-                      <span className="min-w-0 flex-1 text-left">
-                        <span className="block text-[10px] font-bold uppercase tracking-[0.12em] text-[#abddce]">In the spotlight</span>
-                        <span className="block truncate text-sm font-semibold">{primaryEvent.title}</span>
-                      </span>
-                      <ChevronRight className="size-4 shrink-0 text-[#b2e7d5]" aria-hidden />
-                    </button>
-                  ) : heroIndex === 1 ? (
-                    <button type="button" className="ievx-hero-mobile-feature lg:hidden"
-                      onClick={() => { setBrowseAll(true); applyFilter('mode', 'ONLINE') }}>
-                      <span className="grid size-11 shrink-0 place-items-center rounded-lg bg-white/10"><Monitor className="size-5" aria-hidden /></span>
-                      <span className="min-w-0 flex-1 text-left">
-                        <span className="block text-[10px] font-bold uppercase tracking-[0.12em] text-[#abddce]">Explore online</span>
-                        <span className="block truncate text-sm font-semibold">Events you can join remotely</span>
-                      </span>
-                      <ChevronRight className="size-4 shrink-0" aria-hidden />
-                    </button>
-                  ) : heroIndex === 2 ? (
-                    <button type="button" className="ievx-hero-mobile-feature lg:hidden"
-                      onClick={() => navigate(user ? '/create-org' : '/register')}>
-                      <span className="grid size-11 shrink-0 place-items-center rounded-lg bg-white/10"><CalendarCheck className="size-5" aria-hidden /></span>
-                      <span className="min-w-0 flex-1 text-left">
-                        <span className="block text-[10px] font-bold uppercase tracking-[0.12em] text-[#abddce]">For event creators</span>
-                        <span className="block truncate text-sm font-semibold">Create your own gathering</span>
-                      </span>
-                      <ChevronRight className="size-4 shrink-0" aria-hidden />
-                    </button>
-                  ) : null}
-
-                  <div className="ievx-hero-quick" aria-label="Quick ways to explore">
-                    <button type="button" onClick={() => applyFilter('when', 'TODAY')}>Today</button>
-                    <button type="button" onClick={() => applyFilter('when', 'THIS_WEEKEND')}>This weekend</button>
-                    <button type="button" onClick={() => applyFilter('price', 'FREE')}>Free events</button>
-                    <button type="button" onClick={() => applyFilter('mode', 'ONLINE')}>
-                      <Monitor className="size-3.5" aria-hidden /> Join online
-                    </button>
-                    <button type="button" onClick={() => navigate('/reels')}>
-                      <Film className="size-3.5" aria-hidden /> Explore clips
-                    </button>
-                    <button type="button" className="ievx-mobile-quick" onClick={() => setPlannerOpen(true)}>
-                      <CalendarCheck className="size-3.5" aria-hidden /> Plan a weekend
-                    </button>
-                    <button type="button" className="ievx-mobile-quick" onClick={() => document.getElementById('ai-search')?.scrollIntoView({ behavior: 'smooth' })}>
-                      <Wand2 className="size-3.5" aria-hidden /> Find events
-                    </button>
-                  </div>
-                </div>
-
-                {heroIndex === 0 && primaryEvent ? (
-                  <div key="event" className="ievx-hero-visual ievx-hero-visual-enter hidden min-w-0 lg:block">
-                    <HeroSpotlight event={primaryEvent} />
-                  </div>
-                ) : (
-                  <div key={heroIndex} className="ievx-hero-visual ievx-hero-visual-enter ievx-hero-no-feature hidden min-w-0 lg:flex">
-                    <div className="relative z-10 max-w-sm space-y-4 text-center">
-                      <span className="mx-auto grid size-20 place-items-center rounded-3xl border border-white/25 bg-white/10 text-[#c5f9e7]">
-                        {heroIndex === 1 ? <Globe2 className="size-11" aria-hidden /> : <UsersRound className="size-11" aria-hidden />}
-                      </span>
-                      <p className="text-2xl font-extrabold leading-tight">{heroIndex === 1 ? 'Find experiences beyond borders.' : 'Every great community starts somewhere.'}</p>
-                      <p className="text-sm leading-relaxed text-[#c9dedc]">{heroIndex === 1 ? 'Explore the actual online and hybrid events in the catalogue.' : 'Your next audience can find you here.'}</p>
-                      <button type="button" className="mx-auto inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/30 bg-white/15 px-5 py-3 text-sm font-bold text-white hover:bg-white/25"
-                        onClick={() => heroIndex === 1 ? (setBrowseAll(true), applyFilter('mode', 'ONLINE')) : navigate(user ? '/create-org' : '/register')}>
-                        {heroIndex === 1 ? 'Find online events' : 'Get started'} <ArrowUpRight className="size-4" aria-hidden />
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-            <div className="ievx-hero-ticker" aria-hidden="true">
-              <div className="ievx-hero-ticker-track">
-                <span>CONCERTS ✦ CONFERENCES ✦ FESTIVALS ✦ WORSHIP ✦ WORKSHOPS ✦ COMMUNITY ✦ </span>
-                <span>CONCERTS ✦ CONFERENCES ✦ FESTIVALS ✦ WORSHIP ✦ WORKSHOPS ✦ COMMUNITY ✦ </span>
-              </div>
-            </div>
-            {home && (
-              <div className="ievx-real-activity" aria-label="Current platform activity">
-                <span><CalendarDays className="size-4" aria-hidden /> <strong>{statEvents}</strong> upcoming</span>
-                <span><UsersRound className="size-4" aria-hidden /> <strong>{statOrgs}</strong> {statOrgs === 1 ? 'organizer' : 'organizers'}</span>
-                <span><Radio className="size-4" aria-hidden /> <strong>{statLive}</strong> live now</span>
-                <button type="button" onClick={() => setPlannerOpen(true)}>Plan your weekend <ArrowRight className="size-3.5" aria-hidden /></button>
-              </div>
-            )}
-          </div>
-        </section>
-      )}
-
       {/* Search + filters */}
-      <section id="browse" className="ievx-discovery-search sticky top-[52px] z-20">
+      <section id="browse" className="ievx-discovery-search z-20 lg:sticky lg:top-16">
         <div className="mx-auto flex max-w-[1500px] flex-wrap items-center gap-2 px-3 py-2.5 sm:px-6 lg:px-8">
           <form
-            className="flex min-w-0 flex-1 items-center"
+            className="flex min-w-[140px] flex-1 items-center"
             role="search"
             onSubmit={(e) => {
               e.preventDefault()
@@ -554,16 +403,16 @@ export default function Discover({ route }: { route: Route }) {
                 defaultValue={filters.q}
                 key={filters.q}
                 type="search"
-                placeholder="Search events, organizers or cities"
+                placeholder="Search events or cities"
                 aria-label="Search events"
-                className="h-10 w-full rounded-xl border border-border bg-card pl-10 pr-3 text-sm text-foreground outline-none transition-shadow focus:border-primary focus:ring-2 focus:ring-primary/15"
+                className="h-12 w-full rounded-xl border border-border bg-card pl-10 pr-3 text-base text-foreground outline-none transition-shadow focus:border-primary focus:ring-2 focus:ring-primary/15"
               />
             </div>
           </form>
 
           <div className="hidden sm:block">
             <Select value={filters.country || 'any'} onValueChange={(value) => applyFilter('country', value === 'any' ? '' : value)}>
-              <SelectTrigger className="h-10 w-[170px] rounded-xl" aria-label="Discover events by country">
+              <SelectTrigger className="h-12 w-[170px] rounded-xl" aria-label="Discover events by country">
                 <Globe2 className="mr-1 size-4 shrink-0" aria-hidden />
                 <SelectValue placeholder="Worldwide" />
               </SelectTrigger>
@@ -575,8 +424,8 @@ export default function Discover({ route }: { route: Route }) {
               </SelectContent>
             </Select>
           </div>
-          <div className="ml-auto flex items-center gap-2">
-            <div className="hidden items-center gap-1 md:flex">
+          <div className="ml-auto flex min-w-0 items-center gap-2">
+            <div className="hidden flex-wrap items-center gap-1 xl:flex">
               {WHEN_CHIPS.map((chip) => (
                 <button
                   key={chip.value}
@@ -600,7 +449,7 @@ export default function Discover({ route }: { route: Route }) {
             </div>
             <Sheet open={filtersOpen} onOpenChange={setFiltersOpen}>
               <SheetTrigger asChild>
-                <Button variant="outline" className="rounded-full">
+                <Button variant="outline" className="rounded-full" aria-label="Open event filters">
                   <SlidersHorizontal className="h-4 w-4" aria-hidden /> <span className="hidden sm:inline">Filters</span>
                 </Button>
               </SheetTrigger>
@@ -724,12 +573,142 @@ export default function Discover({ route }: { route: Route }) {
         )}
       </section>
 
+      {/* Public entry: real-world discovery first, real featured media second. */}
+      {!browsing && (
+        <section className="ievx-home-hero" aria-label="Discover events worldwide">
+          <div className="mx-auto max-w-[1500px] px-3 pt-3 pb-3 sm:px-6 sm:pt-5 sm:pb-5 lg:px-8 lg:pt-7 lg:pb-6">
+            <div className="ievx-hero-panel" data-hero-story={heroIndex}
+              onMouseEnter={() => setHeroPausedByInteraction(true)}
+              onMouseLeave={() => setHeroPausedByInteraction(false)}
+              onFocusCapture={() => setHeroPausedByInteraction(true)}
+              onBlurCapture={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setHeroPausedByInteraction(false) }}>
+              <div className="ievx-hero-layout">
+                <div className="ievx-hero-intro">
+                  <div key={heroIndex} className="ievx-hero-story-enter" aria-live="off">
+                    <span className="ievx-hero-kicker">
+                      <span className="size-2 rounded-full bg-[#7cdec4]" aria-hidden />
+                      {heroStory.kicker}
+                    </span>
+                    <h1 className="ievx-hero-title">
+                      {heroStory.line}
+                      <span className="ml-1 text-[#b2e7d5] lg:ml-0 lg:block">{heroStory.accent}</span>
+                    </h1>
+                    <p className="ievx-hero-copy hidden lg:block">{heroStory.description}</p>
+                  </div>
+                  <div className="ievx-hero-cta hidden flex-wrap items-center gap-2.5 lg:flex">
+                    <button type="button" className="ievx-hero-action"
+                      onClick={() => {
+                        setBrowseAll(true)
+                        setPage(1)
+                        document.getElementById('browse')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                      }}>
+                      Explore events <ArrowRight className="size-4" aria-hidden />
+                    </button>
+                    <button type="button" className="ievx-hero-action ievx-hero-action-secondary" onClick={() => navigate('/live')}>
+                      <Radio className="size-4" aria-hidden /> Watch live
+                    </button>
+                    <button type="button" className="ievx-hero-text-action" onClick={() => navigate(user ? '/create-org' : '/register')}>
+                      Host an event <ArrowUpRight className="size-4" aria-hidden />
+                    </button>
+                  </div>
+
+                  <div className="ievx-hero-cta flex flex-wrap items-center gap-2 lg:hidden">
+                    {heroIndex === 0 && primaryEvent ? (
+                      <button type="button" className="ievx-hero-action" onClick={() => navigate('/event/' + primaryEvent.slug)} aria-label={'See featured event ' + primaryEvent.title}>View event <ArrowRight className="size-4" aria-hidden /></button>
+                    ) : heroIndex === 1 ? (
+                      <button type="button" className="ievx-hero-action" onClick={() => { setBrowseAll(true); applyFilter('mode', 'ONLINE') }}>Explore online <ArrowRight className="size-4" aria-hidden /></button>
+                    ) : heroIndex === 2 ? (
+                      <button type="button" className="ievx-hero-action" onClick={() => navigate(user ? '/create-org' : '/register')}>Host event <ArrowRight className="size-4" aria-hidden /></button>
+                    ) : (
+                      <button type="button" className="ievx-hero-action" onClick={() => { setBrowseAll(true); setPage(1) }}>Explore events <ArrowRight className="size-4" aria-hidden /></button>
+                    )}
+                    <button type="button" className="ievx-hero-action ievx-hero-action-secondary" onClick={() => heroIndex === 2 ? navigate('/live') : navigate(user ? '/create-org' : '/register')}>{heroIndex === 2 ? 'Watch live' : 'Host event'}</button>
+                  </div>
+
+                  <div className="ievx-hero-story-controls" role="group" aria-label="Homepage highlights">
+                    {HERO_STORIES.map((story, i) => (
+                      <button key={story.label} type="button" className={i === heroIndex ? 'is-active' : ''}
+                        aria-label={'Show highlight ' + (i + 1) + ': ' + story.label}
+                        aria-current={i === heroIndex ? 'true' : undefined}
+                        onClick={() => setHeroIndex(i)}>
+                        <span className="sr-only">{story.label}</span>
+                      </button>
+                    ))}
+                    <button type="button" className="ievx-hero-play-toggle"
+                      aria-label={heroPlaying ? 'Pause rotating highlights' : 'Resume rotating highlights'}
+                      aria-pressed={!heroPlaying} onClick={() => setHeroPlaying((playing) => !playing)}>
+                      {heroPlaying ? <Pause className="size-3.5" aria-hidden /> : <Play className="size-3.5" aria-hidden />}
+                    </button>
+                  </div>
+
+                  <div className="ievx-hero-quick ievx-hero-desktop-quick" aria-label="Quick ways to explore">
+                    <button type="button" onClick={() => applyFilter('when', 'TODAY')}>Today</button>
+                    <button type="button" onClick={() => applyFilter('when', 'THIS_WEEKEND')}>This weekend</button>
+                    <button type="button" onClick={() => applyFilter('price', 'FREE')}>Free events</button>
+                    <button type="button" onClick={() => applyFilter('mode', 'ONLINE')}>
+                      <Monitor className="size-3.5" aria-hidden /> Join online
+                    </button>
+                    <button type="button" onClick={() => navigate('/reels')}>
+                      <Film className="size-3.5" aria-hidden /> Explore clips
+                    </button>
+                    <button type="button" className="ievx-mobile-quick" onClick={() => setPlannerOpen(true)}>
+                      <CalendarCheck className="size-3.5" aria-hidden /> Plan a weekend
+                    </button>
+                    <button type="button" className="ievx-mobile-quick" onClick={() => document.getElementById('ai-search')?.scrollIntoView({ behavior: 'smooth' })}>
+                      <Wand2 className="size-3.5" aria-hidden /> Find events
+                    </button>
+                  </div>
+                </div>
+
+                {heroIndex === 0 && primaryEvent ? (
+                  <div key="event" className="ievx-hero-visual ievx-hero-visual-enter hidden min-w-0 lg:block">
+                    <HeroSpotlight event={primaryEvent} />
+                  </div>
+                ) : (
+                  <div key={heroIndex} className="ievx-hero-visual ievx-hero-visual-enter ievx-hero-no-feature hidden min-w-0 lg:flex">
+                    <div className="relative z-10 max-w-sm space-y-4 text-center">
+                      <span className="mx-auto grid size-20 place-items-center rounded-3xl border border-white/25 bg-white/10 text-[#c5f9e7]">
+                        {heroIndex === 1 ? <Globe2 className="size-11" aria-hidden /> : <UsersRound className="size-11" aria-hidden />}
+                      </span>
+                      <p className="text-2xl font-extrabold leading-tight">{heroIndex === 1 ? 'Find experiences beyond borders.' : 'Every great community starts somewhere.'}</p>
+                      <p className="text-sm leading-relaxed text-[#c9dedc]">{heroIndex === 1 ? 'Explore the actual online and hybrid events in the catalogue.' : 'Your next audience can find you here.'}</p>
+                      <button type="button" className="mx-auto inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/30 bg-white/15 px-5 py-3 text-sm font-bold text-white hover:bg-white/25"
+                        onClick={() => heroIndex === 1 ? (setBrowseAll(true), applyFilter('mode', 'ONLINE')) : navigate(user ? '/create-org' : '/register')}>
+                        {heroIndex === 1 ? 'Find online events' : 'Get started'} <ArrowUpRight className="size-4" aria-hidden />
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="ievx-hero-ticker hidden lg:block" aria-hidden="true">
+              <div className="ievx-hero-ticker-track">
+                <span>CONCERTS ✦ CONFERENCES ✦ FESTIVALS ✦ WORSHIP ✦ WORKSHOPS ✦ COMMUNITY ✦ </span>
+                <span>CONCERTS ✦ CONFERENCES ✦ FESTIVALS ✦ WORSHIP ✦ WORKSHOPS ✦ COMMUNITY ✦ </span>
+              </div>
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2 lg:hidden">
+              <Button size="sm" variant="outline" onClick={() => setPlannerOpen(true)}><CalendarCheck className="size-4" aria-hidden /> Plan weekend</Button>
+              <Button size="sm" variant="outline" onClick={() => document.getElementById('ai-search')?.scrollIntoView({ behavior: 'smooth' })}><Wand2 className="size-4" aria-hidden /> Find with AI</Button>
+            </div>
+            {home && (
+              <div className="ievx-real-activity" aria-label="Current platform activity">
+                <span><CalendarDays className="size-4" aria-hidden /> <strong>{statEvents}</strong> upcoming</span>
+                <span><UsersRound className="size-4" aria-hidden /> <strong>{statOrgs}</strong> {statOrgs === 1 ? 'organizer' : 'organizers'}</span>
+                <span><Radio className="size-4" aria-hidden /> <strong>{statLive}</strong> live now</span>
+                <button type="button" onClick={() => setPlannerOpen(true)}>Plan your weekend <ArrowRight className="size-3.5" aria-hidden /></button>
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
       {/* Content */}
       <div className="mx-auto max-w-7xl px-4 py-6">
         {browsing ? (
           <section aria-label="Search results" aria-busy={loading}>
             <div className="mb-3 flex flex-wrap items-baseline justify-between gap-3">
-              <h2 className="text-lg font-bold">
+              <h2 className="text-xl font-bold sm:text-2xl">
                 {isSearch && searchQuery ? `Results for “${searchQuery}”` : browseAll && !filters.category && !filters.country && !filters.q ? 'Events worldwide' : 'Browse events'}
               </h2>
               <div className="flex items-center gap-3">
@@ -752,12 +731,12 @@ export default function Discover({ route }: { route: Route }) {
               </div>
             )}
             {loading && !items?.length ? (
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                 {Array.from({ length: 8 }).map((_, i) => <EventCardSkeleton key={i} />)}
               </div>
             ) : items && items.length > 0 ? (
               <>
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                   {items.map((event, i) => <EventCard key={event.id} event={event} index={i} compare={comparison(event)} />)}
                 </div>
                 {items.length < total && (
@@ -780,10 +759,10 @@ export default function Discover({ route }: { route: Route }) {
           <>
             {user && <ForYouRail />}
             {home?.liveNow && home.liveNow.length > 0 && (
-              <section className="mb-8" aria-label="Live now">
+              <section className="mb-10" aria-label="Live now">
                 <div className="mb-3 flex items-center gap-2">
                   <span className="ievx-live-dot" />
-                  <h2 className="text-lg font-bold">Happening live</h2>
+                  <h2 className="text-xl font-bold sm:text-2xl">Happening live</h2>
                   <button
                     type="button"
                     className="efx-underline-slide-link ml-auto"
@@ -799,9 +778,9 @@ export default function Discover({ route }: { route: Route }) {
               </section>
             )}
             {otherFeatured.length > 0 && (
-              <section className="mb-8" aria-label="Featured events">
-                <div className="mb-3 flex items-center justify-between">
-                  <h2 className="text-lg font-bold">Featured gatherings</h2>
+              <section className="mb-10" aria-label="Featured events">
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                  <h2 className="text-xl font-bold sm:text-2xl">Featured gatherings</h2>
                   <button
                     type="button"
                     className="efx-underline-slide-link"
@@ -816,9 +795,9 @@ export default function Discover({ route }: { route: Route }) {
                 </div>
               </section>
             )}
-            <section className="mb-8" aria-label="Upcoming events">
-              <div className="mb-3 flex items-center justify-between">
-                <h2 className="text-lg font-bold">Coming up</h2>
+            <section className="mb-10" aria-label="Upcoming events">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <h2 className="text-xl font-bold sm:text-2xl">Coming up</h2>
                 <div className="flex items-center gap-2">
                   {user && <Button variant="outline" size="sm" className="rounded-full" onClick={() => navigate('/me?tab=saved')}>Saved events</Button>}
                   <button
@@ -838,11 +817,11 @@ export default function Discover({ route }: { route: Route }) {
                   <Button variant="outline" className="rounded-full" onClick={() => setHomeRetry((value) => value + 1)}>Try again</Button>
                 </div>
               ) : home === null ? (
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                   {Array.from({ length: 8 }).map((_, i) => <EventCardSkeleton key={i} />)}
                 </div>
               ) : home.upcoming.length > 0 ? (
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                   {home.upcoming.map((event, i) => <EventCard key={event.id} event={event} index={i} compare={comparison(event)} />)}
                 </div>
               ) : (
@@ -856,9 +835,9 @@ export default function Discover({ route }: { route: Route }) {
 
         {/* Sponsored placements (labelled) — compact native-ad style promo rows */}
         {!browsing && sponsoredEvents.length > 0 && (
-          <section className="mb-8" aria-label="Sponsored events">
+          <section className="mb-10" aria-label="Sponsored events">
             <div className="mb-3 flex items-center gap-2">
-              <h2 className="text-lg font-bold">Promoted for you</h2>
+              <h2 className="text-xl font-bold sm:text-2xl">Promoted for you</h2>
               <Badge variant="secondary" className="text-[10px]">Sponsored</Badge>
             </div>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -871,10 +850,10 @@ export default function Discover({ route }: { route: Route }) {
 
 
             {/* How it works — reassurance for first-time buyers */}
-            <section className="mb-8" aria-label="How it works">
+            <section className="mb-10" aria-label="How it works">
               <div className="mb-3 flex items-center gap-2">
                 <CalendarCheck className="h-5 w-5 text-primary" aria-hidden />
-                <h2 className="text-lg font-bold">How iEventPlux works</h2>
+                <h2 className="text-xl font-bold sm:text-2xl">How iEventPlux works</h2>
               </div>
               <div className="grid gap-3 sm:grid-cols-3">
                 {HOW_IT_WORKS.map((step, i) => (
