@@ -170,6 +170,11 @@ jobs:
           IEVENTPLUX_ISOLATED_DB_TEST: "yes"
         run: bash scripts/verify-transport-departure-migration.sh
 
+      - name: Sandbox payment identity concurrency (no provider calls)
+        env:
+          IEVENTPLUX_ISOLATED_DB_TEST: "yes"
+        run: bun run scripts/sandbox-transaction-binding-smoke.ts
+
       - name: Start the stack
         run: |
           (IEVENTPLUX_GROUP_MEETINGS_ENABLED=true bun run dev > dev.log 2>&1 &)

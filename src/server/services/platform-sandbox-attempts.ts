@@ -1,3 +1,4 @@
+import {bindSandboxTransaction} from './sandbox-transaction-binding'
 import {db} from '@/lib/db'
 import {buildSandboxCheckout} from '../platform-paystack-adapter'
 import {paymentIntentSnapshot,requireMatchingIntent} from '../platform-payment-intent'
@@ -41,11 +42,7 @@ export async function recordSandboxNotification(raw:Uint8Array,header:string,key
  return db.$transaction(async tx=>{
   const attempt=await tx.platformSandboxAttempt.findUnique({where:{reference:event.reference}})
   if(!attempt||attempt.expectedAmountMinor!==event.amountMinor||attempt.currency!==event.currency)throw new Error('Notification does not match prepared attempt.')
-  if(attempt.providerTransactionId&&attempt.providerTransactionId!==event.providerTransactionId)throw new Error('Conflicting provider transaction.')
-  const updated=await tx.platformSandboxAttempt.updateMany({where:{id:attempt.id,OR:[{providerTransactionId:null},{providerTransactionId:event.providerTransactionId}]},data:{providerTransactionId:event.providerTransactionId,status:'NOTIFICATION_RECEIVED'}})
-  if(updated.count!==1)throw new Error('Conflicting provider transaction.')
-  const evidence=await tx.platformSandboxCollectionEvidence.findUnique({where:{attemptId:attempt.id}})
-  if(evidence&&evidence.providerTransactionId!==event.providerTransactionId)throw new Error('Notification conflicts with independent collection evidence.')
+  await bindSandboxTransaction(tx,attempt.id,event.providerTransactionId,true)
   await tx.platformSandboxNotification.upsert({where:{dedupKey:event.dedupKey},create:{dedupKey:event.dedupKey,attemptId:attempt.id,providerTransactionId:event.providerTransactionId},update:{}})
   return {status:'NOTIFICATION_RECEIVED' as const,fulfillmentEnabled:false as const}
  })
