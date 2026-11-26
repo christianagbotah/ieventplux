@@ -137,40 +137,31 @@ export function EventCard({ event, index = 0, footer, compare }: {
           {compare.selected ? <Check className="size-4" aria-hidden /> : <ListChecks className="size-4" aria-hidden />}
           {compare.selected ? 'Selected' : 'Compare'}
         </button>}
-        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 via-black/25 to-transparent p-3 pt-8">
-          <div className="flex items-center gap-2 text-[11.5px] font-medium text-white/95">
-            <CalendarDays className="h-3.5 w-3.5" aria-hidden />
-            {dateShort(event.startsAt)}
-            {event.mode === 'VIRTUAL' ? (
-              <>
-                <Monitor className="ml-1 h-3.5 w-3.5" aria-hidden />
-                Online · join anywhere
-              </>
-            ) : (event.city || event.country) && (
-              <>
-                <MapPin className="ml-1 h-3.5 w-3.5" aria-hidden />
-                {[event.city, event.country ? countryLabel(event.country) : null].filter(Boolean).join(', ')}
-              </>
-            )}
-          </div>
-        </div>
       </div>
-      <div className="space-y-2 p-3.5">
-        <h3 className="line-clamp-2 min-h-[2.6em] font-semibold leading-snug group-hover:text-primary">{event.title}</h3>
-        {event.org?.name && <p className="text-xs text-muted-foreground">{event.org.name}{event.org.verifiedAt ? ' · Verified' : ''}</p>}
+      <div className="flex flex-1 flex-col gap-3 p-5">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm font-medium text-primary">
+          <span className="inline-flex items-center gap-1.5"><CalendarDays className="size-4 shrink-0" aria-hidden />{dateShort(event.startsAt)}</span>
+          {event.mode === 'VIRTUAL' ? (
+            <span className="inline-flex items-center gap-1.5 text-muted-foreground"><Monitor className="size-4 shrink-0" aria-hidden />Online</span>
+          ) : (event.city || event.country) && (
+            <span className="inline-flex min-w-0 items-start gap-1.5 text-muted-foreground"><MapPin className="mt-0.5 size-4 shrink-0" aria-hidden /><span className="break-words">{[event.city, event.country ? countryLabel(event.country) : null].filter(Boolean).join(', ')}</span></span>
+          )}
+        </div>
+        <h3 className="break-words text-lg font-bold leading-snug group-hover:text-primary">{event.title}</h3>
+        {event.org?.name && <p className="break-words text-sm leading-relaxed text-muted-foreground">{event.org.name}{event.org.verifiedAt ? ' · Verified' : ''}</p>}
         {typeof event.ratingAvg === 'number' && event.ratingCount && event.ratingCount > 0 && (
-          <p className="flex items-center gap-1 text-xs font-medium" aria-label={`Rated ${event.ratingAvg} out of 5 by ${event.ratingCount} attendees`}>
+          <p className="flex items-center gap-1 text-sm font-medium" aria-label={`Rated ${event.ratingAvg} out of 5 by ${event.ratingCount} attendees`}>
             <Star className="h-3.5 w-3.5 fill-accent text-accent" aria-hidden />
             <span className="font-bold">{event.ratingAvg}</span>
             <span className="text-muted-foreground">({event.ratingCount} review{event.ratingCount === 1 ? '' : 's'})</span>
           </p>
         )}
-        <div className="flex items-center justify-between pt-1">
-          <Badge variant="outline" className="gap-1 text-[11px] capitalize">
+        <div className="mt-auto flex flex-wrap items-center justify-between gap-2 border-t border-border/70 pt-3">
+          <Badge variant="outline" className="gap-1 text-sm capitalize">
             {event.mode === 'VIRTUAL' ? <Monitor className="h-3 w-3" /> : event.mode === 'HYBRID' ? <Radio className="h-3 w-3" /> : <MapPin className="h-3 w-3" />}
             {humanize(event.mode ?? 'Physical')}
           </Badge>
-          <span className="text-sm font-bold text-primary">{priceLabel(event)}</span>
+          <span className="text-base font-bold text-primary">{priceLabel(event)}</span>
         </div>
         {footer}
       </div>
@@ -182,7 +173,7 @@ export function EventCardSkeleton() {
   return (
     <Card className="flex-col gap-0 overflow-hidden rounded-2xl py-0" aria-hidden>
       <div className="ievx-skeleton aspect-[16/10] w-full" />
-      <div className="space-y-2.5 p-3.5">
+      <div className="space-y-3 p-5">
         <div className="ievx-skeleton h-4 w-4/5 rounded" />
         <div className="ievx-skeleton h-3 w-2/5 rounded" />
         <div className="ievx-skeleton h-6 w-24 rounded-full" />
@@ -205,8 +196,8 @@ export function EventRow({ event }: { event: EventCardData }) {
         )}
       </div>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-semibold">{event.title}</p>
-        <p className="truncate text-xs text-muted-foreground">{event.org?.name} · {dateShort(event.startsAt)}</p>
+        <p className="break-words text-base font-semibold">{event.title}</p>
+        <p className="break-words text-sm text-muted-foreground">{event.org?.name} · {dateShort(event.startsAt)}</p>
       </div>
       <span className="text-sm font-bold text-primary">{priceLabel(event)}</span>
     </button>
