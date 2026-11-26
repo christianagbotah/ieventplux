@@ -4,6 +4,7 @@ import { ActivityIndicator, Image, Linking, Pressable, ScrollView, StyleSheet, T
 import { absoluteUrl, api } from '../api/client'
 import { clearTicketWallet } from '../lib/ticket-wallet'
 import { useSession } from '../store/session'
+import PushSettings from '../components/PushSettings'
 import { theme } from '../theme'
 import { LabelPill, PremiumBackdrop, SectionHeading, TileGlyph, mobileDesign } from '../ui/PremiumUI'
 import type { AccountScreenProps } from '../navigation'
@@ -76,6 +77,7 @@ export default function AccountScreen({ navigation }: AccountScreenProps) {
       </>}
       {verifyNotice ? <Text accessibilityLiveRegion="polite" style={styles.rowDetail}>{verifyNotice}</Text> : null}
     </View>}
+    {user&&<PushSettings key={user.id} userId={user.id}/>}
     <SectionHeading title="Your account"/>
     <View style={styles.quickGrid}>
       <QuickTile kind="ticket" title="My tickets" detail="Passes & QR codes" onPress={()=>navigation.navigate('MyTickets')}/>

@@ -18,12 +18,13 @@ async function main(){
  const installationKey=key(),providerToken='ExpoPushToken['+key()+']'
  const data={installationKey,providerToken,platform:'ANDROID',permissionGranted:true}
  const call=async(method:string,body:object,cookie?:string,path='/notifications/devices')=>{
-  const res=await fetch(base+path,{method,headers:{'Content-Type':'application/json',...(cookie?{Cookie:cookie}:{})},body:JSON.stringify(body)})
+  const res=await fetch(base+path,{method,headers:{'Content-Type':'application/json',...(cookie?{Cookie:cookie}:{})},body:JSON.stringify({expectedUserId:cookie===a.cookie?a.user.id:cookie===b.cookie?b.user.id:undefined,...body})})
   return {status:res.status,headers:res.headers,body:await res.json()}
  }
  try{
   check((await call('POST',data)).status===401,'anonymous registration denied')
   check((await call('POST',{...data,permissionGranted:false},a.cookie)).status===400,'permission must be granted')
+  check((await call('POST',{...data,expectedUserId:b.user.id},a.cookie)).status===409,'stale client cannot register against a different authenticated account')
   const registered=await call('POST',data,a.cookie)
   check(registered.status===200&&registered.body.registered&&registered.body.deliveryEnabled===false&&!JSON.stringify(registered.body).includes(providerToken)&&registered.headers.get('cache-control')?.includes('no-store'),'private registration, no delivery claim or token exposure')
   check((await call('POST',data,a.cookie)).status===200,'same installation idempotent')

@@ -14,6 +14,8 @@ import {
   type ReactNode,
 } from 'react'
 import { api, type Membership, type User } from '../api/client'
+import {AppState} from 'react-native'
+import {allowPushAccount,refreshPush,revokePushBeforeLogout} from '../lib/push-registration'
 
 export type SessionStatus = 'restoring' | 'authenticated' | 'anonymous' | 'error'
 
@@ -71,8 +73,21 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setError(null)
   }, [])
 
+  useEffect(()=>{
+    if(status!=='authenticated'||!user?.id)return
+    const id=user.id
+    allowPushAccount(id)
+    void refreshPush(id).catch(()=>{})
+    const sub=AppState.addEventListener('change',state=>{
+      if(state==='active')void refreshPush(id).catch(()=>{})
+    })
+    return()=>sub.remove()
+  },[status,user?.id])
+
   const signOut = useCallback(async () => {
     try {
+      if(user?.id)await revokePushBeforeLogout(user.id).catch(()=>{})
+
       await api.auth.logout()
     } catch {
       // Even if the network call fails, drop local state (cookie may be expired).
@@ -80,7 +95,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setUser(null)
     setMemberships([])
     setStatus('anonymous')
-  }, [])
+  }, [user?.id])
 
   const value = useMemo<SessionContextValue>(
     () => ({ status, user, memberships, error, signIn, refresh, signOut }),
