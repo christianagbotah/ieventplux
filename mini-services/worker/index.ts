@@ -8,6 +8,8 @@
 import { createServer } from 'http'
 import { runJob } from '../../src/server/jobs/handlers'
 import { db } from '../../src/lib/db'
+import {runPushDeliveryTick} from '../../src/server/services/push-delivery'
+import {pushTransportConfigured} from '../../src/server/push-delivery-policy'
 
 const PORT = Number(process.env.WORKER_PORT ?? 3001)
 const WORKER_SECRET = process.env.WORKER_SECRET ?? 'dev-worker-secret'
@@ -137,6 +139,18 @@ httpServer.listen(PORT, process.env.NODE_ENV === 'production' ? '127.0.0.1' : '0
   console.log(`[worker] ${WORKER_ID} listening on :${PORT}`)
   void tick()
   setInterval(() => void tick(), 5000)
+  if(pushTransportConfigured(process.env)){
+    let pushing=false
+    const pushTick=async()=>{
+      if(pushing)return
+      pushing=true
+      try{await runPushDeliveryTick()}
+      catch{console.error('[worker] push delivery tick failed')}
+      finally{pushing=false}
+    }
+    void pushTick()
+    setInterval(()=>void pushTick(),5000)
+  }
 })
 
 process.on('SIGTERM', () => {

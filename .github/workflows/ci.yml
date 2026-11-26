@@ -176,6 +176,14 @@ jobs:
           IEVENTPLUX_ISOLATED_DB_TEST: "yes"
         run: bash scripts/verify-push-installation-migration.sh
 
+      - name: Push delivery ledger migration and synthetic worker tests (no provider calls)
+        env:
+          IEVENTPLUX_ISOLATED_DB_TEST: "yes"
+        run: |
+          bash scripts/verify-push-delivery-migration.sh
+          bun test src/server/push-delivery-policy.test.ts
+          bun run scripts/push-delivery-smoke.ts
+
       - name: Sandbox payment identity concurrency (no provider calls)
         env:
           IEVENTPLUX_ISOLATED_DB_TEST: "yes"
