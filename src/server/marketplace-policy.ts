@@ -22,6 +22,9 @@ function httpsUrl(value: unknown): string | null {
     return u.toString()
   } catch { throw new MarketplacePolicyError('Images and websites must use valid HTTPS URLs.') }
 }
+function imageUrl(value:unknown):string|null {
+  return typeof value==='string'&&/^\/uploads\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(jpg|png|webp)$/i.test(value)?value:httpsUrl(value)
+}
 function slug(value: unknown): string {
   if (typeof value !== 'string' || !/^[a-z0-9][a-z0-9-]{2,58}[a-z0-9]$/.test(value))
     throw new MarketplacePolicyError('Use a lowercase address of 4–60 letters, numbers and hyphens.')
@@ -45,7 +48,7 @@ export function parseStoreDraft(raw: unknown): StoreDraft {
   if(region&&!GHANA_REGIONS.some(r=>r===region))throw new MarketplacePolicyError('Choose a valid Ghana region.')
   return { name, slug: slug(x.slug), category,country,region,
     tagline: optionalText(x.tagline, 180), description: optionalText(x.description, 2400),
-    logoUrl: httpsUrl(x.logoUrl), coverUrl: httpsUrl(x.coverUrl),
+    logoUrl: imageUrl(x.logoUrl), coverUrl: imageUrl(x.coverUrl),
     website: httpsUrl(x.website), city: optionalText(x.city, 90),
     pickupAddress: optionalText(x.pickupAddress, 350),
   }
