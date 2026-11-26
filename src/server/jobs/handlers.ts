@@ -71,7 +71,10 @@ export async function runJob(type: string, payload: JobPayload): Promise<{ detai
       const { invitationPilotEnabled } = await import('../direct-call-policy')
       if (!invitationPilotEnabled(process.env)) return {detail:'disabled'}
       const { sweepDirectCalls } = await import('../services/direct-calls')
-      return {detail:`settled=${await sweepDirectCalls()}`}
+      const settled=await sweepDirectCalls()
+      const {sweepIsolatedDirectCallRooms}=await import('../services/direct-call-rooms')
+      const rooms=await sweepIsolatedDirectCallRooms()
+      return {detail:`settled=${settled} rooms=${rooms?.scanned??0} closed=${rooms?.closed??0} evicted=${rooms?.evicted??0} failures=${rooms?.failed??0}`}
     }
     case 'DIRECT_ACTIVITY_CLEANUP': {
       const now = new Date()
