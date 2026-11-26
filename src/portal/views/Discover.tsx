@@ -536,7 +536,7 @@ export default function Discover({ route }: { route: Route }) {
       <section id="browse" className="ievx-discovery-search sticky top-16 z-20">
         <div className="mx-auto flex max-w-[1500px] flex-wrap items-center gap-2 px-3 py-2.5 sm:px-6 lg:px-8">
           <form
-            className="flex min-w-0 flex-1 items-center"
+            className="flex min-w-[140px] flex-1 items-center"
             role="search"
             onSubmit={(e) => {
               e.preventDefault()
@@ -575,8 +575,8 @@ export default function Discover({ route }: { route: Route }) {
               </SelectContent>
             </Select>
           </div>
-          <div className="ml-auto flex items-center gap-2">
-            <div className="hidden items-center gap-1 md:flex">
+          <div className="ml-auto flex min-w-0 items-center gap-2">
+            <div className="hidden flex-wrap items-center gap-1 xl:flex">
               {WHEN_CHIPS.map((chip) => (
                 <button
                   key={chip.value}
