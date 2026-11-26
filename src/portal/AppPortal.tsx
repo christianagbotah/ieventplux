@@ -426,7 +426,7 @@ export default function AppPortal() {
 
       {/* Mobile bottom navigation */}
       <nav className={`${workspaceMode ? 'hidden' : 'fixed'} inset-x-0 bottom-0 z-30 border-t border-border bg-card shadow-[0_-3px_14px_rgb(16_35_51_/_0.06)] lg:hidden`} aria-label="Mobile primary">
-        <div className="mx-auto flex min-h-16 max-w-lg items-center justify-around px-2 py-1 pb-[calc(0.25rem+env(safe-area-inset-bottom))]">
+        <div className="mx-auto flex min-h-16 max-w-lg items-center justify-around px-0 min-[360px]:px-2 py-1 pb-[calc(0.25rem+env(safe-area-inset-bottom))]">
           {MOBILE_NAV.map((item) => {
             const active = item.path.startsWith('/me')
               ? route.segments[0] === 'me' && (route.query.get('tab') ?? 'tickets') === item.tab
@@ -438,7 +438,7 @@ export default function AppPortal() {
                 onClick={() => navigate(item.path)}
                 aria-current={active ? 'page' : undefined}
                 aria-label={item.label}
-                className={`flex min-h-12 min-w-0 flex-1 flex-col items-center justify-center gap-1 ievx-mobile-nav-item rounded-xl px-0.5 py-1.5 text-[10px] font-semibold transition-colors min-[360px]:text-[11px] sm:text-xs ievx-press ${
+                className={`flex min-h-12 min-w-0 flex-1 flex-col items-center justify-center gap-1 ievx-mobile-nav-item rounded-xl px-0 min-[360px]:px-0.5 py-1.5 text-[10px] font-semibold transition-colors min-[360px]:text-[11px] sm:text-xs ievx-press ${
                   active ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
                 }`}
               >
