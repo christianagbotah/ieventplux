@@ -20,6 +20,7 @@ import { CommandPalette } from './components/CommandPalette'
 import { EffectsRuntime } from './components/EffectsRuntime'
 import { EventCardSkeleton } from './components/EventCard'
 import { MeetingErrorBoundary } from './components/MeetingErrorBoundary'
+import IncomingCallInvitation from './components/IncomingCallInvitation'
 
 const Discover = lazy(() => import('./views/Discover'))
 const EventDetail = lazy(() => import('./views/EventDetail'))
@@ -266,6 +267,7 @@ export default function AppPortal() {
     <div className="flex min-h-screen flex-col bg-background text-foreground">
       {/* Effects Studio catalog — globally available efx-* classes for every view. */}
       <EffectsRuntime />
+      {user&&<IncomingCallInvitation key={user.id} userId={user.id} visible={!immersiveMode&&route.segments[0]!=='messages'}/>}
       {/* A #main anchor would be mistaken for an SPA route by the hash router. */}
       <button
         type="button"

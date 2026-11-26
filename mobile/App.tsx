@@ -34,6 +34,7 @@ import NotificationsScreen from './src/screens/NotificationsScreen'
 import DirectMessagesScreen from './src/screens/DirectMessagesScreen'
 import ForegroundActivity from './src/components/ForegroundActivity'
 import PushActivityBridge from './src/components/PushActivityBridge'
+import IncomingCallInvitation from './src/components/IncomingCallInvitation'
 import {activityDestination} from './src/lib/push-activity-policy'
 import OrganizerStudioScreen from './src/screens/OrganizerStudioScreen'
 import CreateOrganizerScreen from './src/screens/CreateOrganizerScreen'
@@ -174,6 +175,7 @@ function AppNavigation() {
   return <NavigationContainer ref={navigationRef} linking={linking} onReady={syncRoute} onStateChange={syncRoute}>
     <View style={styles.appContainer}>
       <AppRoutes />
+      {status==='authenticated'&&user&&<IncomingCallInvitation key={user.id} userId={user.id} visible={!!currentRoute&&!['DirectMessages','NativeMeeting','Broadcast','Login'].includes(currentRoute)} onAccepted={id=>{if(navigationRef.isReady())navigationRef.navigate('DirectMessages',{id})}}/>}
       <PushActivityBridge ready={!!currentRoute&&(status==='authenticated'||status==='anonymous')} userId={status==='authenticated'?user?.id:undefined} onOpen={openPushActivity}/>
       {status === 'authenticated' && user ? <ForegroundActivity key={user.id} userId={user.id}
         visible={currentRoute !== 'Notifications' && currentRoute !== 'NativeMeeting' && currentRoute !== 'Broadcast' && currentRoute !== 'Login'}
