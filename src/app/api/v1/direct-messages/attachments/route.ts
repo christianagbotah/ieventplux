@@ -1,4 +1,4 @@
-import {NextRequest} from 'next/server'
+import {NextRequest,NextResponse} from 'next/server'
 import {errors,handle,jsonOk,rateLimit,requireUser} from '@/server/api'
 import {validDirectId,parseDirectMessage} from '@/server/direct-message-policy'
 import {attachmentsEnabled} from '@/server/direct-attachment-policy'
@@ -15,7 +15,7 @@ export async function GET(req:NextRequest){
   await rateLimit(req,'direct-attachment-read',60,60_000)
   const file=await readDirectAttachment(messageId,user.id)
   if(req.nextUrl.searchParams.get('encoding')==='base64')return jsonOk({filename:file.filename,mime:file.mime,size:file.size,base64:file.bytes.toString('base64')},{headers})
-  return new Response(new Uint8Array(file.bytes),{headers:{...headers,'Content-Type':file.mime,'Content-Length':String(file.size),'Content-Disposition':'attachment; filename="'+file.filename+'"','Content-Security-Policy':"default-src 'none'; sandbox"}})
+  return new NextResponse(new Uint8Array(file.bytes),{headers:{...headers,'Content-Type':file.mime,'Content-Length':String(file.size),'Content-Disposition':'attachment; filename="'+file.filename+'"','Content-Security-Policy':"default-src 'none'; sandbox"}})
  })
 }
 export async function POST(req:NextRequest){
