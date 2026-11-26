@@ -961,6 +961,10 @@ export const api = {
     list: (page=1) => request<NotificationsResponse>('GET','/notifications?page='+page+'&pageSize=20'),
     mark: (id:string) => request<{ok:boolean}>('POST','/notifications',{id}),
     markAll: () => request<{ok:boolean}>('POST','/notifications',{all:true}),
+    registerDevice: (data:{installationKey:string;providerToken:string;platform:'ANDROID'|'IOS';permissionGranted:true;expectedUserId:string}) =>
+      request<{registered:boolean;deliveryEnabled:boolean}>('POST','/notifications/devices',data),
+    revokeDevice: (installationKey:string,expectedUserId:string) =>
+      request<{registered:boolean;deliveryEnabled:boolean}>('DELETE','/notifications/devices',{installationKey,expectedUserId}),
   },
 }
 
