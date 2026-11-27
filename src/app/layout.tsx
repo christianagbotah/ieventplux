@@ -41,8 +41,8 @@ export const metadata: Metadata = {
     description: "Explore events worldwide, discover online experiences and register for gatherings that matter to you.",
   },
   icons: {
-    icon: "/logo.svg",
-    apple: "/logo.svg",
+    icon: { url: "/logo.svg?v=ticket-1", type: "image/svg+xml", sizes: "any" },
+    apple: "/logo.svg?v=ticket-1",
   },
 };
 

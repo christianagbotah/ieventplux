@@ -26,12 +26,12 @@
  * and does not depend on this worker.
  */
 
-const VERSION = 'ievp-v3'
+const VERSION = 'ievp-v4'
 const SHELL_CACHE = `${VERSION}-shell`
 const ASSET_CACHE = `${VERSION}-assets`
 const API_CACHE = `${VERSION}-api`
 
-const PRECACHE = ['/logo.svg', '/manifest.webmanifest', '/']
+const PRECACHE = ['/logo.svg?v=ticket-1', '/manifest.webmanifest', '/']
 
 const WALLET_API = ['/api/v1/tickets', '/api/v1/orders']
 const IDENTITY_API = ['/api/v1/auth/me']
