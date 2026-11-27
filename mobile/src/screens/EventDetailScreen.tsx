@@ -20,7 +20,7 @@
  * docs/NATIVE_MODULES.md. No in-app purchase code exists in this scaffold.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
@@ -46,6 +46,7 @@ import { theme } from '../theme'
 import {PremiumBackdrop,SectionHeading,TileGlyph,mobileDesign} from '../ui/PremiumUI'
 import { EventProgrammeSections } from '../components/EventProgrammeSections'
 import { EventDemandCard } from '../components/EventDemandCard'
+import {EventLiveEngagement} from '../components/EventLiveEngagement'
 import { eventTimeLabel } from '../lib/event-programme'
 import type { EventDetailScreenProps } from '../navigation'
 
@@ -56,6 +57,8 @@ type DetailState =
 
 export default function EventDetailScreen({ navigation, route }: EventDetailScreenProps) {
   const { eventId } = route.params
+  const scrollRef=useRef<ScrollView>(null)
+  const revealEngagement=useCallback((y:number)=>scrollRef.current?.scrollTo({y:Math.max(0,y-12),animated:true}),[])
   const { width, fontScale } = useWindowDimensions()
   const stackSocial = width < 360 || fontScale >= 1.3
   const [state, setState] = useState<DetailState>({ status: 'loading' })
@@ -181,7 +184,7 @@ export default function EventDetailScreen({ navigation, route }: EventDetailScre
   const currency = event.ticketTypes.find((tt) => tt.priceMinor > 0)?.currency ?? 'GHS'
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+    <ScrollView ref={scrollRef} style={styles.screen} contentContainerStyle={styles.content}>
       <View style={styles.coverShell}>
         {event.coverImageUrl && absoluteUrl(event.coverImageUrl) ?
           <Image source={{uri:absoluteUrl(event.coverImageUrl)!}} style={styles.cover} resizeMode="cover" accessibilityLabel={event.title+' event artwork'}/>:
@@ -229,6 +232,7 @@ export default function EventDetailScreen({ navigation, route }: EventDetailScre
         </View>
       </View>
 
+      <EventLiveEngagement eventId={event.id} eventStatus={event.status} onSignIn={()=>navigation.navigate('Login')} onReveal={revealEngagement}/>
       <EventDemandCard key={event.id} event={event} canManage={canManage} />
       <View style={styles.ticketsHeading}><SectionHeading title="Tickets & entry"/></View>
       {event.ticketTypes.length === 0 ? (
