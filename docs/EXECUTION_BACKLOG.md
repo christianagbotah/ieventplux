@@ -3,11 +3,11 @@
 Maintain this file as the public, sanitized engineering checkpoint. Keep credentials, customer records, private infrastructure details and sensitive operational evidence outside GitHub. A merged feature is not equivalent to a deployed or accepted feature.
 
 ## Checkpoint — 2026-11-27
-- Baseline: main 5973b8b; CI, source-light artifact workflow and Android QA artifact reported successful.
-- Account verification, organizer profile, notifications, private messaging and calling pilot code have merged in integration PRs #136, #139, #140–#159 and #162. Confirm actual staging parity; do not infer delivery or external provider readiness from merge status.
-- Current work: migration-role preflight, tested backup/restore readiness, coordinated web/worker/realtime release rehearsal.
-- Next feature: review organizer recurring-event draft PR #164 and dependent series-edit PR #165; integrate only after security, scheduling and regression acceptance.
-- Reconcile superseded draft PRs against integrated changes before closing; do not merge duplicate patches blindly.
+- Baseline: ticket branding #169, shop verification #167 and mail relay/feedback #168 merged and staged; user confirmed email verification worked. External push delivery and real media acceptance remain separate.
+- Runtime role preflight #166 merged; isolated regression verified normal application ownership, rejection of foreign-owned tables and superuser execution. Continue to use guard for each migration.
+- Recurring event creation #164 and future series editing #165 merged; individual feature-branch CI and artifact checks passed. Combined main CI, artifact deployment and staging acceptance pending.
+- Next: verify combined release, then audit native push/call acceptance and reconcile remaining draft PRs. Core policy files from #156/#157/#160 already match main; review divergent integration files before closing superseded branches.
+- Keep marketplace checkout, settlement, awards voting, and provider integrations gated until their end-to-end acceptance tests pass.
 
 ## P0 — Runtime and release reliability
 - [ ] Run runtime role preflight as application role before and after schema changes; rehearse on disposable PostgreSQL first.
