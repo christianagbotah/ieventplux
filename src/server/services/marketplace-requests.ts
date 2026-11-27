@@ -2,6 +2,7 @@ import {Prisma} from '@prisma/client'
 import {db} from '@/lib/db'
 import {errors} from '@/server/api'
 import {publishNotification} from './notify'
+import {holdPilotEnabled} from '../marketplace-hold-policy'
 import type {Notification} from '@prisma/client'
 import {buildMarketplaceQuote,MarketplaceQuoteError} from '@/server/marketplace-quote-policy'
 import {assertReviewedPrices,parsePurchaseRequest,parseRequestDecision,decisionAllowed,requestNotification} from '@/server/marketplace-request-policy'
@@ -14,9 +15,9 @@ export async function listPurchaseRequests(slug:string,userId:string){
   const seller=store.ownerId===userId
   const requests=await db.marketplacePurchaseRequest.findMany({
     where:{storeId:store.id,...(seller?{}:{buyerId:userId})},
-    select:requestSelect,orderBy:[{createdAt:'desc'},{id:'desc'}],take:50,
+    select:{...requestSelect,stockHold:{select:{id:true,status:true,expiresAt:true,releasedAt:true}}},orderBy:[{createdAt:'desc'},{id:'desc'}],take:50,
   })
-  return {requests,seller,checkoutEnabled:false,inventoryReserved:false}
+  return {requests,seller,checkoutEnabled:false,inventoryReserved:false,stockHoldEnabled:holdPilotEnabled(process.env)}
 }
 
 export async function createPurchaseRequest(slug:string,userId:string,raw:unknown){
@@ -69,13 +70,14 @@ export async function decidePurchaseRequest(id:string,userId:string,raw:unknown)
  try{
   const {result,notice}=await db.$transaction(async tx=>{
    const row=await tx.marketplacePurchaseRequest.findUnique({where:{id},select:{...requestSelect,buyerId:true,
-     store:{select:{ownerId:true,status:true,deletedAt:true,slug:true}}}})
+     stockHold:{select:{status:true}},store:{select:{ownerId:true,status:true,deletedAt:true,slug:true}}}})
    if(!row)throw errors.notFound('Purchase request not found.')
    const role=row.store.ownerId===userId?'seller':row.buyerId===userId?'buyer':null
    if(!role)throw errors.notFound('Purchase request not found.')
    if((role==='seller'&&next==='WITHDRAWN')||(role==='buyer'&&next!=='WITHDRAWN'))throw errors.forbidden('This decision is not available to your role.')
    if(role==='seller'&&(row.store.deletedAt||row.store.status==='SUSPENDED'))throw errors.conflict('This store cannot respond to requests.')
    if(!decisionAllowed(role,row.status,next))throw errors.conflict('This request has already been resolved. Refresh the request list.')
+   if(row.stockHold?.status==='HELD'&&row.status!==next)throw errors.conflict('Release the temporary stock reservation before changing the request.')
    let notice:Notification|null=null
    if(row.status!==next){
     const changed=await tx.marketplacePurchaseRequest.updateMany({where:{id,status:row.status},data:{status:next}})

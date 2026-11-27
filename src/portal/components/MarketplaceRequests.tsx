@@ -61,8 +61,20 @@ export function MarketplaceRequests({slug,seller,quote,onSubmitted}:{slug:string
   }catch(e){if(active.current){fail(e,'Could not update request.');await load()}}
   finally{locked.current=false;if(active.current)setDecisionBusy(false)}
  }
+ async function hold(id:string,release:boolean){
+  if(locked.current)return
+  locked.current=true;setDecisionBusy(true);setSubmissionError('');setNotice('')
+  try{
+   const approved=await confirm({title:release?'Release stock hold?':'Hold requested stock?',description:release?'The held quantities become available for other buyers.':'Reserve the reviewed quantities for 30 minutes. No payment or confirmed order is created.',confirmLabel:release?'Release hold':'Hold stock'})
+   if(!approved||!active.current)return
+   const path='/marketplace/requests/'+encodeURIComponent(id)+'/hold'
+   if(release)await api.delete(path);else await api.post(path,{})
+   if(active.current){setNotice(release?'Stock hold ended.':'Stock hold request processed.');await load()}
+  }catch(e){if(active.current){fail(e,'Could not update stock hold.');await load()}}
+  finally{locked.current=false;if(active.current)setDecisionBusy(false)}
+ }
  return <section className="space-y-3 rounded-2xl border bg-card p-4 sm:p-6" aria-label="Purchase requests">
-  <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-extrabold">{seller?'Incoming purchase requests':'Your purchase requests'}</h2><p className="text-xs text-muted-foreground">Non-binding requests only. No payment or inventory is reserved.</p></div>
+  <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-extrabold">{seller?'Incoming purchase requests':'Your purchase requests'}</h2><p className="text-xs text-muted-foreground">Purchase requests are non-binding. Temporary stock holds are separate; no payment is collected.</p></div>
    <Button variant="outline" size="sm" disabled={loading} onClick={()=>void load()}>{loading?'Refreshing…':'Refresh requests'}</Button></div>
   {!seller&&quote&&<Button disabled={submitting||decisionBusy} onClick={()=>void submit()}>{submitting?'Submitting…':'Submit purchase request · '+price(quote.totalMinor)}</Button>}
   {!seller&&!quote&&<p className="text-xs text-muted-foreground">Review your basket to submit a new request.</p>}
@@ -74,7 +86,8 @@ export function MarketplaceRequests({slug,seller,quote,onSubmitted}:{slug:string
    <div className="flex justify-between gap-2"><strong>{price(row.totalMinor)}</strong><span className="text-xs font-semibold">{requestStatusLabel(row.status)}</span></div>
    <p className="break-all text-xs text-muted-foreground">{new Date(row.createdAt).toLocaleString()} · {row.id}</p>
    {row.items.map(item=><div key={item.variantId} className="flex justify-between gap-3 text-sm"><span>{item.productName} · {item.variantTitle} × {item.quantity}</span><span className="shrink-0">{price(item.lineMinor)}</span></div>)}
-   <div className="flex flex-wrap gap-2">{availableRequestDecisions(seller,row.status).map(action=><Button key={action} size="sm" variant={action==='ACKNOWLEDGED'?'default':'outline'} disabled={decisionBusy||submitting||loading} onClick={()=>void decide(row.id,action)}>{decisionLabel(action)}</Button>)}</div>
+   {row.stockHold&&<p className="rounded-lg bg-muted p-2 text-xs">Stock hold: {row.stockHold.status.toLowerCase()}{row.stockHold.status==='HELD'?' · Expires '+new Date(row.stockHold.expiresAt).toLocaleString():''}</p>}
+   <div className="flex flex-wrap gap-2">{history?.stockHoldEnabled&&seller&&row.status==='ACKNOWLEDGED'&&!row.stockHold&&<Button size="sm" disabled={decisionBusy||submitting||loading} onClick={()=>void hold(row.id,false)}>Hold stock for 30 minutes</Button>}{row.stockHold?.status==='HELD'?<Button variant="outline" size="sm" disabled={decisionBusy||submitting||loading} onClick={()=>void hold(row.id,true)}>Release stock hold</Button>:null}{(row.stockHold?.status==='HELD'?[]:availableRequestDecisions(seller,row.status)).map(action=><Button key={action} size="sm" variant={action==='ACKNOWLEDGED'?'default':'outline'} disabled={decisionBusy||submitting||loading} onClick={()=>void decide(row.id,action)}>{decisionLabel(action)}</Button>)}</div>
   </article>)}
   {history&&history.requests.length===50&&<p className="text-xs text-muted-foreground">Showing the latest 50 requests.</p>}
  </section>
