@@ -7,6 +7,7 @@ import {unlink} from 'node:fs/promises'
 import sharp from 'sharp'
 import {mediaFilePath,isPublicUploadName} from '../src/server/media-storage'
 import { db } from '../src/lib/db'
+import {reserveMarketplaceRequest,releaseMarketplaceRequest,expireMarketplaceHolds} from '../src/server/services/marketplace-holds'
 import { recordPlannedPaymentIntent } from '../src/server/services/platform-payment-intents'
 
 if(process.env.CI!=='true' || process.env.NODE_ENV==='production' ||
@@ -214,11 +215,43 @@ try{
  assert(buyerInbox.data.items.filter((n:Row)=>ids.has(n.id)).length===1&&sellerInbox.data.items.filter((n:Row)=>ids.has(n.id)).length===2&&!otherInbox.data.items.some((n:Row)=>ids.has(n.id)),'notification API exposes only the intended recipient alerts')
  const unchanged=await send('GET','/marketplace/stores/'+slug)
  assert(unchanged.data.products[0].variants[0].available===12,'non-binding request does not reserve inventory')
+ const holdBody={...orderBody,requestKey:'hold-purchase-'+unique}
+ const hReq=await send('POST',requestPath,stranger,holdBody)
+ assert(hReq.status===201,'hold test request created')
+ const hId=hReq.data.request.id
+ assert((await send('PATCH','/marketplace/requests/'+hId,owner,{status:'ACKNOWLEDGED'})).status===200,'hold request acknowledged')
+ assert((await send('POST','/marketplace/requests/'+hId+'/hold',owner,{})).status===503,'stock hold creation disabled by default')
+ process.env.IEVENTPLUX_MARKETPLACE_STOCK_HOLD_ENABLED='true'
+ const denied=await reserveMarketplaceRequest(hId,buyerUser.id).then(()=>false,e=>e.status===404)
+ assert(denied,'buyer cannot reserve as seller')
+ const held=await reserveMarketplaceRequest(hId,sellerUser.id)
+ assert(held.hold.status==='HELD'&&held.checkoutEnabled===false,'seller reserves stock without payment')
+ const repeat=await reserveMarketplaceRequest(hId,sellerUser.id)
+ assert(repeat.hold.id===held.hold.id,'hold replay is idempotent')
+ assert((await db.marketplaceVariant.findUniqueOrThrow({where:{id:variantId}})).stockReserved===2,'exact quantities held once')
+ assert((await send('PATCH','/marketplace/requests/'+hId,stranger,{status:'WITHDRAWN'})).status===409,'request cannot be withdrawn while stock held')
+ assert((await send('GET',requestPath,stranger)).data.requests.some((r:Row)=>r.id===hId&&r.stockHold?.status==='HELD'),'buyer sees own hold')
+ const blocked=await send('POST','/marketplace/variants/'+variantId+'/stock',owner,{delta:-11,reason:'Would consume reserved stock',requestKey:'hold-stock-'+unique})
+ assert(blocked.status===409,'stock adjustment cannot consume held units')
+ const r=await releaseMarketplaceRequest(hId,buyerUser.id)
+ assert(r.hold.status==='RELEASED','buyer can release their hold')
+ await releaseMarketplaceRequest(hId,buyerUser.id)
+ assert((await db.marketplaceVariant.findUniqueOrThrow({where:{id:variantId}})).stockReserved===0,'replay release restores stock exactly once')
+ const h2=await send('POST',requestPath,stranger,{...orderBody,requestKey:'expiry-purchase-'+unique})
+ await send('PATCH','/marketplace/requests/'+h2.data.request.id,owner,{status:'ACKNOWLEDGED'})
+ const expiry=await reserveMarketplaceRequest(h2.data.request.id,sellerUser.id)
+ // Advance only the injected sweep clock, avoiding competition with the real CI worker.
+ const sweep=await expireMarketplaceHolds(new Date(expiry.hold.expiresAt.getTime()+1000))
+ assert(sweep.released===1&&sweep.conflicts===0,'expired hold released by sweep')
+ assert((await db.marketplaceVariant.findUniqueOrThrow({where:{id:variantId}})).stockReserved===0,'expiry restores stock')
+ delete process.env.IEVENTPLUX_MARKETPLACE_STOCK_HOLD_ENABLED
  console.log('MARKETPLACE_FOUNDATION_SMOKE_PASS')
 }finally{
  if(notificationLink)await db.notification.deleteMany({where:{link:notificationLink,type:'MARKETPLACE_REQUEST'}})
  if(intentSource)await db.platformPaymentIntent.deleteMany({where:{sourceId:intentSource,purpose:'MARKETPLACE_GOODS'}})
  if(storeId){
+   await db.marketplaceStockHoldLine.deleteMany({where:{hold:{request:{storeId}}}})
+   await db.marketplaceStockHold.deleteMany({where:{request:{storeId}}})
    await db.marketplacePurchaseRequest.deleteMany({where:{storeId}})
    await db.marketplaceStore.delete({where:{id:storeId}})
    console.log('Synthetic seller and stock ledger deleted from disposable CI DB.')

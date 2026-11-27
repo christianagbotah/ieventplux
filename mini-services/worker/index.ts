@@ -94,6 +94,7 @@ async function drainQueue(max = 20): Promise<number> {
 // ── Periodic sweeps (idempotent; safe when enqueued repeatedly) ─────────────
 const SWEEPS = [
   { type: 'RESERVATION_SWEEP', everyMs: 20_000 },
+  { type: 'MARKETPLACE_HOLD_SWEEP', everyMs: 60_000 },
   { type: 'EVENT_LIFECYCLE', everyMs: 60_000 },
   { type: 'REMINDER_SWEEP', everyMs: 300_000 },
   { type: 'RECONCILE_PAYMENT', everyMs: 60_000 },

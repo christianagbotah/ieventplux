@@ -32,6 +32,11 @@ export async function runJob(type: string, payload: JobPayload): Promise<{ detai
       const result = await releaseExpiredReservations()
       return { detail: `released=${result.released} expiredOrders=${result.ordersExpired}` }
     }
+    case 'MARKETPLACE_HOLD_SWEEP': {
+      const {expireMarketplaceHolds}=await import('../services/marketplace-holds')
+      const result=await expireMarketplaceHolds()
+      return {detail:`released=${result.released} conflicts=${result.conflicts}`}
+    }
     case 'SEND_MESSAGE': {
       return { detail: await handleSendMessage(payload) }
     }

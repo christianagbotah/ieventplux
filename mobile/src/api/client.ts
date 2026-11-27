@@ -861,6 +861,8 @@ export const api = {
       'GET', '/marketplace/stores/' + encodeURIComponent(slug),
     ),
     decidePurchaseRequest: (id:string,status:RequestDecision) => request<{request:PurchaseRequestRow;checkoutEnabled:false;inventoryReserved:false}>('PATCH','/marketplace/requests/'+encodeURIComponent(id),{status}),
+    reservePurchaseStock:(id:string)=>request<unknown>('POST','/marketplace/requests/'+encodeURIComponent(id)+'/hold',{}),
+    releasePurchaseStock:(id:string)=>request<unknown>('DELETE','/marketplace/requests/'+encodeURIComponent(id)+'/hold'),
     purchaseRequests: (slug:string) => request<PurchaseRequestHistory>('GET','/marketplace/stores/'+encodeURIComponent(slug)+'/requests'),
     createPurchaseRequest: (slug:string,body:ReturnType<typeof purchaseRequestBody>) => request<PurchaseRequestResponse>('POST','/marketplace/stores/'+encodeURIComponent(slug)+'/requests',body),
     changePrice: (id:string,priceMinor:number,expectedPriceMinor:number) => request<{variant:{id:string;priceMinor:number}}>(

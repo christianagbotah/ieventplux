@@ -262,6 +262,11 @@ jobs:
           IEVENTPLUX_ISOLATED_DB_TEST: "yes"
         run: bun run scripts/competition-awards-smoke.ts
 
+      - name: Rehearse marketplace stock hold migration twice
+        env:
+          IEVENTPLUX_ISOLATED_DB_TEST: "yes"
+        run: bash scripts/verify-marketplace-holds-migration.sh
+
       - name: Marketplace seller, catalogue and stock ledger integration smoke
         env:
           IEVENTPLUX_ISOLATED_DB_TEST: "yes"
