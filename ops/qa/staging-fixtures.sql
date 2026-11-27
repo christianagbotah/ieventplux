@@ -76,10 +76,10 @@ INSERT INTO "Notification" (id,"userId",type,title,body,link) VALUES ('qa27-noti
 INSERT INTO "AgendaItem" (id,"eventId",title,"startsAt","endsAt",speaker,description,"sortOrder") SELECT e.id||'-agenda',e.id,'Opening and orientation',e."startsAt",e."startsAt"+interval '30 minutes','[DEMO] Jordan Amani','Synthetic programme item',0 FROM "Event" e WHERE e.id LIKE 'qa27-event-%';
 INSERT INTO "EventUpdate" (id,"eventId","orgId",title,body,important) VALUES ('qa27-update-music','qa27-event-music','qa27-org-events','[DEMO] Programme announcement','The synthetic programme has been updated for testing.',false);
 INSERT INTO "EventSouvenirProduct" (id,"eventId",name,sku,"priceMinor","stockTotal","updatedAt") VALUES ('qa27-souvenir','qa27-event-music','[DEMO] Festival tote','QA27-TOTE',2500,40,now());
-INSERT INTO "EventMeeting" (id,"eventId",title,status,"maxParticipants","createdById","updatedAt") VALUES ('qa27-meeting','qa27-event-private','[DEMO] Organizer planning meeting','SCHEDULED',25,'qa27-organizer',now());
+INSERT INTO "EventMeeting" (id,"eventId",title,status,"maxParticipants","createdById","updatedAt") VALUES ('qa27-meeting','qa27-event-private','[DEMO] Organizer planning meeting','SCHEDULED',6,'qa27-organizer',now());
 INSERT INTO "ServiceProviderProfile" (id,"ownerId",category,country,community,"displayName","serviceDescription","reviewStatus",published,"jurisdictionApproved","updatedAt") VALUES
 ('qa27-provider-photo','qa27-vendor','PHOTOGRAPHY','GH','Accra','[DEMO] Horizon Photography','Fictional photography service. Not accepting real bookings.','PENDING',false,false,now()),
 ('qa27-provider-equipment','qa27-vendor2','EVENT_EQUIPMENT','GH','Kumasi','[DEMO] Lantern Event Equipment','Fictional sound and lighting rental. Not accepting real bookings.','PENDING',false,false,now()),
 ('qa27-provider-bus','qa27-festival','BUS_CHARTER','GH','Cape Coast','[DEMO] Coastline Charter','Fictional transport operator. Not licensed or accepting real transport bookings.','PENDING',false,false,now());
-INSERT INTO "TransportVehicle" (id,"providerId",label,"labelKey","vehicleClass","passengerSeats",state,"updatedAt") VALUES ('qa27-vehicle','qa27-provider-bus','[DEMO] Charter Bus','[demo] charter bus','BUS',30,'DRAFT',now());
+INSERT INTO "TransportVehicle" (id,"providerId",label,"labelKey","vehicleClass","passengerSeats",state,"updatedAt") VALUES ('qa27-vehicle','qa27-provider-bus','[DEMO] Charter Bus','[demo] charter bus','COACH',30,'DRAFT',now());
 COMMIT;
