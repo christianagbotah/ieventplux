@@ -5,7 +5,7 @@ import {useToast} from '@/hooks/use-toast'
 import {Button} from '@/components/ui/button'
 import {useConfirm} from '@/components/ui/confirm-dialog-provider'
 import {api} from '../api'
-import {purchaseRequestBody,purchaseRequestFingerprint,requestStatusLabel,availableRequestDecisions,decisionLabel,type RequestDecision,type PurchaseRequestRow,type ReviewedBasket,type PurchaseRequestHistory,type PurchaseRequestResponse,type CheckoutReview,checkoutMethodLabel} from '../lib/marketplace-requests'
+import {purchaseRequestBody,purchaseRequestFingerprint,requestStatusLabel,availableRequestDecisions,decisionLabel,type RequestDecision,type PurchaseRequestRow,type ReviewedBasket,type PurchaseRequestHistory,type PurchaseRequestResponse,type CheckoutReview,checkoutMethodLabel,checkoutReviewStillCurrent} from '../lib/marketplace-requests'
 const price=(n:number)=>'₵'+(n/100).toLocaleString('en-GH',{minimumFractionDigits:2,maximumFractionDigits:2})
 export function MarketplaceRequests({slug,seller,quote,onSubmitted}:{slug:string;seller:boolean;quote:ReviewedBasket|null;onSubmitted:(submitted:ReviewedBasket)=>void}){
  const confirm=useConfirm()
@@ -15,6 +15,8 @@ export function MarketplaceRequests({slug,seller,quote,onSubmitted}:{slug:string
  const [review,setReview]=useState<{id:string;data:CheckoutReview}|null>(null)
  const [reviewBusy,setReviewBusy]=useState(false)
  const [history,setHistory]=useState<PurchaseRequestHistory|null>(null)
+ const previousHistory=useRef<PurchaseRequestHistory|null>(null)
+ const refreshInFlight=useRef(false)
  const [loading,setLoading]=useState(false)
  const [error,setError]=useState('')
  const [submissionError,setSubmissionError]=useState('')
@@ -26,15 +28,25 @@ export function MarketplaceRequests({slug,seller,quote,onSubmitted}:{slug:string
  const epoch=useRef(0)
  const retry=useRef(new Map<string,string>())
  const endpoint='/marketplace/stores/'+encodeURIComponent(slug)+'/requests'
- const load=useCallback(async()=>{
+ const load=useCallback(async(background=false)=>{
+  if(background&&(locked.current||refreshInFlight.current))return
+  refreshInFlight.current=true
   const generation=++epoch.current
-  setLoading(true);setError('');setReview(null)
+  if(!background){setLoading(true);setError('');setReview(null)}
   try{const result=await api.get<PurchaseRequestHistory>(endpoint)
-   if(generation===epoch.current){if(result.seller!==seller)throw new Error('Session changed. Refresh the storefront.');setHistory(result)}
-  }catch(e){if(generation===epoch.current){setHistory(null);setError(e instanceof Error?e.message:'Could not load requests.')}}
-  finally{if(generation===epoch.current)setLoading(false)}
+   if(generation===epoch.current){if(result.seller!==seller)throw new Error('Session changed. Refresh the storefront.');const prior=previousHistory.current;previousHistory.current=result;setHistory(result);setError('');if(background)setReview(current=>current&&checkoutReviewStillCurrent(prior?.requests.find(r=>r.id===current.id),result.requests.find(r=>r.id===current.id))?current:null)}
+  }catch(e){if(generation===epoch.current){previousHistory.current=null;setReview(null);setHistory(null);setError(e instanceof Error?e.message:'Could not load requests.')}}
+  finally{if(generation===epoch.current){refreshInFlight.current=false;setLoading(false)}}
  },[endpoint,seller])
- useEffect(()=>{active.current=true;void load();return()=>{active.current=false;epoch.current++}},[load])
+ useEffect(()=>{
+  active.current=true;void load()
+  let timer:ReturnType<typeof setTimeout>|undefined
+  const wake=()=>{if(document.hidden||timer)return;timer=setTimeout(()=>{timer=undefined;if(active.current)void load(true)},400)}
+  window.addEventListener('ievx:notifications-changed',wake)
+  document.addEventListener('visibilitychange',wake)
+  const fallback=setInterval(wake,30000)
+  return()=>{active.current=false;epoch.current++;refreshInFlight.current=false;previousHistory.current=null;if(timer)clearTimeout(timer);clearInterval(fallback);window.removeEventListener('ievx:notifications-changed',wake);document.removeEventListener('visibilitychange',wake)}
+ },[load])
  async function submit(){
   if(!quote||seller||locked.current)return
   locked.current=true;setSubmitting(true);setSubmissionError('');setNotice('')
@@ -96,7 +108,7 @@ export function MarketplaceRequests({slug,seller,quote,onSubmitted}:{slug:string
    <p className="break-all text-xs text-muted-foreground">{new Date(row.createdAt).toLocaleString()} · {row.id}</p>
    {row.items.map(item=><div key={item.variantId} className="flex justify-between gap-3 text-sm"><span>{item.productName} · {item.variantTitle} × {item.quantity}</span><span className="shrink-0">{price(item.lineMinor)}</span></div>)}
    {row.status==='ACKNOWLEDGED'&&<Button variant="outline" size="sm" disabled={reviewBusy||loading||decisionBusy||submitting} onClick={()=>void inspectCheckout(row.id)}>{reviewBusy?'Loading review…':'Review checkout'}</Button>}
-   {review?.id===row.id&&<div className="space-y-2 rounded-xl border bg-muted/20 p-3 text-sm"><div className="flex justify-between gap-3"><strong>Checkout review</strong><strong>{price(review.data.totalMinor)}</strong></div><p>{review.data.unitCount} items · {review.data.holdValid?'Stock held':'No active stock hold'}</p><p>Seller payment preferences: {review.data.methods.map(checkoutMethodLabel).join(', ')||'Not configured'}</p>{review.data.seller&&review.data.allocation&&<div className="space-y-1 border-t pt-2"><p className="flex justify-between gap-2">Platform commission <strong>{price(review.data.allocation.platformMinor)}</strong></p><p className="flex justify-between gap-2">Seller gross proceeds <strong>{price(review.data.allocation.sellerMinor)}</strong></p><p className="text-xs text-muted-foreground">Estimated allocation before provider fees; no payment collected.</p></div>}<div className="space-y-1 text-xs text-muted-foreground">{review.data.blockers.map(message=><p key={message}>{message}</p>)}</div></div>}
+   {review?.id===row.id&&<div className="space-y-2 rounded-xl border bg-muted/20 p-3 text-sm"><div className="flex justify-between gap-3"><strong>Checkout review</strong><strong>{price(review.data.totalMinor)}</strong></div><p>{review.data.unitCount} items · {review.data.holdValid?'Stock held at review':'No active stock hold'}</p><p>Seller payment preferences: {review.data.methods.map(checkoutMethodLabel).join(', ')||'Not configured'}</p>{review.data.seller&&review.data.allocation&&<div className="space-y-1 border-t pt-2"><p className="flex justify-between gap-2">Platform commission <strong>{price(review.data.allocation.platformMinor)}</strong></p><p className="flex justify-between gap-2">Seller gross proceeds <strong>{price(review.data.allocation.sellerMinor)}</strong></p><p className="text-xs text-muted-foreground">Estimated allocation before provider fees; no payment collected.</p></div>}<div className="space-y-1 text-xs text-muted-foreground">{review.data.blockers.map(message=><p key={message}>{message}</p>)}</div></div>}
    {row.stockHold&&<p className="rounded-lg bg-muted p-2 text-xs">Stock hold: {row.stockHold.status.toLowerCase()}{row.stockHold.status==='HELD'?' · Expires '+new Date(row.stockHold.expiresAt).toLocaleString():''}</p>}
    <div className="flex flex-wrap gap-2">{history?.stockHoldEnabled&&seller&&row.status==='ACKNOWLEDGED'&&!row.stockHold&&<Button size="sm" disabled={decisionBusy||submitting||loading} onClick={()=>void hold(row.id,false)}>Hold stock for 30 minutes</Button>}{row.stockHold?.status==='HELD'?<Button variant="outline" size="sm" disabled={decisionBusy||submitting||loading} onClick={()=>void hold(row.id,true)}>Release stock hold</Button>:null}{(row.stockHold?.status==='HELD'?[]:availableRequestDecisions(seller,row.status)).map(action=><Button key={action} size="sm" variant={action==='ACKNOWLEDGED'?'default':'outline'} disabled={decisionBusy||submitting||loading} onClick={()=>void decide(row.id,action)}>{decisionLabel(action)}</Button>)}</div>
   </article>)}

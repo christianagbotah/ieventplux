@@ -20,3 +20,6 @@ test('request actions respect seller and buyer roles and terminal states',async(
  expect(availableRequestDecisions(true,'DECLINED')).toEqual([])
  expect(requestStatusLabel('ACKNOWLEDGED')).toContain('not confirmed')
 })
+
+import {checkoutReviewStillCurrent,type PurchaseRequestRow} from './marketplace-requests'
+test('live review invalidates on changed or removed reservation',()=>{const row:PurchaseRequestRow={id:'request',status:'ACKNOWLEDGED',totalMinor:100,currency:'GHS',unitCount:1,createdAt:'2026-11-27',items:[],stockHold:{id:'hold',status:'HELD',expiresAt:'2026-11-27T12:30:00Z',releasedAt:null}};expect(checkoutReviewStillCurrent(row,{...row})).toBe(true);expect(checkoutReviewStillCurrent(row,{...row,status:'WITHDRAWN'})).toBe(false);expect(checkoutReviewStillCurrent(row,{...row,stockHold:{...row.stockHold!,status:'EXPIRED'}})).toBe(false);expect(checkoutReviewStillCurrent(row,undefined)).toBe(false)})
