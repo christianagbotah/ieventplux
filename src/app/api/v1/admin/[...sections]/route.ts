@@ -485,19 +485,15 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
       const config = await resolveSmtpConfig()
       if (!config.configured) throw errors.badRequest('Save complete SMTP settings before attempting a connection test.')
       const nodemailer = await import('nodemailer')
-      const transport = nodemailer.createTransport({
-        host: config.host, port: config.port, secure: config.port === 465,
-        requireTLS: config.port !== 465,
-        auth: { user: config.user, pass: config.pass },
-        connectionTimeout: 9000, greetingTimeout: 9000, socketTimeout: 12000,
-      })
+      const {mailTransportOptions} = await import('@/server/mail-transport-policy')
+      const transport = nodemailer.createTransport(mailTransportOptions(config))
       let ok = false
       try { await transport.verify(); ok = true } catch { /* Never return raw SMTP errors: providers may echo tokens or usernames. */ }
       finally { transport.close() }
       const { audit } = await import('@/server/audit')
       await audit({ actorUserId: user.id, actorLabel: user.email, action: 'smtp.connection.test', entityType: 'PlatformSetting', entityId: 'smtp.provider.*', after: { ok } })
-      return jsonOk({ ok, stage: ok ? 'authenticated' : 'failed', detail: ok
-        ? 'Connected and authenticated to the SMTP server. No email was sent, and inbox delivery remains unverified.'
+      return jsonOk({ ok, stage: ok ? (config.transport === 'loopback' ? 'connected' : 'authenticated') : 'failed', detail: ok
+        ? (config.transport === 'loopback' ? 'Connected to the local mail relay. No email was sent, and inbox delivery remains unverified.' : 'Connected and authenticated to the SMTP server. No email was sent, and inbox delivery remains unverified.')
         : 'SMTP authentication or connection failed. Check the hostname, port, password, outbound access and provider restrictions.' }, { headers: { 'Cache-Control': 'private, no-store' } })
     }
 
@@ -539,6 +535,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     if (root === 'smtp' && !id) {
       if (!platformCan(user.role, 'admin:settings')) throw errors.forbidden('Super administrator role required.')
       await rateLimit(req, 'smtp-config', 6, 60_000)
+      if (process.env.IEVENTPLUX_MAIL_TRANSPORT === 'loopback') throw errors.forbidden('The local mail relay is managed by the server operator.')
       const { SMTP_SETTING_KEYS, encryptSmtpPassword, validSmtpHost, validSmtpFrom, validSmtpPort } = await import('@/server/communications-config')
       const { setSetting } = await import('@/server/settings')
       const fields = {

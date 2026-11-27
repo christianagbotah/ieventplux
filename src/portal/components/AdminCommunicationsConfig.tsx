@@ -11,7 +11,7 @@ import { useToast } from '@/hooks/use-toast'
 import { api, ApiClientError } from '../api'
 
 type SmsView = { provider: 'HUBTEL'; configured: boolean; senderIdMasked: string; clientIdMasked: string; secretSaved: boolean; source: string }
-type SmtpView = { configured: boolean; source: string; host: string; port: number; usernameMasked: string; passwordSaved: boolean; from: string; note: string }
+type SmtpView = { configured: boolean; source: string; transport?: string; host: string; port: number; usernameMasked: string; passwordSaved: boolean; from: string; note: string }
 
 /** Superadmin-only forms. Never prefill the secret in browser inputs, even in a
  * password field; blank secrets retain the server's existing encrypted value. */
@@ -130,10 +130,10 @@ export function AdminCommunicationsConfig({ onSaved }: { onSaved?: () => void })
           </CardContent>
         </Card>
         <Card className="min-w-0 rounded-2xl">
-          <CardHeader className="pb-2"><CardTitle className="flex flex-wrap items-center justify-between gap-2 text-sm"><span className="flex items-center gap-2"><Mail className="size-4 text-primary" /> SMTP email</span><Badge variant={mail?.configured ? 'default' : 'outline'}>{mail?.configured ? 'Credentials present' : 'Not configured'}</Badge></CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="flex flex-wrap items-center justify-between gap-2 text-sm"><span className="flex items-center gap-2"><Mail className="size-4 text-primary" /> SMTP email</span><Badge variant={mail?.configured ? 'default' : 'outline'}>{mail?.configured ? (mail.transport === 'loopback' ? 'Local relay configured' : 'Credentials present') : 'Not configured'}</Badge></CardTitle></CardHeader>
           <CardContent className="space-y-3 text-sm">
             <p className="text-xs leading-relaxed text-muted-foreground">Use your email provider’s SMTP details, including an app password where required. Changes are read by the delivery worker without a website redeploy.</p>
-            {mail && <p className="rounded-lg bg-secondary/50 p-2 text-[11px] text-muted-foreground">Source: {mail.source} · User: {mail.usernameMasked || 'Missing'} · Password: {mail.passwordSaved ? 'saved' : 'missing'} · Delivery: not yet tested</p>}
+            {mail?.transport === 'loopback' ? <p className="rounded-lg bg-secondary/50 p-2 text-xs">Local server relay · Sender: {mail.from} · No mailbox password needed. Test email delivery below.</p> : <>{mail && <p className="rounded-lg bg-secondary/50 p-2 text-[11px] text-muted-foreground">Source: {mail.source} · User: {mail.usernameMasked || 'Missing'} · Password: {mail.passwordSaved ? 'saved' : 'missing'} · Delivery: not yet tested</p>}
             <div className="grid grid-cols-[minmax(0,1fr)_92px] gap-3">
               <div className="space-y-1.5"><Label htmlFor="smtp-host">SMTP hostname</Label><Input id="smtp-host" autoComplete="off" value={smtpFields.host} onChange={(e) => setSmtpFields((f) => ({ ...f, host: e.target.value }))} placeholder="smtp.example.com" /></div>
               <div className="space-y-1.5"><Label htmlFor="smtp-port">Port</Label><Input id="smtp-port" inputMode="numeric" value={smtpFields.port} onChange={(e) => setSmtpFields((f) => ({ ...f, port: e.target.value }))} /></div>
@@ -141,7 +141,7 @@ export function AdminCommunicationsConfig({ onSaved }: { onSaved?: () => void })
             <div className="space-y-1.5"><Label htmlFor="smtp-user">SMTP username</Label><Input id="smtp-user" autoComplete="off" value={smtpFields.username} onChange={(e) => setSmtpFields((f) => ({ ...f, username: e.target.value }))} placeholder={mail?.usernameMasked ? `Saved: ${mail.usernameMasked} — blank keeps it` : 'Email account or SMTP user'} /></div>
             <div className="space-y-1.5"><Label htmlFor="smtp-pass">SMTP app password</Label><Input id="smtp-pass" type="password" autoComplete="new-password" value={smtpFields.password} onChange={(e) => setSmtpFields((f) => ({ ...f, password: e.target.value }))} placeholder={mail?.passwordSaved ? 'Saved encrypted — blank keeps it' : 'App-specific password or provider secret'} /></div>
             <div className="space-y-1.5"><Label htmlFor="smtp-from">Sender email (From)</Label><Input id="smtp-from" type="email" autoComplete="off" value={smtpFields.from} onChange={(e) => setSmtpFields((f) => ({ ...f, from: e.target.value }))} placeholder="ieventplux@lightworldtech.com" /></div>
-            <Button className="min-h-10 w-full sm:w-auto" disabled={busy !== null} onClick={() => void saveSmtp()}>{busy === 'smtp' ? <Loader2 className="mr-1.5 size-4 animate-spin" /> : <CheckCircle2 className="mr-1.5 size-4" />} Save SMTP settings</Button>
+            <Button className="min-h-10 w-full sm:w-auto" disabled={busy !== null} onClick={() => void saveSmtp()}>{busy === 'smtp' ? <Loader2 className="mr-1.5 size-4 animate-spin" /> : <CheckCircle2 className="mr-1.5 size-4" />} Save SMTP settings</Button></>}
             <div className="space-y-3 rounded-xl border border-border bg-secondary/30 p-3">
               <p className="text-xs font-bold">Verify SMTP and send a test email</p>
               <p className="text-[11px] leading-relaxed text-muted-foreground">Verify checks whether the server can connect and authenticate; no message is sent. The separate test email goes through the normal delivery worker.</p>

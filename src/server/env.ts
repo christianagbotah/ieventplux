@@ -204,7 +204,7 @@ export async function integrationStatuses(): Promise<IntegrationStatus[]> {
       stage: 'implemented',
       configured: smtpLive.configured,
       mode: smtpLive.configured ? 'real' : 'unavailable',
-      detail: smtpLive.configured ? `SMTP settings available via ${smtpLive.source}. SMTP acceptance and recipient delivery have not yet been verified.` : 'SMTP credentials incomplete — email messages are suppressed until the provider is configured.',
+      detail: smtpLive.configured ? (smtpLive.transport === 'loopback' ? 'Local SMTP relay configured. Provider acceptance and recipient delivery require separate testing.' : `SMTP settings available via ${smtpLive.source}. SMTP acceptance and recipient delivery have not yet been verified.`) : 'SMTP credentials incomplete — email messages are suppressed until the provider is configured.',
     },
     {
       key: 'ai-concierge',

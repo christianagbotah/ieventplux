@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Mail, ShieldCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import {SubmissionFeedback} from '@/components/ui/submission-feedback'
 import { api } from '../api'
 import {useRoute} from '../router'
 import {shopVerificationReturn} from '../lib/shop-verification'
@@ -19,6 +20,7 @@ export default function VerifyEmail() {
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState('')
   const [error, setError] = useState('')
+  const [attempt,setAttempt] = useState(0)
   const refresh = async () => {
     const response = await api.get<{user: SessionUser | null}>('/auth/me')
     setUser(response.user)
@@ -35,7 +37,7 @@ export default function VerifyEmail() {
         await api.post('/auth/verify-contact', {channel: 'EMAIL', code})
         await refresh()
       }
-    } catch (err) { setError(err instanceof Error ? err.message : 'Please try again.') }
+    } catch (err) { setError(err instanceof Error ? err.message : 'Please try again.'); setAttempt(n=>n+1) }
     finally { setBusy(false) }
   }
   return <section className="mx-auto max-w-md px-4 py-10">
@@ -50,15 +52,15 @@ export default function VerifyEmail() {
         <Button asChild><a href={returnHref}>{returnLabel}</a></Button>
       </> : <>
         <p className="text-sm text-muted-foreground">Enter the six-digit code sent to <strong className="break-all text-foreground">{user.email}</strong>. If you do not have a code, request a new one below.</p>
+        <SubmissionFeedback message={error} attempt={attempt}/>
+        {notice && <p role="status" className="rounded-xl border border-primary/30 bg-primary/5 p-3 text-sm">{notice}</p>}
         <form className="space-y-4" onSubmit={e => {e.preventDefault(); void submit(false)}}>
           <label htmlFor="email-verification-code" className="block text-sm font-medium">Verification code</label>
           <Input id="email-verification-code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={e => setCode(e.target.value.replace(/\D/g, ''))} placeholder="000000" />
           <Button disabled={busy || code.length !== 6} type="submit" className="w-full">{busy ? 'Please wait…' : 'Verify email'}</Button>
         </form>
-        <Button disabled={busy} variant="outline" onClick={() => void submit(true)}>Send a new code</Button>
+        <Button disabled={busy} variant="outline" onClick={() => void submit(true)}>{busy ? 'Please wait…' : 'Send a new code'}</Button>
         <p className="text-xs text-muted-foreground">Codes expire after 30 minutes.</p>
-        {notice && <p role="status" className="text-sm">{notice}</p>}
-        {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
         <a className="block text-sm text-primary underline underline-offset-4" href={returnHref}>{returnLabel}</a>
       </>}
     </div>

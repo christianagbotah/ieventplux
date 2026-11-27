@@ -2,6 +2,7 @@ import { hasCurrentDemandEntitlement } from '../event-demand-access'
 import { reminderNotice } from '../event-demand-policy'
 import { db } from '../../lib/db'
 import { env } from '../env'
+import {mailTransportOptions} from '../mail-transport-policy'
 import { sendSms, checkSmsDelivery } from '../hubtel/sms'
 import { checkSendMoneyStatus } from '../hubtel/payments'
 import { processProviderEvent, reconcilePayments } from '../services/payments'
@@ -131,13 +132,16 @@ async function handleSendMessage(payload: JobPayload): Promise<string> {
       await db.messageDelivery.update({ where: { id: message.id }, data: { status: 'SUPPRESSED', failureReason: 'SMTP not configured' } })
       return 'suppressed_no_smtp'
     }
+    if (message.purpose === 'MARKETING') {
+      const {marketingAllowed} = await import('../services/notify')
+      if (!(await marketingAllowed('EMAIL', message.target))) {
+        await db.messageDelivery.update({where:{id:message.id},data:{status:'SUPPRESSED',failureReason:'Marketing consent not granted'}})
+        return 'suppressed_no_consent'
+      }
+    }
     try {
       const nodemailer = await import('nodemailer')
-      const transport = nodemailer.createTransport({
-        host: smtp.host, port: smtp.port, secure: smtp.port === 465,
-        requireTLS: smtp.port !== 465, auth: { user: smtp.user, pass: smtp.pass },
-        connectionTimeout: 10_000, greetingTimeout: 10_000, socketTimeout: 15_000,
-      })
+      const transport = nodemailer.createTransport(mailTransportOptions(smtp))
       await transport.sendMail({ from: smtp.from, to: message.target, subject: message.subject ?? 'iEventPlux', text: message.body })
       await db.messageDelivery.update({ where: { id: message.id }, data: { status: 'SENT', provider: 'SMTP', sentAt: new Date(), attempts: { increment: 1 } } })
       return 'smtp_accepted'
