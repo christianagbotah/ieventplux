@@ -7,6 +7,7 @@ import { checkoutLinePrice, normalizeCheckoutLines } from '../checkout-policy'
 import { supportedTicketCheckoutCurrency } from '../paid-currency-policy'
 import { ticketOrderShadowIntent } from '../ticket-payment-intent'
 import { publishNotification } from './notify'
+import {isQaFinancialRecord,QA_MONEY_BLOCKED} from '../qa-fixture-policy'
 
 /**
  * Order creation with database-enforced inventory reservations.
@@ -82,6 +83,7 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
   }
 
   const total = Math.max(0, subtotal - orderDiscount)
+  if(total>0&&isQaFinancialRecord({eventId:event.id,orgId:event.orgId,userId:input.userId,buyerEmail:input.buyerEmail}))throw errors.forbidden(QA_MONEY_BLOCKED)
   const platformFee = total > 0 ? computePlatformFee(total, fee) : 0
   const kind: 'PAID' | 'FREE' = total > 0 ? 'PAID' : 'FREE'
   const reference = orderReference()

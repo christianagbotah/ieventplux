@@ -85,6 +85,9 @@ jobs:
       - name: Event community privacy, moderation and reply authorization
         run: bun test src/server/community-policy.test.ts src/server/event-update-delivery-policy.test.ts src/server/event-demand-policy.test.ts
 
+      - name: QA fixture money and external delivery isolation
+        run: bun test src/server/qa-fixture-policy.test.ts
+
       - name: Awards, pageants and supporter-voting policy regression
         run: bun test src/server/competition-policy.test.ts
 

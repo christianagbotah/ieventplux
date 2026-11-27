@@ -3,6 +3,7 @@ import { reminderNotice } from '../event-demand-policy'
 import { db } from '../../lib/db'
 import { env } from '../env'
 import {mailTransportOptions} from '../mail-transport-policy'
+import {suppressQaExternalDelivery} from '../qa-fixture-policy'
 import { sendSms, checkSmsDelivery } from '../hubtel/sms'
 import { checkSendMoneyStatus } from '../hubtel/payments'
 import { processProviderEvent, reconcilePayments } from '../services/payments'
@@ -103,6 +104,7 @@ async function handleSendMessage(payload: JobPayload): Promise<string> {
   const message = await db.messageDelivery.findUnique({ where: { id } })
   if (!message) return 'missing'
   if (['DELIVERED', 'SENT', 'SUPPRESSED'].includes(message.status)) return `already_${message.status.toLowerCase()}`
+  if(suppressQaExternalDelivery(message)){await db.messageDelivery.update({where:{id:message.id},data:{status:'SUPPRESSED',failureReason:'Synthetic QA external delivery disabled'}});return 'suppressed_qa_fixture'}
 
   if (message.channel === 'SMS') {
     if (message.purpose === 'MARKETING') {

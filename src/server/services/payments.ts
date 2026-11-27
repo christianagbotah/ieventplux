@@ -5,6 +5,7 @@ import { errors } from '../api'
 import { paymentReference } from '../ids'
 import { initiateCheckout } from '../hubtel/payments'
 import { enqueue } from '../outbox'
+import {isQaFinancialRecord,isQaFixtureId,QA_MONEY_BLOCKED} from '../qa-fixture-policy'
 
 /**
  * Payment orchestration: attempt creation, provider initiation, callback intake.
@@ -16,6 +17,7 @@ export async function initiatePaymentForOrder(orderRef: string, userId?: string 
   const order = await db.order.findUnique({ where: { reference: orderRef }, include: { event: true, payments: true } })
   if (!order) throw errors.notFound('Order not found.')
   if (order.userId && userId && order.userId !== userId) throw errors.forbidden('This order belongs to another buyer.')
+  if(isQaFinancialRecord(order)||isQaFixtureId(userId))throw errors.forbidden(QA_MONEY_BLOCKED)
   if (order.status !== 'PENDING_PAYMENT') throw errors.conflict(`Order is ${order.status.toLowerCase().replace('_', ' ')} — payment is not required or no longer possible.`)
   if (order.expiresAt && order.expiresAt < new Date()) {
     // Re-arm the hold window if capacity still allows a retry.

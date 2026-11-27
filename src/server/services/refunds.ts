@@ -2,6 +2,7 @@ import { db } from '../../lib/db'
 import { errors } from '../api'
 import { postJournal, ensureOrgAccounts, ensurePlatformAccounts } from '../ledger'
 import { notifyUser } from './notify'
+import {isQaFinancialRecord,isQaFixtureId,QA_MONEY_BLOCKED} from '../qa-fixture-policy'
 
 /**
  * Refunds & payouts.
@@ -27,6 +28,7 @@ export async function requestRefund(params: {
     include: { tickets: true },
   })
   if (!order) throw errors.notFound('Order not found.')
+  if(isQaFinancialRecord(order)||isQaFixtureId(params.requestedBy))throw errors.forbidden(QA_MONEY_BLOCKED)
   if (!['PAID', 'EXCEPTION_REVIEW', 'PARTIALLY_REFUNDED'].includes(order.status)) throw errors.conflict('Only paid orders can be refunded.')
   const existing = await db.refundCase.findFirst({ where: { orderId: order.id, status: { in: ['REQUESTED', 'APPROVED', 'PROCESSED'] } } })
   if (existing) throw errors.conflict('A refund case is already open for this order.')
@@ -55,6 +57,7 @@ export async function requestRefund(params: {
 export async function processRefund(refundCaseId: string, actorId: string) {
   const rc = await db.refundCase.findUnique({ where: { id: refundCaseId }, include: { order: { include: { event: { select: { title: true } } } } } })
   if (!rc) throw errors.notFound('Refund case not found.')
+  if(isQaFinancialRecord(rc.order)||isQaFixtureId(actorId))throw errors.forbidden(QA_MONEY_BLOCKED)
   // Only live cases can execute. REJECTED is a closed decision, PROCESSED/FAILED
   // are terminal, and MANUAL_TRACKED means the provider path is unavailable —
   // executing any of those would be fake or double money movement.
@@ -194,6 +197,7 @@ export async function rejectRefund(refundCaseId: string, actorId: string, note: 
 // ── Payouts ────────────────────────────────────────────────────────────────
 
 export async function requestPayout(params: { orgId: string; requestedBy: string; amountMinor: number; destination: { momoNumber: string; recipientName: string } }) {
+  if(isQaFixtureId(params.orgId)||isQaFixtureId(params.requestedBy))throw errors.forbidden(QA_MONEY_BLOCKED)
   const { orgFinanceSummary } = await import('../ledger')
   const summary = await orgFinanceSummary(params.orgId)
   if (params.amountMinor <= 0) throw errors.badRequest('Payout amount must be positive.')
@@ -224,6 +228,7 @@ export async function approvePayout(payoutId: string, approverId: string) {
 export async function submitPayout(payoutId: string) {
   const payout = await db.payout.findUnique({ where: { id: payoutId } })
   if (!payout) throw errors.notFound('Payout not found.')
+  if(isQaFixtureId(payout.orgId)||isQaFixtureId(payout.requestedBy))throw errors.forbidden(QA_MONEY_BLOCKED)
   if (payout.status !== 'APPROVED') throw errors.conflict('Payout must be approved before submission.')
   const { submitPayout: providerSubmit } = await import('../hubtel/payments')
   const destination = JSON.parse(payout.destination || '{}') as { momoNumber: string; recipientName: string }
