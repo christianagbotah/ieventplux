@@ -151,7 +151,7 @@ jobs:
         run: bun test src/server/following-feed-policy.test.ts
 
       - name: Global discovery timezone, online and checkout-currency safety
-        run: bun test src/server/discovery-time.test.ts
+        run: bun test src/server/discovery-time.test.ts src/server/discovery-sort.test.ts
 
       - name: Provider health reconciles administrator-saved credentials
         run: bun test src/server/provider-health.test.ts
@@ -277,6 +277,11 @@ jobs:
         env:
           IEVENTPLUX_ISOLATED_DB_TEST: "yes"
         run: bun run scripts/org-event-access-smoke.ts
+
+      - name: Public event discovery rank and currency privacy regression
+        env:
+          IEVENTPLUX_ISOLATED_DB_TEST: "yes"
+        run: bun run scripts/event-discovery-sort-smoke.ts
 
       - name: Concierge capability status and real-catalogue fallback
         run: bun run scripts/catalogue-availability-smoke.ts

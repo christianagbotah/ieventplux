@@ -5,6 +5,7 @@ import { buildDiscoveryWhere } from '@/server/services/events'
 import { orgCan } from '@/server/permissions'
 import { assertCanPublishNewEvent } from '@/server/services/subscriptions'
 import { organizerEventCatalogFilters } from '@/server/organizer-meeting-catalog'
+import { parseDiscoverySort,validDiscoveryDate,orderByIds } from '@/server/discovery-sort'
 
 /**
  * Events API:
@@ -68,6 +69,10 @@ export async function GET(req: NextRequest) {
       return jsonList(items, total, page, pageSize)
     }
 
+    const sort=parseDiscoverySort(url.searchParams.get('sort'),url.searchParams.get('currency'))
+    if(!sort)throw errors.badRequest('Choose a valid event sort and a single currency for price sorting.')
+    const from=url.searchParams.get('from'),to=url.searchParams.get('to')
+    if(!validDiscoveryDate(from)||!validDiscoveryDate(to)||(from&&to&&Date.parse(from)>Date.parse(to)))throw errors.badRequest('Invalid event date range.')
     const where = buildDiscoveryWhere({
       q: url.searchParams.get('q') ?? undefined,
       country: url.searchParams.get('country')?.toUpperCase() || undefined,
@@ -84,9 +89,25 @@ export async function GET(req: NextRequest) {
     if (url.searchParams.get('when') === 'LIVE_NOW') {
       where.status = 'LIVE'
     }
+    if(sort.kind==='price'){
+      const price=url.searchParams.get('price')
+      const tickets={active:true,currency:sort.currency,...(price==='FREE'?{priceMinor:0}:price==='PAID'?{priceMinor:{gt:0}}:{})}
+      // Rank the full matching catalogue, not just the current page, using
+      // actual minimum active ticket price in one currency. Same predicate
+      // for count, rank and fetched cards; no cross-currency comparison.
+      const result=await db.$transaction(async tx=>{
+        const eligible={...where,ticketTypes:{some:tickets}}
+        const total=await tx.event.count({where:eligible})
+        const ranked=await tx.ticketType.groupBy({by:['eventId'],where:{...tickets,event:eligible},_min:{priceMinor:true},orderBy:[{_min:{priceMinor:'asc'}},{eventId:'asc'}],skip:offset,take:pageSize})
+        const ids=ranked.map(row=>row.eventId)
+        const rows=ids.length?await tx.event.findMany({where:{...eligible,id:{in:ids}},select:eventCardSelect}):[]
+        return {items:orderByIds(rows,ids),total}
+      },{isolationLevel:'RepeatableRead'})
+      return jsonList(result.items,result.total,page,pageSize)
+    }
     const items = await db.event.findMany({
       where,
-      orderBy: url.searchParams.get('sort') === 'price' ? { ticketTypes: { _count: 'desc' } } : { startsAt: 'asc' },
+      orderBy: sort.kind==='newest'?[{createdAt:'desc'},{id:'asc'}]:[{startsAt:'asc'},{id:'asc'}],
       skip: offset,
       take: pageSize,
       select: eventCardSelect,

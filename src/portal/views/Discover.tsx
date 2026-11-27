@@ -72,6 +72,7 @@ const WHEN_CHIPS = [
   { value: 'TODAY', label: 'Today' },
   { value: 'THIS_WEEK', label: 'This week' },
   { value: 'THIS_WEEKEND', label: 'This weekend' },
+  { value: 'LIVE_NOW', label: 'Live now' },
 ]
 
 // Category icons from the DB (`icon` slug) → lucide components, tinted with each category's brand color.
@@ -88,7 +89,7 @@ const CATEGORY_ICONS: Record<string, React.ComponentType<{ className?: string }>
   activity: Activity,
 }
 
-const EMPTY_FILTERS = { q: '', category: '', country: '', city: '', mode: '', price: '', when: '' }
+const EMPTY_FILTERS = { q: '', category: '', country: '', city: '', mode: '', price: '', when: '',sort: '' }
 
 /** Animated number for hero stats (respects prefers-reduced-motion). */
 function useCountUp(target: number | null, durationMs = 900): number {
@@ -308,7 +309,7 @@ export default function Discover({ route }: { route: Route }) {
       try {
         const result = await api.get<{ items: EventCardData[]; total: number }>(
           '/events' + qs({
-            ...filters, mode: filters.mode === 'ONLINE' ? '' : filters.mode,
+            ...filters,sort:filters.sort.startsWith('price:')?'price':filters.sort,currency:filters.sort.startsWith('price:')?filters.sort.slice(6):'', mode: filters.mode === 'ONLINE' ? '' : filters.mode,
             access: filters.mode === 'ONLINE' ? 'ONLINE' : '',
             timezone: attendeeTimeZone, page: targetPage, pageSize: 12,
           }),
@@ -336,7 +337,7 @@ export default function Discover({ route }: { route: Route }) {
     [filterKey, attendeeTimeZone],
   )
 
-  const browsing = isSearch || browseAll || Boolean(filters.category || filters.country || filters.city || filters.mode || filters.price || filters.when || filters.q)
+  const browsing = isSearch || browseAll || Boolean(filters.category || filters.country || filters.city || filters.mode || filters.price || filters.when || filters.q || filters.sort)
 
   useEffect(() => {
     if (!browsing) return
@@ -359,6 +360,7 @@ export default function Discover({ route }: { route: Route }) {
     if (isSearch) navigate('/', { replace: true })
   }
 
+  const sortOptions=[{value:'newest',label:'Recently added'},{value:'price:GHS',label:'Lowest price (₵)'},{value:'price:USD',label:'Lowest price (USD)'},{value:'price:EUR',label:'Lowest price (EUR)'},{value:'price:GBP',label:'Lowest price (GBP)'}]
   const activeFilters: { key: keyof typeof filters; label: string }[] = [
     ...(filters.q ? [{ key: 'q' as const, label: 'Search: ' + filters.q }] : []),
     ...(filters.country ? [{ key: 'country' as const, label: countryLabel(filters.country) }] : []),
@@ -366,6 +368,7 @@ export default function Discover({ route }: { route: Route }) {
     ...(filters.category ? [{ key: 'category' as const, label: (home?.categories ?? categories).find((c) => c.slug === filters.category)?.name ?? filters.category }] : []),
     ...(filters.mode ? [{ key: 'mode' as const, label: filters.mode === 'ONLINE' ? 'Online & hybrid' : humanize(filters.mode) }] : []),
     ...(filters.price ? [{ key: 'price' as const, label: filters.price === 'FREE' ? 'Free entry' : 'Paid entry' }] : []),
+    ...(filters.sort ? [{key:'sort' as const,label:sortOptions.find(s=>s.value===filters.sort)?.label??filters.sort}] : []),
     ...(filters.when ? [{ key: 'when' as const, label: WHEN_CHIPS.find((chip) => chip.value === filters.when)?.label ?? filters.when }] : []),
   ]
 
@@ -515,6 +518,14 @@ export default function Discover({ route }: { route: Route }) {
                         <SelectItem value="PAID">Paid only</SelectItem>
                       </SelectContent>
                     </Select>
+                  </div>
+                  <div>
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Sort</p>
+                    <Select value={filters.sort||'upcoming'} onValueChange={v=>applyFilter('sort',v==='upcoming'?'':v)}>
+                      <SelectTrigger aria-label="Sort events"><SelectValue/></SelectTrigger>
+                      <SelectContent><SelectItem value="upcoming">Event start date</SelectItem>{sortOptions.map(s=><SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}</SelectContent>
+                    </Select>
+                    {filters.sort.startsWith('price:')&&<p className="mt-2 text-xs text-muted-foreground">Only events with active ticket types in the selected currency are included.</p>}
                   </div>
                   <div>
                     <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">When</p>

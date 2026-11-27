@@ -73,7 +73,7 @@ export interface DiscoveryEventCard {
   categorySlug?: string | null
   org: OrgRef
   /** Present on `upcoming` items; used to derive a "from GHS x" label. */
-  ticketTypes?: { priceMinor: number }[]
+  ticketTypes?: { priceMinor: number;currency?:string }[]
 }
 
 export interface DiscoveryHome {

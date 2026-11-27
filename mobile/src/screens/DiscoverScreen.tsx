@@ -24,7 +24,7 @@ import {
   ApiClientError,
   api,
   formatDate,
-  minPriceLabel,
+  formatMinor,
   type DiscoveryEventCard,
   type DiscoveryHome,
 } from '../api/client'
@@ -33,7 +33,7 @@ import { PremiumBackdrop, SectionHeading, LabelPill, mobileDesign } from '../ui/
 import { useSession } from '../store/session'
 import { HOME_STORIES } from '../lib/home-stories'
 import { DiscoverFilterSheet } from '../components/DiscoverFilterSheet'
-import { buildDiscoveryQuery, isDiscoveryFiltered, type DiscoveryFilters } from '../lib/discovery-filters'
+import { buildDiscoveryQuery, isDiscoveryFiltered, discoveryPriceLabel, type DiscoveryFilters } from '../lib/discovery-filters'
 import type { DiscoverScreenProps } from '../navigation'
 
 type ListState =
@@ -68,8 +68,8 @@ export default function DiscoverScreen({ navigation }: DiscoverScreenProps) {
   const [searchError, setSearchError] = useState(false)
   const [filterOpen, setFilterOpen] = useState(false)
   const [countries, setCountries] = useState<{ code: string; count: number }[]>([])
-  const [advanced, setAdvanced] = useState<Pick<DiscoveryFilters,'country'|'city'|'mode'|'price'|'when'>>({
-    country: '', city: '', mode: '', price: '', when: '',
+  const [advanced, setAdvanced] = useState<Pick<DiscoveryFilters,'country'|'city'|'mode'|'price'|'when'|'sort'>>({
+    country: '', city: '', mode: '', price: '', when: '',sort:'',
   })
   const [searchTotal, setSearchTotal] = useState<number | null>(null)
   const [searchPage, setSearchPage] = useState(1)
@@ -83,12 +83,12 @@ export default function DiscoverScreen({ navigation }: DiscoverScreenProps) {
   const activeFilters: DiscoveryFilters = useMemo(() => ({q:search,category:category==='all'?'':category,...advanced}), [search,category,advanced])
   const filterKey = JSON.stringify(activeFilters)
   const isFiltered = isDiscoveryFiltered(activeFilters)
-  const activeCount = Object.values(activeFilters).filter(v=>v.trim()).length
+  const activeCount = Object.values(activeFilters).filter(v=>v?.trim()).length
   const setQuickFilter = (key: keyof typeof advanced, value: string) => {
     setAdvanced(old => ({...old,[key]:old[key] === value ? '' : value}))
   }
   const resetFilters = () => {
-    setSearch('');setCategory('all');setAdvanced({country:'',city:'',mode:'',price:'',when:''})
+    setSearch('');setCategory('all');setAdvanced({country:'',city:'',mode:'',price:'',when:'',sort:''})
     setServerResults(null);setSearchError(false);setSearchBusy(false)
     listRef.current?.scrollToOffset({offset:0,animated:true})
   }
@@ -388,7 +388,7 @@ export default function DiscoverScreen({ navigation }: DiscoverScreenProps) {
     <DiscoverFilterSheet visible={filterOpen} filters={activeFilters} categories={state.home.categories}
       countries={countries} onClose={()=>setFilterOpen(false)} onApply={next=>{
         setSearch(next.q);setCategory(next.category || 'all')
-        setAdvanced({country:next.country,city:next.city,mode:next.mode,price:next.price,when:next.when})
+        setAdvanced({country:next.country,city:next.city,mode:next.mode,price:next.price,when:next.when,sort:next.sort??''})
         setFilterOpen(false)
         listRef.current?.scrollToOffset({offset:0,animated:true})
       }} />
@@ -405,7 +405,7 @@ function FeaturedEventCard({ event, onPress }: { event: DiscoveryEventCard; onPr
       <Text style={styles.featuredMeta}>{formatDate(event.startsAt)} · {event.city ?? 'See event details'}</Text>
       <Text style={styles.featuredTitle}>{event.title}</Text>
       <Text style={styles.featuredOrg}>{event.org.name}</Text>
-      <View style={styles.featuredBottom}><Text style={styles.featuredAction}>View details & tickets  →</Text><Text style={styles.featuredPrice}>{minPriceLabel((event.ticketTypes ?? []).map(t=>t.priceMinor))}</Text></View>
+      <View style={styles.featuredBottom}><Text style={styles.featuredAction}>View details & tickets  →</Text><Text style={styles.featuredPrice}>{discoveryPriceLabel(event.ticketTypes??[],formatMinor)}</Text></View>
     </View>
   </Pressable>
 }
@@ -445,7 +445,7 @@ function LiveNowCard({ event, onPress }: { event: DiscoveryHome['liveNow'][numbe
 }
 
 function EventRow({ event, onPress }: { event: DiscoveryEventCard; onPress: () => void }) {
-  const priceLabel = minPriceLabel((event.ticketTypes ?? []).map(t => t.priceMinor))
+  const priceLabel = discoveryPriceLabel(event.ticketTypes??[],formatMinor)
   return <Pressable style={({pressed}) => [styles.card,pressed && styles.cardPressed]}
     onPress={onPress} accessibilityRole="button" accessibilityLabel={'Open event ' + event.title}>
     <View style={styles.eventPosterWrap}>
