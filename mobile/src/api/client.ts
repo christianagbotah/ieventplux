@@ -1,4 +1,4 @@
-import type {PurchaseRequestHistory,PurchaseRequestResponse,purchaseRequestBody,RequestDecision,PurchaseRequestRow} from '../lib/marketplace-requests'
+import type {PurchaseRequestHistory,PurchaseRequestResponse,purchaseRequestBody,RequestDecision,PurchaseRequestRow,CheckoutReview} from '../lib/marketplace-requests'
 /**
  * Typed API client for the iEventPlux v1 REST surface (src/app/api/v1 on the
  * iEventPlux web deployment).
