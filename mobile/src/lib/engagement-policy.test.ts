@@ -1,0 +1,4 @@
+import {expect,test} from 'bun:test'
+import {pollDraft,votePercent,canVotePoll} from './engagement-policy'
+test('drafts require distinct bounded options',()=>{expect(pollDraft(' Pick one ',[' A ','B',''])).toEqual({question:'Pick one',options:['A','B']});expect(pollDraft('Pick one',['A',' A '])).toBeNull();expect(pollDraft('x',['A','B'])).toBeNull();expect(pollDraft('Pick one',['A'])).toBeNull();expect(pollDraft('Pick one',['A','B','C','D','E','F','G'])).toBeNull()})
+test('vote controls fail closed and percentages never overflow',()=>{expect(canVotePoll('LIVE','OPEN',null)).toBe(true);expect(canVotePoll('PUBLISHED','OPEN',null)).toBe(false);expect(canVotePoll('LIVE','OPEN','mine')).toBe(false);expect(canVotePoll('LIVE','CLOSED',null)).toBe(false);expect(votePercent(1,3)).toBe(33);expect(votePercent(5,0)).toBe(0);expect(votePercent(8,4)).toBe(100)})

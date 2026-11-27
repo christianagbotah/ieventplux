@@ -343,6 +343,10 @@ export interface EventDetail {
   feeNote?: string | null
 }
 
+export type AudiencePollOption={id:string;text:string;position:number;votes:number}
+export type AudiencePoll={id:string;eventId:string;question:string;status:'DRAFT'|'OPEN'|'CLOSED';totalVotes:number;myOptionId:string|null;options:AudiencePollOption[]}
+export type AudienceQuestion={id:string;body:string;status:'NEW'|'ANSWERED'|'HIDDEN';answer:string|null;pinned:boolean;author:{id:string;displayName:string};upvotes:number;myUpvote:boolean;isMine:boolean}
+
 export interface EventReminderState { active: boolean; holdingTicket: boolean; upcoming: boolean }
 export interface EventWaitlistState {
   count: number
@@ -824,6 +828,15 @@ export const api = {
     waitlist: (id: string) => request<EventWaitlistState>('GET', '/events/'+encodeURIComponent(id)+'/waitlist'),
     joinWaitlist: (id: string, body: {name:string;contact:string;partySize:number}) => request<{position:number;reactivated:boolean;status:string}>('POST','/events/'+encodeURIComponent(id)+'/waitlist',body),
     leaveWaitlist: (id: string) => request<{left:boolean}>('POST','/events/'+encodeURIComponent(id)+'/waitlist-leave',{}),
+  },
+  engagement: {
+    polls:(eventId:string,signal?:AbortSignal)=>request<{polls:AudiencePoll[];isOrg:boolean}>('GET','/events/'+encodeURIComponent(eventId)+'/polls',undefined,signal),
+    questions:(eventId:string,signal?:AbortSignal)=>request<{questions:AudienceQuestion[];isOrg:boolean}>('GET','/events/'+encodeURIComponent(eventId)+'/questions',undefined,signal),
+    vote:(pollId:string,optionId:string)=>request<{myOptionId:string}>('POST','/polls/'+encodeURIComponent(pollId)+'/vote',{optionId}),
+    createPoll:(eventId:string,question:string,options:string[])=>request<{poll:AudiencePoll}>('POST','/events/'+encodeURIComponent(eventId)+'/polls',{question,options}),
+    pollStatus:(pollId:string,action:'open'|'close')=>request<{poll:AudiencePoll}>('POST','/polls/'+encodeURIComponent(pollId)+'/'+action,{}),
+    ask:(eventId:string,body:string)=>request<{question:AudienceQuestion}>('POST','/events/'+encodeURIComponent(eventId)+'/questions',{body}),
+    questionAction:(id:string,action:'upvote'|'answer'|'hide'|'unhide'|'pin'|'unpin',answer?:string)=>request<unknown>('POST','/questions/'+encodeURIComponent(id)+'/'+action,answer===undefined?{}:{answer}),
   },
   organizer: {
     memberships: () => request<{ items: Membership[] }>('GET','/orgs'),
