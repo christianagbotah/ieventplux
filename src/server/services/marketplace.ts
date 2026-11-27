@@ -151,8 +151,8 @@ export async function updateStore(idOrSlug: string, userId: string, raw: unknown
   if (x.status === 'ACTIVE') {
     const account = await db.user.findUnique({ where:{ id:userId },
       select:{emailVerifiedAt:true,status:true} })
-    if (!account?.emailVerifiedAt || account.status !== 'ACTIVE')
-      throw errors.forbidden('Verify your email address before publishing a public store.')
+    if (!account || account.status !== 'ACTIVE') throw errors.forbidden('An active account is required.')
+    if (!account.emailVerifiedAt) throw errors.emailVerificationRequired('Verify your email address before publishing a public store.')
   }
   const update = parseStoreDraft({ ...existing, ...x })
   if (update.slug !== existing.slug) throw errors.badRequest('Store address cannot be changed after creation.')
