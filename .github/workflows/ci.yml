@@ -288,6 +288,11 @@ jobs:
           IEVENTPLUX_ISOLATED_DB_TEST: "yes"
         run: bun run scripts/event-series-create-smoke.ts
 
+      - name: Live engagement privacy and concurrent vote integrity
+        env:
+          IEVENTPLUX_ISOLATED_DB_TEST: "yes"
+        run: bun run scripts/live-engagement-smoke.ts
+
       - name: Concierge capability status and real-catalogue fallback
         run: bun run scripts/catalogue-availability-smoke.ts
 
