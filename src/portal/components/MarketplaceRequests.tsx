@@ -5,13 +5,15 @@ import {useToast} from '@/hooks/use-toast'
 import {Button} from '@/components/ui/button'
 import {useConfirm} from '@/components/ui/confirm-dialog-provider'
 import {api} from '../api'
-import {purchaseRequestBody,purchaseRequestFingerprint,requestStatusLabel,availableRequestDecisions,decisionLabel,type RequestDecision,type PurchaseRequestRow,type ReviewedBasket,type PurchaseRequestHistory,type PurchaseRequestResponse} from '../lib/marketplace-requests'
+import {purchaseRequestBody,purchaseRequestFingerprint,requestStatusLabel,availableRequestDecisions,decisionLabel,type RequestDecision,type PurchaseRequestRow,type ReviewedBasket,type PurchaseRequestHistory,type PurchaseRequestResponse,type CheckoutReview,checkoutMethodLabel} from '../lib/marketplace-requests'
 const price=(n:number)=>'₵'+(n/100).toLocaleString('en-GH',{minimumFractionDigits:2,maximumFractionDigits:2})
 export function MarketplaceRequests({slug,seller,quote,onSubmitted}:{slug:string;seller:boolean;quote:ReviewedBasket|null;onSubmitted:(submitted:ReviewedBasket)=>void}){
  const confirm=useConfirm()
  const {toast}=useToast()
  const [attempt,setAttempt]=useState(0)
  function fail(e:unknown,fallback:string){const message=e instanceof Error?e.message:fallback;setSubmissionError(message);setAttempt(n=>n+1);toast({title:'Request not completed',description:message,variant:'destructive',duration:10000})}
+ const [review,setReview]=useState<{id:string;data:CheckoutReview}|null>(null)
+ const [reviewBusy,setReviewBusy]=useState(false)
  const [history,setHistory]=useState<PurchaseRequestHistory|null>(null)
  const [loading,setLoading]=useState(false)
  const [error,setError]=useState('')
@@ -26,7 +28,7 @@ export function MarketplaceRequests({slug,seller,quote,onSubmitted}:{slug:string
  const endpoint='/marketplace/stores/'+encodeURIComponent(slug)+'/requests'
  const load=useCallback(async()=>{
   const generation=++epoch.current
-  setLoading(true);setError('')
+  setLoading(true);setError('');setReview(null)
   try{const result=await api.get<PurchaseRequestHistory>(endpoint)
    if(generation===epoch.current){if(result.seller!==seller)throw new Error('Session changed. Refresh the storefront.');setHistory(result)}
   }catch(e){if(generation===epoch.current){setHistory(null);setError(e instanceof Error?e.message:'Could not load requests.')}}
@@ -73,6 +75,13 @@ export function MarketplaceRequests({slug,seller,quote,onSubmitted}:{slug:string
   }catch(e){if(active.current){fail(e,'Could not update stock hold.');await load()}}
   finally{locked.current=false;if(active.current)setDecisionBusy(false)}
  }
+ async function inspectCheckout(id:string){
+  if(locked.current)return
+  locked.current=true;setReviewBusy(true);setSubmissionError('');setReview(null)
+  try{const data=await api.get<CheckoutReview>('/marketplace/requests/'+encodeURIComponent(id)+'/checkout-review');if(active.current)setReview({id,data})}
+  catch(e){if(active.current)fail(e,'Could not load checkout review.')}
+  finally{locked.current=false;if(active.current)setReviewBusy(false)}
+ }
  return <section className="space-y-3 rounded-2xl border bg-card p-4 sm:p-6" aria-label="Purchase requests">
   <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-extrabold">{seller?'Incoming purchase requests':'Your purchase requests'}</h2><p className="text-xs text-muted-foreground">Purchase requests are non-binding. Temporary stock holds are separate; no payment is collected.</p></div>
    <Button variant="outline" size="sm" disabled={loading} onClick={()=>void load()}>{loading?'Refreshing…':'Refresh requests'}</Button></div>
@@ -86,6 +95,8 @@ export function MarketplaceRequests({slug,seller,quote,onSubmitted}:{slug:string
    <div className="flex justify-between gap-2"><strong>{price(row.totalMinor)}</strong><span className="text-xs font-semibold">{requestStatusLabel(row.status)}</span></div>
    <p className="break-all text-xs text-muted-foreground">{new Date(row.createdAt).toLocaleString()} · {row.id}</p>
    {row.items.map(item=><div key={item.variantId} className="flex justify-between gap-3 text-sm"><span>{item.productName} · {item.variantTitle} × {item.quantity}</span><span className="shrink-0">{price(item.lineMinor)}</span></div>)}
+   {row.status==='ACKNOWLEDGED'&&<Button variant="outline" size="sm" disabled={reviewBusy||loading||decisionBusy||submitting} onClick={()=>void inspectCheckout(row.id)}>{reviewBusy?'Loading review…':'Review checkout'}</Button>}
+   {review?.id===row.id&&<div className="space-y-2 rounded-xl border bg-muted/20 p-3 text-sm"><div className="flex justify-between gap-3"><strong>Checkout review</strong><strong>{price(review.data.totalMinor)}</strong></div><p>{review.data.unitCount} items · {review.data.holdValid?'Stock held':'No active stock hold'}</p><p>Seller payment preferences: {review.data.methods.map(checkoutMethodLabel).join(', ')||'Not configured'}</p>{review.data.seller&&review.data.allocation&&<div className="space-y-1 border-t pt-2"><p className="flex justify-between gap-2">Platform commission <strong>{price(review.data.allocation.platformMinor)}</strong></p><p className="flex justify-between gap-2">Seller gross proceeds <strong>{price(review.data.allocation.sellerMinor)}</strong></p><p className="text-xs text-muted-foreground">Estimated allocation before provider fees; no payment collected.</p></div>}<div className="space-y-1 text-xs text-muted-foreground">{review.data.blockers.map(message=><p key={message}>{message}</p>)}</div></div>}
    {row.stockHold&&<p className="rounded-lg bg-muted p-2 text-xs">Stock hold: {row.stockHold.status.toLowerCase()}{row.stockHold.status==='HELD'?' · Expires '+new Date(row.stockHold.expiresAt).toLocaleString():''}</p>}
    <div className="flex flex-wrap gap-2">{history?.stockHoldEnabled&&seller&&row.status==='ACKNOWLEDGED'&&!row.stockHold&&<Button size="sm" disabled={decisionBusy||submitting||loading} onClick={()=>void hold(row.id,false)}>Hold stock for 30 minutes</Button>}{row.stockHold?.status==='HELD'?<Button variant="outline" size="sm" disabled={decisionBusy||submitting||loading} onClick={()=>void hold(row.id,true)}>Release stock hold</Button>:null}{(row.stockHold?.status==='HELD'?[]:availableRequestDecisions(seller,row.status)).map(action=><Button key={action} size="sm" variant={action==='ACKNOWLEDGED'?'default':'outline'} disabled={decisionBusy||submitting||loading} onClick={()=>void decide(row.id,action)}>{decisionLabel(action)}</Button>)}</div>
   </article>)}

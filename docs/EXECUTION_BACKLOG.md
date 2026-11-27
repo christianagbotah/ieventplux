@@ -7,8 +7,9 @@ Maintain this file as the public, sanitized engineering checkpoint. Keep credent
 - Runtime role preflight #166 merged; isolated regression verified normal application ownership, rejection of foreign-owned tables and superuser execution. Continue to use guard for each migration.
 - Recurring event creation #164 and future series editing #165 merged; individual feature-branch CI and artifact checks passed. Combined main CI, artifact deployment and staging acceptance pending.
 - Recurring event combined CI and runtime package passed; web deployed with API health checks, Android QA build pending installable release verification. Superseded #156/#157/#160 closed after source reconciliation.
-- Live engagement #171, native engagement #173, award ballot integrity #174 and Android build catch-up #172 merged with feature-branch checks passing. Combined release and installable Android verification pending.
-- Current: separate 30-minute marketplace stock hold pilot, atomic reserve/release/expiry, explicit gated UI and migration rehearsal. Do not enable before isolated regression, migration/worker deployment and staging acceptance. No order/payment settlement yet. Real-device push/calling and paid competitions remain pending.
+- Live engagement #171, native engagement #173, award ballot integrity #174 and Android build catch-up #172 merged with feature-branch checks passing. Combined web release deployed and read-only staging health checks passed; installable Android build verification pending.
+- Stock hold pilot #175 merged after all feature-branch CI checks passed; combined runtime and migration deployment pending. Keep flag off until worker and staging acceptance.
+- Current: private checkout review with server-calculated price/commission, exact reservation matching, merchant payment preferences, no payment/intent creation. Real-device push/calling and paid competitions remain pending.
 - Keep marketplace checkout, settlement, awards voting, and provider integrations gated until their end-to-end acceptance tests pass.
 
 ## P0 — Runtime and release reliability
