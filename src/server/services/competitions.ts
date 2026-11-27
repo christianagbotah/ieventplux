@@ -6,6 +6,7 @@ import {
   parseCompetitionDraft, type CompetitionDraft,
 } from '@/server/competition-policy'
 import { realtimeEmit } from './realtime'
+import {engagementAccess} from '../engagement-access'
 
 /**
  * Organizer-created, durable awards and supporter voting.
@@ -32,10 +33,10 @@ export type CompetitionView = {
   }[]
 }
 
-export async function listEventCompetitions(
-  eventId: string, viewerId: string | null, organizer: boolean, eventStatus: string,
+async function listEventCompetitions(
+  eventId: string, viewerId: string | null, organizer: boolean, eventStatus: string, client:Prisma.TransactionClient,
 ): Promise<CompetitionView[]> {
-  const contests = await db.eventCompetition.findMany({
+  const contests = await client.eventCompetition.findMany({
     where: { eventId, ...(organizer ? {} : { status: { in: ['OPEN', 'CLOSED'] } }) },
     orderBy: [{ createdAt: 'desc' }],
     include: {
@@ -45,12 +46,12 @@ export async function listEventCompetitions(
   if (!contests.length) return []
   const ids = contests.map(c => c.id)
   const [counts, personalVotes] = await Promise.all([
-    db.competitionVote.groupBy({
+    client.competitionVote.groupBy({
       by: ['competitionId', 'categoryId', 'nomineeId'],
       where: { competitionId: { in: ids } },
       _count: { _all: true },
     }),
-    viewerId ? db.competitionVote.findMany({
+    viewerId ? client.competitionVote.findMany({
       where: { competitionId: { in: ids }, userId: viewerId },
       select: { categoryId: true, nomineeId: true },
     }) : Promise.resolve([]),
@@ -89,16 +90,31 @@ export async function listEventCompetitions(
   })
 }
 
+export async function competitionSnapshot(eventId:string,viewerId:string|null){
+ return db.$transaction(async tx=>{
+  const {event,organizer}=await engagementAccess(eventId,viewerId,tx)
+  return {competitions:await listEventCompetitions(eventId,viewerId,organizer,event.status,tx),canManage:organizer,paidVotingEnabled:false}
+ },{isolationLevel:Prisma.TransactionIsolationLevel.RepeatableRead})
+}
+async function requireCompetitionOrganizer(tx:Prisma.TransactionClient,eventId:string,actorId:string){
+ const {event,organizer}=await engagementAccess(eventId,actorId,tx)
+ if(!organizer)throw errors.forbidden('Organizer permission required.')
+ return event
+}
+async function competitionAudit(tx:Prisma.TransactionClient,actorId:string,id:string,action:string){
+ // Never include the category or nominee in a vote audit; preserve ballot privacy.
+ await tx.auditLog.create({data:{actorUserId:actorId,actorLabel:'competition-account',entityType:'EventCompetition',entityId:id,action:'competition.'+action}})
+}
+function concurrentChange(err:unknown){return !!err&&typeof err==='object'&&'code' in err&&err.code==='P2034'}
+
 export async function createEventCompetition(
   eventId: string, actorId: string, rawDraft: unknown,
 ) {
   const input: CompetitionDraft = parseCompetitionDraft(rawDraft)
-  const event = await db.event.findUnique({
-    where: { id: eventId }, select: { id: true, status: true, deletedAt: true },
-  })
-  if (!event || event.deletedAt) throw errors.notFound('Event not found.')
-  if (['CANCELLED'].includes(event.status)) throw errors.conflict('Cannot create awards for a cancelled event.')
-  return db.eventCompetition.create({
+  try{return await db.$transaction(async tx=>{
+  const event=await requireCompetitionOrganizer(tx,eventId,actorId)
+  if(event.status==='CANCELLED')throw errors.conflict('Cannot create awards for a cancelled event.')
+  const row=await tx.eventCompetition.create({
     data: {
       eventId, title: input.title, description: input.description,
       createdBy: actorId, status: 'DRAFT', votingMethod: 'FREE',
@@ -115,13 +131,16 @@ export async function createEventCompetition(
     },
     select: { id: true, title: true, status: true, eventId: true },
   })
+  await competitionAudit(tx,actorId,row.id,'create')
+  return row
+  },{isolationLevel:Prisma.TransactionIsolationLevel.Serializable})}catch(err){if(concurrentChange(err))throw errors.conflict('Competition changed. Refresh and retry.');throw err}
 }
 
 /**
  * Draft-only replacement of categories and nominees. Never edit ballots
  * after voting opens; even a successful close does not permit re-editing.
  */
-export async function reviseDraftCompetition(id: string, rawDraft: unknown) {
+export async function reviseDraftCompetition(id: string, actorId:string, rawDraft: unknown) {
   const input = parseCompetitionDraft(rawDraft)
   try {
     return await db.$transaction(async tx => {
@@ -129,6 +148,7 @@ export async function reviseDraftCompetition(id: string, rawDraft: unknown) {
         where: { id }, select: { id: true, status: true, eventId: true },
       })
       if (!existing) throw errors.notFound('Competition not found.')
+      await requireCompetitionOrganizer(tx,existing.eventId,actorId)
       if (existing.status !== 'DRAFT') throw errors.conflict('Published competitions and nominees cannot be edited after voting opens.')
       const votes = await tx.competitionVote.count({ where: { competitionId: id } })
       if (votes !== 0) throw errors.conflict('Competition nominations are locked because votes exist.')
@@ -152,6 +172,7 @@ export async function reviseDraftCompetition(id: string, rawDraft: unknown) {
           },
         })
       }
+      await competitionAudit(tx,actorId,id,'draft_edit')
       return { id, eventId: existing.eventId, status: 'DRAFT' }
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
   } catch (err) {
@@ -162,17 +183,19 @@ export async function reviseDraftCompetition(id: string, rawDraft: unknown) {
 }
 
 /** Draft deletion never deletes ballots; open/closed competitions are retained. */
-export async function discardDraftCompetition(id: string) {
+export async function discardDraftCompetition(id: string,actorId:string) {
   try {
     return await db.$transaction(async tx => {
       const contest = await tx.eventCompetition.findUnique({
         where: { id }, select: { id: true, eventId: true, status: true },
       })
       if (!contest) throw errors.notFound('Competition not found.')
+      await requireCompetitionOrganizer(tx,contest.eventId,actorId)
       if (contest.status !== 'DRAFT') throw errors.conflict('Open or completed competitions cannot be removed.')
       const votes = await tx.competitionVote.count({ where: { competitionId: id } })
       if (votes !== 0) throw errors.conflict('Votes exist; this competition cannot be removed.')
       await tx.eventCompetition.delete({ where: { id } })
+      await competitionAudit(tx,actorId,id,'draft_delete')
       return { removed: true, eventId: contest.eventId }
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
   } catch (err) {
@@ -193,6 +216,7 @@ export async function changeCompetitionStatus(
       },
     })
     if (!contest || contest.event.deletedAt) throw errors.notFound('Competition not found.')
+    await requireCompetitionOrganizer(tx,contest.eventId,actorId)
     const now = new Date()
     if (target === 'OPEN') {
       if (contest.status !== 'DRAFT') throw errors.conflict('Only a draft competition can be opened.')
@@ -206,11 +230,10 @@ export async function changeCompetitionStatus(
       data: target === 'OPEN' ? { status: 'OPEN', openedAt: now } : { status: 'CLOSED', closedAt: now },
     })
     if (updated.count !== 1) throw errors.conflict('Competition status changed. Refresh and try again.')
+    await competitionAudit(tx,actorId,id,target==='OPEN'?'open':'close')
     return { competitionId: id, eventId: contest.eventId, status: target, actorId }
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
-  await realtimeEmit('event:' + result.eventId, 'competition:changed', {
-    competitionId: id, type: 'status', status: target,
-  })
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }).catch(err=>{if(concurrentChange(err))throw errors.conflict('Voting status changed. Refresh and try again.');throw err})
+  await realtimeEmit('event:' + result.eventId, 'competition:changed', {})
   return result
 }
 
@@ -234,6 +257,8 @@ export async function castCompetitionVote(args: {
         },
       })
       if (!competition || competition.event.deletedAt) throw errors.notFound('Competition not found.')
+      await engagementAccess(competition.eventId,args.userId,tx)
+      if(!await tx.user.findFirst({where:{id:args.userId,status:'ACTIVE',deletedAt:null},select:{id:true}}))throw errors.unauthorized()
       if (competition.votingMethod !== 'FREE')
         throw errors.conflict('Paid voting is not available in this release.')
       if (!canVoteInCompetition({
@@ -254,6 +279,7 @@ export async function castCompetitionVote(args: {
         data: { competitionId: args.competitionId, categoryId: category.id,
           nomineeId: nominee.id, userId: args.userId },
       })
+      await competitionAudit(tx,args.userId,args.competitionId,'vote')
       return { competitionId: args.competitionId, categoryId: category.id,
         nomineeId: nominee.id, eventId: competition.eventId }
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
@@ -266,9 +292,7 @@ export async function castCompetitionVote(args: {
     throw err
   }
   // Do not leak rankings via WebSocket before organizer's reveal setting.
-  await realtimeEmit('event:' + result.eventId, 'competition:changed', {
-    competitionId: result.competitionId, categoryId: result.categoryId, type: 'vote',
-  })
+  await realtimeEmit('event:' + result.eventId, 'competition:changed', {})
   return { accepted: true, competitionId: result.competitionId,
     categoryId: result.categoryId, nomineeId: result.nomineeId }
 }

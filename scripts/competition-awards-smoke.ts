@@ -5,6 +5,7 @@
  */
 import { randomUUID } from 'node:crypto'
 import { db } from '../src/lib/db'
+import {castCompetitionVote} from '../src/server/services/competitions'
 
 const BASE = 'http://127.0.0.1:3000/api/v1'
 if (process.env.CI !== 'true' || process.env.IEVENTPLUX_ISOLATED_DB_TEST !== 'yes' ||
@@ -31,7 +32,7 @@ async function login(email: string) {
   assert(cookie.startsWith('ievx_session='), 'signed-in session cookie')
   return cookie
 }
-async function call(method: string, path: string, cookie?: string, body?: unknown): Promise<{ status: number; data: Payload }> {
+async function call(method: string, path: string, cookie?: string, body?: unknown): Promise<{ status: number; data: Payload; headers: Headers }> {
   const response = await fetch(BASE + path, {
     method, headers: {
       ...(cookie ? { Cookie: cookie } : {}),
@@ -40,7 +41,7 @@ async function call(method: string, path: string, cookie?: string, body?: unknow
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   })
   const data = await response.json().catch(() => ({}))
-  return { status: response.status, data }
+  return { status: response.status, data, headers:response.headers }
 }
 
 let eventId: string | null = null
@@ -105,6 +106,7 @@ try {
   assert((await call('POST', '/competitions/' + id + '/open', host, {})).status === 200,
     'organizer opens voting')
   const publicOpen = await call('GET', '/events/' + eventId + '/competitions', fanA)
+  assert(publicOpen.headers.get('cache-control')?.includes('no-store'),'personal ballot snapshot is not cacheable')
   assert(publicOpen.status === 200 && publicOpen.data.competitions[0]?.countsVisible === false &&
     publicOpen.data.competitions[0]?.totalVotes === null,
     'public vote totals withheld until close')
@@ -144,6 +146,18 @@ try {
     'organizer cannot edit candidates once voting starts')
   assert((await call('DELETE', '/competitions/' + id, host)).status === 409,
     'organizer cannot delete an active competition with votes')
+  assert(await db.auditLog.count({where:{entityType:'EventCompetition',entityId:id,action:'competition.vote'}})===3,'only accepted ballots create one audit each')
+  await db.event.update({where:{id:eventId},data:{visibility:'INVITE_ONLY'}})
+  const fanUser=await db.user.findUniqueOrThrow({where:{email:'ama@example.dev'}})
+  assert((await call('GET','/events/'+eventId+'/competitions',fanA)).status===404,'private event ballot read denied without entitlement')
+  let denied=false
+  try{await castCompetitionVote({competitionId:id,categoryId:categoryB.id,nomineeId:categoryB.nominees[1].id,userId:fanUser.id})}catch(err){denied=!!err&&typeof err==='object'&&'status' in err&&err.status===404}
+  assert(denied,'direct service rejects unauthorized private ballot inside transaction')
+  const rsvp=await db.rsvp.create({data:{eventId,userId:fanUser.id,name:'Synthetic approved fan',status:'APPROVED'}})
+  assert((await call('GET','/events/'+eventId+'/competitions',fanA)).status===200,'approved private attendee can view ballots')
+  await db.rsvp.update({where:{id:rsvp.id},data:{status:'DECLINED'}})
+  assert((await call('POST','/competitions/'+id+'/vote',fanA,{categoryId:categoryB.id,nomineeId:categoryB.nominees[1].id})).status===404,'revoked attendee cannot vote')
+  await db.event.update({where:{id:eventId},data:{visibility:'PUBLIC'}})
   assert((await call('POST', '/competitions/' + id + '/close', host, {})).status === 200,
     'organizer closes competition')
   const final = await call('GET', '/events/' + eventId + '/competitions', fanA)

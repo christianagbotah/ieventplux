@@ -4,7 +4,6 @@ import { handle, jsonOk, requireUser, errors, rateLimit, readJson } from '@/serv
 import { requireCommunityAccess } from '@/server/community-access'
 import { eventOrgAccess } from '@/server/permissions'
 import { castCompetitionVote, changeCompetitionStatus } from '@/server/services/competitions'
-import { audit } from '@/server/audit'
 
 type Context = { params: Promise<{ id: string; action: string }> }
 
@@ -34,20 +33,12 @@ export async function POST(req: NextRequest, ctx: Context) {
       const result = await castCompetitionVote({
         competitionId: id, categoryId, nomineeId, userId: user.id,
       })
-      await audit({
-        actorUserId: user.id, actorLabel: user.email, action: 'competition.vote',
-        entityType: 'EventCompetition', entityId: id,
-      })
       return jsonOk(result, { status: 201 })
     }
 
     const access = await eventOrgAccess(user.id, contest.eventId, 'event:edit')
     if (!access.allowed) throw errors.forbidden('Organizer permission required to manage voting.')
     const result = await changeCompetitionStatus(id, user.id, action === 'open' ? 'OPEN' : 'CLOSED')
-    await audit({
-      actorUserId: user.id, actorLabel: user.email,
-      action: 'competition.' + action, entityType: 'EventCompetition', entityId: id,
-    })
     return jsonOk(result)
   })
 }

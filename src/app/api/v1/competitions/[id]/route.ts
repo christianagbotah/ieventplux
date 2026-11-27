@@ -5,7 +5,6 @@ import { eventOrgAccess } from '@/server/permissions'
 import { requireCommunityAccess } from '@/server/community-access'
 import { CompetitionPolicyError } from '@/server/competition-policy'
 import { reviseDraftCompetition, discardDraftCompetition } from '@/server/services/competitions'
-import { audit } from '@/server/audit'
 
 type Context = { params: Promise<{ id: string }> }
 
@@ -24,9 +23,7 @@ export async function PATCH(req: NextRequest, ctx: Context) {
     if (!permission.allowed) throw errors.forbidden('Organizer permission required.')
     const body = await readJson<unknown>(req)
     try {
-      const result = await reviseDraftCompetition(id, body)
-      await audit({ actorUserId: user.id, actorLabel: user.email,
-        action: 'competition.draft_edit', entityType: 'EventCompetition', entityId: id })
+      const result = await reviseDraftCompetition(id, user.id, body)
       return jsonOk({ competition: result })
     } catch (cause) {
       if (cause instanceof CompetitionPolicyError) throw errors.badRequest(cause.message)
@@ -46,9 +43,7 @@ export async function DELETE(req: NextRequest, ctx: Context) {
     await requireCommunityAccess(competition.eventId)
     const permission = await eventOrgAccess(user.id, competition.eventId, 'event:edit')
     if (!permission.allowed) throw errors.forbidden('Organizer permission required.')
-    const result = await discardDraftCompetition(id)
-    await audit({ actorUserId: user.id, actorLabel: user.email,
-      action: 'competition.draft_delete', entityType: 'EventCompetition', entityId: id })
+    const result = await discardDraftCompetition(id,user.id)
     return jsonOk({ removed: result.removed })
   })
 }
