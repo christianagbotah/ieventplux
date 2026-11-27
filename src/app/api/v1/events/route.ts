@@ -1,4 +1,6 @@
 import { NextRequest } from 'next/server'
+import { randomUUID } from 'node:crypto'
+import {eventInstant,eventTimezone,parseRepeatWeeks,weeklyEventOccurrences} from '@/server/event-series-timing'
 import { handle, jsonOk, jsonList, pagination, requireUser, readJson, errors, sanitizeText, parseTags } from '@/server/api'
 import { db } from '@/lib/db'
 import { buildDiscoveryWhere } from '@/server/services/events'
@@ -129,18 +131,21 @@ export async function POST(req: NextRequest) {
 
     const title = sanitizeText(body.title, 140)
     if (title.length < 3) throw errors.badRequest('Event title is required.')
-    const startsAt = body.startsAt ? new Date(String(body.startsAt)) : null
-    const endsAt = body.endsAt ? new Date(String(body.endsAt)) : null
-    if (!startsAt || Number.isNaN(startsAt.getTime())) throw errors.badRequest('A valid start date/time is required.')
-    if (!endsAt || Number.isNaN(endsAt.getTime())) throw errors.badRequest('A valid end date/time is required.')
-    if (endsAt <= startsAt) throw errors.badRequest('End must be after start.')
-
+    const startsAt=eventInstant(body.startsAt),endsAt=eventInstant(body.endsAt)
+    if(!startsAt||!endsAt||endsAt<=startsAt)throw errors.badRequest('Use valid event dates with an explicit timezone offset. End must be after start.')
+    const timezone=eventTimezone(body.timezone??'Africa/Accra')
+    if(!timezone)throw errors.badRequest('Choose a valid event timezone.')
+    const repeatWeeks=parseRepeatWeeks(body.repeatWeeks)
+    if(repeatWeeks===null)throw errors.badRequest('Choose between 0 and 26 extra weekly occurrences.')
+    const occurrences=weeklyEventOccurrences(startsAt,endsAt,timezone,repeatWeeks)
+    if(!occurrences)throw errors.badRequest('A recurring date has an ambiguous or nonexistent local time. Choose another event time.')
+    const venueId=typeof body.venueId==='string'&&body.venueId?body.venueId:null
     const mode = ['PHYSICAL', 'VIRTUAL', 'HYBRID'].includes(String(body.mode)) ? String(body.mode) : 'PHYSICAL'
-    const visibility = ['PUBLIC', 'UNLISTED', 'INVITE_ONLY'].includes(String(body.visibility)) ? String(body.visibility) : 'PUBLIC'
-    const slug = `${title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '').slice(0, 60)}-${Date.now().toString(36)}`
+    if(body.visibility!==undefined&&!['PUBLIC','UNLISTED','INVITE_ONLY'].includes(String(body.visibility)))throw errors.badRequest('Choose a valid visibility setting.')
+    const visibility=String(body.visibility??'PUBLIC')
+    const slug = `${title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '').slice(0, 60)}-${randomUUID().slice(0,12)}`
 
-    const event = await db.event.create({
-      data: {
+    const common = {
         orgId,
         title,
         slug,
@@ -152,10 +157,10 @@ export async function POST(req: NextRequest) {
         mode,
         visibility,
         status: 'DRAFT',
-        venueId: typeof body.venueId === 'string' && body.venueId ? body.venueId : null,
+        venueId,
         country: sanitizeText(body.country, 2).toUpperCase() || 'GH',
         city: sanitizeText(body.city, 60) || null,
-        timezone: sanitizeText(body.timezone, 60) || 'Africa/Accra',
+        timezone,
         startsAt,
         endsAt,
         contactEmail: sanitizeText(body.contactEmail, 160) || null,
@@ -165,63 +170,19 @@ export async function POST(req: NextRequest) {
         ageGuidance: sanitizeText(body.ageGuidance, 60) || null,
         refundPolicy: sanitizeText(body.refundPolicy, 500) || null,
         createdBy: user.id,
-      },
-    })
-    // ── Optional weekly series: generate future occurrences (all DRAFT) ──
-    // The parent keeps its own lifecycle; occurrences are independent events the
-    // organizer publishes individually (or edits once and applies to the series).
-    let seriesId: string | null = null
-    const repeatWeeks = Math.max(0, Math.min(26, Math.round(Number(body.repeatWeeks ?? 0))))
-    if (repeatWeeks > 0) {
-      const seriesSlug = `${slug}-series`
-      const series = await db.eventSeries.create({
-        data: {
-          orgId,
-          title,
-          slug: seriesSlug,
-          description: sanitizeText(body.summary, 200) || null,
-          categorySlug: sanitizeText(body.categorySlug, 40) || 'community',
-          recurrence: JSON.stringify({ freq: 'WEEKLY', interval: 1, count: repeatWeeks }),
-          isActive: true,
-        },
-      })
-      seriesId = series.id
-      const durationMs = endsAt.getTime() - startsAt.getTime()
-      await db.event.update({ where: { id: event.id }, data: { seriesId: series.id } })
-      await db.event.createMany({
-        data: Array.from({ length: repeatWeeks }, (_, i) => ({
-          orgId,
-          seriesId: series.id,
-          title,
-          slug: `${slug}-w${i + 2}`,
-          summary: sanitizeText(body.summary, 200) || null,
-          description: sanitizeText(body.description, 8000) || '',
-          categorySlug: sanitizeText(body.categorySlug, 40) || 'community',
-          tags: JSON.stringify(parseTags(body.tags)),
-          coverImageUrl: typeof body.coverImageUrl === 'string' && body.coverImageUrl.startsWith('/') ? body.coverImageUrl : null,
-          mode,
-          visibility,
-          status: 'DRAFT',
-          venueId: typeof body.venueId === 'string' && body.venueId ? body.venueId : null,
-          country: sanitizeText(body.country, 2).toUpperCase() || 'GH',
-          city: sanitizeText(body.city, 60) || null,
-          timezone: sanitizeText(body.timezone, 60) || 'Africa/Accra',
-          startsAt: new Date(startsAt.getTime() + (i + 1) * 7 * 24 * 60 * 60 * 1000),
-          endsAt: new Date(endsAt.getTime() + (i + 1) * 7 * 24 * 60 * 60 * 1000),
-          contactEmail: sanitizeText(body.contactEmail, 160) || null,
-          contactPhone: sanitizeText(body.contactPhone, 24) || null,
-          accessibilityInfo: sanitizeText(body.accessibilityInfo, 500) || null,
-          attendanceRules: sanitizeText(body.attendanceRules, 500) || null,
-          ageGuidance: sanitizeText(body.ageGuidance, 60) || null,
-          refundPolicy: sanitizeText(body.refundPolicy, 500) || null,
-          createdBy: user.id,
-        })),
-      })
-      void durationMs
-    }
-
-    const { audit } = await import('@/server/audit')
-    await audit({ actorUserId: user.id, actorLabel: user.email, action: 'event.create', entityType: 'Event', entityId: event.id, after: { title, seriesOccurrences: repeatWeeks || undefined } })
-    return jsonOk({ event, seriesId, occurrencesCreated: repeatWeeks })
+      }
+    return db.$transaction(async tx=>{
+      const member=await tx.membership.findFirst({where:{orgId,userId:user.id,acceptedAt:{not:null},org:{deletedAt:null}},select:{role:true}})
+      if(!member||!orgCan(member.role,'event:create'))throw errors.forbidden('Event creation requires organizer permission.')
+      if(venueId&&!await tx.venue.findFirst({where:{id:venueId,orgId},select:{id:true}}))throw errors.badRequest('Choose a venue belonging to your organization.')
+      const series=repeatWeeks?await tx.eventSeries.create({data:{
+        orgId,title,slug:slug+'-series',description:common.summary,categorySlug:common.categorySlug,
+        timezone,visibility,recurrence:JSON.stringify({freq:'WEEKLY',interval:1,count:repeatWeeks+1}),isActive:true,
+      }}):null
+      const event=await tx.event.create({data:{...common,seriesId:series?.id??null}})
+      if(series)await tx.event.createMany({data:occurrences.map((timing,i)=>({...common,...timing,seriesId:series.id,slug:slug+'-w'+(i+2)}))})
+      await tx.auditLog.create({data:{actorUserId:user.id,actorLabel:user.email.slice(0,120),action:'event.create',entityType:'Event',entityId:event.id,after:JSON.stringify({title,seriesOccurrences:repeatWeeks})}})
+      return jsonOk({event,seriesId:series?.id??null,occurrencesCreated:repeatWeeks})
+    },{isolationLevel:'Serializable'})
   })
 }

@@ -26,6 +26,7 @@ export type EventDraftForm = {
   startTime: string
   endDate: string
   endTime: string
+  repeatWeeks?:string
 }
 export const BLANK_EVENT_DRAFT: EventDraftForm = {
   title:'', summary:'', description:'', categorySlug:'community',country:'GH',city:'',
@@ -68,6 +69,7 @@ export function validateEventDraft(form:EventDraftForm, editing=false):string|nu
   if (!EVENT_MODES.some(item=>item.value===form.mode)) return 'Choose a valid attendance mode.'
   if (!EVENT_VISIBILITY.some(item=>item.value===form.visibility)) return 'Choose a valid visibility setting.'
   if (editing) return null
+  if(form.repeatWeeks&&(!/^\d{1,2}$/.test(form.repeatWeeks)||Number(form.repeatWeeks)>26))return 'Choose 0–26 extra weekly occurrences.'
   const start=parseDeviceLocalDateTime(form.startDate,form.startTime)
   const end=parseDeviceLocalDateTime(form.endDate,form.endTime)
   if (!start || !end) return 'Enter real start and end dates (YYYY-MM-DD) and times (24-hour HH:MM).'
@@ -83,7 +85,7 @@ export function newEventDraftPayload(orgId:string, form:EventDraftForm) {
     orgId, title:form.title.trim(),summary:form.summary.trim(),description:form.description.trim(),
     categorySlug:form.categorySlug,country:form.country.trim().toUpperCase(),city:form.city.trim(),
     mode:form.mode,visibility:form.visibility,timezone:deviceTimeZone(),
-    startsAt:start.toISOString(),endsAt:end.toISOString(),
+    startsAt:start.toISOString(),endsAt:end.toISOString(),repeatWeeks:Number(form.repeatWeeks||0),
   }
 }
 export function editEventDraftPayload(form:EventDraftForm) {

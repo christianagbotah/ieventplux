@@ -28,3 +28,12 @@ test('edit form does not change event dates, publication status or visibility',(
   expect('status' in payload).toBe(false)
   expect('visibility' in payload).toBe(false)
 })
+
+test('native recurrence sends a bounded number of extra drafts',()=>{
+ const f={...BLANK_EVENT_DRAFT,title:'Weekly gathering',startDate:'2099-10-11',startTime:'12:00',endDate:'2099-10-11',endTime:'13:00',repeatWeeks:'4'}
+ expect(validateEventDraft(f)).toBeNull()
+ expect(newEventDraftPayload('org',f).repeatWeeks).toBe(4)
+ expect(validateEventDraft({...f,repeatWeeks:'27'})).toContain('0–26')
+ expect(validateEventDraft({...f,repeatWeeks:'1.5'})).toContain('0–26')
+ expect('repeatWeeks' in editEventDraftPayload(f)).toBe(false)
+})
