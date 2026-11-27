@@ -24,6 +24,7 @@ export const errors = {
   badRequest: (msg = 'Invalid request.') => new ApiError('BAD_REQUEST', msg, 400),
   unauthorized: (msg = 'Sign in required.') => new ApiError('UNAUTHORIZED', msg, 401),
   forbidden: (msg = 'You do not have permission to perform this action.') => new ApiError('FORBIDDEN', msg, 403),
+  emailVerificationRequired: (msg = 'Verify your email address to continue.') => new ApiError('EMAIL_VERIFICATION_REQUIRED', msg, 403),
   notFound: (msg = 'Resource not found.') => new ApiError('NOT_FOUND', msg, 404),
   conflict: (msg = 'Conflicting state.') => new ApiError('CONFLICT', msg, 409),
   rateLimited: (msg = 'Too many requests. Please slow down.') => new ApiError('RATE_LIMITED', msg, 429),

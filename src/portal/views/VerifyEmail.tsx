@@ -5,10 +5,16 @@ import { Mail, ShieldCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { api } from '../api'
+import {useRoute} from '../router'
+import {shopVerificationReturn} from '../lib/shop-verification'
 import { usePortal, type SessionUser } from '../store'
 
 export default function VerifyEmail() {
   const { user, booted, setUser } = usePortal()
+  const route = useRoute()
+  const shopReturn = shopVerificationReturn(route.query.get('returnTo'))
+  const returnHref = shopReturn ? '#'+shopReturn : '#/me?tab=profile'
+  const returnLabel = shopReturn ? 'Return to my shop' : 'Back to my account'
   const [code, setCode] = useState('')
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState('')
@@ -41,7 +47,7 @@ export default function VerifyEmail() {
         <Button asChild><a href="#/signin?continue=%2Fverify-email">Sign in to verify</a></Button>
       </> : user.emailVerifiedAt ? <>
         <p className="break-all text-sm text-muted-foreground">{user.email} is verified.</p>
-        <Button asChild><a href="#/me?tab=profile">Back to my account</a></Button>
+        <Button asChild><a href={returnHref}>{returnLabel}</a></Button>
       </> : <>
         <p className="text-sm text-muted-foreground">Enter the six-digit code sent to <strong className="break-all text-foreground">{user.email}</strong>. If you do not have a code, request a new one below.</p>
         <form className="space-y-4" onSubmit={e => {e.preventDefault(); void submit(false)}}>
@@ -53,7 +59,7 @@ export default function VerifyEmail() {
         <p className="text-xs text-muted-foreground">Codes expire after 30 minutes.</p>
         {notice && <p role="status" className="text-sm">{notice}</p>}
         {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-        <a className="block text-sm text-primary underline underline-offset-4" href="#/me?tab=profile">Back to my account</a>
+        <a className="block text-sm text-primary underline underline-offset-4" href={returnHref}>{returnLabel}</a>
       </>}
     </div>
   </section>

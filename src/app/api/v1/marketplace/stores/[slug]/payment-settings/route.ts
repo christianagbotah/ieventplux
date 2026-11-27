@@ -20,7 +20,8 @@ export async function PATCH(req:NextRequest,ctx:Context){
   const store=await ownedStore((await ctx.params).slug,user.id)
   if(store.status==='SUSPENDED')throw errors.forbidden('Suspended stores cannot modify payment preferences.')
   const account=await db.user.findUnique({where:{id:user.id},select:{emailVerifiedAt:true,status:true}})
-  if(!account?.emailVerifiedAt||account.status!=='ACTIVE')throw errors.forbidden('Verify your email before changing payment preferences.')
+  if(!account||account.status!=='ACTIVE')throw errors.forbidden('An active account is required.')
+  if(!account.emailVerifiedAt)throw errors.emailVerificationRequired('Verify your email before changing payment preferences.')
   let preferences
   try{preferences=parsePaymentPreferences(await readJson(req))}catch(e){if(e instanceof PaymentPreferencesError)throw errors.badRequest(e.message);throw e}
   await db.$transaction(async tx=>{

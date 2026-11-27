@@ -14,6 +14,7 @@ import { useConfirm } from '@/components/ui/confirm-dialog-provider'
 import { useToast } from '@/hooks/use-toast'
 import { api, ApiClientError } from '../api'
 import { navigate } from '../router'
+import {isEmailVerificationRequired,shopVerificationHref} from '../lib/shop-verification'
 import {basketSelection,canAddBasketUnit,type StoreQuote} from '../lib/marketplace-basket'
 import { usePortal } from '../store'
 import { MARKETPLACE_CATEGORIES } from '@/lib/marketplace-options'
@@ -42,6 +43,9 @@ export default function MarketplaceStorefront({slug}:{slug:string}) {
  const [loading,setLoading]=useState(true)
  const [error,setError]=useState('')
  const [busy,setBusy]=useState(false)
+ const [publicationError,setPublicationError]=useState('')
+ const [publicationVerification,setPublicationVerification]=useState(false)
+ const [publicationAttempt,setPublicationAttempt]=useState(0)
  const [branding,setBranding]=useState<'logo'|'cover'|null>(null)
  const [brandError,setBrandError]=useState('')
  const [brandAttempt,setBrandAttempt]=useState(0)
@@ -108,6 +112,7 @@ export default function MarketplaceStorefront({slug}:{slug:string}) {
 
  async function setStoreStatus(status:'DRAFT'|'ACTIVE'){
    if(!data||busy)return
+   setPublicationError('');setPublicationVerification(false)
    const approved=await confirm({
      title:status==='ACTIVE'?'Publish your storefront?':'Unpublish this storefront?',
      description:status==='ACTIVE'
@@ -122,7 +127,9 @@ export default function MarketplaceStorefront({slug}:{slug:string}) {
      await load()
      toast({title:status==='ACTIVE'?'Store published':'Store hidden from public discovery'})
    }catch(e){
-     toast({title:'Unable to change store status',description:e instanceof ApiClientError?e.message:'Try again.',variant:'destructive'})
+     const message=e instanceof ApiClientError?e.message:'Try again.'
+     setPublicationError(message);setPublicationVerification(isEmailVerificationRequired(e));setPublicationAttempt(n=>n+1)
+     toast({title:'Unable to change store status',description:message,variant:'destructive'})
    }finally{setBusy(false)}
  }
 
@@ -271,6 +278,7 @@ export default function MarketplaceStorefront({slug}:{slug:string}) {
         </Button>
       </div>}
     </div>
+    {data.canManage&&<SubmissionFeedback message={publicationError} attempt={publicationAttempt} action={publicationVerification&&<a className="inline-flex min-h-10 items-center font-semibold underline underline-offset-4" href={shopVerificationHref(slug)}>Click here to verify your email</a>}/>}
     {data.canManage&&<><SubmissionFeedback message={brandError} attempt={brandAttempt}/><p className="text-xs text-muted-foreground">Logo: 512 × 512 · Banner: 1600 × 600 · JPG, PNG or WebP, max 5 MB. Public images.</p></>}
     {data.store.description&&<p className="max-w-3xl whitespace-pre-wrap text-sm leading-7 text-muted-foreground">{data.store.description}</p>}
     <section className="space-y-4">
