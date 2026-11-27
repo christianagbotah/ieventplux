@@ -3,8 +3,8 @@ import { handle, jsonOk, requireUser, readJson, errors, rateLimit } from '@/serv
 import { eventOrgAccess } from '@/server/permissions'
 import { requireCommunityAccess } from '@/server/community-access'
 import { CompetitionPolicyError } from '@/server/competition-policy'
-import { createEventCompetition, listEventCompetitions } from '@/server/services/competitions'
-import { audit } from '@/server/audit'
+import { createEventCompetition, competitionSnapshot } from '@/server/services/competitions'
+import {getSession} from '@/server/auth'
 
 type Context = { params: Promise<{ id: string }> }
 
@@ -12,11 +12,8 @@ type Context = { params: Promise<{ id: string }> }
 export async function GET(_req: NextRequest, ctx: Context) {
   return handle(async () => {
     const { id } = await ctx.params
-    const { event, userId } = await requireCommunityAccess(id)
-    const access = userId ? await eventOrgAccess(userId, id, 'event:edit') : null
-    const organizer = Boolean(access?.allowed)
-    const competitions = await listEventCompetitions(id, userId, organizer, event.status)
-    return jsonOk({ competitions, canManage: organizer, paidVotingEnabled: false })
+    const session=await getSession()
+    return jsonOk(await competitionSnapshot(id,session?.user.id??null),{headers:{'Cache-Control':'private, no-store'}})
   })
 }
 
@@ -31,10 +28,6 @@ export async function POST(req: NextRequest, ctx: Context) {
     const body = await readJson<unknown>(req)
     try {
       const competition = await createEventCompetition(id, user.id, body)
-      await audit({
-        actorUserId: user.id, actorLabel: user.email,
-        action: 'competition.create', entityType: 'EventCompetition', entityId: competition.id,
-      })
       return jsonOk({ competition }, { status: 201 })
     } catch (error) {
       if (error instanceof CompetitionPolicyError) throw errors.badRequest(error.message)
