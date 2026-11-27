@@ -42,6 +42,20 @@ async function main(){
   check((await call({title:'Updated synthetic event'},rows[0].id)).status===200,'authorized metadata edit accepted')
   const after=await db.event.findUniqueOrThrow({where:{id:rows[0].id}})
   check(after.venueId===venue.id&&after.startsAt.toISOString()===rows[0].startsAt.toISOString(),'rejected edits do not mutate venue or schedule')
+  const apply=async(body:object)=>{
+   const res=await fetch(base+'/'+rows[0].id+'/apply-to-series',{method:'POST',headers:{Cookie:'ievx_session='+token,'Content-Type':'application/json'},body:JSON.stringify(body)})
+   return {status:res.status,data:await res.json()}
+  }
+  const source=await call({startsAt:'2027-03-07T17:00:00Z',endsAt:'2027-03-07T18:00:00Z',summary:'Synthetic revised summary'},rows[0].id)
+  check(source.status===200,'source clock updated')
+  await db.event.update({where:{id:rows[2].id},data:{status:'PUBLISHED'}})
+  check((await apply({fields:['summary'],adoptTime:true})).status===409,'published target prevents entire bulk timing update')
+  check((await db.event.findUniqueOrThrow({where:{id:rows[1].id}})).summary===rows[1].summary,'rejected bulk timing change does not apply metadata')
+  await db.event.update({where:{id:rows[2].id},data:{status:'DRAFT'}})
+  const bulk=await apply({fields:['summary'],adoptTime:true})
+  check(bulk.status===200&&bulk.data.updated===2,'all future drafts updated together')
+  const revised=await db.event.findUniqueOrThrow({where:{id:rows[1].id}})
+  check(revised.summary==='Synthetic revised summary'&&revised.startsAt.toISOString()==='2027-03-14T16:00:00.000Z'&&revised.endsAt.toISOString()==='2027-03-14T17:00:00.000Z','bulk adopts correct DST local clocks')
   console.log('EVENT_SERIES_CREATE_SMOKE_PASS')
  }finally{
   await db.event.deleteMany({where:{orgId:{in:orgIds}}})
