@@ -13,16 +13,10 @@
   "lang": "en",
   "icons": [
     {
-      "src": "/logo.svg",
+      "src": "/logo.svg?v=ticket-1",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any"
-    },
-    {
-      "src": "/logo.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "maskable"
     }
   ],
   "shortcuts": [
