@@ -1251,12 +1251,12 @@ function EventEditor({ orgId, event, onClose }: { orgId: string; event: OrgEvent
   ]
 
   const applyToSeries = async () => {
-    if (!event) return
+    if (!event||applying) return
     setApplying(true)
     try {
       const res = await api.post<{ updated: number }>(`/events/${event.id}/apply-to-series`, { fields: seriesFields, adoptTime: seriesAdoptTime })
       setSeriesOpen(false)
-      toast({ title: res.updated > 0 ? `Applied to ${res.updated} upcoming ${res.updated === 1 ? 'occurrence' : 'occurrences'}` : 'No upcoming occurrences to update', description: 'Only DRAFT, scheduled, published or postponed future events in this series were touched. Already-started and ended ones are never edited.' })
+      toast({ title: res.updated > 0 ? `Applied to ${res.updated} upcoming ${res.updated === 1 ? 'occurrence' : 'occurrences'}` : 'No upcoming occurrences to update', description: 'Future occurrences updated together. Bulk timing changes are draft-only; already-started and ended events are never edited.' })
     } catch (err) {
       toast({ title: 'Could not apply to the series', description: err instanceof ApiClientError ? err.message : undefined, variant: 'destructive' })
     } finally {
@@ -1579,7 +1579,7 @@ function EventEditor({ orgId, event, onClose }: { orgId: string; event: OrgEvent
               <DialogTitle>Apply to future occurrences</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">Pick what to copy from <span className="font-semibold text-foreground">{event?.title}</span> to every upcoming occurrence in this series.</p>
+              <p className="text-sm text-muted-foreground">Pick saved fields to copy from <span className="font-semibold text-foreground">{event?.title}</span> to every upcoming occurrence. Save changes to the source event first. Timing changes require all targets to remain drafts.</p>
               <div className="flex flex-wrap gap-1.5">
                 {SERIES_FIELD_OPTIONS.map((opt) => {
                   const on = seriesFields.includes(opt.key)
@@ -1598,7 +1598,7 @@ function EventEditor({ orgId, event, onClose }: { orgId: string; event: OrgEvent
               </div>
               <label className="flex items-center gap-2 text-sm">
                 <Switch checked={seriesAdoptTime} onCheckedChange={setSeriesAdoptTime} aria-label="Also adopt time of day" />
-                Also set the same start time (and duration) on each occurrence
+                Also adopt the same local start and end times (unpublished drafts only)
               </label>
             </div>
             <DialogFooter>

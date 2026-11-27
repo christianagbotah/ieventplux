@@ -42,3 +42,13 @@ export function weeklyEventOccurrences(start:Date,end:Date,zone:string,count:num
  }
  return result
 }
+
+/** Keep a target's local calendar date; adopt source local clocks and day span. */
+export function adoptSeriesTiming(sourceStart:Date,sourceEnd:Date,targetStart:Date,zone:string){
+ const startWall=wall(sourceStart,zone),endWall=wall(sourceEnd,zone)
+ const localTarget=wall(targetStart,zone),day=86400000
+ const newWall=Math.floor(localTarget/day)*day+(startWall-Math.floor(startWall/day)*day)
+ const startsAt=resolveWall(newWall,zone),endsAt=resolveWall(newWall+(endWall-startWall),zone)
+ if(!startsAt||!endsAt||endsAt<=startsAt)return null
+ return {startsAt,endsAt}
+}
