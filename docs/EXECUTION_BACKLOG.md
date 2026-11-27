@@ -58,3 +58,13 @@ Maintain this file as the public, sanitized engineering checkpoint. Keep credent
 
 ## Definition of done
 Implement database/API/web/native changes as applicable; run focused and regression tests, CI, artifact packaging and staging acceptance. Record evidence and remaining blockers; then immediately select the next actionable task. Never equate a source merge with a successful deployment or a pilot with production certification.
+
+## P0 — GitHub-first runtime consolidation (2026-11-27)
+- [x] Identify active application components, repository visibility and remote source references; initial public endpoint and local backup service checks passed.
+- [ ] Complete inventory and provenance review of all obsolete checkouts, local branches, stashes, generated files and historical runtime packages; preserve reviewed work securely before deleting.
+- [ ] Remove complete redundant worktrees with Git metadata cleanup under existing deployment locks; retain any service-referenced directories until runtime replacements are verified.
+- [ ] Move monitor and meeting guard to independently packaged minimal runtime artifacts; preserve permanent app entry path and persistent state.
+- [ ] Publish checksum-verified web, worker, realtime and supporting runtime artifacts through GitHub Actions/Releases; rehearse recovery and keep a compatible rollback set.
+- [ ] Implement shared-lock-aware retention with active service and process reference checks, health gates, recoverability verification and private audit logs; never delete persistent state.
+- [ ] Reconcile storage measurements, verify authentication/admin/API/database/jobs/integrations and backup restore; keep operational details in restricted evidence storage rather than this public repository.
+- [ ] Resume seeded staging pilot verification after storage and deployment safety gates pass.
