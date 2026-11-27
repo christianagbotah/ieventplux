@@ -38,7 +38,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
 
     if (action === 'hide' || action === 'unhide' || action === 'pin' || action === 'unpin') {
       const verb = action.toUpperCase().replace('-', '_') as 'HIDE' | 'UNHIDE' | 'PIN' | 'UNPIN'
-      const result = await moderateQuestion({ questionId: id, action: verb })
+      const result = await moderateQuestion({ questionId: id, action: verb, userId:user.id })
       await audit({ actorUserId: user.id, actorLabel: user.email, action: `question.${action}`, entityType: 'AudienceQuestion', entityId: id })
       return jsonOk(result)
     }

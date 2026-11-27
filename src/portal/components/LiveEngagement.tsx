@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { connectRealtime } from '../realtime'
 import {
   BarChart3, MessageCircleQuestion, Send, ChevronUp, Pin, EyeOff, Eye, Check,
@@ -62,8 +62,12 @@ interface Question {
 
 const LETTERS = ['A', 'B', 'C', 'D', 'E', 'F']
 
-export default function LiveEngagement({ eventId, slug, live }: { eventId: string; slug: string; live: boolean }) {
-  const { user } = usePortal()
+export default function LiveEngagement({ eventId, live }: { eventId: string; slug: string; live: boolean }) {
+  const {user}=usePortal()
+  return <EngagementContent key={eventId+':'+(user?.id??'guest')} eventId={eventId} live={live}/>
+}
+function EngagementContent({eventId,live}:{eventId:string;live:boolean}){
+  const {user}=usePortal()
   const { toast } = useToast()
 
   const [polls, setPolls] = useState<Poll[] | null>(null)
@@ -78,67 +82,28 @@ export default function LiveEngagement({ eventId, slug, live }: { eventId: strin
   const [composer, setComposer] = useState({ question: '', options: ['', ''] })
   const [creating, setCreating] = useState(false)
 
-  const load = useCallback(async () => {
-    const [pollsPayload, questionsPayload] = await Promise.all([
-      api.get<{ polls: Poll[]; isOrg: boolean }>(`/events/${eventId}/polls`).catch(() => null),
-      api.get<{ questions: Question[]; isOrg: boolean }>(`/events/${eventId}/questions`).catch(() => null),
-    ])
-    if (pollsPayload) {
-      setPolls(pollsPayload.polls)
-      setIsOrg(pollsPayload.isOrg)
-    }
-    if (questionsPayload) setQuestions(questionsPayload.questions)
-  }, [eventId])
-
-  useEffect(() => {
-    void load()
-  }, [load, user?.id])
-
-  // Realtime deltas from the event room (best-effort; load() is the fallback).
-  useEffect(() => {
-    const socket = connectRealtime()
-    socket.on('connect', () => socket.emit('join', { room: `event:${eventId}` }))
-
-    socket.on('poll:update', ({ poll }: { poll: Poll }) => {
-      // Replace wholesale but preserve this viewer's own vote marker — the
-      // broadcast is room-wide, so the server cannot include per-viewer fields.
-      setPolls((prev) => (prev ? (prev.some((p) => p.id === poll.id) ? prev.map((p) => (p.id === poll.id ? { ...poll, myOptionId: p.myOptionId ?? poll.myOptionId } : p)) : [poll, ...prev]) : [poll]))
-    })
-    socket.on('poll:closed-others', ({ exceptPollId }: { exceptPollId: string }) => {
-      setPolls((prev) => prev?.map((p) => (p.id !== exceptPollId && p.status === 'OPEN' ? { ...p, status: 'CLOSED' as const } : p)) ?? prev)
-    })
-    socket.on('poll:vote', ({ pollId, tallies }: { pollId: string; tallies: { options: PollOption[]; totalVotes: number } }) => {
-      setPolls((prev) => prev?.map((p) => (p.id === pollId ? { ...p, options: tallies.options, totalVotes: tallies.totalVotes } : p)) ?? prev)
-    })
-    socket.on('qa:new', ({ question }: { question: Question }) => {
-      setQuestions((prev) => (prev?.some((q) => q.id === question.id) ? prev : [question, ...(prev ?? [])]))
-    })
-    socket.on('qa:update', ({ question }: { question: Question }) => {
-      setQuestions((prev) => {
-        if (!prev) return prev
-        if (question.status === 'HIDDEN' && !isOrg) return prev.filter((q) => q.id !== question.id)
-        // Preserve this viewer's own upvote/ownership markers on replace.
-        return prev.some((q) => q.id === question.id)
-          ? prev.map((q) => (q.id === question.id ? { ...question, myUpvote: q.myUpvote, isMine: q.isMine } : q))
-          : [question, ...prev]
-      })
-    })
-    socket.on('qa:upvote', ({ questionId, upvotes }: { questionId: string; upvotes: number }) => {
-      setQuestions((prev) => prev?.map((q) => (q.id === questionId ? { ...q, upvotes } : q)) ?? prev)
-    })
-    return () => {
-      socket.disconnect()
-    }
-  }, [eventId, isOrg])
-
-  // Resilience: if the relay is unreachable or a socket drops without a
-  // reconnect (some proxies strip websocket upgrades), this light refetch
-  // keeps the panel honest while the event is live.
-  useEffect(() => {
-    if (!live) return
-    const timer = setInterval(() => void load(), 30_000)
-    return () => clearInterval(timer)
-  }, [live, load])
+  const [loadError,setLoadError]=useState('')
+  const loadEpoch=useRef(0)
+  const load=useCallback(async()=>{
+    const epoch=++loadEpoch.current
+    try{
+      const [p,q]=await Promise.all([api.get<{polls:Poll[];isOrg:boolean}>(`/events/${eventId}/polls`),api.get<{questions:Question[];isOrg:boolean}>(`/events/${eventId}/questions`)])
+      if(epoch!==loadEpoch.current)return
+      setPolls(p.polls);setQuestions(q.questions);setIsOrg(p.isOrg&&q.isOrg);setLoadError('')
+    }catch(err){if(epoch!==loadEpoch.current)return;setPolls(null);setQuestions(null);setIsOrg(false);setLoadError(err instanceof ApiClientError?err.message:'Engagement could not be loaded.')}
+  },[eventId])
+  useEffect(()=>{void load();return()=>{loadEpoch.current++}},[load])
+  useEffect(()=>{
+    const socket=connectRealtime()
+    let timer:ReturnType<typeof setTimeout>|undefined
+    const refresh=()=>{if(timer)return;timer=setTimeout(()=>{timer=undefined;void load()},300)}
+    socket.on('connect',()=>{socket.emit('join',{room:`event:${eventId}`});refresh()})
+    socket.on('engagement:changed',refresh)
+    // Older deployed web nodes may still emit legacy signals; never consume payloads.
+    for(const name of ['poll:update','poll:closed-others','poll:vote','qa:new','qa:update','qa:upvote'])socket.on(name,refresh)
+    const fallback=setInterval(()=>void load(),live?15000:30000)
+    return()=>{clearInterval(fallback);if(timer)clearTimeout(timer);socket.disconnect()}
+  },[eventId,live,load])
 
   const openPoll = useMemo(() => polls?.find((p) => p.status === 'OPEN') ?? null, [polls])
   const closedPolls = useMemo(() => polls?.filter((p) => p.status === 'CLOSED') ?? [], [polls])
@@ -149,6 +114,7 @@ export default function LiveEngagement({ eventId, slug, live }: { eventId: strin
   )
 
   // Self-hide: nothing to show for ended/quiet events unless the organizer is here.
+  if(loadError)return <Card className="rounded-2xl"><CardContent className="space-y-3 p-5"><p role="alert" className="text-sm text-muted-foreground">{loadError}</p><Button variant="outline" onClick={()=>void load()}>Retry engagement</Button></CardContent></Card>
   if (polls === null || questions === null) {
     return (
       <Card className="rounded-2xl" aria-busy="true">
@@ -168,7 +134,7 @@ export default function LiveEngagement({ eventId, slug, live }: { eventId: strin
     try {
       const result = await api.post<{ tallies: { options: PollOption[]; totalVotes: number }; myOptionId: string }>(`/polls/${poll.id}/vote`, { optionId: option.id })
       setPolls((prev) => prev?.map((p) => (p.id === poll.id ? { ...p, options: result.tallies.options, totalVotes: result.tallies.totalVotes, myOptionId: result.myOptionId } : p)) ?? prev)
-      toast({ description: 'Vote counted.' })
+      toast({ description: 'Vote counted.' });void load()
     } catch (err) {
       toast({ description: err instanceof ApiClientError ? err.message : 'Vote failed.', variant: 'destructive' })
     } finally {
@@ -184,7 +150,7 @@ export default function LiveEngagement({ eventId, slug, live }: { eventId: strin
       const result = await api.post<{ question: Question }>(`/events/${eventId}/questions`, { body: askDraft })
       setQuestions((prev) => (prev?.some((q) => q.id === result.question.id) ? prev : [result.question, ...(prev ?? [])]))
       setAskDraft('')
-      toast({ description: 'Question sent to the organizers.' })
+      toast({ description: 'Question sent to the organizers.' });void load()
     } catch (err) {
       toast({ description: err instanceof ApiClientError ? err.message : 'Could not send the question.', variant: 'destructive' })
     } finally {
@@ -197,7 +163,7 @@ export default function LiveEngagement({ eventId, slug, live }: { eventId: strin
     setUpvoting(question.id)
     try {
       const result = await api.post<{ upvoted: boolean; upvotes: number }>(`/questions/${question.id}/upvote`)
-      setQuestions((prev) => prev?.map((q) => (q.id === question.id ? { ...q, myUpvote: result.upvoted, upvotes: result.upvotes } : q)) ?? prev)
+      setQuestions((prev) => prev?.map((q) => (q.id === question.id ? { ...q, myUpvote: result.upvoted, upvotes: result.upvotes } : q)) ?? prev);void load()
     } catch (err) {
       toast({ description: err instanceof ApiClientError ? err.message : 'Could not upvote.', variant: 'destructive' })
     } finally {

@@ -6,7 +6,8 @@ Maintain this file as the public, sanitized engineering checkpoint. Keep credent
 - Baseline: ticket branding #169, shop verification #167 and mail relay/feedback #168 merged and staged; user confirmed email verification worked. External push delivery and real media acceptance remain separate.
 - Runtime role preflight #166 merged; isolated regression verified normal application ownership, rejection of foreign-owned tables and superuser execution. Continue to use guard for each migration.
 - Recurring event creation #164 and future series editing #165 merged; individual feature-branch CI and artifact checks passed. Combined main CI, artifact deployment and staging acceptance pending.
-- Next: verify combined release, then audit native push/call acceptance and reconcile remaining draft PRs. Core policy files from #156/#157/#160 already match main; review divergent integration files before closing superseded branches.
+- Recurring event combined CI and runtime package passed; web deployed with API health checks, Android QA build pending installable release verification. Superseded #156/#157/#160 closed after source reconciliation.
+- Current: harden live poll and Q&A privacy, atomic voting and realtime refresh; isolated concurrency/access regression in CI. Real-device push/calling and paid competitions remain pending.
 - Keep marketplace checkout, settlement, awards voting, and provider integrations gated until their end-to-end acceptance tests pass.
 
 ## P0 — Runtime and release reliability
