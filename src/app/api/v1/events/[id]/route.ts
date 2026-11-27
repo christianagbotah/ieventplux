@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { handle, jsonOk, requireUser, readJson, errors, sanitizeText, parseTags } from '@/server/api'
 import { db } from '@/lib/db'
 import { getSession } from '@/server/auth'
+import {eventInstant,eventTimezone} from '@/server/event-series-timing'
 
 type RouteContext = { params: Promise<{ id: string }> }
 
@@ -134,7 +135,7 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
     const data: Record<string, unknown> = {}
     const textFields: [string, number][] = [
       ['title', 140], ['summary', 200], ['description', 8000], ['categorySlug', 40],
-      ['city', 60], ['timezone', 60], ['contactEmail', 160], ['contactPhone', 24],
+      ['city', 60], ['contactEmail', 160], ['contactPhone', 24],
       ['accessibilityInfo', 500], ['attendanceRules', 500], ['ageGuidance', 60],
       ['refundPolicy', 500], ['coverImageUrl', 300], ['directionsUrl', 300],
     ]
@@ -152,21 +153,21 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
     if (body.tags !== undefined) data.tags = JSON.stringify(parseTags(body.tags))
     if (body.mode && ['PHYSICAL', 'VIRTUAL', 'HYBRID'].includes(String(body.mode))) data.mode = String(body.mode)
     if (body.venueId !== undefined) data.venueId = body.venueId ? String(body.venueId) : null
-    if (body.startsAt) {
-      const d = new Date(String(body.startsAt))
-      if (Number.isNaN(d.getTime())) throw errors.badRequest('Invalid start date.')
-      data.startsAt = d
-    }
-    if (body.endsAt) {
-      const d = new Date(String(body.endsAt))
-      if (Number.isNaN(d.getTime())) throw errors.badRequest('Invalid end date.')
-      data.endsAt = d
-    }
-    if (data.startsAt && data.endsAt && data.endsAt <= data.startsAt) throw errors.badRequest('End must be after start.')
-
-    const updated = await db.event.update({ where: { id: access.event.id }, data })
-    const { audit } = await import('@/server/audit')
-    await audit({ actorUserId: user.id, actorLabel: user.email, action: 'event.edit', entityType: 'Event', entityId: access.event.id, after: { title: updated.title } })
+    if(body.timezone!==undefined){const zone=eventTimezone(body.timezone);if(!zone)throw errors.badRequest('Choose a valid event timezone.');data.timezone=zone}
+    if(body.title!==undefined&&String(data.title??'').length<3)throw errors.badRequest('Event title is required.')
+    if(body.startsAt!==undefined){const date=eventInstant(body.startsAt);if(!date)throw errors.badRequest('Invalid start date.');data.startsAt=date}
+    if(body.endsAt!==undefined){const date=eventInstant(body.endsAt);if(!date)throw errors.badRequest('Invalid end date.');data.endsAt=date}
+    const updated=await db.$transaction(async tx=>{
+      const current=await tx.event.findFirst({where:{id:access.event!.id,orgId:access.event!.orgId,deletedAt:null}})
+      if(!current)throw errors.notFound('Event not found.')
+      const member=await tx.membership.findFirst({where:{orgId:current.orgId,userId:user.id,acceptedAt:{not:null},org:{deletedAt:null}},select:{role:true}})
+      if(!member||!orgCan(member.role,'event:edit'))throw errors.forbidden('Event editing requires organizer permission.')
+      if(typeof data.venueId==='string'&&!await tx.venue.findFirst({where:{id:data.venueId,orgId:current.orgId},select:{id:true}}))throw errors.badRequest('Choose a venue belonging to your organization.')
+      if(((data.endsAt as Date|undefined)??current.endsAt)<=((data.startsAt as Date|undefined)??current.startsAt))throw errors.badRequest('End must be after start.')
+      const row=await tx.event.update({where:{id:current.id},data})
+      await tx.auditLog.create({data:{actorUserId:user.id,actorLabel:user.email.slice(0,120),action:'event.edit',entityType:'Event',entityId:row.id,after:JSON.stringify({title:row.title})}})
+      return row
+    },{isolationLevel:'Serializable'})
     void orgCan
     return jsonOk({ event: updated })
   })

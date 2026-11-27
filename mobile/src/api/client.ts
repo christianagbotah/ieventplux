@@ -833,7 +833,7 @@ export const api = {
     events: (orgId: string, page=1) => request<OrganizerEventPage>(
       'GET', '/events?mine=1&orgId='+encodeURIComponent(orgId)+'&page='+page+'&pageSize=20',
     ),
-    createDraft: (payload: unknown) => request<{ event: {id:string;slug:string;title:string;status:string} }>(
+    createDraft: (payload: unknown) => request<{ event: {id:string;slug:string;title:string;status:string};occurrencesCreated:number;seriesId:string|null }>(
       'POST','/events',payload,
     ),
     editDetails: (id:string,payload:unknown) => request<{event: {id:string;title:string}}>(

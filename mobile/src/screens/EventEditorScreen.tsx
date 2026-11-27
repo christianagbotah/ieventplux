@@ -84,7 +84,7 @@ export default function EventEditorScreen({navigation,route}:EventEditorScreenPr
         setResultNotice('Event details saved to the server.')
       }else{
         const created=await api.organizer.createDraft(newEventDraftPayload(orgId,form))
-        setResultNotice('Draft created: '+created.event.title)
+        setResultNotice('Draft created: '+created.event.title+(created.occurrencesCreated?' · '+created.occurrencesCreated+' additional drafts':''))
       }
       navigation.navigate('OrganizerStudio')
     }catch(e){setError(e instanceof Error?e.message:'The event could not be saved. Please try again.')}
@@ -95,7 +95,7 @@ export default function EventEditorScreen({navigation,route}:EventEditorScreenPr
     if(issue){setError(issue);return}
     Alert.alert(editing?'Save event details?':'Create event draft?',editing?
       'Update basic event information. This does not change its publication or tickets.':
-      'Create an unpublished draft in this organization. You can complete ticketing and publishing in the organizer workspace.',[
+      'Create '+(1+Number(form.repeatWeeks||0))+' unpublished draft(s) in this organization. Publish each occurrence separately.',[
       {text:'Cancel',style:'cancel'},
       {text:editing?'Save details':'Create draft',onPress:()=>void submit()},
     ])
@@ -134,6 +134,7 @@ export default function EventEditorScreen({navigation,route}:EventEditorScreenPr
         </View>
         <Field label="Country code" value={form.country} onChange={v=>update('country',v.toUpperCase())} placeholder="GH" maxLength={2}/>
         <Field label="City" value={form.city} onChange={v=>update('city',v)} placeholder="Accra" maxLength={60}/>
+        <Field label="Extra weekly occurrences" value={form.repeatWeeks??'0'} onChange={v=>update('repeatWeeks',v.replace(/\D/g,''))} placeholder="0" maxLength={2} keyboardType="number-pad" helper={'0–26 extra drafts. Each keeps the local event time in '+timeZone+'. Publish each separately.'}/>
         <Options label="Visibility" options={EVENT_VISIBILITY} value={form.visibility} onChange={v=>update('visibility',v)}/>
         <Text style={styles.helper}>All new events start as drafts. Invitations, venue privacy and publication are enforced by the server.</Text>
       </View>:<View style={styles.panel}>

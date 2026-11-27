@@ -1087,6 +1087,7 @@ function EventEditor({ orgId, event, onClose }: { orgId: string; event: OrgEvent
   const [savingTt, setSavingTt] = useState(false)
   const [repeat, setRepeat] = useState(false)
   const [repeatWeeks, setRepeatWeeks] = useState('3')
+  const eventDeviceTimezone=Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC'
   const [seriesOpen, setSeriesOpen] = useState(false)
   const [seriesFields, setSeriesFields] = useState<string[]>(['summary', 'city'])
   const [seriesAdoptTime, setSeriesAdoptTime] = useState(false)
@@ -1142,6 +1143,8 @@ function EventEditor({ orgId, event, onClose }: { orgId: string; event: OrgEvent
   }, [orgId])
 
   const save = async () => {
+    if(busy)return
+    if(!event&&repeat&&(!/^\d{1,2}$/.test(repeatWeeks)||Number(repeatWeeks)<1||Number(repeatWeeks)>26)){setSaveError('Choose 1–26 extra weekly occurrences.');return}
     const errors = validateEventDraftTiming(form)
     if (Object.keys(errors).length > 0) {
       setSaveError('Review the event title and schedule before saving.')
@@ -1160,7 +1163,7 @@ function EventEditor({ orgId, event, onClose }: { orgId: string; event: OrgEvent
         await api.patch(`/events/${event.id}`, payload)
         toast({ title: 'Event saved' })
       } else {
-        const result = await api.post<{ event: OrgEvent; occurrencesCreated: number }>('/events', { ...payload, orgId, repeatWeeks: repeat ? Math.max(0, Math.min(26, Number(repeatWeeks) || 0)) : 0 })
+        const result = await api.post<{ event: OrgEvent; occurrencesCreated: number }>('/events', { ...payload, orgId, timezone:eventDeviceTimezone, repeatWeeks: repeat ? Number(repeatWeeks) : 0 })
         toast({ title: 'Event created as a draft', description: result.occurrencesCreated > 0 ? `${result.occurrencesCreated} weekly occurrences added as drafts — publish them individually.` : 'Add a ticket type below, then publish from Events.' })
         setCreatedEvent(result.event) // R23: keep the dialog open on the ticket-types step
         return
@@ -1465,7 +1468,7 @@ function EventEditor({ orgId, event, onClose }: { orgId: string; event: OrgEvent
                 {repeat && (
                   <div className="mt-2 flex flex-wrap items-center gap-2">
                     <Input className="h-8 w-24" inputMode="numeric" value={repeatWeeks} onChange={(e) => setRepeatWeeks(e.target.value.replace(/\D/g, ''))} aria-label="Number of extra weekly occurrences" />
-                    <p className="text-xs text-muted-foreground">extra weekly occurrences, created as drafts you publish individually (1–26).</p>
+                    <p className="text-xs text-muted-foreground">extra weekly occurrences (1–26). All drafts keep the same local clock time in {eventDeviceTimezone}; publish each separately.</p>
                   </div>
                 )}
               </div>
