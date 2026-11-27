@@ -240,8 +240,8 @@ try{
  const h2=await send('POST',requestPath,stranger,{...orderBody,requestKey:'expiry-purchase-'+unique})
  await send('PATCH','/marketplace/requests/'+h2.data.request.id,owner,{status:'ACKNOWLEDGED'})
  const expiry=await reserveMarketplaceRequest(h2.data.request.id,sellerUser.id)
- await db.marketplaceStockHold.update({where:{id:expiry.hold.id},data:{expiresAt:new Date(Date.now()-1000)}})
- const sweep=await expireMarketplaceHolds()
+ // Advance only the injected sweep clock, avoiding competition with the real CI worker.
+ const sweep=await expireMarketplaceHolds(new Date(expiry.hold.expiresAt.getTime()+1000))
  assert(sweep.released===1&&sweep.conflicts===0,'expired hold released by sweep')
  assert((await db.marketplaceVariant.findUniqueOrThrow({where:{id:variantId}})).stockReserved===0,'expiry restores stock')
  delete process.env.IEVENTPLUX_MARKETPLACE_STOCK_HOLD_ENABLED

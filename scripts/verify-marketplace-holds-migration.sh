@@ -30,7 +30,7 @@ DO $$ BEGIN
  BEGIN
   DELETE FROM "MarketplaceVariant";
   RAISE EXCEPTION 'held variant deleted';
- EXCEPTION WHEN foreign_key_violation THEN NULL; END;
+ EXCEPTION WHEN foreign_key_violation OR restrict_violation THEN NULL; END;
 END $$;
 SQL
 echo MARKETPLACE_HOLD_MIGRATION_PASS
