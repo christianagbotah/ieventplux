@@ -4,6 +4,11 @@ name: Android Installable Test APK
 on:
   workflow_dispatch:
     inputs:
+      tested_sha:
+        description: "Optional exact main SHA that passed CI (automatic builds)"
+        required: false
+        type: string
+        default: ""
       diagnostics_only:
         description: "Only reproduce Expo native CMake/Prefab configuration (no APK)"
         required: false
@@ -17,6 +22,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: ieventplux-android-debug
@@ -27,12 +33,38 @@ jobs:
     name: Build Android debug-signed test APK
     runs-on: ubuntu-22.04
     timeout-minutes: 45
+    outputs:
+      source_sha: ${{ steps.source.outputs.sha }}
     env:
       CI: "true"
       EXPO_NO_TELEMETRY: "1"
     steps:
       - name: Check out tested source
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tested_sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Validate pinned source and successful main CI
+        id: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUESTED_SHA: ${{ inputs.tested_sha }}
+        run: |
+          set -euo pipefail
+          sha="$(git rev-parse HEAD)"
+          if [ -n "$REQUESTED_SHA" ]; then
+            [[ "$REQUESTED_SHA" =~ ^[a-f0-9]{40}$ ]]
+            test "$sha" = "$REQUESTED_SHA"
+            test "$GITHUB_REF" = refs/heads/main
+          fi
+          if [ "$GITHUB_REF" = refs/heads/main ]; then
+            git merge-base --is-ancestor "$sha" origin/main
+            count="$(gh api --method GET "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs" -f head_sha="$sha" -f branch=main -f event=push -f status=success --jq '.total_count')"
+            test "$count" -gt 0
+          fi
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
 
       - name: Install Java 17 for Expo SDK 52
         uses: actions/setup-java@v4
@@ -311,9 +343,10 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          SHA: ${{ needs.debug-apk.outputs.source_sha }}
         run: |
           set -euo pipefail
-          SHA="$GITHUB_SHA"
+          [[ "$SHA" =~ ^[a-f0-9]{40}$ ]]
           TAG="android-qa-${SHA:0:7}"
           APK="qa-apk/app-release.apk"
           test -s "$APK"
@@ -322,8 +355,9 @@ jobs:
           if gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "Immutable QA release $TAG already exists; not replacing prior APK"
           else
-            gh release create "$TAG" "$APK" -R "$GITHUB_REPOSITORY" --prerelease               --title "iEventPlux Android QA $TAG"               --notes "Test-signed Android QA build for commit $SHA. Not Google Play certified. Persistent QA signing identity starts with this build. Older test APKs may require one uninstall/reinstall due to the old ephemeral key; subsequent fixed-key releases support in-place updates. Device approval remains required. Camera, mic and native meetings still require physical-device testing."
+            gh release create "$TAG" "$APK" -R "$GITHUB_REPOSITORY" --target "$SHA" --prerelease               --title "iEventPlux Android QA $TAG"               --notes "Test-signed Android QA build for commit $SHA. Not Google Play certified. Persistent QA signing identity starts with this build. Older test APKs may require one uninstall/reinstall due to the old ephemeral key; subsequent fixed-key releases support in-place updates. Device approval remains required. Camera, mic and native meetings still require physical-device testing."
           fi
+          test "$(gh api "repos/$GITHUB_REPOSITORY/commits/$TAG" --jq .sha)" = "$SHA"
           gh release view "$TAG" -R "$GITHUB_REPOSITORY" --json assets             --jq '.assets[]|select(.name=="app-release.apk")|.url' |
             grep -F "https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/app-release.apk"
           echo "Android QA APK: https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/app-release.apk"
