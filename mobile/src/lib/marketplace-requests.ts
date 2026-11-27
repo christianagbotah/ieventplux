@@ -35,3 +35,8 @@ export function decisionLabel(decision:RequestDecision){
 
 export type CheckoutReview={currency:'GHS';totalMinor:number;unitCount:number;holdValid:boolean;expiresAt:string|null;methods:('MOBILE_MONEY'|'CARD'|'CASH')[];checkoutEnabled:false;seller:boolean;blockers:string[];allocation?:{platformMinor:number;sellerMinor:number;basisPoints:number}|null;sandboxRecipientVerified?:boolean}
 export function checkoutMethodLabel(method:string){return method==='MOBILE_MONEY'?'Mobile money':method==='CARD'?'Card':method==='CASH'?'Cash':'Unavailable'}
+
+/** A review becomes stale on a request or reservation change, not on every background refresh. */
+export function checkoutReviewStillCurrent(previous:PurchaseRequestRow|undefined,next:PurchaseRequestRow|undefined){
+ return !!previous&&!!next&&previous.id===next.id&&previous.status===next.status&&previous.totalMinor===next.totalMinor&&previous.stockHold?.id===next.stockHold?.id&&previous.stockHold?.status===next.stockHold?.status&&previous.stockHold?.expiresAt===next.stockHold?.expiresAt
+}
