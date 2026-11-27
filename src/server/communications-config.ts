@@ -7,6 +7,7 @@ import { db } from '@/lib/db'
 import { env } from './env'
 import { errors } from './api'
 import { maskSecret } from './hubtel/credentials'
+import { localMailRelayEnabled } from './mail-transport-policy'
 
 export const SMTP_SETTING_KEYS = {
   host: 'smtp.provider.host',
@@ -24,6 +25,7 @@ export interface SmtpConfig {
   from: string
   configured: boolean
   source: 'db' | 'env' | 'none'
+  transport?: 'loopback' | 'authenticated'
 }
 
 export function validSmtpHost(value: string): boolean {
@@ -62,6 +64,9 @@ export function decryptSmtpPassword(ciphertext: string): string {
 }
 
 export async function resolveSmtpConfig(): Promise<SmtpConfig> {
+  if (process.env.IEVENTPLUX_MAIL_TRANSPORT === 'loopback') {
+    return {host:'127.0.0.1',port:25,user:'',pass:'',from:env.smtp.from,configured:localMailRelayEnabled(process.env.IEVENTPLUX_MAIL_TRANSPORT,env.smtp.from),source:'env',transport:'loopback'}
+  }
   const rows = await db.platformSetting.findMany({ where: { key: { in: Object.values(SMTP_SETTING_KEYS) } } })
   const settings = new Map(rows.map((row) => [row.key, row.value]))
   const configuredInDb = settings.has(SMTP_SETTING_KEYS.password)
@@ -75,7 +80,7 @@ export async function resolveSmtpConfig(): Promise<SmtpConfig> {
   return { host, port, user, pass, from, configured, source: rows.length > 0 ? 'db' : env.smtp.host ? 'env' : 'none' }
 }
 export function smtpAdminView(config: SmtpConfig) {
-  return { configured: config.configured, source: config.source, host: config.host, port: config.port,
+  return { configured: config.configured, source: config.source, transport: config.transport ?? 'authenticated', host: config.host, port: config.port,
     usernameMasked: maskSecret(config.user), passwordSaved: Boolean(config.pass), from: config.from,
-    note: config.configured ? 'SMTP settings are present; successful server delivery has not yet been verified.' : 'Provide an SMTP host, port, account, app password and sender email.' }
+    note: config.transport === 'loopback' ? 'Local mail relay is managed by the server operator; no mailbox password is required. Test message acceptance separately.' : config.configured ? 'SMTP settings are present; successful server delivery has not yet been verified.' : 'Provide an SMTP host, port, account, app password and sender email.' }
 }
