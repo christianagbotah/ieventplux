@@ -2237,6 +2237,7 @@ model MarketplaceStockHold {
   releasedAt  DateTime?
   request     MarketplacePurchaseRequest @relation(fields:[requestId],references:[id],onDelete:Restrict)
   lines       MarketplaceStockHoldLine[]
+  checkoutDraft MarketplaceCheckoutDraft?
   @@index([status,expiresAt])
 }
 model MarketplaceStockHoldLine {
@@ -2247,4 +2248,19 @@ model MarketplaceStockHoldLine {
   variant   MarketplaceVariant @relation(fields:[variantId],references:[id],onDelete:Restrict)
   @@id([holdId,variantId])
   @@index([variantId])
+}
+
+// Buyer-confirmed review of a stock hold; never a paid order or payment intent.
+model MarketplaceCheckoutDraft {
+  id          String   @id @default(cuid())
+  holdId      String   @unique
+  status      String   @default("PREPARED")
+  currency    String
+  totalMinor  Int
+  unitCount   Int
+  items       Json
+  createdAt   DateTime @default(now())
+  closedAt    DateTime?
+  hold        MarketplaceStockHold @relation(fields:[holdId],references:[id],onDelete:Restrict)
+  @@index([status,createdAt])
 }

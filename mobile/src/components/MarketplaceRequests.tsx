@@ -3,7 +3,7 @@ import {Alert,Pressable,StyleSheet,Text,View} from 'react-native'
 import {api,formatMinor} from '../api/client'
 import {ActionDialog,type ActionPrompt} from './ActionDialog'
 import {mobileDesign} from '../ui/PremiumUI'
-import {purchaseRequestBody,purchaseRequestFingerprint,requestStatusLabel,availableRequestDecisions,decisionLabel,type RequestDecision,type ReviewedBasket,type PurchaseRequestHistory} from '../lib/marketplace-requests'
+import {canPrepareCheckout,purchaseRequestBody,purchaseRequestFingerprint,requestStatusLabel,availableRequestDecisions,decisionLabel,type PurchaseRequestRow,type RequestDecision,type ReviewedBasket,type PurchaseRequestHistory} from '../lib/marketplace-requests'
 
 export function MarketplaceRequests({slug,seller,quote,onSubmitted}:{slug:string;seller:boolean;quote:ReviewedBasket|null;onSubmitted:(submitted:ReviewedBasket)=>void}){
  const [history,setHistory]=useState<PurchaseRequestHistory|null>(null)
@@ -62,6 +62,10 @@ export function MarketplaceRequests({slug,seller,quote,onSubmitted}:{slug:string
    finally{locked.current=false;if(active.current){setSubmitting(false);setHoldPrompt(null)}}
   })()})
  }
+ function prepare(row:PurchaseRequestRow){
+  if(locked.current||!canPrepareCheckout(history,row))return
+  setHoldPrompt({title:'Review reserved items?',description:'Prepare a checkout draft for '+formatMinor(row.totalMinor,row.currency)+'. No charge, confirmed order or delivery fee is created.',confirmLabel:'Prepare draft',onConfirm:()=>void (async()=>{if(locked.current||!active.current)return;locked.current=true;setSubmitting(true);setSubmissionError('');setNotice('');try{const result=await api.marketplace.preparePurchaseCheckout(row.id,row.totalMinor);if(result.checkoutEnabled!==false||result.paymentCollected!==false)throw new Error('Unexpected checkout draft response.');if(active.current){setNotice('Checkout draft prepared. No payment collected.');await load()}}catch(e){if(active.current){setSubmissionError(e instanceof Error?e.message:'Could not prepare checkout.');await load()}}finally{locked.current=false;if(active.current){setSubmitting(false);setHoldPrompt(null)}}})()})
+ }
  return <View style={styles.panel}>
   <Text style={styles.eyebrow}>MARKETPLACE REQUESTS</Text>
   <Text accessibilityRole="header" style={styles.title}>{seller?'Incoming purchase requests':'Your purchase requests'}</Text>
@@ -78,6 +82,8 @@ export function MarketplaceRequests({slug,seller,quote,onSubmitted}:{slug:string
    <Text style={styles.muted}>{new Date(row.createdAt).toLocaleString()} · {row.id}</Text>
    {row.items.map(item=><View key={item.variantId} style={styles.line}><Text style={[styles.muted,{flex:1}]}>{item.productName} · {item.variantTitle} × {item.quantity}</Text><Text style={styles.secondaryText}>{formatMinor(item.lineMinor,item.currency)}</Text></View>)}
    {row.stockHold?<Text style={styles.muted}>Stock hold: {row.stockHold.status.toLowerCase()}{row.stockHold.status==='HELD'?' · Expires '+new Date(row.stockHold.expiresAt).toLocaleString():''}</Text>:null}
+   {row.stockHold?.checkoutDraft?<Text style={styles.muted}>Checkout draft: {row.stockHold.checkoutDraft.status.toLowerCase()} · {formatMinor(row.stockHold.checkoutDraft.totalMinor,row.currency)} · No payment collected</Text>:null}
+   {canPrepareCheckout(history,row)?<Pressable accessibilityRole="button" disabled={submitting||loading} style={styles.primary} onPress={()=>prepare(row)}><Text style={styles.primaryText}>Prepare checkout draft</Text></Pressable>:null}
    {history?.stockHoldEnabled&&seller&&row.status==='ACKNOWLEDGED'&&!row.stockHold?<Pressable accessibilityRole="button" disabled={submitting||loading} style={styles.primary} onPress={()=>confirmHold(row.id,false)}><Text style={styles.primaryText}>Hold stock for 30 minutes</Text></Pressable>:null}
    {row.stockHold?.status==='HELD'?<Pressable accessibilityRole="button" disabled={submitting||loading} style={styles.secondary} onPress={()=>confirmHold(row.id,true)}><Text style={styles.secondaryText}>Release stock hold</Text></Pressable>:null}
    {(row.stockHold?.status==='HELD'?[]:availableRequestDecisions(seller,row.status)).map(action=><Pressable key={action} accessibilityRole="button" disabled={submitting||loading} style={action==='ACKNOWLEDGED'?styles.primary:styles.secondary} onPress={()=>setDecision({id:row.id,status:action})}><Text style={action==='ACKNOWLEDGED'?styles.primaryText:styles.secondaryText}>{decisionLabel(action)}</Text></Pressable>)}

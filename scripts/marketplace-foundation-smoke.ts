@@ -7,6 +7,7 @@ import {unlink} from 'node:fs/promises'
 import sharp from 'sharp'
 import {mediaFilePath,isPublicUploadName} from '../src/server/media-storage'
 import { db } from '../src/lib/db'
+import {prepareMarketplaceCheckout} from '../src/server/services/marketplace-checkout-drafts'
 import {reserveMarketplaceRequest,releaseMarketplaceRequest,expireMarketplaceHolds} from '../src/server/services/marketplace-holds'
 import { recordPlannedPaymentIntent } from '../src/server/services/platform-payment-intents'
 
@@ -229,27 +230,42 @@ try{
  const repeat=await reserveMarketplaceRequest(hId,sellerUser.id)
  assert(repeat.hold.id===held.hold.id,'hold replay is idempotent')
  assert((await db.marketplaceVariant.findUniqueOrThrow({where:{id:variantId}})).stockReserved===2,'exact quantities held once')
+ assert((await send('POST','/marketplace/requests/'+hId+'/checkout-draft',stranger,{expectedTotalMinor:70000})).status===503,'checkout draft disabled by default')
+ process.env.IEVENTPLUX_MARKETPLACE_CHECKOUT_DRAFT_ENABLED='true'
+ assert(await prepareMarketplaceCheckout(hId,sellerUser.id,{expectedTotalMinor:70000}).then(()=>false,e=>e.status===404),'seller cannot prepare buyer checkout')
+ assert(await prepareMarketplaceCheckout(hId,buyerUser.id,{expectedTotalMinor:60000}).then(()=>false,e=>e.status===409),'stale buyer total rejected')
+ const prepared=await prepareMarketplaceCheckout(hId,buyerUser.id,{expectedTotalMinor:70000})
+ assert(prepared.draft.status==='PREPARED'&&!prepared.paymentCollected&&!prepared.checkoutEnabled,'buyer review persists without payment')
+ const checkoutReplay=await prepareMarketplaceCheckout(hId,buyerUser.id,{expectedTotalMinor:70000})
+ assert(checkoutReplay.replayed&&checkoutReplay.draft.id===prepared.draft.id,'checkout replay returns original draft')
+ assert(await db.platformPaymentIntent.count({where:{sourceId:prepared.draft.id}})===0,'review never creates a payment intent')
+
  assert((await send('PATCH','/marketplace/requests/'+hId,stranger,{status:'WITHDRAWN'})).status===409,'request cannot be withdrawn while stock held')
  assert((await send('GET',requestPath,stranger)).data.requests.some((r:Row)=>r.id===hId&&r.stockHold?.status==='HELD'),'buyer sees own hold')
  const blocked=await send('POST','/marketplace/variants/'+variantId+'/stock',owner,{delta:-11,reason:'Would consume reserved stock',requestKey:'hold-stock-'+unique})
  assert(blocked.status===409,'stock adjustment cannot consume held units')
  const r=await releaseMarketplaceRequest(hId,buyerUser.id)
  assert(r.hold.status==='RELEASED','buyer can release their hold')
+ assert((await db.marketplaceCheckoutDraft.findUniqueOrThrow({where:{id:prepared.draft.id}})).status==='RELEASED','release closes checkout draft atomically')
  await releaseMarketplaceRequest(hId,buyerUser.id)
  assert((await db.marketplaceVariant.findUniqueOrThrow({where:{id:variantId}})).stockReserved===0,'replay release restores stock exactly once')
  const h2=await send('POST',requestPath,stranger,{...orderBody,requestKey:'expiry-purchase-'+unique})
  await send('PATCH','/marketplace/requests/'+h2.data.request.id,owner,{status:'ACKNOWLEDGED'})
  const expiry=await reserveMarketplaceRequest(h2.data.request.id,sellerUser.id)
+ const preparedExpiry=await prepareMarketplaceCheckout(h2.data.request.id,buyerUser.id,{expectedTotalMinor:70000})
  // Advance only the injected sweep clock, avoiding competition with the real CI worker.
  const sweep=await expireMarketplaceHolds(new Date(expiry.hold.expiresAt.getTime()+1000))
  assert(sweep.released===1&&sweep.conflicts===0,'expired hold released by sweep')
+ assert((await db.marketplaceCheckoutDraft.findUniqueOrThrow({where:{id:preparedExpiry.draft.id}})).status==='EXPIRED','expiry closes checkout draft atomically')
  assert((await db.marketplaceVariant.findUniqueOrThrow({where:{id:variantId}})).stockReserved===0,'expiry restores stock')
+ delete process.env.IEVENTPLUX_MARKETPLACE_CHECKOUT_DRAFT_ENABLED
  delete process.env.IEVENTPLUX_MARKETPLACE_STOCK_HOLD_ENABLED
  console.log('MARKETPLACE_FOUNDATION_SMOKE_PASS')
 }finally{
  if(notificationLink)await db.notification.deleteMany({where:{link:notificationLink,type:'MARKETPLACE_REQUEST'}})
  if(intentSource)await db.platformPaymentIntent.deleteMany({where:{sourceId:intentSource,purpose:'MARKETPLACE_GOODS'}})
  if(storeId){
+   await db.marketplaceCheckoutDraft.deleteMany({where:{hold:{request:{storeId}}}})
    await db.marketplaceStockHoldLine.deleteMany({where:{hold:{request:{storeId}}}})
    await db.marketplaceStockHold.deleteMany({where:{request:{storeId}}})
    await db.marketplacePurchaseRequest.deleteMany({where:{storeId}})
