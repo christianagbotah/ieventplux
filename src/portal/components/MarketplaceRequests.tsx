@@ -5,13 +5,14 @@ import {useToast} from '@/hooks/use-toast'
 import {Button} from '@/components/ui/button'
 import {useConfirm} from '@/components/ui/confirm-dialog-provider'
 import {api} from '../api'
-import {stockHoldLabel,inventoryHoldFingerprint,canPrepareCheckout,purchaseRequestBody,purchaseRequestFingerprint,requestStatusLabel,availableRequestDecisions,decisionLabel,type RequestDecision,type PurchaseRequestRow,type ReviewedBasket,type PurchaseRequestHistory,type PurchaseRequestResponse} from '../lib/marketplace-requests'
+import {type CheckoutReview,checkoutMethodLabel,stockHoldLabel,inventoryHoldFingerprint,canPrepareCheckout,purchaseRequestBody,purchaseRequestFingerprint,requestStatusLabel,availableRequestDecisions,decisionLabel,type RequestDecision,type PurchaseRequestRow,type ReviewedBasket,type PurchaseRequestHistory,type PurchaseRequestResponse} from '../lib/marketplace-requests'
 const price=(n:number)=>'₵'+(n/100).toLocaleString('en-GH',{minimumFractionDigits:2,maximumFractionDigits:2})
 export function MarketplaceRequests({slug,seller,quote,onSubmitted,onInventoryChanged}:{slug:string;seller:boolean;quote:ReviewedBasket|null;onSubmitted:(submitted:ReviewedBasket)=>void;onInventoryChanged:()=>void}){
  const confirm=useConfirm()
  const {toast}=useToast()
  const [attempt,setAttempt]=useState(0)
  function fail(e:unknown,fallback:string){const message=e instanceof Error?e.message:fallback;setSubmissionError(message);setAttempt(n=>n+1);toast({title:'Request not completed',description:message,variant:'destructive',duration:10000})}
+ const [review,setReview]=useState<{id:string;data:CheckoutReview;at:number}|null>(null)
  const [history,setHistory]=useState<PurchaseRequestHistory|null>(null)
  const [loading,setLoading]=useState(false)
  const [error,setError]=useState('')
@@ -29,7 +30,7 @@ export function MarketplaceRequests({slug,seller,quote,onSubmitted,onInventoryCh
  const endpoint='/marketplace/stores/'+encodeURIComponent(slug)+'/requests'
  const load=useCallback(async(background=false)=>{
   if(!active.current||(background&&(locked.current||inFlight.current)))return
-  inFlight.current=true;setNow(Date.now())
+  inFlight.current=true;setNow(Date.now());setReview(null)
   const generation=++epoch.current
   if(!background)setLoading(true);setError('')
   try{const result=await api.get<PurchaseRequestHistory>(endpoint)
@@ -84,6 +85,10 @@ export function MarketplaceRequests({slug,seller,quote,onSubmitted,onInventoryCh
   locked.current=true;setDecisionBusy(true);setSubmissionError('');setNotice('')
   try{const approved=await confirm({title:'Review reserved items?',description:'Prepare a checkout draft for '+price(row.totalMinor)+'. No charge, confirmed order or delivery fee is created.',confirmLabel:'Prepare checkout draft'});if(!approved||!active.current)return;const result=await api.post<{checkoutEnabled:false;paymentCollected:false}>('/marketplace/requests/'+encodeURIComponent(row.id)+'/checkout-draft',{expectedTotalMinor:row.totalMinor});if(result.checkoutEnabled!==false||result.paymentCollected!==false)throw new Error('Unexpected checkout draft response.');if(active.current){setNotice('Checkout draft prepared. No payment collected.');await load()}}catch(e){if(active.current){fail(e,'Could not prepare checkout.');await load()}}finally{locked.current=false;if(active.current)setDecisionBusy(false)}
  }
+ async function inspect(row:PurchaseRequestRow){
+  if(locked.current||inFlight.current||!active.current)return;locked.current=true;setDecisionBusy(true);setReview(null);setSubmissionError('');const generation=epoch.current
+  try{const data=await api.get<CheckoutReview>('/marketplace/requests/'+encodeURIComponent(row.id)+'/checkout-review');if(data.checkoutEnabled!==false||data.seller!==seller||data.totalMinor!==row.totalMinor)throw new Error('Checkout review changed. Refresh the request.');if(active.current&&generation===epoch.current)setReview({id:row.id,data,at:Date.now()})}catch(e){if(active.current)fail(e,'Could not load checkout review.')}finally{locked.current=false;setDecisionBusy(false)}
+ }
  return <section className="space-y-3 rounded-2xl border bg-card p-4 sm:p-6" aria-label="Purchase requests">
   <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-extrabold">{seller?'Incoming purchase requests':'Your purchase requests'}</h2><p className="text-xs text-muted-foreground">Purchase requests are non-binding. Temporary stock holds are separate; no payment is collected.</p></div>
    <Button variant="outline" size="sm" disabled={loading} onClick={()=>void load()}>{loading?'Refreshing…':'Refresh requests'}</Button></div>
@@ -99,6 +104,8 @@ export function MarketplaceRequests({slug,seller,quote,onSubmitted,onInventoryCh
    {row.items.map(item=><div key={item.variantId} className="flex justify-between gap-3 text-sm"><span>{item.productName} · {item.variantTitle} × {item.quantity}</span><span className="shrink-0">{price(item.lineMinor)}</span></div>)}
    {row.stockHold&&<p className="rounded-lg bg-muted p-2 text-xs">Stock hold: {stockHoldLabel(row.stockHold,now)}{row.stockHold.status==='HELD'?' · Expires '+new Date(row.stockHold.expiresAt).toLocaleString():''}</p>}
    {row.stockHold?.checkoutDraft&&<p className="rounded-lg border p-2 text-xs">Checkout draft: {row.stockHold.checkoutDraft.status.toLowerCase()} · {price(row.stockHold.checkoutDraft.totalMinor)} · No payment collected</p>}
+   {row.status==='ACKNOWLEDGED'&&<Button variant="outline" size="sm" disabled={decisionBusy||submitting||loading} onClick={()=>void inspect(row)}>Review checkout readiness</Button>}
+   {review?.id===row.id&&now-review.at<15000&&<div className="space-y-2 rounded-xl border p-3 text-sm"><strong>Checkout readiness · {price(review.data.totalMinor)}</strong><p>Seller preferences: {review.data.methods.map(checkoutMethodLabel).join(', ')||'Not configured'}</p><p>{review.data.holdValid&&review.data.expiresAt&&Date.parse(review.data.expiresAt)>now?'Stock held at review':'No active stock hold confirmed'}</p>{seller&&review.data.allocation&&<p>Estimated platform commission {price(review.data.allocation.platformMinor)} · Seller gross {price(review.data.allocation.sellerMinor)} (before provider fees)</p>}{review.data.blockers.map(message=><p className="text-xs text-muted-foreground" key={message}>{message}</p>)}</div>}
    <div className="flex flex-wrap gap-2">{canPrepareCheckout(history,row,now)&&<Button size="sm" disabled={decisionBusy||submitting||loading} onClick={()=>void prepare(row)}>Prepare checkout draft</Button>}{history?.stockHoldEnabled&&seller&&row.status==='ACKNOWLEDGED'&&!row.stockHold&&<Button size="sm" disabled={decisionBusy||submitting||loading} onClick={()=>void hold(row.id,false)}>Hold stock for 30 minutes</Button>}{row.stockHold?.status==='HELD'?<Button variant="outline" size="sm" disabled={decisionBusy||submitting||loading} onClick={()=>void hold(row.id,true)}>Release stock hold</Button>:null}{(row.stockHold?.status==='HELD'?[]:availableRequestDecisions(seller,row.status)).map(action=><Button key={action} size="sm" variant={action==='ACKNOWLEDGED'?'default':'outline'} disabled={decisionBusy||submitting||loading} onClick={()=>void decide(row.id,action)}>{decisionLabel(action)}</Button>)}</div>
   </article>)}
   {history&&history.requests.length===50&&<p className="text-xs text-muted-foreground">Showing the latest 50 requests.</p>}

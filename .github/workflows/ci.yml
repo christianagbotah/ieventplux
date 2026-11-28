@@ -101,7 +101,7 @@ jobs:
         run: bun test src/server/souvenir-request-policy.test.ts src/server/ticket-payment-intent.test.ts src/server/payment-certification-policy.test.ts src/server/platform-paystack-transport.test.ts src/server/platform-paystack-webhook.test.ts src/server/platform-paystack-adapter.test.ts
 
       - name: Shared marketplace basket quote pricing, stock, permissions and web/native parity
-        run: bun test src/server/marketplace-quote-policy.test.ts src/server/marketplace-quote-surface.test.ts src/portal/lib/marketplace-basket.test.ts mobile/src/lib/marketplace-basket.test.ts
+        run: bun test src/server/marketplace-checkout-review.test.ts src/server/marketplace-quote-policy.test.ts src/server/marketplace-quote-surface.test.ts src/portal/lib/marketplace-basket.test.ts mobile/src/lib/marketplace-basket.test.ts
 
       - name: Official Android QA release URL safety regression
         run: bun test src/server/android-qa-release-policy.test.ts

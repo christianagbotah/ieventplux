@@ -5,9 +5,10 @@ import {subscribeActivity} from '../lib/activity-signal'
 import {api,formatMinor} from '../api/client'
 import {ActionDialog,type ActionPrompt} from './ActionDialog'
 import {mobileDesign} from '../ui/PremiumUI'
-import {stockHoldLabel,inventoryHoldFingerprint,canPrepareCheckout,purchaseRequestBody,purchaseRequestFingerprint,requestStatusLabel,availableRequestDecisions,decisionLabel,type PurchaseRequestRow,type RequestDecision,type ReviewedBasket,type PurchaseRequestHistory} from '../lib/marketplace-requests'
+import {type CheckoutReview,checkoutMethodLabel,stockHoldLabel,inventoryHoldFingerprint,canPrepareCheckout,purchaseRequestBody,purchaseRequestFingerprint,requestStatusLabel,availableRequestDecisions,decisionLabel,type PurchaseRequestRow,type RequestDecision,type ReviewedBasket,type PurchaseRequestHistory} from '../lib/marketplace-requests'
 
 export function MarketplaceRequests({userId,slug,seller,quote,onSubmitted,onInventoryChanged}:{userId:string;slug:string;seller:boolean;quote:ReviewedBasket|null;onSubmitted:(submitted:ReviewedBasket)=>void;onInventoryChanged:()=>void}){
+ const [review,setReview]=useState<{id:string;data:CheckoutReview;at:number}|null>(null)
  const [history,setHistory]=useState<PurchaseRequestHistory|null>(null)
  const [loading,setLoading]=useState(false)
  const [error,setError]=useState('')
@@ -26,7 +27,7 @@ export function MarketplaceRequests({userId,slug,seller,quote,onSubmitted,onInve
  const retry=useRef(new Map<string,string>())
  const load=useCallback(async(background=false)=>{
   if(!active.current||(background&&(locked.current||inFlight.current)))return
-  inFlight.current=true;setNow(Date.now())
+  inFlight.current=true;setNow(Date.now());setReview(null)
   const generation=++epoch.current;if(!background)setLoading(true);setError('')
   try{const result=await api.marketplace.purchaseRequests(slug)
    if(active.current&&generation===epoch.current){if(result.seller!==seller)throw new Error('Session changed. Refresh the storefront.');const signature=inventoryHoldFingerprint(result);const changed=lastInventory.current!==null&&lastInventory.current!==signature;lastInventory.current=signature;setHistory(result);if(changed)onInventoryChanged()}
@@ -35,7 +36,7 @@ export function MarketplaceRequests({userId,slug,seller,quote,onSubmitted,onInve
  },[slug,seller,onInventoryChanged])
  const focused=useIsFocused()
  useEffect(()=>{active.current=true;lastInventory.current=null;void load();return()=>{active.current=false;epoch.current++;inFlight.current=false}},[load])
- useEffect(()=>{if(!focused)return;const wake=()=>{if(AppState.currentState==='active'){setNow(Date.now());void load(true)}};const sub=AppState.addEventListener('change',state=>{if(state==='active')wake()});const unsubscribe=subscribeActivity(userId,wake);const timer=setInterval(wake,15000);wake();return()=>{unsubscribe();clearInterval(timer);sub.remove()}},[focused,load,userId])
+ useEffect(()=>{if(!focused)return;const wake=()=>{if(AppState.currentState==='active'){setNow(Date.now());void load(true)}};const sub=AppState.addEventListener('change',state=>{if(state==='active')wake()});const unsubscribe=subscribeActivity(userId,wake);const timer=setInterval(wake,15000);wake();return()=>{unsubscribe();clearInterval(timer);sub.remove();setReview(null);epoch.current++;inFlight.current=false}},[focused,load,userId])
  async function submit(){
   if(!pending||seller||locked.current)return
   locked.current=true;setSubmitting(true);setSubmissionError('');setNotice('')
@@ -75,6 +76,10 @@ export function MarketplaceRequests({userId,slug,seller,quote,onSubmitted,onInve
   if(locked.current||!canPrepareCheckout(history,row))return
   setHoldPrompt({title:'Review reserved items?',description:'Prepare a checkout draft for '+formatMinor(row.totalMinor,row.currency)+'. No charge, confirmed order or delivery fee is created.',confirmLabel:'Prepare draft',onConfirm:()=>void (async()=>{if(locked.current||!active.current)return;locked.current=true;setSubmitting(true);setSubmissionError('');setNotice('');try{const result=await api.marketplace.preparePurchaseCheckout(row.id,row.totalMinor);if(result.checkoutEnabled!==false||result.paymentCollected!==false)throw new Error('Unexpected checkout draft response.');if(active.current){setNotice('Checkout draft prepared. No payment collected.');await load()}}catch(e){if(active.current){setSubmissionError(e instanceof Error?e.message:'Could not prepare checkout.');await load()}}finally{locked.current=false;if(active.current){setSubmitting(false);setHoldPrompt(null)}}})()})
  }
+ async function inspect(row:PurchaseRequestRow){
+  if(locked.current||inFlight.current||!active.current||!focused)return;locked.current=true;setSubmitting(true);setReview(null);setSubmissionError('');const generation=epoch.current
+  try{const data=await api.marketplace.checkoutReview(row.id);if(data.checkoutEnabled!==false||data.seller!==seller||data.totalMinor!==row.totalMinor)throw new Error('Checkout review changed. Refresh the request.');if(active.current&&generation===epoch.current)setReview({id:row.id,data,at:Date.now()})}catch(e){if(active.current)setSubmissionError(e instanceof Error?e.message:'Could not load checkout review.')}finally{locked.current=false;setSubmitting(false)}
+ }
  return <View style={styles.panel}>
   <Text style={styles.eyebrow}>MARKETPLACE REQUESTS</Text>
   <Text accessibilityRole="header" style={styles.title}>{seller?'Incoming purchase requests':'Your purchase requests'}</Text>
@@ -92,6 +97,8 @@ export function MarketplaceRequests({userId,slug,seller,quote,onSubmitted,onInve
    {row.items.map(item=><View key={item.variantId} style={styles.line}><Text style={[styles.muted,{flex:1}]}>{item.productName} · {item.variantTitle} × {item.quantity}</Text><Text style={styles.secondaryText}>{formatMinor(item.lineMinor,item.currency)}</Text></View>)}
    {row.stockHold?<Text style={styles.muted}>Stock hold: {stockHoldLabel(row.stockHold,now)}{row.stockHold.status==='HELD'?' · Expires '+new Date(row.stockHold.expiresAt).toLocaleString():''}</Text>:null}
    {row.stockHold?.checkoutDraft?<Text style={styles.muted}>Checkout draft: {row.stockHold.checkoutDraft.status.toLowerCase()} · {formatMinor(row.stockHold.checkoutDraft.totalMinor,row.currency)} · No payment collected</Text>:null}
+   {row.status==='ACKNOWLEDGED'?<Pressable accessibilityRole="button" disabled={submitting||loading} style={styles.secondary} onPress={()=>void inspect(row)}><Text style={styles.secondaryText}>Review checkout readiness</Text></Pressable>:null}
+   {review?.id===row.id&&now-review.at<15000?<View style={styles.request}><Text style={styles.title}>Checkout readiness</Text><Text style={styles.amount}>{formatMinor(review.data.totalMinor,'GHS')}</Text><Text style={styles.muted}>Seller preferences: {review.data.methods.map(checkoutMethodLabel).join(', ')||'Not configured'}</Text><Text style={styles.muted}>{review.data.holdValid&&review.data.expiresAt&&Date.parse(review.data.expiresAt)>now?'Stock held at review':'No active stock hold confirmed'}</Text>{seller&&review.data.allocation?<Text style={styles.muted}>Estimated platform commission {formatMinor(review.data.allocation.platformMinor,'GHS')} · Seller gross {formatMinor(review.data.allocation.sellerMinor,'GHS')} (before provider fees)</Text>:null}{review.data.blockers.map(message=><Text key={message} style={styles.muted}>{message}</Text>)}</View>:null}
    {canPrepareCheckout(history,row,now)?<Pressable accessibilityRole="button" disabled={submitting||loading} style={styles.primary} onPress={()=>prepare(row)}><Text style={styles.primaryText}>Prepare checkout draft</Text></Pressable>:null}
    {history?.stockHoldEnabled&&seller&&row.status==='ACKNOWLEDGED'&&!row.stockHold?<Pressable accessibilityRole="button" disabled={submitting||loading} style={styles.primary} onPress={()=>confirmHold(row.id,false)}><Text style={styles.primaryText}>Hold stock for 30 minutes</Text></Pressable>:null}
    {row.stockHold?.status==='HELD'?<Pressable accessibilityRole="button" disabled={submitting||loading} style={styles.secondary} onPress={()=>confirmHold(row.id,true)}><Text style={styles.secondaryText}>Release stock hold</Text></Pressable>:null}

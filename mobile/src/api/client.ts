@@ -895,6 +895,7 @@ export const api = {
       'GET', '/marketplace/stores/' + encodeURIComponent(slug),
     ),
     decidePurchaseRequest: (id:string,status:RequestDecision) => request<{request:PurchaseRequestRow;checkoutEnabled:false;inventoryReserved:false}>('PATCH','/marketplace/requests/'+encodeURIComponent(id),{status}),
+    checkoutReview:(id:string)=>request<import('../lib/marketplace-requests').CheckoutReview>('GET','/marketplace/requests/'+encodeURIComponent(id)+'/checkout-review'),
     preparePurchaseCheckout:(id:string,totalMinor:number)=>request<{checkoutEnabled:false;paymentCollected:false}>('POST','/marketplace/requests/'+encodeURIComponent(id)+'/checkout-draft',{expectedTotalMinor:totalMinor}),
     reservePurchaseStock:(id:string)=>request<unknown>('POST','/marketplace/requests/'+encodeURIComponent(id)+'/hold',{}),
     releasePurchaseStock:(id:string)=>request<unknown>('DELETE','/marketplace/requests/'+encodeURIComponent(id)+'/hold'),

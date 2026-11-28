@@ -38,6 +38,11 @@ Maintain this file as the public, sanitized engineering checkpoint. Keep credent
 - [x] Combined #184/#185 main CI passed and Android QA `android-qa-fe7a127` published.
 - [ ] Verify simultaneous competing reservations, truthful expiry display, focused/foreground refresh and catalogue invalidation on both web and native.
 
+### 2026-11-28 — inventory release reconciliation
+- [x] #186 immutable plan combined main CI passed, verified web/worker packages deployed.
+- [x] #187 competing-buyer regression, expiry display and realtime request refresh passed all six checks; tree-identical web/worker release activated and health/access checks passed. Android release and physical acceptance pending.
+- [ ] Carry forward useful checkout readiness review from #176/#177 without overwriting current checkout drafts, payment plans or foreground refresh. Keep checkout disabled.
+
 ## P0 — Runtime and release reliability
 - [ ] Run runtime role preflight as application role before and after schema changes; rehearse on disposable PostgreSQL first.
 - [ ] Review additive migration order, role ownership, constraints, defaults, indexes, rollback compatibility; test twice.

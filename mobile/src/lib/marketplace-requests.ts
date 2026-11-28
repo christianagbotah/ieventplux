@@ -46,3 +46,6 @@ export function stockHoldLabel(hold:StockHold,now=Date.now()){
 export function inventoryHoldFingerprint(history:PurchaseRequestHistory){
  return JSON.stringify(history.requests.filter(r=>r.stockHold).map(r=>[r.id,r.stockHold!.id,r.stockHold!.status] as const).sort((a,b)=>a[0].localeCompare(b[0])))
 }
+
+export type CheckoutReview={currency:'GHS';totalMinor:number;unitCount:number;holdValid:boolean;expiresAt:string|null;methods:('MOBILE_MONEY'|'CARD'|'CASH')[];checkoutEnabled:false;seller:boolean;blockers:string[];allocation?:{platformMinor:number;sellerMinor:number;basisPoints:number}|null;sandboxRecipientVerified?:boolean}
+export function checkoutMethodLabel(method:string){return method==='MOBILE_MONEY'?'Mobile money':method==='CARD'?'Card':method==='CASH'?'Cash':'Unavailable'}
