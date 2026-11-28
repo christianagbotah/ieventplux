@@ -2,7 +2,8 @@
  * payouts, programmes and high-risk permissions remain in the full web studio.
  * The API independently enforces accepted membership + event edit privilege. */
 import {useCallback,useEffect,useMemo,useRef,useState} from 'react'
-import {ActivityIndicator,Alert,KeyboardAvoidingView,Platform,Pressable,ScrollView,StyleSheet,Text,TextInput,View,type KeyboardTypeOptions} from 'react-native'
+import {ActivityIndicator,KeyboardAvoidingView,Platform,Pressable,ScrollView,StyleSheet,Text,TextInput,View,type KeyboardTypeOptions} from 'react-native'
+import {ActionDialog,type ActionPrompt} from '../components/ActionDialog'
 import {api,type Membership} from '../api/client'
 import {
   BLANK_EVENT_DRAFT,EVENT_MODES,EVENT_VISIBILITY,canManageNativeEvent,
@@ -41,6 +42,9 @@ export default function EventEditorScreen({navigation,route}:EventEditorScreenPr
   const {status}=useSession()
   const [form,setForm]=useState<EventDraftForm>({...BLANK_EVENT_DRAFT})
   const [org,setOrg]=useState<Membership|null>(null)
+  const [categories,setCategories]=useState<{slug:string;name:string}[]>([])
+  const [prompt,setPrompt]=useState<ActionPrompt|null>(null)
+  const submitLock=useRef(false)
   const [loading,setLoading]=useState(true)
   const [saving,setSaving]=useState(false)
   const [error,setError]=useState('')
@@ -57,6 +61,7 @@ export default function EventEditorScreen({navigation,route}:EventEditorScreenPr
       const selected=groups.items.find(item=>item.orgId===orgId)
       if(!selected||!canManageNativeEvent(selected.role))throw new Error('This account does not have event editing permission for the selected organization.')
       setOrg(selected)
+      try{setCategories((await api.discovery.home()).categories)}catch{setCategories([])}
       if(eventId){
         const {event}=await api.events.get(eventId)
         if(event.org.id!==orgId)throw new Error('This event does not belong to your selected organization.')
@@ -76,10 +81,10 @@ export default function EventEditorScreen({navigation,route}:EventEditorScreenPr
   },[orgId,eventId,status])
   useEffect(()=>{void load()},[load])
   const submit=async()=>{
-    if(saving||loading||!org)return
+    if(submitLock.current||saving||loading||!org)return
     const issue=validateEventDraft(form,editing)
     if(issue){showError(issue);return}
-    setSaving(true);setError('')
+    submitLock.current=true;setSaving(true);setError('')
     try{
       if(eventId){
         await api.organizer.editDetails(eventId,editEventDraftPayload(form))
@@ -90,27 +95,22 @@ export default function EventEditorScreen({navigation,route}:EventEditorScreenPr
       }
       navigation.navigate('OrganizerStudio')
     }catch(e){showError(e instanceof Error?e.message:'The event could not be saved. Please try again.')}
-    finally{setSaving(false)}
+    finally{submitLock.current=false;setSaving(false);setPrompt(null)}
   }
   const confirmSave=()=>{
     const issue=validateEventDraft(form,editing)
     if(issue){showError(issue);return}
-    Alert.alert(editing?'Save event details?':'Create event draft?',editing?
-      'Update basic event information. This does not change its publication or tickets.':
-      'Create '+(1+Number(form.repeatWeeks||0))+' unpublished draft(s) in this organization. Publish each occurrence separately.',[
-      {text:'Cancel',style:'cancel'},
-      {text:editing?'Save details':'Create draft',onPress:()=>void submit()},
-    ])
+    setPrompt({title:editing?'Save event details?':'Create event draft?',description:editing?'Update basic event information. Existing tickets and publication remain unchanged.':'Create '+(1+Number(form.repeatWeeks||0))+' unpublished draft(s). Publish each occurrence separately.',confirmLabel:editing?'Save details':'Create draft',onConfirm:()=>void submit()})
   }
   if(loading)return <View style={styles.center}><ActivityIndicator size="large" color={theme.colors.primary}/><Text style={styles.helper}>Loading authorized event details…</Text></View>
   if(!org)return <View style={styles.center}><Text style={styles.error} accessibilityRole="alert">{error||'Event editing unavailable.'}</Text><Pressable accessibilityRole="button" style={styles.outlined} onPress={()=>navigation.goBack()}><Text style={styles.outlinedText}>Back to organizer studio</Text></Pressable></View>
-  return <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS==='ios'?'padding':undefined}>
+  return <><KeyboardAvoidingView style={styles.screen} behavior={Platform.OS==='ios'?'padding':undefined}>
     <ScrollView ref={scroll} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
       <View style={styles.hero}>
         <PremiumBackdrop mode="midnight"/>
         <Text style={styles.kicker}>{editing?'MANAGE EVENT':'NEW EVENT'}</Text>
         <Text style={styles.title}>{editing?'Edit event details':'Create a new experience'}</Text>
-        <Text style={styles.subtitle}>{editing?'Update event information safely. Existing publication, tickets and agenda stay untouched.':'Start an unpublished event draft. Add tickets, speakers, artwork and publishing settings in the full web studio.'}</Text>
+        <Text style={styles.subtitle}>{editing?'Update event information safely. Existing publication, tickets and agenda stay untouched.':'Start an unpublished event draft. After saving, open the event workspace to add artwork, ticket tiers and publish.'}</Text>
         <Text style={styles.orgName}>Organization: {org.orgName}</Text>
       </View>
       {error?<View style={styles.errorBox}><Text style={styles.error} accessibilityRole="alert">{error}</Text></View>:null}
@@ -120,7 +120,7 @@ export default function EventEditorScreen({navigation,route}:EventEditorScreenPr
         <Field label="Event title *" value={form.title} onChange={v=>update('title',v)} placeholder="e.g. Worship & Leadership Conference" maxLength={140}/>
         <Field label="Short description" value={form.summary} onChange={v=>update('summary',v)} placeholder="A short introduction to your event" maxLength={200} multiline/>
         <Field label="Full description" value={form.description} onChange={v=>update('description',v)} placeholder="What should attendees expect?" maxLength={8000} multiline/>
-        <Field label="Category slug" value={form.categorySlug} onChange={v=>update('categorySlug',v.toLowerCase().trim())} placeholder="community" maxLength={40} helper="Use the category code from iEventPlux (for example music or community)."/>
+        {categories.length?<Options label="Event category" options={categories.some(c=>c.slug===form.categorySlug)?categories.map(c=>({value:c.slug,label:c.name})):[{value:form.categorySlug,label:form.categorySlug.replaceAll('-',' ')},...categories.map(c=>({value:c.slug,label:c.name}))]} value={form.categorySlug} onChange={v=>update('categorySlug',v)}/>:<Field label="Event category" value={form.categorySlug} onChange={v=>update('categorySlug',v.toLowerCase().trim())} placeholder="community" maxLength={40} helper="Category list unavailable. Enter an existing category code or retry later."/>}
         <Options label="Event format" options={EVENT_MODES} value={form.mode} onChange={v=>update('mode',v)}/>
       </View>
       {!editing?<View style={styles.panel}>
@@ -150,7 +150,7 @@ export default function EventEditorScreen({navigation,route}:EventEditorScreenPr
       <Pressable accessibilityRole="button" style={styles.outlined} onPress={()=>navigation.goBack()}><Text style={styles.outlinedText}>Cancel and return</Text></Pressable>
       <Text style={styles.footer}>iEventPlux verifies organizer permissions and subscription limits before any event is created or changed.</Text>
     </ScrollView>
-  </KeyboardAvoidingView>
+  </KeyboardAvoidingView><ActionDialog prompt={prompt} busy={saving} onDismiss={()=>setPrompt(null)}/></>
 }
 const styles=StyleSheet.create({
   screen:{flex:1,backgroundColor:theme.colors.bg},content:{padding:16,paddingBottom:40,gap:14},

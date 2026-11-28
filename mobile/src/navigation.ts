@@ -15,6 +15,7 @@ export type RootStackParamList = {
   Account: undefined
   Notifications: undefined
   DirectMessages: {id?:string}|undefined
+  OrganizerProfileEditor:{orgId:string;slug:string}
   EditProfile: undefined
   Register: undefined
   EventManagement:{eventId:string;orgId:string}
@@ -98,3 +99,5 @@ export type RegisterScreenProps=NativeStackScreenProps<RootStackParamList,'Regis
 export type EventManagementScreenProps=NativeStackScreenProps<RootStackParamList,'EventManagement'>
 
 export type EditProfileScreenProps=NativeStackScreenProps<RootStackParamList,'EditProfile'>
+
+export type OrganizerProfileEditorScreenProps=NativeStackScreenProps<RootStackParamList,'OrganizerProfileEditor'>

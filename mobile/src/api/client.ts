@@ -847,6 +847,10 @@ export const api = {
     questionAction:(id:string,action:'upvote'|'answer'|'hide'|'unhide'|'pin'|'unpin',answer?:string)=>request<unknown>('POST','/questions/'+encodeURIComponent(id)+'/'+action,answer===undefined?{}:{answer}),
   },
   organizer: {
+    profile:(slug:string)=>request<{org:{id:string;slug:string;name:string;tagline:string|null;description:string|null;city:string|null;logoUrl:string|null;coverUrl:string|null;verified:boolean};canEdit:boolean}>('GET','/orgs/'+encodeURIComponent(slug)+'/profile'),
+    updateProfile:(slug:string,body:unknown)=>request<{ok:boolean}>('PATCH','/orgs/'+encodeURIComponent(slug)+'/profile',body),
+    uploadBranding:(id:string,body:FormData)=>request<{url:string}>('POST','/orgs/'+encodeURIComponent(id)+'/branding',body),
+    uploadEventArtwork:(body:FormData)=>request<{asset:{url:string;id:string}}>('POST','/uploads',body),
     eventStats:(id:string)=>request<{paidOrders:number;freeOrders:number;ticketsSold:number;checkedIn:number;grossMinor:number;feesMinor:number;netMinor:number}>('GET','/events/'+encodeURIComponent(id)+'/stats'),
     eventOrders:(id:string,page:number)=>request<{items:{id:string;reference:string;buyerName:string;totalMinor:number;currency:string;status:string;createdAt:string}[];total:number}>('GET','/events/'+encodeURIComponent(id)+'/orders?page='+page+'&pageSize=25'),
     eventAttendees:(id:string,page:number)=>request<{items:{id:string;code:string;holderName:string;ticketType:string;status:string;checkedInAt:string|null}[];total:number}>('GET','/events/'+encodeURIComponent(id)+'/attendees?page='+page+'&pageSize=25'),
