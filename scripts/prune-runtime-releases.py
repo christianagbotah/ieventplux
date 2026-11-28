@@ -122,7 +122,7 @@ def relative_name(member, component, tracked_uploads=None):
         raise ValueError("Unsafe runtime archive member")
     if "uploads" in p.parts:
         compiled_route = name.startswith(".next/server/app/") and (member.isdir() or name.endswith((".js", ".js.map", ".json")))
-        reviewed_asset = name in tracked_uploads or (member.isdir() and any(n.startswith(name + "/") for n in tracked_uploads))
+        reviewed_asset = (member.isfile() and name in tracked_uploads) or (member.isdir() and any(n.startswith(name + "/") for n in tracked_uploads))
         if not compiled_route and not reviewed_asset:
             raise ValueError("Unreviewed upload path in runtime archive")
     if not (member.isfile() or member.isdir() or member.issym() or member.islnk()):
