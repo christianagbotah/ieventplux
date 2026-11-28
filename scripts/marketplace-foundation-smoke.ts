@@ -283,6 +283,25 @@ try{
  assert(sweep.released===1&&sweep.conflicts===0,'expired hold released by sweep')
  assert((await db.marketplaceCheckoutDraft.findUniqueOrThrow({where:{id:preparedExpiry.draft.id}})).status==='EXPIRED','expiry closes checkout draft atomically')
  assert((await db.marketplaceVariant.findUniqueOrThrow({where:{id:variantId}})).stockReserved===0,'expiry restores stock')
+ // Competing buyers each review eight of twelve units before either hold is made.
+ const competingBody={items:[{variantId,quantity:8,expectedUnitPriceMinor:35000}],expectedTotalMinor:280000}
+ const competingA=await send('POST',requestPath,stranger,{...competingBody,requestKey:'race-a-'+unique})
+ const competingB=await send('POST',requestPath,third,{...competingBody,requestKey:'race-b-'+unique})
+ assert(competingA.status===201&&competingB.status===201,'two independent reviewed requests exist before reservation')
+ const requests=[competingA.data.request.id,competingB.data.request.id]
+ for(const id of requests)assert((await send('PATCH','/marketplace/requests/'+id,owner,{status:'ACKNOWLEDGED'})).status===200,'competing request acknowledged')
+ const races=await Promise.allSettled(requests.map(id=>reserveMarketplaceRequest(id,sellerUser.id)))
+ assert(races.filter(x=>x.status==='fulfilled').length===1&&races.filter(x=>x.status==='rejected'&&x.reason?.status===409).length===1,'competing reservations cannot oversell')
+ const winner=requests[races.findIndex(x=>x.status==='fulfilled')]
+ const loser=requests.find(x=>x!==winner)!
+ const inventory=await db.marketplaceVariant.findUniqueOrThrow({where:{id:variantId}})
+ assert(inventory.stockReserved===8&&inventory.stockOnHand===12,'exactly eight units held with physical stock unchanged')
+ assert(await db.marketplaceStockHold.count({where:{requestId:loser}})===0,'losing transaction leaves no hold')
+ const outsider=await db.marketplacePurchaseRequest.findUniqueOrThrow({where:{id:loser},select:{buyerId:true}})
+ assert(await releaseMarketplaceRequest(winner,outsider.buyerId).then(()=>false,e=>e.status===404),'other buyer cannot release winning hold')
+ await releaseMarketplaceRequest(winner,sellerUser.id)
+ assert((await db.marketplaceVariant.findUniqueOrThrow({where:{id:variantId}})).stockReserved===0,'winning hold releases exactly eight units')
+
  delete process.env.IEVENTPLUX_MARKETPLACE_CHECKOUT_DRAFT_ENABLED
  delete process.env.IEVENTPLUX_MARKETPLACE_STOCK_HOLD_ENABLED
  console.log('MARKETPLACE_FOUNDATION_SMOKE_PASS')

@@ -33,6 +33,11 @@ Maintain this file as the public, sanitized engineering checkpoint. Keep credent
 - [x] Main CI for #182/#183 passed; Android QA `android-qa-f703022` published. Physical-device acceptance pending.
 - [ ] Internal marketplace payment planning binds approved commission and settlement mapping to an active reviewed hold. No real payment, sandbox attempt, fulfillment or live settlement enabled; provider certification and authenticated staging acceptance remain necessary.
 
+### 2026-11-28 — payment plan and inventory acceptance
+- [x] #186 immutable payment plan merged after six successful CI checks; no public execution route or provider attempt.
+- [x] Combined #184/#185 main CI passed and Android QA `android-qa-fe7a127` published.
+- [ ] Verify simultaneous competing reservations, truthful expiry display, focused/foreground refresh and catalogue invalidation on both web and native.
+
 ## P0 — Runtime and release reliability
 - [ ] Run runtime role preflight as application role before and after schema changes; rehearse on disposable PostgreSQL first.
 - [ ] Review additive migration order, role ownership, constraints, defaults, indexes, rollback compatibility; test twice.

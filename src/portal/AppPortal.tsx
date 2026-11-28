@@ -137,13 +137,14 @@ export default function AppPortal() {
     socket.on('room:joined', () => void refresh())
     socket.on('disconnect', () => setRealtimeConnected(false))
     socket.on('room:denied', () => setRealtimeConnected(false))
-    socket.on('notification', (payload: { id: string; title: string; body: string }) => {
+    socket.on('notification', (payload: { id: string; title: string; body: string; type?:string }) => {
       if (!active) return
       if (payload.id && !seen.has(payload.id)) {
         if (seen.size >= 500) seen.clear()
         seen.add(payload.id)
         toast({ title: payload.title, description: payload.body })
       }
+      if(payload.type==='MARKETPLACE_REQUEST')window.dispatchEvent(new Event('ievx:marketplace-changed'))
       void refresh()
     })
     socket.on('notification:read', () => void refresh())

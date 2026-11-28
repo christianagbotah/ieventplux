@@ -353,7 +353,7 @@ export default function MarketplaceStorefront({slug}:{slug:string}) {
       {!quote&&<p className="mt-3 text-xs text-muted-foreground">Select available variants above, then check the live catalogue. No inventory is held and no order or payment will be created.</p>}
     </section>}
     {data.canManage&&<MarketplacePaymentSettings key={slug} slug={slug}/>}
-    {user&&<MarketplaceRequests key={user.id+':'+slug+':'+data.canManage} slug={slug} seller={data.canManage} quote={quote} onSubmitted={submitted=>setQuote(current=>current===submitted?null:current)}/>}
+    {user&&<MarketplaceRequests key={user.id+':'+slug+':'+data.canManage} slug={slug} seller={data.canManage} quote={quote} onInventoryChanged={load} onSubmitted={submitted=>setQuote(current=>current===submitted?null:current)}/>}
     {!user&&!data.canManage&&<Button variant="outline" onClick={()=>navigate('/signin')}>Sign in to submit purchase requests</Button>}
     <p className="rounded-xl border bg-muted/30 p-4 text-xs leading-6 text-muted-foreground">
       <CheckCircle2 className="mr-1 inline size-4 text-primary"/> Product listings show seller-provided descriptions and inventory. Platform checkout, order delivery and refunds are not yet enabled for independent stores. Unverified sellers are not represented as verified.
