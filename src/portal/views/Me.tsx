@@ -109,7 +109,7 @@ export default function Me({ route }: { route: Route }) {
     const next={ email: true, push: false, sms: Boolean(user.phone), marketing: false, ...user.notifPrefs }
     preferenceBaseline.current=next;setPrefs(next)
   // Branding refresh must not discard unrelated unsaved profile fields.
-  }, [user?.id, booted])
+  }, [user?.id, user?.displayName, user?.phone, user?.city, user?.bio, user?.notifPrefs, booted])
 
   const loadTickets = useCallback(async () => {
     const data = await api.get<{ items: TicketRow[] }>('/tickets').catch(() => null)
