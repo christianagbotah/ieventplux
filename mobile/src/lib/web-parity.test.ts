@@ -9,11 +9,15 @@ const portal = readFileSync(new URL('../../../src/portal/AppPortal.tsx', import.
 const discover = readFileSync(new URL('../../../src/portal/views/Discover.tsx', import.meta.url), 'utf8')
 const css = readFileSync(new URL('../../../src/app/globals.css', import.meta.url), 'utf8')
 
-test('Android and web have matching six visible mobile nav labels', () => {
+test('Native nav preserves shared destinations and adds a visible creation entry', () => {
   const mobileSection = portal.split('const MOBILE_NAV = [')[1]?.split('\n]')[0]
   expect(mobileSection).toBeTruthy()
   const webLabels = Array.from(mobileSection?.matchAll(/label: '([^']+)'/g) ?? []).map(match => match[1])
-  expect(MAIN_TABS.map(item => item.label)).toEqual(webLabels)
+  // Intentional native UX exception: the owner requested direct creation access.
+  // Reels is kept one tap away on Discover and in the creation hub.
+  expect(MAIN_TABS.map(item => item.label).filter(label=>label!=='Create')).toEqual(webLabels.filter(label=>label!=='Reels'))
+  expect(MAIN_TABS.some(item=>item.route==='CreateHub')).toBe(true)
+  expect(readFileSync(new URL('../screens/DiscoverScreen.tsx',import.meta.url),'utf8')).toContain("navigation.navigate('Reels')")
 })
 
 test('all homepage editorial slider stories are the same on Android and web', () => {

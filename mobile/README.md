@@ -248,3 +248,6 @@ Check-in, marketplace storefront details, and broadcast viewer reuse the React N
 ### Real native reel playback (media-ready only)
 
 `expo-video` renders verified published MP4 clip URLs from this platform through `VerifiedReelMedia`. One visible clip may autoplay muted when Reels is focused and the app is active. Viewers control sound and pausing; off-screen clips are not loaded. Image-only event previews remain static. This does **not** create or approve public video assets: native video upload/moderation/transcoding and byte-range serving are separately required and subject to content-rights safeguards. Real-device playback needs verification on the newly built APK.
+
+### Native Create & seller workspace
+The native navigation intentionally replaces the Reels tab with Create. Reels stays accessible on Discover and in Create; all other primary destinations remain unchanged. Creation hub, seller store draft, product draft, stock movement and publication use the existing server APIs directly. The signed-in return destination is preserved on the create journey. Advanced product media/specifications, variants, store branding and settlement editing still need native parity; physical-device UAT is mandatory.

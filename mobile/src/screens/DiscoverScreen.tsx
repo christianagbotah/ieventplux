@@ -298,6 +298,7 @@ export default function DiscoverScreen({ navigation }: DiscoverScreenProps) {
           </View>
 
           ) : null}
+          {!filtered?<View style={{flexDirection:'row',flexWrap:'wrap',gap:8,marginBottom:12}}><Pressable accessibilityRole="button" style={styles.quickChip} onPress={()=>navigation.navigate('CreateHub')}><Text style={styles.quickText}>＋ Create & manage</Text></Pressable><Pressable accessibilityRole="button" style={styles.quickChip} onPress={()=>navigation.navigate('Reels')}><Text style={styles.quickText}>▶ Reels</Text></Pressable><Pressable accessibilityRole="button" style={styles.quickChip} onPress={()=>navigation.navigate('SellerStudio')}><Text style={styles.quickText}>My stores</Text></Pressable></View>:null}
           {filtered ? <View style={styles.activeFilterBanner}>
             <Text style={styles.activeFilterLabel}>{activeCount} active</Text>
             <Pressable accessibilityRole="button" accessibilityLabel="Clear all event filters" onPress={resetFilters}><Text style={styles.clearFilterLabel}>Clear all</Text></Pressable>
