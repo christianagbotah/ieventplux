@@ -15,10 +15,14 @@ export type RootStackParamList = {
   Account: undefined
   Notifications: undefined
   DirectMessages: {id?:string}|undefined
+  OrganizerProfileEditor:{orgId:string;slug:string}
+  EditProfile: undefined
   Register: undefined
+  EventProgramme:{eventId:string;orgId:string}
   EventManagement:{eventId:string;orgId:string}
   CreateHub: undefined
   SellerStudio: undefined
+  SellerPaymentSettings:{slug:string}
   SellerProduct: {slug:string}
   OrganizerStudio: undefined
   CreateOrganizer: undefined
@@ -95,3 +99,11 @@ export type SellerProductScreenProps=NativeStackScreenProps<RootStackParamList,'
 
 export type RegisterScreenProps=NativeStackScreenProps<RootStackParamList,'Register'>
 export type EventManagementScreenProps=NativeStackScreenProps<RootStackParamList,'EventManagement'>
+
+export type EditProfileScreenProps=NativeStackScreenProps<RootStackParamList,'EditProfile'>
+
+export type OrganizerProfileEditorScreenProps=NativeStackScreenProps<RootStackParamList,'OrganizerProfileEditor'>
+
+export type EventProgrammeScreenProps=NativeStackScreenProps<RootStackParamList,'EventProgramme'>
+
+export type SellerPaymentSettingsScreenProps=NativeStackScreenProps<RootStackParamList,'SellerPaymentSettings'>

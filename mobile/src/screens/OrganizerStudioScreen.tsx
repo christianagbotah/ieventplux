@@ -97,6 +97,7 @@ export default function OrganizerStudioScreen({navigation}:OrganizerStudioScreen
         <View style={styles.stats}><Text style={styles.statNumber}>{items.filter(x=>x.status==='DRAFT').length}</Text><Text style={styles.statCaption}>drafts on this page</Text></View>
       </View>
       {canEdit?<Pressable style={styles.create} accessibilityRole="button" onPress={()=>navigation.navigate('EventEditor',{orgId:orgId!})}><Text style={styles.createText}>＋  Create an event draft</Text></Pressable>:<Text style={styles.permissionNote}>Your {selected?.role.replaceAll('_',' ').toLowerCase()} membership can view its events. Editing requires an organizer or event manager role.</Text>}
+      {selected&&['OWNER','ADMIN'].includes(selected.role)?<Pressable style={styles.secondaryAction} accessibilityRole="button" onPress={()=>navigation.navigate('OrganizerProfileEditor',{orgId:selected.orgId,slug:selected.orgSlug})}><Text style={styles.secondaryText}>Edit organization profile & branding</Text></Pressable>:null}
       <Text style={styles.sectionLabel}>MANAGE EVENTS</Text>
       {listError?<View style={styles.alert}><Text style={styles.error} accessibilityRole="alert">{listError}</Text><Pressable accessibilityRole="button" onPress={()=>void load(1,true)} style={styles.retry}><Text style={styles.retryText}>Retry</Text></Pressable></View>:null}
       {loading?<ActivityIndicator color={theme.colors.primary} style={styles.loader}/>:null}

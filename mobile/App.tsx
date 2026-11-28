@@ -36,10 +36,14 @@ import ForegroundActivity from './src/components/ForegroundActivity'
 import PushActivityBridge from './src/components/PushActivityBridge'
 import IncomingCallInvitation from './src/components/IncomingCallInvitation'
 import {activityDestination} from './src/lib/push-activity-policy'
+import OrganizerProfileEditorScreen from './src/screens/OrganizerProfileEditorScreen'
+import EditProfileScreen from './src/screens/EditProfileScreen'
 import RegisterScreen from './src/screens/RegisterScreen'
+import EventProgrammeScreen from './src/screens/EventProgrammeScreen'
 import EventManagementScreen from './src/screens/EventManagementScreen'
 import CreateHubScreen from './src/screens/CreateHubScreen'
 import SellerStudioScreen from './src/screens/SellerStudioScreen'
+import SellerPaymentSettingsScreen from './src/screens/SellerPaymentSettingsScreen'
 import SellerProductScreen from './src/screens/SellerProductScreen'
 import OrganizerStudioScreen from './src/screens/OrganizerStudioScreen'
 import CreateOrganizerScreen from './src/screens/CreateOrganizerScreen'
@@ -132,7 +136,10 @@ function AppRoutes() {
         contentStyle: { backgroundColor: theme.colors.bg },
       }}
     >
+      <Stack.Screen name="OrganizerProfileEditor" component={OrganizerProfileEditorScreen} options={{title:'Organizer profile'}}/>
+      <Stack.Screen name="EditProfile" component={EditProfileScreen} options={{title:'Edit profile'}}/>
       <Stack.Screen name="Register" component={RegisterScreen} options={{title:'Create your account'}}/>
+      <Stack.Screen name="EventProgramme" component={EventProgrammeScreen} options={{title:'Programme & lineup'}}/>
       <Stack.Screen name="EventManagement" component={EventManagementScreen} options={{title:'Manage event'}}/>
       <Stack.Screen name="Login" component={LoginScreen} options={{ title: 'Sign in', headerShown: false }} />
       <Stack.Screen name="Discover" component={DiscoverScreen} options={{ headerTitle: () => <AppBrand /> }} />
@@ -144,6 +151,7 @@ function AppRoutes() {
       <Stack.Screen name="DirectMessages" component={DirectMessagesScreen} options={{title:'Messages'}}/>
       <Stack.Screen name="CreateHub" component={CreateHubScreen} options={{title:'Create & manage'}}/>
       <Stack.Screen name="SellerStudio" component={SellerStudioScreen} options={{title:'Seller Studio'}}/>
+      <Stack.Screen name="SellerPaymentSettings" component={SellerPaymentSettingsScreen} options={{title:'Payments & settlement'}}/>
       <Stack.Screen name="SellerProduct" component={SellerProductScreen} options={{title:'Add product'}}/>
       <Stack.Screen name="OrganizerStudio" component={OrganizerStudioScreen} options={{ title: 'Organizer Studio' }} />
       <Stack.Screen name="CreateOrganizer" component={CreateOrganizerScreen} options={{ title: 'Create organizer profile' }} />

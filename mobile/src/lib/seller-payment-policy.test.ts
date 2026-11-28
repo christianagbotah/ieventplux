@@ -1,0 +1,5 @@
+import {expect,test} from 'bun:test'
+import {canRequestSettlement,samePaymentPreferences,formatCommission} from './seller-payment-policy'
+import type {NativeSellerPaymentSettings} from '../api/client'
+const v:NativeSellerPaymentSettings={preferences:{mobileMoney:true,card:false,cash:false,destination:'BANK'},commissionBps:250,commissionScope:'global',settlementStatus:'NOT_CONFIGURED',settlementAccount:null,checkoutEnabled:false}
+test('settlement request requires saved supported methods, bank and verification',()=>{expect(canRequestSettlement(v,v.preferences,true)).toBe(true);expect(canRequestSettlement(v,v.preferences,false)).toBe(false);expect(canRequestSettlement(v,{...v.preferences,destination:'MOMO'},true)).toBe(false);expect(canRequestSettlement({...v,settlementStatus:'REQUESTED'},v.preferences,true)).toBe(false);const cash={...v.preferences,mobileMoney:false,cash:true};expect(canRequestSettlement({...v,preferences:cash},cash,true)).toBe(false);expect(samePaymentPreferences(v.preferences,{...v.preferences,card:true})).toBe(false);expect(formatCommission(250)).toBe('2.50%');expect(formatCommission(null)).toBe('Not configured')})

@@ -35,6 +35,10 @@ export interface User {
   displayName: string
   role: string
   avatarUrl?: string | null
+  bannerUrl?:string|null
+  bio?:string|null
+  city?:string|null
+  phone?:string|null
 }
 
 export interface Membership {
@@ -796,6 +800,8 @@ export const api = {
     decide:(eventId:string,id:string,status:string)=>request<{status:string}>('PATCH','/events/'+encodeURIComponent(eventId)+'/souvenir-requests/'+encodeURIComponent(id),{status}),
   },
   auth: {
+    updateProfile:(body:{expectedUserId:string;displayName:string;city:string;bio:string})=>request<{ok:boolean}>('POST','/auth/profile',body),
+    uploadProfileImage:(body:FormData)=>request<{url:string}>('POST','/auth/branding',body),
     register:(body:{displayName:string;email:string;password:string})=>request<{user:User;verificationEmailAvailable:boolean}>('POST','/auth/register',body),
     login: (email: string, password: string) =>
       request<LoginResponse>('POST', '/auth/login', { email, password }),
@@ -841,6 +847,17 @@ export const api = {
     questionAction:(id:string,action:'upvote'|'answer'|'hide'|'unhide'|'pin'|'unpin',answer?:string)=>request<unknown>('POST','/questions/'+encodeURIComponent(id)+'/'+action,answer===undefined?{}:{answer}),
   },
   organizer: {
+    agenda:(id:string)=>request<{items:(EventAgendaItem&{sortOrder:number})[]}>('GET','/events/'+encodeURIComponent(id)+'/agenda'),
+    saveAgenda:(id:string,itemId:string|null,body:unknown)=>request<unknown>(itemId?'PATCH':'POST','/events/'+encodeURIComponent(id)+'/agenda'+(itemId?'/'+encodeURIComponent(itemId):''),body),
+    removeAgenda:(id:string,itemId:string)=>request<unknown>('DELETE','/events/'+encodeURIComponent(id)+'/agenda/'+encodeURIComponent(itemId)),
+    contributors:(id:string)=>request<{items:(EventContributor&{endsAt:string|null;sortOrder:number;published:boolean})[]}>('GET','/events/'+encodeURIComponent(id)+'/contributors'),
+    saveContributor:(id:string,itemId:string|null,body:unknown)=>request<unknown>(itemId?'PATCH':'POST','/events/'+encodeURIComponent(id)+'/contributors'+(itemId?'/'+encodeURIComponent(itemId):''),body),
+    removeContributor:(id:string,itemId:string)=>request<unknown>('DELETE','/events/'+encodeURIComponent(id)+'/contributors/'+encodeURIComponent(itemId)),
+    archiveProgramme:(id:string,assetId:string)=>request<unknown>('DELETE','/events/'+encodeURIComponent(id)+'/programmes/'+encodeURIComponent(assetId)),
+    profile:(slug:string)=>request<{org:{id:string;slug:string;name:string;tagline:string|null;description:string|null;city:string|null;logoUrl:string|null;coverUrl:string|null;verified:boolean};canEdit:boolean}>('GET','/orgs/'+encodeURIComponent(slug)+'/profile'),
+    updateProfile:(slug:string,body:unknown)=>request<{ok:boolean}>('PATCH','/orgs/'+encodeURIComponent(slug)+'/profile',body),
+    uploadBranding:(id:string,body:FormData)=>request<{url:string}>('POST','/orgs/'+encodeURIComponent(id)+'/branding',body),
+    uploadEventArtwork:(body:FormData)=>request<{asset:{url:string;id:string}}>('POST','/uploads',body),
     eventStats:(id:string)=>request<{paidOrders:number;freeOrders:number;ticketsSold:number;checkedIn:number;grossMinor:number;feesMinor:number;netMinor:number}>('GET','/events/'+encodeURIComponent(id)+'/stats'),
     eventOrders:(id:string,page:number)=>request<{items:{id:string;reference:string;buyerName:string;totalMinor:number;currency:string;status:string;createdAt:string}[];total:number}>('GET','/events/'+encodeURIComponent(id)+'/orders?page='+page+'&pageSize=25'),
     eventAttendees:(id:string,page:number)=>request<{items:{id:string;code:string;holderName:string;ticketType:string;status:string;checkedInAt:string|null}[];total:number}>('GET','/events/'+encodeURIComponent(id)+'/attendees?page='+page+'&pageSize=25'),
@@ -861,6 +878,10 @@ export const api = {
     ),
   },
   marketplace: {
+    paymentSettings:(slug:string)=>request<NativeSellerPaymentSettings>('GET','/marketplace/stores/'+encodeURIComponent(slug)+'/payment-settings'),
+    savePaymentSettings:(slug:string,body:NativeSellerPaymentPreferences)=>request<NativeSellerPaymentSettings>('PATCH','/marketplace/stores/'+encodeURIComponent(slug)+'/payment-settings',body),
+    requestSettlement:(slug:string)=>request<{settlementStatus:string;checkoutEnabled:false}>('POST','/marketplace/stores/'+encodeURIComponent(slug)+'/settlement-onboarding',{}),
+    uploadImage:(slug:string,body:FormData)=>request<{url:string}>('POST','/marketplace/stores/'+encodeURIComponent(slug)+'/images',body),
     myStores:()=>request<{stores:NativeMarketplaceStore[]}>('GET','/marketplace/stores?mine=1'),
     createStore:(body:unknown)=>request<{store:{id:string;slug:string;name:string;status:string}}>('POST','/marketplace/stores',body),
     updateStore:(slug:string,body:unknown)=>request<{store:{id:string;slug:string;status:string}}>('PATCH','/marketplace/stores/'+encodeURIComponent(slug),body),
@@ -1058,3 +1079,6 @@ export function formatDateTime(iso: string): string {
   if (Number.isNaN(d.getTime())) return iso
   return `${formatDate(iso)} · ${pad2(d.getHours())}:${pad2(d.getMinutes())}`
 }
+
+export type NativeSellerPaymentPreferences={mobileMoney:boolean;card:boolean;cash:boolean;destination:'BANK'|'MOMO'}
+export type NativeSellerPaymentSettings={preferences:NativeSellerPaymentPreferences;commissionBps:number|null;commissionScope:string|null;settlementStatus:string;settlementAccount:{maskedAccount:string|null;bankName:string|null}|null;checkoutEnabled:false}

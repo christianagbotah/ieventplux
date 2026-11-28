@@ -270,6 +270,11 @@ jobs:
           IEVENTPLUX_ISOLATED_DB_TEST: "yes"
         run: bash scripts/verify-marketplace-holds-migration.sh
 
+      - name: Personal profile branding ownership and image decoding
+        env:
+          IEVENTPLUX_ISOLATED_DB_TEST: "yes"
+        run: bun run scripts/profile-branding-smoke.ts
+
       - name: Marketplace seller, catalogue and stock ledger integration smoke
         env:
           IEVENTPLUX_ISOLATED_DB_TEST: "yes"
