@@ -4,6 +4,7 @@ import { env } from '../env'
 import { enqueue } from '../outbox'
 import { estimateSegments } from '../hubtel/sms'
 import { realtimeEmit } from './realtime'
+import {suppressQaExternalDelivery} from '../qa-fixture-policy'
 
 /**
  * Notifications + durable message queue (SMS/email/in-app) with deduplication,
@@ -45,6 +46,7 @@ export interface QueueMessageInput {
 
 /** Queue a message for durable delivery. Returns the MessageDelivery id (or null on dedup hit). */
 export async function queueMessage(input: QueueMessageInput): Promise<string | null> {
+  if(suppressQaExternalDelivery(input))return null
   if (input.dedupKey) {
     const existing = await db.messageDelivery.findUnique({ where: { dedupKey: input.dedupKey } })
     if (existing) return null

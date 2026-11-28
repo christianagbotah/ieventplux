@@ -5,6 +5,7 @@ import { membershipFor, orgCan } from '@/server/permissions'
 import { paymentReference } from '@/server/ids'
 import { env } from '@/server/env'
 import { initiateCheckout } from '@/server/hubtel/payments'
+import {isQaFixtureId,QA_MONEY_BLOCKED} from '@/server/qa-fixture-policy'
 
 /**
  * POST /api/v1/subscriptions/purchase — buy/renew a plan.
@@ -29,6 +30,7 @@ export async function POST(req: NextRequest) {
       return jsonOk({ activated: true, free: true, currentPeriodEnd: result.currentPeriodEnd })
     }
 
+    if(isQaFixtureId(orgId)||isQaFixtureId(user.id))throw errors.forbidden(QA_MONEY_BLOCKED)
     const invoice = await db.invoice.create({
       data: {
         orgId,

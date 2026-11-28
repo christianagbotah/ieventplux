@@ -6,6 +6,7 @@ import { ticketCode } from '../ids'
 import { postJournal, ensureOrgAccounts, ensurePlatformAccounts } from '../ledger'
 import { notifyUser, queueMessage } from './notify'
 import { formatMoney } from '../money'
+import {isQaFinancialRecord,QA_MONEY_BLOCKED} from '../qa-fixture-policy'
 
 /**
  * Idempotent payment fulfilment.
@@ -32,6 +33,8 @@ export async function fulfilPaidOrder(params: { orderId: string; paymentAttemptI
   const { orderId, paymentAttemptId, amountMinor } = params
   const order = await db.order.findUnique({ where: { id: orderId }, include: { items: true, event: true, reservations: true, payments: true } })
   if (!order) throw errors.notFound('Order not found.')
+
+  if(isQaFinancialRecord(order))return {outcome:'REJECTED',detail:QA_MONEY_BLOCKED}
 
   // Idempotency: another attempt already paid this order → duplicate payment case.
   const successAttempts = order.payments.filter((p) => p.status === 'SUCCESS' && p.id !== paymentAttemptId)
@@ -295,6 +298,7 @@ export async function applyProviderOutcome(params: {
 }): Promise<FulfilOutcome | { outcome: 'NOOP' | 'PENDING' | 'FAILED'; detail: string }> {
   const attempt = await db.paymentAttempt.findUnique({ where: { id: params.attemptId }, include: { order: true } })
   if (!attempt) return { outcome: 'NOOP', detail: 'Attempt not found.' }
+  if(attempt.order&&isQaFinancialRecord(attempt.order))return {outcome:'REJECTED',detail:QA_MONEY_BLOCKED}
   // A public callback is never evidence of real payment. Real attempts must
   // enter via an authenticated provider status read (AUTHENTICATED_STATUS or RECONCILE).
   if (params.source === 'CALLBACK' && attempt.provider !== 'SIMULATOR') {

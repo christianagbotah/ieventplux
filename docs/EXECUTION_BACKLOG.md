@@ -11,6 +11,8 @@ Maintain this file as the public, sanitized engineering checkpoint. Keep credent
 - Current: separate 30-minute marketplace stock hold pilot, atomic reserve/release/expiry, explicit gated UI and migration rehearsal. Do not enable before isolated regression, migration/worker deployment and staging acceptance. No order/payment settlement yet. Real-device push/calling and paid competitions remain pending.
 - Keep marketplace checkout, settlement, awards voting, and provider integrations gated until their end-to-end acceptance tests pass.
 
+- QA batch: removable fixture seed and acceptance matrix in `ops/qa/`; rehearsal and safety guard required before staging load. Payment, notification and cleanup isolation must pass. Pilot only after reviewed cleanup.
+
 ## P0 — Runtime and release reliability
 - [ ] Run runtime role preflight as application role before and after schema changes; rehearse on disposable PostgreSQL first.
 - [ ] Review additive migration order, role ownership, constraints, defaults, indexes, rollback compatibility; test twice.
