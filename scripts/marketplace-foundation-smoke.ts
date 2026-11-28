@@ -233,6 +233,14 @@ try{
  const repeat=await reserveMarketplaceRequest(hId,sellerUser.id)
  assert(repeat.hold.id===held.hold.id,'hold replay is idempotent')
  assert((await db.marketplaceVariant.findUniqueOrThrow({where:{id:variantId}})).stockReserved===2,'exact quantities held once')
+ const reviewPath='/marketplace/requests/'+hId+'/checkout-review'
+ assert((await send('GET',reviewPath)).status===401,'anonymous review denied')
+ assert((await send('GET',reviewPath,third)).status===404,'unrelated account cannot review checkout')
+ const buyerReview=await send('GET',reviewPath,stranger)
+ assert(buyerReview.status===200&&buyerReview.data.totalMinor===70000&&!buyerReview.data.checkoutEnabled&&!('allocation' in buyerReview.data)&&!('sandboxRecipientVerified' in buyerReview.data),'buyer review hides private seller allocation and verification')
+ const sellerReview=await send('GET',reviewPath,owner)
+ assert(sellerReview.status===200&&sellerReview.data.holdValid&&!sellerReview.data.checkoutEnabled&&('allocation' in sellerReview.data),'seller sees read-only allocation readiness')
+
  assert((await send('POST','/marketplace/requests/'+hId+'/checkout-draft',stranger,{expectedTotalMinor:70000})).status===503,'checkout draft disabled by default')
  process.env.IEVENTPLUX_MARKETPLACE_CHECKOUT_DRAFT_ENABLED='true'
  assert(await prepareMarketplaceCheckout(hId,sellerUser.id,{expectedTotalMinor:70000}).then(()=>false,e=>e.status===404),'seller cannot prepare buyer checkout')
@@ -301,6 +309,12 @@ try{
  assert(await releaseMarketplaceRequest(winner,outsider.buyerId).then(()=>false,e=>e.status===404),'other buyer cannot release winning hold')
  await releaseMarketplaceRequest(winner,sellerUser.id)
  assert((await db.marketplaceVariant.findUniqueOrThrow({where:{id:variantId}})).stockReserved===0,'winning hold releases exactly eight units')
+ const staleHold=await send('POST',requestPath,stranger,{...orderBody,requestKey:'hold-price-stale-'+unique})
+ assert(staleHold.status===201,'reviewed request saved before price change')
+ await send('PATCH','/marketplace/requests/'+staleHold.data.request.id,owner,{status:'ACKNOWLEDGED'})
+ await db.marketplaceVariant.update({where:{id:variantId},data:{priceMinor:36000}})
+ try{const staleReview=await send('GET','/marketplace/requests/'+staleHold.data.request.id+'/checkout-review',stranger);assert(staleReview.status===200&&staleReview.data.catalogueCurrent===false,'readiness review identifies stale catalogue');assert(await reserveMarketplaceRequest(staleHold.data.request.id,sellerUser.id).then(()=>false,e=>e.status===409),'stale price cannot reserve stock');assert(await db.marketplaceStockHold.count({where:{requestId:staleHold.data.request.id}})===0,'stale price creates no hold')}finally{await db.marketplaceVariant.update({where:{id:variantId},data:{priceMinor:35000}})}
+
 
  delete process.env.IEVENTPLUX_MARKETPLACE_CHECKOUT_DRAFT_ENABLED
  delete process.env.IEVENTPLUX_MARKETPLACE_STOCK_HOLD_ENABLED
