@@ -24,7 +24,7 @@ from datetime import datetime, timezone
 COMPONENTS = {"web", "worker", "realtime"}
 HEX = re.compile(r"^[0-9a-f]{40}$")
 NAME = re.compile(r"^(web|worker|realtime)-([0-9a-f]{7,40})-[0-9]{8}$")
-FORBIDDEN = {".git", ".github", ".ssh", ".env", "uploads", "media-uploads", "pgdata", "backups"}
+FORBIDDEN = {".git", ".github", ".ssh", ".env", "media-uploads", "pgdata", "backups"}
 SUFFIXES = (".db", ".sqlite", ".sqlite3", ".dump", ".key", ".jks", ".keystore", ".p12", ".pfx")
 
 def command(*args):
@@ -111,7 +111,8 @@ def download(repo, item, scratch, durable=False):
         raise ValueError("Artifact checksum mismatch")
     return path
 
-def relative_name(member, component):
+def relative_name(member, component, tracked_uploads=None):
+    tracked_uploads = tracked_uploads or {}
     name = member.name.removeprefix("./")
     p = PurePosixPath(name)
     allowed = {"server.js", "package.json", "node_modules", ".next", "public"} if component == "web" else {component + ".mjs", "node_modules"}
@@ -119,6 +120,11 @@ def relative_name(member, component):
         or any(x in FORBIDDEN or x.startswith(".env.") for x in p.parts)
         or name.lower().endswith(SUFFIXES)):
         raise ValueError("Unsafe runtime archive member")
+    if "uploads" in p.parts:
+        compiled_route = name.startswith(".next/server/app/") and (member.isdir() or name.endswith((".js", ".js.map", ".json")))
+        reviewed_asset = name in tracked_uploads or (member.isdir() and any(n.startswith(name + "/") for n in tracked_uploads))
+        if not compiled_route and not reviewed_asset:
+            raise ValueError("Unreviewed upload path in runtime archive")
     if not (member.isfile() or member.isdir() or member.issym() or member.islnk()):
         raise ValueError("Unsupported archive member")
     if member.issym() or member.islnk():
@@ -128,13 +134,14 @@ def relative_name(member, component):
             raise ValueError("External archive link")
     return name
 
-def compare_archive(path, archive, component, protected_web=(), allow_extra_static=False):
+def compare_archive(path, archive, component, protected_web=(), allow_extra_static=False, tracked_uploads=None):
     """Do not extract. Reject changed or extra files except already preserved immutable browser assets."""
+    tracked_uploads = tracked_uploads or {}
     seen = set()
     files = 0
     with tarfile.open(archive, "r:gz") as tar:
         for member in tar:
-            name = relative_name(member, component)
+            name = relative_name(member, component, tracked_uploads)
             if name in seen:
                 raise ValueError("Duplicate archive member")
             seen.add(name)
@@ -143,8 +150,11 @@ def compare_archive(path, archive, component, protected_web=(), allow_extra_stat
                 if not target.is_file() or target.is_symlink() or not target.resolve().is_relative_to(path):
                     raise ValueError("Runtime file missing or redirected")
                 with tar.extractfile(member) as source:
-                    if digest(source) != digest_path(target):
+                    actual = digest(source)
+                    if actual != digest_path(target):
                         raise ValueError("Runtime file differs from recovery archive")
+                    if name in tracked_uploads and actual != tracked_uploads[name]:
+                        raise ValueError("Reviewed source asset hash mismatch")
                 files += 1
             elif member.issym():
                 if not target.is_symlink() or os.readlink(target) != member.linkname:
@@ -266,6 +276,12 @@ def main():
     if len({i["sha"] for i in rollback}) != 1:
         raise ValueError("Rollback must be one coherent source revision")
     protected = {entry(root, i) for i in active + rollback}
+    if len(protected) != 6:
+        raise ValueError("Active and rollback runtime paths must be distinct")
+    tracked_uploads = plan.get("tracked_uploads", {})
+    for name, value in tracked_uploads.items():
+        if not re.fullmatch(r"public/(?:public/)?uploads/[A-Za-z0-9._-]+", name) or not re.fullmatch(r"[a-f0-9]{64}", value):
+            raise ValueError("Invalid reviewed source asset identity")
     protected_web = [entry(root, i) for i in active + rollback if i["component"] == "web"]
     candidates = [(entry(root, i), i) for i in plan["candidates"]]
     candidates = [(p, i) for p, i in candidates if p.exists() and p not in protected]
@@ -278,7 +294,7 @@ def main():
     for item in rollback:
         with tempfile.TemporaryDirectory(prefix="runtime-rollback-proof-") as tmp:
             archive = download(repo, item, Path(tmp), durable=True)
-            files = compare_archive(entry(root, item), archive, item["component"])
+            files = compare_archive(entry(root, item), archive, item["component"], tracked_uploads=tracked_uploads)
             log(f"ROLLBACK_VERIFIED {item['name']} files={files}")
     configs = list(config_references(plan["reference_paths"]))
     roots = [Path(p) for p in plan["link_roots"]] + [p for p in root.iterdir() if p.is_dir() and not p.is_symlink()]
@@ -301,7 +317,7 @@ def main():
             local_identity(path, item)
             with tempfile.TemporaryDirectory(prefix="runtime-recovery-proof-") as tmp:
                 archive = download(repo, item, Path(tmp), durable=item.get("durable", False))
-                files = compare_archive(path, archive, item["component"], protected_web, allow_extra_static=True)
+                files = compare_archive(path, archive, item["component"], protected_web, allow_extra_static=True, tracked_uploads=tracked_uploads)
             size = int(command("du", "-sxB1", str(path)).split()[0])
             check_health(plan, root)
             if referenced(path):
