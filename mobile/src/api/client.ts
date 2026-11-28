@@ -878,6 +878,9 @@ export const api = {
     ),
   },
   marketplace: {
+    paymentSettings:(slug:string)=>request<NativeSellerPaymentSettings>('GET','/marketplace/stores/'+encodeURIComponent(slug)+'/payment-settings'),
+    savePaymentSettings:(slug:string,body:NativeSellerPaymentPreferences)=>request<NativeSellerPaymentSettings>('PATCH','/marketplace/stores/'+encodeURIComponent(slug)+'/payment-settings',body),
+    requestSettlement:(slug:string)=>request<{settlementStatus:string;checkoutEnabled:false}>('POST','/marketplace/stores/'+encodeURIComponent(slug)+'/settlement-onboarding',{}),
     uploadImage:(slug:string,body:FormData)=>request<{url:string}>('POST','/marketplace/stores/'+encodeURIComponent(slug)+'/images',body),
     myStores:()=>request<{stores:NativeMarketplaceStore[]}>('GET','/marketplace/stores?mine=1'),
     createStore:(body:unknown)=>request<{store:{id:string;slug:string;name:string;status:string}}>('POST','/marketplace/stores',body),
@@ -1075,3 +1078,6 @@ export function formatDateTime(iso: string): string {
   if (Number.isNaN(d.getTime())) return iso
   return `${formatDate(iso)} · ${pad2(d.getHours())}:${pad2(d.getMinutes())}`
 }
+
+export type NativeSellerPaymentPreferences={mobileMoney:boolean;card:boolean;cash:boolean;destination:'BANK'|'MOMO'}
+export type NativeSellerPaymentSettings={preferences:NativeSellerPaymentPreferences;commissionBps:number|null;commissionScope:string|null;settlementStatus:string;settlementAccount:{maskedAccount:string|null;bankName:string|null}|null;checkoutEnabled:false}
