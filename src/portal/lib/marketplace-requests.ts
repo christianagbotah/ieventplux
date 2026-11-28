@@ -32,3 +32,6 @@ export function availableRequestDecisions(seller:boolean,status:string):RequestD
 export function decisionLabel(decision:RequestDecision){
  return decision==='ACKNOWLEDGED'?'Acknowledge request':decision==='DECLINED'?'Decline request':'Withdraw request'
 }
+
+export type CheckoutReview={currency:'GHS';totalMinor:number;unitCount:number;holdValid:boolean;expiresAt:string|null;methods:('MOBILE_MONEY'|'CARD'|'CASH')[];checkoutEnabled:false;seller:boolean;blockers:string[];allocation?:{platformMinor:number;sellerMinor:number;basisPoints:number}|null;sandboxRecipientVerified?:boolean}
+export function checkoutMethodLabel(method:string){return method==='MOBILE_MONEY'?'Mobile money':method==='CARD'?'Card':method==='CASH'?'Cash':'Unavailable'}

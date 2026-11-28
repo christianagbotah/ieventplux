@@ -3,9 +3,11 @@ import {Alert,Pressable,StyleSheet,Text,View} from 'react-native'
 import {api,formatMinor} from '../api/client'
 import {ActionDialog,type ActionPrompt} from './ActionDialog'
 import {mobileDesign} from '../ui/PremiumUI'
-import {purchaseRequestBody,purchaseRequestFingerprint,requestStatusLabel,availableRequestDecisions,decisionLabel,type RequestDecision,type ReviewedBasket,type PurchaseRequestHistory} from '../lib/marketplace-requests'
+import {purchaseRequestBody,purchaseRequestFingerprint,requestStatusLabel,availableRequestDecisions,decisionLabel,type RequestDecision,type ReviewedBasket,type PurchaseRequestHistory,type CheckoutReview,checkoutMethodLabel} from '../lib/marketplace-requests'
 
 export function MarketplaceRequests({slug,seller,quote,onSubmitted}:{slug:string;seller:boolean;quote:ReviewedBasket|null;onSubmitted:(submitted:ReviewedBasket)=>void}){
+ const [review,setReview]=useState<{id:string;data:CheckoutReview}|null>(null)
+ const [reviewBusy,setReviewBusy]=useState(false)
  const [history,setHistory]=useState<PurchaseRequestHistory|null>(null)
  const [loading,setLoading]=useState(false)
  const [error,setError]=useState('')
@@ -20,7 +22,7 @@ export function MarketplaceRequests({slug,seller,quote,onSubmitted}:{slug:string
  const epoch=useRef(0)
  const retry=useRef(new Map<string,string>())
  const load=useCallback(async()=>{
-  const generation=++epoch.current;setLoading(true);setError('')
+  const generation=++epoch.current;setLoading(true);setError('');setReview(null)
   try{const result=await api.marketplace.purchaseRequests(slug)
    if(generation===epoch.current){if(result.seller!==seller)throw new Error('Session changed. Refresh the storefront.');setHistory(result)}
   }catch(e){if(generation===epoch.current){setHistory(null);setError(e instanceof Error?e.message:'Could not load requests.')}}
@@ -62,6 +64,13 @@ export function MarketplaceRequests({slug,seller,quote,onSubmitted}:{slug:string
    finally{locked.current=false;if(active.current){setSubmitting(false);setHoldPrompt(null)}}
   })()})
  }
+ async function inspectCheckout(id:string){
+  if(locked.current)return
+  locked.current=true;setReviewBusy(true);setSubmissionError('');setReview(null)
+  try{const data=await api.marketplace.checkoutReview(id);if(active.current)setReview({id,data})}
+  catch(e){if(active.current)setSubmissionError(e instanceof Error?e.message:'Could not load checkout review.')}
+  finally{locked.current=false;if(active.current)setReviewBusy(false)}
+ }
  return <View style={styles.panel}>
   <Text style={styles.eyebrow}>MARKETPLACE REQUESTS</Text>
   <Text accessibilityRole="header" style={styles.title}>{seller?'Incoming purchase requests':'Your purchase requests'}</Text>
@@ -77,6 +86,8 @@ export function MarketplaceRequests({slug,seller,quote,onSubmitted}:{slug:string
    <Text style={styles.amount}>{formatMinor(row.totalMinor,row.currency)}</Text><Text style={styles.muted}>{requestStatusLabel(row.status)}</Text>
    <Text style={styles.muted}>{new Date(row.createdAt).toLocaleString()} · {row.id}</Text>
    {row.items.map(item=><View key={item.variantId} style={styles.line}><Text style={[styles.muted,{flex:1}]}>{item.productName} · {item.variantTitle} × {item.quantity}</Text><Text style={styles.secondaryText}>{formatMinor(item.lineMinor,item.currency)}</Text></View>)}
+   {row.status==='ACKNOWLEDGED'?<Pressable accessibilityRole="button" disabled={reviewBusy||submitting||loading} style={styles.secondary} onPress={()=>void inspectCheckout(row.id)}><Text style={styles.secondaryText}>{reviewBusy?'Loading review…':'Review checkout'}</Text></Pressable>:null}
+   {review?.id===row.id?<View style={styles.request}><Text style={styles.title}>Checkout review</Text><Text style={styles.amount}>{formatMinor(review.data.totalMinor,'GHS')}</Text><Text style={styles.muted}>{review.data.unitCount} items · {review.data.holdValid?'Stock held':'No active stock hold'}</Text><Text style={styles.muted}>Seller payment preferences: {review.data.methods.map(checkoutMethodLabel).join(', ')||'Not configured'}</Text>{review.data.seller&&review.data.allocation?<><Text style={styles.muted}>Platform commission: {formatMinor(review.data.allocation.platformMinor,'GHS')}</Text><Text style={styles.muted}>Seller gross proceeds: {formatMinor(review.data.allocation.sellerMinor,'GHS')}</Text><Text style={styles.muted}>Estimated allocation before provider fees.</Text></>:null}{review.data.blockers.map(message=><Text key={message} style={styles.muted}>{message}</Text>)}</View>:null}
    {row.stockHold?<Text style={styles.muted}>Stock hold: {row.stockHold.status.toLowerCase()}{row.stockHold.status==='HELD'?' · Expires '+new Date(row.stockHold.expiresAt).toLocaleString():''}</Text>:null}
    {history?.stockHoldEnabled&&seller&&row.status==='ACKNOWLEDGED'&&!row.stockHold?<Pressable accessibilityRole="button" disabled={submitting||loading} style={styles.primary} onPress={()=>confirmHold(row.id,false)}><Text style={styles.primaryText}>Hold stock for 30 minutes</Text></Pressable>:null}
    {row.stockHold?.status==='HELD'?<Pressable accessibilityRole="button" disabled={submitting||loading} style={styles.secondary} onPress={()=>confirmHold(row.id,true)}><Text style={styles.secondaryText}>Release stock hold</Text></Pressable>:null}

@@ -231,6 +231,15 @@ try{
  assert((await db.marketplaceVariant.findUniqueOrThrow({where:{id:variantId}})).stockReserved===2,'exact quantities held once')
  assert((await send('PATCH','/marketplace/requests/'+hId,stranger,{status:'WITHDRAWN'})).status===409,'request cannot be withdrawn while stock held')
  assert((await send('GET',requestPath,stranger)).data.requests.some((r:Row)=>r.id===hId&&r.stockHold?.status==='HELD'),'buyer sees own hold')
+ const reviewPath='/marketplace/requests/'+hId+'/checkout-review'
+ assert((await send('GET',reviewPath)).status===401,'anonymous checkout review denied')
+ assert((await send('GET',reviewPath,third)).status===404,'unrelated user cannot read checkout review')
+ const buyerReview=await send('GET',reviewPath,stranger)
+ assert(buyerReview.status===200&&buyerReview.data.totalMinor===70000&&buyerReview.data.checkoutEnabled===false&&!('allocation' in buyerReview.data)&&!('sandboxRecipientVerified' in buyerReview.data),'buyer review uses immutable total and masks merchant details')
+ const sellerReview=await send('GET',reviewPath,owner)
+ assert(sellerReview.status===200&&sellerReview.data.holdValid===true&&sellerReview.data.checkoutEnabled===false&&('allocation' in sellerReview.data),'seller sees private allocation readiness without payment')
+ assert(await db.platformPaymentIntent.count({where:{sourceId:hId}})===0,'checkout review creates no financial intent')
+
  const blocked=await send('POST','/marketplace/variants/'+variantId+'/stock',owner,{delta:-11,reason:'Would consume reserved stock',requestKey:'hold-stock-'+unique})
  assert(blocked.status===409,'stock adjustment cannot consume held units')
  const r=await releaseMarketplaceRequest(hId,buyerUser.id)
@@ -244,6 +253,28 @@ try{
  const sweep=await expireMarketplaceHolds(new Date(expiry.hold.expiresAt.getTime()+1000))
  assert(sweep.released===1&&sweep.conflicts===0,'expired hold released by sweep')
  assert((await db.marketplaceVariant.findUniqueOrThrow({where:{id:variantId}})).stockReserved===0,'expiry restores stock')
+ // Competing buyers may submit nonbinding requests for the same stock. Only
+ // one can turn eight of twelve units into a hold, even under concurrency.
+ const raceBody={expectedTotalMinor:280000,items:[{variantId,quantity:8,expectedUnitPriceMinor:35000}]}
+ const first=await send('POST',requestPath,stranger,{...raceBody,requestKey:'hold-race-one-'+unique})
+ const second=await send('POST',requestPath,third,{...raceBody,requestKey:'hold-race-two-'+unique})
+ assert(first.status===201&&second.status===201,'competing nonbinding requests accepted')
+ for(const row of [first,second])assert((await send('PATCH','/marketplace/requests/'+row.data.request.id,owner,{status:'ACKNOWLEDGED'})).status===200,'seller acknowledges competing request')
+ const race=await Promise.allSettled([first,second].map(row=>reserveMarketplaceRequest(row.data.request.id,sellerUser.id)))
+ const success=race.filter(x=>x.status==='fulfilled');const failure=race.filter(x=>x.status==='rejected')
+ assert(success.length===1&&failure.length===1&&failure[0]?.status==='rejected'&&failure[0].reason?.status===409,'competing holds cannot oversell')
+ assert((await db.marketplaceVariant.findUniqueOrThrow({where:{id:variantId}})).stockReserved===8,'only winning stock hold increments reservation')
+ for(const row of [first,second]){const active=await db.marketplaceStockHold.findUnique({where:{requestId:row.data.request.id}});if(active)await releaseMarketplaceRequest(row.data.request.id,sellerUser.id)}
+ assert((await db.marketplaceVariant.findUniqueOrThrow({where:{id:variantId}})).stockReserved===0,'winning hold release restores inventory exactly')
+ const staleHold=await send('POST',requestPath,stranger,{...orderBody,requestKey:'hold-stale-price-'+unique})
+ assert(staleHold.status===201,'new request saved with reviewed price')
+ await send('PATCH','/marketplace/requests/'+staleHold.data.request.id,owner,{status:'ACKNOWLEDGED'})
+ await db.marketplaceVariant.update({where:{id:variantId},data:{priceMinor:36000}})
+ try{
+  assert(await reserveMarketplaceRequest(staleHold.data.request.id,sellerUser.id).then(()=>false,e=>e.status===409),'price change invalidates stale hold')
+  assert(await db.marketplaceStockHold.count({where:{requestId:staleHold.data.request.id}})===0,'stale hold has no durable reservation')
+  assert((await db.marketplaceVariant.findUniqueOrThrow({where:{id:variantId}})).stockReserved===0,'stale hold leaves stock untouched')
+ }finally{await db.marketplaceVariant.update({where:{id:variantId},data:{priceMinor:35000}})}
  delete process.env.IEVENTPLUX_MARKETPLACE_STOCK_HOLD_ENABLED
  console.log('MARKETPLACE_FOUNDATION_SMOKE_PASS')
 }finally{
