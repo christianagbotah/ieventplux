@@ -1,0 +1,30 @@
+name: Runtime retention safety tests
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/prune-runtime-releases.py'
+      - 'scripts/test-runtime-retention.py'
+      - '.github/workflows/runtime-retention-tests.yml'
+  pull_request:
+    paths:
+      - 'scripts/prune-runtime-releases.py'
+      - 'scripts/test-runtime-retention.py'
+      - '.github/workflows/runtime-retention-tests.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  safety:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+      - run: python3 scripts/test-runtime-retention.py
