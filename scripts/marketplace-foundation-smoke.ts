@@ -7,6 +7,8 @@ import {unlink} from 'node:fs/promises'
 import sharp from 'sharp'
 import {mediaFilePath,isPublicUploadName} from '../src/server/media-storage'
 import { db } from '../src/lib/db'
+import {recordMarketplacePaymentPlan} from '../src/server/services/marketplace-payment-plans'
+import {prepareSandboxAttempt} from '../src/server/services/platform-sandbox-attempts'
 import {prepareMarketplaceCheckout} from '../src/server/services/marketplace-checkout-drafts'
 import {reserveMarketplaceRequest,releaseMarketplaceRequest,expireMarketplaceHolds} from '../src/server/services/marketplace-holds'
 import { recordPlannedPaymentIntent } from '../src/server/services/platform-payment-intents'
@@ -40,6 +42,7 @@ async function send(method:string,path:string,cookie?:string,body?:unknown){
 let storeId:string|undefined
 let notificationLink:string|undefined
 let intentSource:string|undefined
+let plannedSource:string|undefined
 const testMedia:string[]=[]
 try{
  const owner=await signIn('pastor@lightworld.dev')
@@ -239,6 +242,26 @@ try{
  const checkoutReplay=await prepareMarketplaceCheckout(hId,buyerUser.id,{expectedTotalMinor:70000})
  assert(checkoutReplay.replayed&&checkoutReplay.draft.id===prepared.draft.id,'checkout replay returns original draft')
  assert(await db.platformPaymentIntent.count({where:{sourceId:prepared.draft.id}})===0,'review never creates a payment intent')
+ plannedSource=prepared.draft.id
+ assert(await recordMarketplacePaymentPlan(prepared.draft.id,buyerUser.id).then(()=>false,e=>e.status===503),'payment planning independently gated')
+ process.env.IEVENTPLUX_MARKETPLACE_PAYMENT_PLAN_ENABLED='true'
+ assert(await recordMarketplacePaymentPlan(prepared.draft.id,sellerUser.id).then(()=>false,e=>e.status===404),'seller cannot plan buyer checkout')
+ // Isolated fixture approval only; no provider request or real account.
+ await db.user.update({where:{id:buyerUser.id},data:{emailVerifiedAt:new Date()}})
+ assert(await recordMarketplacePaymentPlan(prepared.draft.id,buyerUser.id).then(()=>false,e=>e.status===409),'unverified recipient mapping rejected')
+ const testCode='ACCT_ci'+unique.replace(/-/g,'')
+ await db.marketplaceSettlementOnboarding.update({where:{storeId},data:{state:'SANDBOX_VERIFIED',testSubaccountCode:testCode}})
+ await db.sandboxSettlementClaim.create({data:{code:testCode,beneficiaryKind:'STORE',beneficiaryId:storeId!}})
+ await db.marketplaceCommissionRule.create({data:{key:'store:'+storeId,basisPoints:250,updatedBy:sellerUser.id}})
+ const plan=await recordMarketplacePaymentPlan(prepared.draft.id,buyerUser.id)
+ assert(plan.totalMinor===70000&&plan.platformMinor===1750&&plan.sellerMinor===68250&&!plan.executionEnabled,'server records immutable commission split without collection')
+ const planReplay=await recordMarketplacePaymentPlan(prepared.draft.id,buyerUser.id)
+ assert(planReplay.replayed&&planReplay.intentId===plan.intentId,'plan is idempotent')
+ assert(await prepareSandboxAttempt(plan.intentId,'buyer@example.invalid').then(()=>false,()=>true),'PLAN reference cannot enter sandbox execution')
+ assert(await db.platformSandboxAttempt.count({where:{intentId:plan.intentId}})===0,'planning produces no provider attempt')
+ await db.marketplaceCommissionRule.update({where:{key:'store:'+storeId},data:{basisPoints:300}})
+ assert(await recordMarketplacePaymentPlan(prepared.draft.id,buyerUser.id).then(()=>false,e=>e.status===409),'changed commission cannot overwrite immutable plan')
+
 
  assert((await send('PATCH','/marketplace/requests/'+hId,stranger,{status:'WITHDRAWN'})).status===409,'request cannot be withdrawn while stock held')
  assert((await send('GET',requestPath,stranger)).data.requests.some((r:Row)=>r.id===hId&&r.stockHold?.status==='HELD'),'buyer sees own hold')
@@ -246,6 +269,8 @@ try{
  assert(blocked.status===409,'stock adjustment cannot consume held units')
  const r=await releaseMarketplaceRequest(hId,buyerUser.id)
  assert(r.hold.status==='RELEASED','buyer can release their hold')
+ assert(await recordMarketplacePaymentPlan(prepared.draft.id,buyerUser.id).then(()=>false,e=>e.status===409),'released hold cannot be planned')
+ delete process.env.IEVENTPLUX_MARKETPLACE_PAYMENT_PLAN_ENABLED
  assert((await db.marketplaceCheckoutDraft.findUniqueOrThrow({where:{id:prepared.draft.id}})).status==='RELEASED','release closes checkout draft atomically')
  await releaseMarketplaceRequest(hId,buyerUser.id)
  assert((await db.marketplaceVariant.findUniqueOrThrow({where:{id:variantId}})).stockReserved===0,'replay release restores stock exactly once')
@@ -264,7 +289,10 @@ try{
 }finally{
  if(notificationLink)await db.notification.deleteMany({where:{link:notificationLink,type:'MARKETPLACE_REQUEST'}})
  if(intentSource)await db.platformPaymentIntent.deleteMany({where:{sourceId:intentSource,purpose:'MARKETPLACE_GOODS'}})
+ if(plannedSource)await db.platformPaymentIntent.deleteMany({where:{sourceId:plannedSource,purpose:'MARKETPLACE_GOODS'}})
  if(storeId){
+   await db.sandboxSettlementClaim.deleteMany({where:{beneficiaryKind:'STORE',beneficiaryId:storeId}})
+   await db.marketplaceCommissionRule.deleteMany({where:{key:'store:'+storeId}})
    await db.marketplaceCheckoutDraft.deleteMany({where:{hold:{request:{storeId}}}})
    await db.marketplaceStockHoldLine.deleteMany({where:{hold:{request:{storeId}}}})
    await db.marketplaceStockHold.deleteMany({where:{request:{storeId}}})
