@@ -36,6 +36,7 @@ import ForegroundActivity from './src/components/ForegroundActivity'
 import PushActivityBridge from './src/components/PushActivityBridge'
 import IncomingCallInvitation from './src/components/IncomingCallInvitation'
 import {activityDestination} from './src/lib/push-activity-policy'
+import OrganizerProfileEditorScreen from './src/screens/OrganizerProfileEditorScreen'
 import EditProfileScreen from './src/screens/EditProfileScreen'
 import RegisterScreen from './src/screens/RegisterScreen'
 import EventManagementScreen from './src/screens/EventManagementScreen'
@@ -133,6 +134,7 @@ function AppRoutes() {
         contentStyle: { backgroundColor: theme.colors.bg },
       }}
     >
+      <Stack.Screen name="OrganizerProfileEditor" component={OrganizerProfileEditorScreen} options={{title:'Organizer profile'}}/>
       <Stack.Screen name="EditProfile" component={EditProfileScreen} options={{title:'Edit profile'}}/>
       <Stack.Screen name="Register" component={RegisterScreen} options={{title:'Create your account'}}/>
       <Stack.Screen name="EventManagement" component={EventManagementScreen} options={{title:'Manage event'}}/>
