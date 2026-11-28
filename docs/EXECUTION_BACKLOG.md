@@ -68,3 +68,12 @@ Implement database/API/web/native changes as applicable; run focused and regress
 - [ ] Implement shared-lock-aware retention with active service and process reference checks, health gates, recoverability verification and private audit logs; never delete persistent state.
 - [ ] Reconcile storage measurements, verify authentication/admin/API/database/jobs/integrations and backup restore; keep operational details in restricted evidence storage rather than this public repository.
 - [ ] Resume seeded staging pilot verification after storage and deployment safety gates pass.
+
+### 2026-11-28 checkpoint
+- [x] Verify remote provenance for reviewed obsolete worktrees, remove complete redundant checkouts with Git metadata cleanup, and preserve a reviewed local-only ticketing commit in a recovery branch. Existing checkout-policy test stash is present in a remote branch.
+- [x] Publish three checksum-verified web/worker/realtime recovery packages through the durable runtime-candidate workflow. Independently compare the previous complete runtime set against its GitHub archives; schema source comparison has no changes. This is archive recovery evidence, not a live rollback switch.
+- [x] Add manifest-gated runtime retention and GitHub CI tests for path, archive, source checkout, unknown-content and reviewed asset safety. See [runtime retention runbook](RUNTIME_RETENTION.md).
+- [ ] Complete first applied runtime retention pass and review held candidates; legacy full source tracing roots, copied SQLite fixtures and signing files require explicit provenance/data review. Never remove a referenced path.
+- [ ] Integrate the retention manifest refresh into every verified deployment; preserve current and rollback sets, and keep local operational evidence restricted.
+- [ ] Package monitor and SFU guard as isolated source-light services; migrate their existing source-dependent startup paths and legacy browser asset copy dependency without interrupting staging.
+- [ ] Complete isolated rollback boot acceptance, offsite restore rehearsal and authenticated staging/pilot payment workflow checks. External provider credentials and certification remain separate gates.
