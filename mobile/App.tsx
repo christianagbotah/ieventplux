@@ -43,6 +43,7 @@ import EventProgrammeScreen from './src/screens/EventProgrammeScreen'
 import EventManagementScreen from './src/screens/EventManagementScreen'
 import CreateHubScreen from './src/screens/CreateHubScreen'
 import SellerStudioScreen from './src/screens/SellerStudioScreen'
+import SellerPaymentSettingsScreen from './src/screens/SellerPaymentSettingsScreen'
 import SellerProductScreen from './src/screens/SellerProductScreen'
 import OrganizerStudioScreen from './src/screens/OrganizerStudioScreen'
 import CreateOrganizerScreen from './src/screens/CreateOrganizerScreen'
@@ -150,6 +151,7 @@ function AppRoutes() {
       <Stack.Screen name="DirectMessages" component={DirectMessagesScreen} options={{title:'Messages'}}/>
       <Stack.Screen name="CreateHub" component={CreateHubScreen} options={{title:'Create & manage'}}/>
       <Stack.Screen name="SellerStudio" component={SellerStudioScreen} options={{title:'Seller Studio'}}/>
+      <Stack.Screen name="SellerPaymentSettings" component={SellerPaymentSettingsScreen} options={{title:'Payments & settlement'}}/>
       <Stack.Screen name="SellerProduct" component={SellerProductScreen} options={{title:'Add product'}}/>
       <Stack.Screen name="OrganizerStudio" component={OrganizerStudioScreen} options={{ title: 'Organizer Studio' }} />
       <Stack.Screen name="CreateOrganizer" component={CreateOrganizerScreen} options={{ title: 'Create organizer profile' }} />

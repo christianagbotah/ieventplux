@@ -22,6 +22,7 @@ export type RootStackParamList = {
   EventManagement:{eventId:string;orgId:string}
   CreateHub: undefined
   SellerStudio: undefined
+  SellerPaymentSettings:{slug:string}
   SellerProduct: {slug:string}
   OrganizerStudio: undefined
   CreateOrganizer: undefined
@@ -104,3 +105,5 @@ export type EditProfileScreenProps=NativeStackScreenProps<RootStackParamList,'Ed
 export type OrganizerProfileEditorScreenProps=NativeStackScreenProps<RootStackParamList,'OrganizerProfileEditor'>
 
 export type EventProgrammeScreenProps=NativeStackScreenProps<RootStackParamList,'EventProgramme'>
+
+export type SellerPaymentSettingsScreenProps=NativeStackScreenProps<RootStackParamList,'SellerPaymentSettings'>
