@@ -1,0 +1,100 @@
+name: Preserve verified runtime candidate
+
+# Manual promotion of previously tested public CI artifacts, not a deployment.
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Successful source-light artifact workflow run ID
+        required: true
+        type: string
+      source_sha:
+        description: Full 40-character source commit SHA
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: write
+
+concurrency:
+  group: runtime-candidate-release-${{ inputs.source_sha }}
+  cancel-in-progress: false
+
+jobs:
+  preserve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SOURCE_SHA: ${{ inputs.source_sha }}
+      ARTIFACT_RUN_ID: ${{ inputs.run_id }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Validate run provenance
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[a-f0-9]{40}$ ]]
+          [[ "$ARTIFACT_RUN_ID" =~ ^[0-9]{1,20}$ ]]
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$ARTIFACT_RUN_ID" > "$RUNNER_TEMP/run.json"
+          jq -e --arg sha "$SOURCE_SHA" --arg repo "$GITHUB_REPOSITORY" '
+            .head_sha == $sha and
+            .head_repository.full_name == $repo and
+            .repository.full_name == $repo and
+            .status == "completed" and .conclusion == "success" and
+            .path == ".github/workflows/release-artifact.yml"
+          ' "$RUNNER_TEMP/run.json" >/dev/null
+          gh api "repos/$GITHUB_REPOSITORY/commits/$SOURCE_SHA" --jq .sha | grep -Fx "$SOURCE_SHA"
+      - name: Download and independently verify every runtime component
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/candidates" release-bundle
+          for component in web worker realtime; do
+            suffix=""
+            if [[ "$component" != web ]]; then suffix="-$component"; fi
+            artifact="ieventplux${suffix}-candidate-$SOURCE_SHA"
+            archive="ieventplux${suffix}-$SOURCE_SHA.tar.gz"
+            dir="$RUNNER_TEMP/candidates/$component"
+            mkdir -p "$dir"
+            gh run download "$ARTIFACT_RUN_ID" --repo "$GITHUB_REPOSITORY" --name "$artifact" --dir "$dir"
+            test "$(find "$dir" -mindepth 1 -maxdepth 1 -type f | wc -l)" -eq 4
+            test "$(find "$dir" -mindepth 1 -maxdepth 1 | wc -l)" -eq 4
+            test "$(cat "$dir/SOURCE_SHA")" = "$SOURCE_SHA"
+            test "$(cat "$dir/CI_RUN_ID")" = "$ARTIFACT_RUN_ID"
+            actual="$(sha256sum "$dir/$archive" | cut -d' ' -f1)"
+            test "$(cat "$dir/SHA256SUMS")" = "$actual  $archive"
+            case "$component" in
+              web) python3 scripts/verify-runtime-package.py "$dir/$archive" ;;
+              worker) python3 scripts/verify-worker-package.py "$dir/$archive" worker.mjs ;;
+              realtime) python3 scripts/verify-worker-package.py "$dir/$archive" realtime.mjs ;;
+            esac
+            cp -- "$dir/$archive" release-bundle/
+          done
+          printf '%s\n' "$SOURCE_SHA" > release-bundle/SOURCE_SHA
+          printf '%s\n' "$ARTIFACT_RUN_ID" > release-bundle/CI_RUN_ID
+          (cd release-bundle && sha256sum *.tar.gz > SHA256SUMS && sha256sum -c SHA256SUMS)
+      - name: Preserve verified packages as a versioned prerelease
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="runtime-candidate-$SOURCE_SHA"
+          # Never replace or overwrite an existing release.
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release already exists; inspect it instead of overwriting."
+            exit 1
+          fi
+          gh release create "$tag" release-bundle/* --repo "$GITHUB_REPOSITORY" \
+            --target "$SOURCE_SHA" --draft --prerelease --latest=false \
+            --title "Verified runtime candidate $SOURCE_SHA" \
+            --notes "Source-light web, worker and realtime packages from successful CI run $ARTIFACT_RUN_ID. SHA256SUMS and source provenance are included. Candidate only; no environment configuration, database, customer data or deployment certification."
+          gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --draft=false --latest=false
+          gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json url,tagName,assets
