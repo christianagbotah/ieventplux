@@ -15,6 +15,8 @@ Maintain this file as the public, sanitized engineering checkpoint. Keep credent
 
 - Mobile creation parity: prioritize visible Create navigation, native organizer and seller workflows, catalogue creation, inventory and publication; physical-device UX acceptance required.
 
+- Native Create workspace, registration, seller drafting/stock/publication and event sales/attendance screens merged in #179 with CI passing. Android install and physical-device UAT pending. Profile and media parity in progress; personal branding uses additive migration and authenticated owner upload.
+
 ## P0 — Runtime and release reliability
 - [ ] Run runtime role preflight as application role before and after schema changes; rehearse on disposable PostgreSQL first.
 - [ ] Review additive migration order, role ownership, constraints, defaults, indexes, rollback compatibility; test twice.

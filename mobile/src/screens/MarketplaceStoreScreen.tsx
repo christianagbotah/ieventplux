@@ -4,6 +4,7 @@ import {useFocusEffect} from '@react-navigation/native'
 import * as Crypto from 'expo-crypto'
 import {ActionDialog,type ActionPrompt} from '../components/ActionDialog'
 import {StudioField,StudioFeedback} from '../ui/StudioForm'
+import {pickNativeImage} from '../lib/native-image-picker'
 import {sellerStockDelta} from '../lib/seller-creation-policy'
 import {ActivityIndicator,Alert,Image,Modal,TextInput,Pressable,ScrollView,StyleSheet,Text,View} from 'react-native'
 import {absoluteUrl,api,ApiClientError,formatMinor,type NativeStoreDetail,type NativeMarketplaceProduct,type NativeMarketplaceQuote} from '../api/client'
@@ -87,6 +88,10 @@ export default function MarketplaceStoreScreen({route,navigation}:MarketplaceSto
     catch(e){setManageError(e instanceof Error?e.message:'Could not save change.');scrollRef.current?.scrollTo({y:0,animated:true})}
     finally{manageLock.current=false;setManageBusy(false);setPrompt(null)}
   }
+  async function updateBranding(purpose:'logo'|'cover'){
+    if(manageLock.current)return;manageLock.current=true;setManageBusy(true);setManageError('');setManageNotice('')
+    try{const body=await pickNativeImage();if(!body)return;body.append('purpose',purpose);await api.marketplace.uploadImage(slug,body);setManageNotice('Store branding saved.');await load()}catch(e){setManageError(e instanceof Error?e.message:'Unable to upload image.');scrollRef.current?.scrollTo({y:0,animated:true})}finally{manageLock.current=false;setManageBusy(false)}
+  }
   function openStock(v:NativeMarketplaceProduct['variants'][number]){setStockVariant(v);setStockDelta('');setStockReason('');setStockError('');stockKey.current=Crypto.randomUUID()}
   async function saveStock(){
     if(!stockVariant||manageLock.current)return;const delta=sellerStockDelta(stockDelta)
@@ -120,7 +125,7 @@ export default function MarketplaceStoreScreen({route,navigation}:MarketplaceSto
         <View style={styles.heroBottom}><Text style={styles.heroMeta}>{[store.city,store.country].filter(Boolean).join(', ')}  ·  {store.category}</Text>
           <Text style={styles.heroCount}>{detail.products.length} products</Text></View>
       </View>
-      {detail.canManage?<View style={styles.about}><SectionHeading title="Seller tools" subtitle="Manage your catalogue and stock here."/><LabelPill label={store.status} tone={store.status==='ACTIVE'?'mint':'light'}/>{store.status!=='SUSPENDED'?<><PremiumButton label="+ Add product" disabled={manageBusy} onPress={()=>navigation.navigate('SellerProduct',{slug})}/>{store.status!=='ACTIVE'&&!user?.emailVerifiedAt?<PremiumButton label="Verify email to publish" secondary onPress={()=>navigation.navigate('Account')}/>:<PremiumButton label={store.status==='ACTIVE'?'Unpublish store':'Publish store'} secondary disabled={manageBusy} onPress={()=>askManage(store.status==='ACTIVE'?'Unpublish store?':'Publish store?',store.status==='ACTIVE'?'The storefront will no longer appear in public discovery.':'Your storefront will become publicly discoverable. Payment checkout remains disabled.',()=>api.marketplace.updateStore(slug,{status:store.status==='ACTIVE'?'DRAFT':'ACTIVE'}),'Store status saved.')}/>}</>:<Text style={styles.aboutText}>Suspended stores require platform review.</Text>}<PremiumButton label="All my stores" secondary onPress={()=>navigation.navigate('SellerStudio')}/></View>:null}
+      {detail.canManage?<View style={styles.about}><SectionHeading title="Seller tools" subtitle="Manage your catalogue and stock here."/><LabelPill label={store.status} tone={store.status==='ACTIVE'?'mint':'light'}/>{store.status!=='SUSPENDED'?<><PremiumButton label="Change store logo" secondary disabled={manageBusy} onPress={()=>void updateBranding('logo')}/><PremiumButton label="Change store banner" secondary disabled={manageBusy} onPress={()=>void updateBranding('cover')}/><PremiumButton label="+ Add product" disabled={manageBusy} onPress={()=>navigation.navigate('SellerProduct',{slug})}/>{store.status!=='ACTIVE'&&!user?.emailVerifiedAt?<PremiumButton label="Verify email to publish" secondary onPress={()=>navigation.navigate('Account')}/>:<PremiumButton label={store.status==='ACTIVE'?'Unpublish store':'Publish store'} secondary disabled={manageBusy} onPress={()=>askManage(store.status==='ACTIVE'?'Unpublish store?':'Publish store?',store.status==='ACTIVE'?'The storefront will no longer appear in public discovery.':'Your storefront will become publicly discoverable. Payment checkout remains disabled.',()=>api.marketplace.updateStore(slug,{status:store.status==='ACTIVE'?'DRAFT':'ACTIVE'}),'Store status saved.')}/>}</>:<Text style={styles.aboutText}>Suspended stores require platform review.</Text>}<PremiumButton label="All my stores" secondary onPress={()=>navigation.navigate('SellerStudio')}/></View>:null}
       {store.description?<View style={styles.about}><Text style={styles.aboutTitle}>About this store</Text><Text style={styles.aboutText}>{store.description}</Text></View>:null}
       <View style={styles.notice}><Text style={styles.noticeIcon}>ⓘ</Text><View style={styles.noticeBody}>
         <Text style={styles.noticeTitle}>Product discovery & purchase requests</Text><Text style={styles.noticeText}>Prices, stock and options come from the seller's published catalogue. Online checkout and delivery are not yet available.</Text>
