@@ -77,3 +77,11 @@ Implement database/API/web/native changes as applicable; run focused and regress
 - [ ] Integrate the retention manifest refresh into every verified deployment; preserve current and rollback sets, and keep local operational evidence restricted.
 - [ ] Package monitor and SFU guard as isolated source-light services; migrate their existing source-dependent startup paths and legacy browser asset copy dependency without interrupting staging.
 - [ ] Complete isolated rollback boot acceptance, offsite restore rehearsal and authenticated staging/pilot payment workflow checks. External provider credentials and certification remain separate gates.
+
+
+### 2026-11-28 — Applied retention checkpoint (08:39 UTC)
+- [x] Removed 52 obsolete registered worktrees with preserved Git provenance; 30 registered directories remain including the main checkout.
+- [x] Verified 3,192 rollback archive files and published durable checksummed recovery packages; live rollback switch rehearsal is still outstanding.
+- [x] Enabled the manifest-driven retention watcher; initial applied pass confirms seven obsolete runtime removals (1,865,129,984 allocated bytes, measured filesystem-free deltas totaling 1,762,111,488 bytes). Snapshot is not the final pass result.
+- [ ] Complete the remaining candidate verification, reconcile legacy runtime references and source-bearing builds, and wire atomic retention-manifest refresh into the deployment controller after successful health verification and lock release.
+- [ ] Independently review the provenance of previously tracked public upload assets; unknown runtime content remains protected. Complete authenticated application smoke tests and isolated backup/rollback restoration.
