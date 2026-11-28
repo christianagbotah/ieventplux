@@ -44,5 +44,5 @@ export function stockHoldLabel(hold:StockHold,now=Date.now()){
  return !Number.isFinite(expiry)||expiry<=now?'Expiry reached · awaiting server release':'Reserved'
 }
 export function inventoryHoldFingerprint(history:PurchaseRequestHistory){
- return JSON.stringify(history.requests.filter(r=>r.stockHold).map(r=>[r.id,r.stockHold!.id,r.stockHold!.status]).sort((a,b)=>a[0].localeCompare(b[0])))
+ return JSON.stringify(history.requests.filter(r=>r.stockHold).map(r=>[r.id,r.stockHold!.id,r.stockHold!.status] as const).sort((a,b)=>a[0].localeCompare(b[0])))
 }
