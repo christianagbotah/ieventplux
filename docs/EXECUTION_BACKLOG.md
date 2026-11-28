@@ -27,6 +27,12 @@ Maintain this file as the public, sanitized engineering checkpoint. Keep credent
 - [ ] #184 gated checkout preparation: corrected CI variable collision, full regression and runtime package verification pending. Live payment and delivery remain gated.
 - [ ] QA: automate isolated fixture verification; staging login credential provisioning and authenticated pilot acceptance remain blocked. No staging fixture load claimed.
 
+### 2026-11-28 — checkout release checkpoint
+- [x] #184 merged; full branch CI and three package checks passed. Web and worker deployed from the tree-identical candidate `7a6a082` after verified backup and additive migration with application role pre/postflight; public health and anonymous checkout rejection passed. Checkout and stock-hold feature flags remain gated.
+- [x] #185 isolated QA fixture regression merged after CI passed. Actual staging fixture credential provisioning remains blocked; no seed load claimed.
+- [x] Main CI for #182/#183 passed; Android QA `android-qa-f703022` published. Physical-device acceptance pending.
+- [ ] Internal marketplace payment planning binds approved commission and settlement mapping to an active reviewed hold. No real payment, sandbox attempt, fulfillment or live settlement enabled; provider certification and authenticated staging acceptance remain necessary.
+
 ## P0 — Runtime and release reliability
 - [ ] Run runtime role preflight as application role before and after schema changes; rehearse on disposable PostgreSQL first.
 - [ ] Review additive migration order, role ownership, constraints, defaults, indexes, rollback compatibility; test twice.
