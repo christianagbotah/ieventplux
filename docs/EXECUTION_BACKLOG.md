@@ -85,3 +85,14 @@ Implement database/API/web/native changes as applicable; run focused and regress
 - [x] Enabled the manifest-driven retention watcher; initial applied pass confirms seven obsolete runtime removals (1,865,129,984 allocated bytes, measured filesystem-free deltas totaling 1,762,111,488 bytes). Snapshot is not the final pass result.
 - [ ] Complete the remaining candidate verification, reconcile legacy runtime references and source-bearing builds, and wire atomic retention-manifest refresh into the deployment controller after successful health verification and lock release.
 - [ ] Independently review the provenance of previously tracked public upload assets; unknown runtime content remains protected. Complete authenticated application smoke tests and isolated backup/rollback restoration.
+
+
+### 2026-11-28 — Extended storage audit checkpoint
+- [x] Search root-level history, hidden and regular worktree roots, deployments, source/workspaces, archive and QA roots, runner workspaces, temporary directories, certificate roots and additional locations. Inspect repository remote metadata in addition to folder names.
+- [x] Consolidate 17 historical root entries into restricted local operations history; preserve configuration and audit evidence rather than publishing it.
+- [x] Remove a separate redundant Git clone, its 12 attached worktrees and two empty scratch directories after verifying source, local references and reflog recovery.
+- [x] Remove 23 temporary deployment directories, including 16 checksum-verified duplicate runtime archives; preserve small deployment records privately. Combined newly removed allocation is 1,848,766,464 bytes before the separate legacy-checkout pass.
+- [x] Complete first source-light runtime retention pass: 19 obsolete runtime releases removed, with active and coherent rollback copies preserved.
+- [ ] Finish legacy source-bearing checkout review and remove only byte-recoverable copies without references, unknown media or signing material. Reconcile embedded rollback build copies and obsolete startup dependencies.
+- [ ] Review remaining QA/browser profiles, generated native-project scratch trees, and disposable database provenance before removing them. Do not delete live databases, certificates, signing material, backups or evidence.
+- [ ] Complete deployment-controller integration and authenticated staging, rollback and offsite restore tests; resume fixture-backed product pilot verification.
