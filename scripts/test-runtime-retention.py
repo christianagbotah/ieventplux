@@ -29,6 +29,17 @@ class RuntimeRetentionPolicy(unittest.TestCase):
         with self.assertRaises(ValueError):
             r.relative_name(link, "web")
 
+    def test_compiled_upload_route_is_not_persistent_media(self):
+        self.assertEqual(r.relative_name(tarfile.TarInfo(".next/server/app/uploads/route.js"), "web"),
+                         ".next/server/app/uploads/route.js")
+        with self.assertRaises(ValueError):
+            r.relative_name(tarfile.TarInfo(".next/server/app/uploads/customer.png"), "web")
+        with self.assertRaises(ValueError):
+            r.relative_name(tarfile.TarInfo("public/uploads/unknown.png"), "web")
+        self.assertEqual(r.relative_name(tarfile.TarInfo("public/uploads/reviewed.png"), "web",
+                                        {"public/uploads/reviewed.png": "a"*64}),
+                         "public/uploads/reviewed.png")
+
     def test_exact_archive_comparison_and_extra_data_hold(self):
         with tempfile.TemporaryDirectory() as d:
             root = Path(d) / "runtime"
