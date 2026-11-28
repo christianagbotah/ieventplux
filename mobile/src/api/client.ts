@@ -796,6 +796,7 @@ export const api = {
     decide:(eventId:string,id:string,status:string)=>request<{status:string}>('PATCH','/events/'+encodeURIComponent(eventId)+'/souvenir-requests/'+encodeURIComponent(id),{status}),
   },
   auth: {
+    register:(body:{displayName:string;email:string;password:string})=>request<{user:User;verificationEmailAvailable:boolean}>('POST','/auth/register',body),
     login: (email: string, password: string) =>
       request<LoginResponse>('POST', '/auth/login', { email, password }),
     requestReset: (email: string) =>
@@ -840,6 +841,11 @@ export const api = {
     questionAction:(id:string,action:'upvote'|'answer'|'hide'|'unhide'|'pin'|'unpin',answer?:string)=>request<unknown>('POST','/questions/'+encodeURIComponent(id)+'/'+action,answer===undefined?{}:{answer}),
   },
   organizer: {
+    eventStats:(id:string)=>request<{paidOrders:number;freeOrders:number;ticketsSold:number;checkedIn:number;grossMinor:number;feesMinor:number;netMinor:number}>('GET','/events/'+encodeURIComponent(id)+'/stats'),
+    eventOrders:(id:string,page:number)=>request<{items:{id:string;reference:string;buyerName:string;totalMinor:number;currency:string;status:string;createdAt:string}[];total:number}>('GET','/events/'+encodeURIComponent(id)+'/orders?page='+page+'&pageSize=25'),
+    eventAttendees:(id:string,page:number)=>request<{items:{id:string;code:string;holderName:string;ticketType:string;status:string;checkedInAt:string|null}[];total:number}>('GET','/events/'+encodeURIComponent(id)+'/attendees?page='+page+'&pageSize=25'),
+    createTicketType:(id:string,body:unknown)=>request<{ticketType:TicketType}>('POST','/events/'+encodeURIComponent(id)+'/ticket-types',body),
+    publishEvent:(id:string)=>request<unknown>('POST','/events/'+encodeURIComponent(id)+'/transition',{to:'PUBLISHED'}),
     memberships: () => request<{ items: Membership[] }>('GET','/orgs'),
     createOrganization: (payload: unknown) => request<{org:{id:string;name:string;status:string};note:string}>(
       'POST','/orgs',payload,

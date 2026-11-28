@@ -1,7 +1,7 @@
 /** Native create-draft and basic metadata editor. Publishing, ticket tiers,
  * payouts, programmes and high-risk permissions remain in the full web studio.
  * The API independently enforces accepted membership + event edit privilege. */
-import {useCallback,useEffect,useMemo,useState} from 'react'
+import {useCallback,useEffect,useMemo,useRef,useState} from 'react'
 import {ActivityIndicator,Alert,KeyboardAvoidingView,Platform,Pressable,ScrollView,StyleSheet,Text,TextInput,View,type KeyboardTypeOptions} from 'react-native'
 import {api,type Membership} from '../api/client'
 import {
@@ -44,6 +44,8 @@ export default function EventEditorScreen({navigation,route}:EventEditorScreenPr
   const [loading,setLoading]=useState(true)
   const [saving,setSaving]=useState(false)
   const [error,setError]=useState('')
+  const scroll=useRef<ScrollView>(null)
+  const showError=(message:string)=>{setError(message);scroll.current?.scrollTo({y:0,animated:true})}
   const [resultNotice,setResultNotice]=useState('')
   const timeZone=useMemo(()=>deviceTimeZone(),[])
   const update=<K extends keyof EventDraftForm>(key:K,value:EventDraftForm[K])=>setForm(prev=>({...prev,[key]:value}))
@@ -76,7 +78,7 @@ export default function EventEditorScreen({navigation,route}:EventEditorScreenPr
   const submit=async()=>{
     if(saving||loading||!org)return
     const issue=validateEventDraft(form,editing)
-    if(issue){setError(issue);return}
+    if(issue){showError(issue);return}
     setSaving(true);setError('')
     try{
       if(eventId){
@@ -87,12 +89,12 @@ export default function EventEditorScreen({navigation,route}:EventEditorScreenPr
         setResultNotice('Draft created: '+created.event.title+(created.occurrencesCreated?' · '+created.occurrencesCreated+' additional drafts':''))
       }
       navigation.navigate('OrganizerStudio')
-    }catch(e){setError(e instanceof Error?e.message:'The event could not be saved. Please try again.')}
+    }catch(e){showError(e instanceof Error?e.message:'The event could not be saved. Please try again.')}
     finally{setSaving(false)}
   }
   const confirmSave=()=>{
     const issue=validateEventDraft(form,editing)
-    if(issue){setError(issue);return}
+    if(issue){showError(issue);return}
     Alert.alert(editing?'Save event details?':'Create event draft?',editing?
       'Update basic event information. This does not change its publication or tickets.':
       'Create '+(1+Number(form.repeatWeeks||0))+' unpublished draft(s) in this organization. Publish each occurrence separately.',[
@@ -103,7 +105,7 @@ export default function EventEditorScreen({navigation,route}:EventEditorScreenPr
   if(loading)return <View style={styles.center}><ActivityIndicator size="large" color={theme.colors.primary}/><Text style={styles.helper}>Loading authorized event details…</Text></View>
   if(!org)return <View style={styles.center}><Text style={styles.error} accessibilityRole="alert">{error||'Event editing unavailable.'}</Text><Pressable accessibilityRole="button" style={styles.outlined} onPress={()=>navigation.goBack()}><Text style={styles.outlinedText}>Back to organizer studio</Text></Pressable></View>
   return <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS==='ios'?'padding':undefined}>
-    <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
+    <ScrollView ref={scroll} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
       <View style={styles.hero}>
         <PremiumBackdrop mode="midnight"/>
         <Text style={styles.kicker}>{editing?'MANAGE EVENT':'NEW EVENT'}</Text>

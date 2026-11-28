@@ -39,3 +39,5 @@ test('native seller workflow exposes creation, publication and stock without emb
  expect(store).toContain('api.marketplace.updateStore')
  for(const content of [hub,studio,product])expect(content).not.toContain('WebView')
 })
+
+test('native registration and organizer operations use existing server endpoints',()=>{expect(screen('RegisterScreen')).toContain('api.auth.register');const manage=screen('EventManagementScreen');for(const action of ['eventStats','eventOrders','eventAttendees','createTicketType','publishEvent'])expect(manage).toContain('api.organizer.'+action);expect(manage).not.toContain('WebView')})

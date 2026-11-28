@@ -1,6 +1,6 @@
 /** Native organizer registration. Server creates owner membership and pending KYC.
  * We do not upload identification or mark a profile as verified on this screen. */
-import {useState} from 'react'
+import {useRef,useState} from 'react'
 import {ActivityIndicator,Alert,KeyboardAvoidingView,Platform,Pressable,ScrollView,StyleSheet,Text,TextInput,View} from 'react-native'
 import {api} from '../api/client'
 import {EMPTY_ORGANIZER_FORM,ORGANIZER_CATEGORIES,ORGANIZER_PROFILE_FIELDS,organizerOnboardingPayload,
@@ -26,11 +26,13 @@ export default function CreateOrganizerScreen({navigation}:CreateOrganizerScreen
   const [form,setForm]=useState<OrganizerOnboardingForm>({...EMPTY_ORGANIZER_FORM,profileDetails:{}})
   const [saving,setSaving]=useState(false)
   const [error,setError]=useState('')
+  const scroll=useRef<ScrollView>(null)
+  const showError=(message:string)=>{setError(message);scroll.current?.scrollTo({y:0,animated:true})}
   const update=<K extends keyof OrganizerOnboardingForm>(key:K,value:OrganizerOnboardingForm[K])=>setForm(old=>({...old,[key]:value}))
   const submit=async()=>{
     if(saving||status!=='authenticated')return
     const issue=validateOrganizerOnboarding(form)
-    if(issue){setError(issue);return}
+    if(issue){showError(issue);return}
     setSaving(true);setError('')
     try{
       await api.organizer.createOrganization(organizerOnboardingPayload(form))
@@ -38,13 +40,13 @@ export default function CreateOrganizerScreen({navigation}:CreateOrganizerScreen
       Alert.alert('Organizer profile created','Your organizer profile is pending verification. You can start creating event drafts; paid sales require the required identity checks.',[
         {text:'Open studio',onPress:()=>navigation.replace('OrganizerStudio')},
       ])
-    }catch(e){setError(e instanceof Error?e.message:'Could not create this organizer profile. Please retry.')}
+    }catch(e){showError(e instanceof Error?e.message:'Could not create this organizer profile. Please retry.')}
     finally{setSaving(false)}
   }
   if(status!=='authenticated')return <View style={styles.screen}><View style={styles.panel}><Text style={styles.title}>Sign in to organize events</Text><Text style={styles.description}>Organizer registration needs an authenticated iEventPlux account.</Text><Pressable accessibilityRole="button" style={styles.submit} onPress={()=>navigation.navigate('Login')}><Text style={styles.submitText}>Sign in</Text></Pressable></View></View>
   const type=form.orgType
   return <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS==='ios'?'padding':undefined}>
-    <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
+    <ScrollView ref={scroll} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
       <View style={styles.hero}>
         <PremiumBackdrop mode="midnight"/>
         <Text style={styles.kicker}>CREATE WITH iEVENTPLUX</Text>
@@ -84,7 +86,7 @@ export default function CreateOrganizerScreen({navigation}:CreateOrganizerScreen
         <Pressable accessibilityRole="button" accessibilityLabel="Create unverified organizer profile" disabled={saving} style={[styles.submit,saving&&{opacity:.6}]}
           onPress={()=>{
             const issue=validateOrganizerOnboarding(form)
-            if(issue){setError(issue);return}
+            if(issue){showError(issue);return}
             Alert.alert('Create organizer profile?',`Create ${form.name.trim()} as a pending-verification organizer?`,[
               {text:'Cancel',style:'cancel'}, {text:'Create profile',onPress:()=>void submit()},
             ])

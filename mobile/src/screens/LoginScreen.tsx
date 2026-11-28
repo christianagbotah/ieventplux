@@ -248,6 +248,7 @@ export default function LoginScreen({ navigation,route }: LoginScreenProps) {
             </>
           )}
 
+          {!resetMode?<Pressable accessibilityRole="button" disabled={busy} style={styles.secondaryButton} onPress={()=>navigation.navigate('Register')}><Text style={styles.secondaryButtonText}>New to iEventPlux? Create an account</Text></Pressable>:null}
           <Text style={styles.footnote}>
             Powered by Lightworld Technologies.
           </Text>
