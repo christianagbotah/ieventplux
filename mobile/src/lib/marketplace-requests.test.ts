@@ -20,3 +20,21 @@ test('request actions respect seller and buyer roles and terminal states',async(
  expect(availableRequestDecisions(true,'DECLINED')).toEqual([])
  expect(requestStatusLabel('ACKNOWLEDGED')).toContain('not confirmed')
 })
+
+
+test('local expiry never promises stock release and disables checkout',async()=>{
+ const {stockHoldLabel,canPrepareCheckout,inventoryHoldFingerprint}=await import('./marketplace-requests')
+ const row={id:'request1',status:'ACKNOWLEDGED',totalMinor:2500,currency:'GHS',unitCount:3,createdAt:'2026-11-28T00:00:00Z',items:[],stockHold:{id:'hold1',status:'HELD' as const,expiresAt:'2026-11-28T00:30:00Z',releasedAt:null}}
+ const history={requests:[row],seller:false,checkoutDraftEnabled:true,checkoutEnabled:false as const,inventoryReserved:false as const}
+ const before=Date.parse('2026-11-28T00:29:59Z'),after=before+1000
+ expect(stockHoldLabel(row.stockHold,before)).toBe('Reserved')
+ expect(stockHoldLabel(row.stockHold,after)).toContain('awaiting server release')
+ expect(stockHoldLabel({...row.stockHold,expiresAt:'invalid'},before)).toContain('awaiting server release')
+ expect(canPrepareCheckout(history,row,before)).toBe(true)
+ expect(canPrepareCheckout(history,row,after)).toBe(false)
+ expect(canPrepareCheckout({...history,seller:true},row,before)).toBe(false)
+ const released={...row,stockHold:{...row.stockHold,status:'EXPIRED' as const}}
+ expect(stockHoldLabel(released.stockHold,after)).toBe('Expired · released')
+ expect(inventoryHoldFingerprint(history)).not.toBe(inventoryHoldFingerprint({...history,requests:[released]}))
+ expect(inventoryHoldFingerprint(history)).toBe(inventoryHoldFingerprint({...history,requests:[{...row,status:'REQUESTED'}]}))
+})

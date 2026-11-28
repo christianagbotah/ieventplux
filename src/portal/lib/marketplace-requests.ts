@@ -35,3 +35,14 @@ export function decisionLabel(decision:RequestDecision){
 }
 
 export function canPrepareCheckout(history:PurchaseRequestHistory|null,row:PurchaseRequestRow,now=Date.now()){return !!history?.checkoutDraftEnabled&&!history.seller&&row.status==='ACKNOWLEDGED'&&row.stockHold?.status==='HELD'&&Date.parse(row.stockHold.expiresAt)>now&&!row.stockHold.checkoutDraft}
+
+/** The client cannot declare inventory released; only the server can close a hold. */
+export function stockHoldLabel(hold:StockHold,now=Date.now()){
+ if(hold.status==='RELEASED')return 'Released'
+ if(hold.status==='EXPIRED')return 'Expired · released'
+ const expiry=Date.parse(hold.expiresAt)
+ return !Number.isFinite(expiry)||expiry<=now?'Expiry reached · awaiting server release':'Reserved'
+}
+export function inventoryHoldFingerprint(history:PurchaseRequestHistory){
+ return JSON.stringify(history.requests.filter(r=>r.stockHold).map(r=>[r.id,r.stockHold!.id,r.stockHold!.status]).sort((a,b)=>a[0].localeCompare(b[0])))
+}

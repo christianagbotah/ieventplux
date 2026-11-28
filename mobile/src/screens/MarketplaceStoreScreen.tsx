@@ -158,7 +158,7 @@ export default function MarketplaceStoreScreen({route,navigation}:MarketplaceSto
       </View>:null}
       {!quote?<Text style={styles.basketInfo}>Select product quantities above. This is an estimate, not an order or checkout.</Text>:null}
     </View>:null}
-    {detail&&user?<MarketplaceRequests key={user.id+':'+slug+':'+detail.canManage} slug={slug} seller={detail.canManage} quote={quote} onSubmitted={submitted=>setQuote(current=>current===submitted?null:current)}/>:null}
+    {detail&&user?<MarketplaceRequests key={user.id+':'+slug+':'+detail.canManage} slug={slug} seller={detail.canManage} quote={quote} onInventoryChanged={load} onSubmitted={submitted=>setQuote(current=>current===submitted?null:current)}/>:null}
     {detail&&!user?<Text style={styles.basketInfo}>Sign in to submit purchase requests.</Text>:null}
     {detail?<Pressable onPress={()=>void load()} style={styles.reload} accessibilityRole="button"><Text style={styles.reloadText}>Refresh catalogue  ↻</Text></Pressable>:null}
   </ScrollView>

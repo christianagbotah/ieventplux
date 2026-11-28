@@ -1,11 +1,12 @@
 import {useCallback,useEffect,useRef,useState} from 'react'
-import {Alert,Pressable,StyleSheet,Text,View} from 'react-native'
+import {Alert,AppState,Pressable,StyleSheet,Text,View} from 'react-native'
+import {useIsFocused} from '@react-navigation/native'
 import {api,formatMinor} from '../api/client'
 import {ActionDialog,type ActionPrompt} from './ActionDialog'
 import {mobileDesign} from '../ui/PremiumUI'
-import {canPrepareCheckout,purchaseRequestBody,purchaseRequestFingerprint,requestStatusLabel,availableRequestDecisions,decisionLabel,type PurchaseRequestRow,type RequestDecision,type ReviewedBasket,type PurchaseRequestHistory} from '../lib/marketplace-requests'
+import {stockHoldLabel,inventoryHoldFingerprint,canPrepareCheckout,purchaseRequestBody,purchaseRequestFingerprint,requestStatusLabel,availableRequestDecisions,decisionLabel,type PurchaseRequestRow,type RequestDecision,type ReviewedBasket,type PurchaseRequestHistory} from '../lib/marketplace-requests'
 
-export function MarketplaceRequests({slug,seller,quote,onSubmitted}:{slug:string;seller:boolean;quote:ReviewedBasket|null;onSubmitted:(submitted:ReviewedBasket)=>void}){
+export function MarketplaceRequests({slug,seller,quote,onSubmitted,onInventoryChanged}:{slug:string;seller:boolean;quote:ReviewedBasket|null;onSubmitted:(submitted:ReviewedBasket)=>void;onInventoryChanged:()=>void}){
  const [history,setHistory]=useState<PurchaseRequestHistory|null>(null)
  const [loading,setLoading]=useState(false)
  const [error,setError]=useState('')
@@ -18,15 +19,22 @@ export function MarketplaceRequests({slug,seller,quote,onSubmitted}:{slug:string
  const locked=useRef(false)
  const active=useRef(true)
  const epoch=useRef(0)
+ const inFlight=useRef(false)
+ const lastInventory=useRef<string|null>(null)
+ const [now,setNow]=useState(Date.now())
  const retry=useRef(new Map<string,string>())
- const load=useCallback(async()=>{
-  const generation=++epoch.current;setLoading(true);setError('')
+ const load=useCallback(async(background=false)=>{
+  if(!active.current||(background&&(locked.current||inFlight.current)))return
+  inFlight.current=true;setNow(Date.now())
+  const generation=++epoch.current;if(!background)setLoading(true);setError('')
   try{const result=await api.marketplace.purchaseRequests(slug)
-   if(generation===epoch.current){if(result.seller!==seller)throw new Error('Session changed. Refresh the storefront.');setHistory(result)}
+   if(active.current&&generation===epoch.current){if(result.seller!==seller)throw new Error('Session changed. Refresh the storefront.');const signature=inventoryHoldFingerprint(result);const changed=lastInventory.current!==null&&lastInventory.current!==signature;lastInventory.current=signature;setHistory(result);if(changed)onInventoryChanged()}
   }catch(e){if(generation===epoch.current){setHistory(null);setError(e instanceof Error?e.message:'Could not load requests.')}}
-  finally{if(generation===epoch.current)setLoading(false)}
- },[slug,seller])
- useEffect(()=>{active.current=true;void load();return()=>{active.current=false;epoch.current++}},[load])
+  finally{if(generation===epoch.current){inFlight.current=false;setLoading(false)}}
+ },[slug,seller,onInventoryChanged])
+ const focused=useIsFocused()
+ useEffect(()=>{active.current=true;lastInventory.current=null;void load();return()=>{active.current=false;epoch.current++;inFlight.current=false}},[load])
+ useEffect(()=>{if(!focused)return;const wake=()=>{if(AppState.currentState==='active'){setNow(Date.now());void load(true)}};const sub=AppState.addEventListener('change',state=>{if(state==='active')wake()});const timer=setInterval(wake,15000);wake();return()=>{clearInterval(timer);sub.remove()}},[focused,load])
  async function submit(){
   if(!pending||seller||locked.current)return
   locked.current=true;setSubmitting(true);setSubmissionError('');setNotice('')
@@ -81,9 +89,9 @@ export function MarketplaceRequests({slug,seller,quote,onSubmitted}:{slug:string
    <Text style={styles.amount}>{formatMinor(row.totalMinor,row.currency)}</Text><Text style={styles.muted}>{requestStatusLabel(row.status)}</Text>
    <Text style={styles.muted}>{new Date(row.createdAt).toLocaleString()} · {row.id}</Text>
    {row.items.map(item=><View key={item.variantId} style={styles.line}><Text style={[styles.muted,{flex:1}]}>{item.productName} · {item.variantTitle} × {item.quantity}</Text><Text style={styles.secondaryText}>{formatMinor(item.lineMinor,item.currency)}</Text></View>)}
-   {row.stockHold?<Text style={styles.muted}>Stock hold: {row.stockHold.status.toLowerCase()}{row.stockHold.status==='HELD'?' · Expires '+new Date(row.stockHold.expiresAt).toLocaleString():''}</Text>:null}
+   {row.stockHold?<Text style={styles.muted}>Stock hold: {stockHoldLabel(row.stockHold,now)}{row.stockHold.status==='HELD'?' · Expires '+new Date(row.stockHold.expiresAt).toLocaleString():''}</Text>:null}
    {row.stockHold?.checkoutDraft?<Text style={styles.muted}>Checkout draft: {row.stockHold.checkoutDraft.status.toLowerCase()} · {formatMinor(row.stockHold.checkoutDraft.totalMinor,row.currency)} · No payment collected</Text>:null}
-   {canPrepareCheckout(history,row)?<Pressable accessibilityRole="button" disabled={submitting||loading} style={styles.primary} onPress={()=>prepare(row)}><Text style={styles.primaryText}>Prepare checkout draft</Text></Pressable>:null}
+   {canPrepareCheckout(history,row,now)?<Pressable accessibilityRole="button" disabled={submitting||loading} style={styles.primary} onPress={()=>prepare(row)}><Text style={styles.primaryText}>Prepare checkout draft</Text></Pressable>:null}
    {history?.stockHoldEnabled&&seller&&row.status==='ACKNOWLEDGED'&&!row.stockHold?<Pressable accessibilityRole="button" disabled={submitting||loading} style={styles.primary} onPress={()=>confirmHold(row.id,false)}><Text style={styles.primaryText}>Hold stock for 30 minutes</Text></Pressable>:null}
    {row.stockHold?.status==='HELD'?<Pressable accessibilityRole="button" disabled={submitting||loading} style={styles.secondary} onPress={()=>confirmHold(row.id,true)}><Text style={styles.secondaryText}>Release stock hold</Text></Pressable>:null}
    {(row.stockHold?.status==='HELD'?[]:availableRequestDecisions(seller,row.status)).map(action=><Pressable key={action} accessibilityRole="button" disabled={submitting||loading} style={action==='ACKNOWLEDGED'?styles.primary:styles.secondary} onPress={()=>setDecision({id:row.id,status:action})}><Text style={action==='ACKNOWLEDGED'?styles.primaryText:styles.secondaryText}>{decisionLabel(action)}</Text></Pressable>)}
