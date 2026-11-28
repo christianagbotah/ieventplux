@@ -192,6 +192,11 @@ jobs:
           IEVENTPLUX_ISOLATED_DB_TEST: "yes"
         run: bun run scripts/sandbox-transaction-binding-smoke.ts
 
+      - name: Rehearse simulated pilot fixture load and verify financial isolation
+        env:
+          IEVENTPLUX_ISOLATED_DB_TEST: "yes"
+        run: bash scripts/verify-qa-fixture-batch.sh
+
       - name: Start the stack
         run: |
           (IEVENTPLUX_GROUP_MEETINGS_ENABLED=true IEVENTPLUX_DIRECT_CALL_TEST_MODE=yes IEVENTPLUX_DIRECT_CALL_MEDIA_TEST_MODE=yes IEVENTPLUX_DIRECT_ATTACHMENTS_ENABLED=true IEVENTPLUX_DIRECT_ATTACHMENT_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef bun run dev > dev.log 2>&1 &)

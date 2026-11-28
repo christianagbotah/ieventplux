@@ -19,6 +19,14 @@ Maintain this file as the public, sanitized engineering checkpoint. Keep credent
 
 - Android QA `android-qa-a6f5776` published after successful main CI; native Create, registration, organizer sales/attendees and seller workflows available for physical testing. #180 profile/media HTTP regression added; full web rerun pending after existing KYC smoke connection reset. #181 native organizer branding and artwork; #182 programme/lineup/PDF workspace. Current native seller payment preferences and bank review request only; live checkout remains gated. QA data import still blocked by credential provisioning.
 
+### 2026-11-28 — profile release and mobile creation checkpoint
+- [x] #180 profile branding CI rerun passed, runtime archive manifests verified, additive banner migration rehearsed and applied with role preflight before/after and successful backup; web/worker deployed from `e38ec91` release, public health and anonymous branding rejection passed.
+- [x] #181 organization branding and event artwork merged; Android QA `android-qa-b0fa8eb` published after combined CI.
+- [x] #182 programme/lineup/PDF workspace and #183 native seller payment settings merged after branch CI.
+- [ ] Confirm combined main Android release and physical-device acceptance, including actual image picker, agenda date/time, PDF and email verification return.
+- [ ] #184 gated checkout preparation: corrected CI variable collision, full regression and runtime package verification pending. Live payment and delivery remain gated.
+- [ ] QA: automate isolated fixture verification; staging login credential provisioning and authenticated pilot acceptance remain blocked. No staging fixture load claimed.
+
 ## P0 — Runtime and release reliability
 - [ ] Run runtime role preflight as application role before and after schema changes; rehearse on disposable PostgreSQL first.
 - [ ] Review additive migration order, role ownership, constraints, defaults, indexes, rollback compatibility; test twice.
