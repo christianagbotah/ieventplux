@@ -313,7 +313,7 @@ try{
  assert(staleHold.status===201,'reviewed request saved before price change')
  await send('PATCH','/marketplace/requests/'+staleHold.data.request.id,owner,{status:'ACKNOWLEDGED'})
  await db.marketplaceVariant.update({where:{id:variantId},data:{priceMinor:36000}})
- try{assert(await reserveMarketplaceRequest(staleHold.data.request.id,sellerUser.id).then(()=>false,e=>e.status===409),'stale price cannot reserve stock');assert(await db.marketplaceStockHold.count({where:{requestId:staleHold.data.request.id}})===0,'stale price creates no hold')}finally{await db.marketplaceVariant.update({where:{id:variantId},data:{priceMinor:35000}})}
+ try{const staleReview=await send('GET','/marketplace/requests/'+staleHold.data.request.id+'/checkout-review',stranger);assert(staleReview.status===200&&staleReview.data.catalogueCurrent===false,'readiness review identifies stale catalogue');assert(await reserveMarketplaceRequest(staleHold.data.request.id,sellerUser.id).then(()=>false,e=>e.status===409),'stale price cannot reserve stock');assert(await db.marketplaceStockHold.count({where:{requestId:staleHold.data.request.id}})===0,'stale price creates no hold')}finally{await db.marketplaceVariant.update({where:{id:variantId},data:{priceMinor:35000}})}
 
 
  delete process.env.IEVENTPLUX_MARKETPLACE_CHECKOUT_DRAFT_ENABLED
