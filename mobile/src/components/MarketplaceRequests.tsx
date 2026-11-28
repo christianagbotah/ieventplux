@@ -1,12 +1,13 @@
 import {useCallback,useEffect,useRef,useState} from 'react'
 import {Alert,AppState,Pressable,StyleSheet,Text,View} from 'react-native'
 import {useIsFocused} from '@react-navigation/native'
+import {subscribeActivity} from '../lib/activity-signal'
 import {api,formatMinor} from '../api/client'
 import {ActionDialog,type ActionPrompt} from './ActionDialog'
 import {mobileDesign} from '../ui/PremiumUI'
 import {stockHoldLabel,inventoryHoldFingerprint,canPrepareCheckout,purchaseRequestBody,purchaseRequestFingerprint,requestStatusLabel,availableRequestDecisions,decisionLabel,type PurchaseRequestRow,type RequestDecision,type ReviewedBasket,type PurchaseRequestHistory} from '../lib/marketplace-requests'
 
-export function MarketplaceRequests({slug,seller,quote,onSubmitted,onInventoryChanged}:{slug:string;seller:boolean;quote:ReviewedBasket|null;onSubmitted:(submitted:ReviewedBasket)=>void;onInventoryChanged:()=>void}){
+export function MarketplaceRequests({userId,slug,seller,quote,onSubmitted,onInventoryChanged}:{userId:string;slug:string;seller:boolean;quote:ReviewedBasket|null;onSubmitted:(submitted:ReviewedBasket)=>void;onInventoryChanged:()=>void}){
  const [history,setHistory]=useState<PurchaseRequestHistory|null>(null)
  const [loading,setLoading]=useState(false)
  const [error,setError]=useState('')
@@ -34,7 +35,7 @@ export function MarketplaceRequests({slug,seller,quote,onSubmitted,onInventoryCh
  },[slug,seller,onInventoryChanged])
  const focused=useIsFocused()
  useEffect(()=>{active.current=true;lastInventory.current=null;void load();return()=>{active.current=false;epoch.current++;inFlight.current=false}},[load])
- useEffect(()=>{if(!focused)return;const wake=()=>{if(AppState.currentState==='active'){setNow(Date.now());void load(true)}};const sub=AppState.addEventListener('change',state=>{if(state==='active')wake()});const timer=setInterval(wake,15000);wake();return()=>{clearInterval(timer);sub.remove()}},[focused,load])
+ useEffect(()=>{if(!focused)return;const wake=()=>{if(AppState.currentState==='active'){setNow(Date.now());void load(true)}};const sub=AppState.addEventListener('change',state=>{if(state==='active')wake()});const unsubscribe=subscribeActivity(userId,wake);const timer=setInterval(wake,15000);wake();return()=>{unsubscribe();clearInterval(timer);sub.remove()}},[focused,load,userId])
  async function submit(){
   if(!pending||seller||locked.current)return
   locked.current=true;setSubmitting(true);setSubmissionError('');setNotice('')
