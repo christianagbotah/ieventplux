@@ -36,6 +36,11 @@ import ForegroundActivity from './src/components/ForegroundActivity'
 import PushActivityBridge from './src/components/PushActivityBridge'
 import IncomingCallInvitation from './src/components/IncomingCallInvitation'
 import {activityDestination} from './src/lib/push-activity-policy'
+import RegisterScreen from './src/screens/RegisterScreen'
+import EventManagementScreen from './src/screens/EventManagementScreen'
+import CreateHubScreen from './src/screens/CreateHubScreen'
+import SellerStudioScreen from './src/screens/SellerStudioScreen'
+import SellerProductScreen from './src/screens/SellerProductScreen'
 import OrganizerStudioScreen from './src/screens/OrganizerStudioScreen'
 import CreateOrganizerScreen from './src/screens/CreateOrganizerScreen'
 import EventEditorScreen from './src/screens/EventEditorScreen'
@@ -127,6 +132,8 @@ function AppRoutes() {
         contentStyle: { backgroundColor: theme.colors.bg },
       }}
     >
+      <Stack.Screen name="Register" component={RegisterScreen} options={{title:'Create your account'}}/>
+      <Stack.Screen name="EventManagement" component={EventManagementScreen} options={{title:'Manage event'}}/>
       <Stack.Screen name="Login" component={LoginScreen} options={{ title: 'Sign in', headerShown: false }} />
       <Stack.Screen name="Discover" component={DiscoverScreen} options={{ headerTitle: () => <AppBrand /> }} />
       <Stack.Screen name="LiveHub" component={LiveHubScreen} options={{ title: 'Live now' }} />
@@ -135,6 +142,9 @@ function AppRoutes() {
       <Stack.Screen name="Account" component={AccountScreen} options={{ title: 'Your space' }} />
       <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ title: 'Notifications' }} />
       <Stack.Screen name="DirectMessages" component={DirectMessagesScreen} options={{title:'Messages'}}/>
+      <Stack.Screen name="CreateHub" component={CreateHubScreen} options={{title:'Create & manage'}}/>
+      <Stack.Screen name="SellerStudio" component={SellerStudioScreen} options={{title:'Seller Studio'}}/>
+      <Stack.Screen name="SellerProduct" component={SellerProductScreen} options={{title:'Add product'}}/>
       <Stack.Screen name="OrganizerStudio" component={OrganizerStudioScreen} options={{ title: 'Organizer Studio' }} />
       <Stack.Screen name="CreateOrganizer" component={CreateOrganizerScreen} options={{ title: 'Create organizer profile' }} />
       <Stack.Screen name="EventEditor" component={EventEditorScreen} options={{ title: 'Event editor' }} />
@@ -172,7 +182,7 @@ function AppNavigation() {
   const navigateTab = (route: MainTabRoute) => {
     if (!navigationRef.isReady() || navigationRef.getCurrentRoute()?.name === route) return
     if (status !== 'authenticated' && requiresAuthentication(route)) {
-      navigationRef.navigate('Login')
+      navigationRef.navigate('Login',{returnTo:route==='MyTickets'?'MyTickets':'Account'})
       return
     }
     navigationRef.navigate(route)

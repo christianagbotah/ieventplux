@@ -5,7 +5,7 @@
 export const MAIN_TABS = [
   { route: 'Discover', label: 'Discover', icon: 'compass' },
   { route: 'Following', label: 'Feed', icon: 'users' },
-  { route: 'Reels', label: 'Reels', icon: 'film' },
+  { route: 'CreateHub', label: 'Create', icon: 'plus' },
   { route: 'Marketplace', label: 'Shop', icon: 'bag' },
   { route: 'MyTickets', label: 'Tickets', icon: 'ticket' },
   { route: 'Account', label: 'Account', icon: 'person' },

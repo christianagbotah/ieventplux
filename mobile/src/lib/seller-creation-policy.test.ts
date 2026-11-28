@@ -1,0 +1,4 @@
+import {expect,test} from 'bun:test'
+import {sellerSlug,validSellerSlug,sellerPriceMinor,sellerStockDelta} from './seller-creation-policy'
+test('seller address and money parsing are strict',()=>{expect(sellerSlug('  Coastal Event Shop! ')).toBe('coastal-event-shop');expect(validSellerSlug('abc')).toBe(false);expect(validSellerSlug('abcd')).toBe(true);expect(sellerPriceMinor('12.50')).toBe(1250);expect(sellerPriceMinor('0')).toBeNull();expect(sellerPriceMinor('1.001')).toBeNull();expect(sellerPriceMinor('1e3')).toBeNull();expect(sellerPriceMinor('1000000')).toBe(100000000);expect(sellerPriceMinor('1000000.01')).toBeNull()})
+test('inventory accepts bounded whole nonzero movements',()=>{expect(sellerStockDelta('-12')).toBe(-12);expect(sellerStockDelta('2.5')).toBeNull();expect(sellerStockDelta('0')).toBeNull();expect(sellerStockDelta('100001')).toBeNull()})

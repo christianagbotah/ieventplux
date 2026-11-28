@@ -15,7 +15,7 @@ test('shared React Native visual system is image-free, scalable, and genuinely n
 })
 test('high traffic native screens use the same hero art and typography system',()=>{
   for(const name of ['DiscoverScreen','LoginScreen','AccountScreen','MarketplaceScreen',
-    'MyTicketsScreen','OrganizerStudioScreen','EventEditorScreen','CreateOrganizerScreen']){
+    'MyTicketsScreen','OrganizerStudioScreen','EventEditorScreen','CreateOrganizerScreen','CreateHubScreen','SellerStudioScreen','SellerProductScreen']){
     expect(screen(name)).toContain('PremiumBackdrop')
   }
 })
@@ -28,3 +28,16 @@ test('mobile creator journey remains native, and account labels web-only tools h
   expect(nav).toContain('useSafeAreaInsets')
   expect(nav).toContain('MAIN_TABS.map')
 })
+
+test('native seller workflow exposes creation, publication and stock without embedded web',()=>{
+ const hub=screen('CreateHubScreen'),studio=screen('SellerStudioScreen'),product=screen('SellerProductScreen'),store=screen('MarketplaceStoreScreen')
+ for(const route of ['OrganizerStudio','CreateOrganizer','SellerStudio','Services'])expect(hub).toContain(route)
+ expect(studio).toContain('api.marketplace.createStore')
+ expect(product).toContain('api.marketplace.createProduct')
+ expect(store).toContain('api.marketplace.adjustStock')
+ expect(store).toContain('api.marketplace.publishProduct')
+ expect(store).toContain('api.marketplace.updateStore')
+ for(const content of [hub,studio,product])expect(content).not.toContain('WebView')
+})
+
+test('native registration and organizer operations use existing server endpoints',()=>{expect(screen('RegisterScreen')).toContain('api.auth.register');const manage=screen('EventManagementScreen');for(const action of ['eventStats','eventOrders','eventAttendees','createTicketType','publishEvent'])expect(manage).toContain('api.organizer.'+action);expect(manage).not.toContain('WebView')})

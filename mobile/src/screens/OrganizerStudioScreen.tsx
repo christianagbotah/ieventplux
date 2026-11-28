@@ -84,6 +84,7 @@ export default function OrganizerStudioScreen({navigation}:OrganizerStudioScreen
     {orgError?<Text style={styles.error} accessibilityRole="alert">{orgError}</Text>:null}
     {webError?<Text style={styles.error} accessibilityRole="alert">{webError}</Text>:null}
     {orgLoading?<ActivityIndicator style={styles.loader} color={theme.colors.primary}/>:null}
+    <Pressable style={styles.secondaryAction} accessibilityRole="button" onPress={()=>navigation.navigate('CreateOrganizer')}><Text style={styles.secondaryText}>＋ Create another organization</Text></Pressable>
     {orgs.length>0?<>
       <Text style={styles.sectionLabel}>YOUR ORGANIZATIONS</Text>
       <View style={styles.orgs}>{orgs.map(org=><Pressable accessibilityRole="button" accessibilityState={{selected:org.orgId===orgId}}
@@ -116,6 +117,7 @@ export default function OrganizerStudioScreen({navigation}:OrganizerStudioScreen
           <View style={styles.badge}><Text style={styles.badgeText}>{item.status.replaceAll('_',' ')} · {item.visibility.replaceAll('_',' ')}</Text></View>
         </View>
       </View>
+      <Pressable accessibilityRole="button" style={styles.create} onPress={()=>navigation.navigate('EventManagement',{orgId:orgId!,eventId:item.id})}><Text style={styles.createText}>Manage event · tickets & attendees</Text></Pressable>
       <View style={styles.eventActions}>
         {canEdit?<Pressable style={styles.actionPrimary} accessibilityRole="button" accessibilityLabel={'Edit '+item.title}
           onPress={()=>navigation.navigate('EventEditor',{orgId:orgId!,eventId:item.id})}><Text style={styles.actionPrimaryText}>Edit details</Text></Pressable>:null}

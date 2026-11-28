@@ -184,6 +184,7 @@ export interface NativeMarketplaceStore {
   city: string | null
   verificationState: string
   productCount: number
+  status?:string
 }
 export interface NativeMarketplaceVariant {
   id: string
@@ -795,6 +796,7 @@ export const api = {
     decide:(eventId:string,id:string,status:string)=>request<{status:string}>('PATCH','/events/'+encodeURIComponent(eventId)+'/souvenir-requests/'+encodeURIComponent(id),{status}),
   },
   auth: {
+    register:(body:{displayName:string;email:string;password:string})=>request<{user:User;verificationEmailAvailable:boolean}>('POST','/auth/register',body),
     login: (email: string, password: string) =>
       request<LoginResponse>('POST', '/auth/login', { email, password }),
     requestReset: (email: string) =>
@@ -839,6 +841,11 @@ export const api = {
     questionAction:(id:string,action:'upvote'|'answer'|'hide'|'unhide'|'pin'|'unpin',answer?:string)=>request<unknown>('POST','/questions/'+encodeURIComponent(id)+'/'+action,answer===undefined?{}:{answer}),
   },
   organizer: {
+    eventStats:(id:string)=>request<{paidOrders:number;freeOrders:number;ticketsSold:number;checkedIn:number;grossMinor:number;feesMinor:number;netMinor:number}>('GET','/events/'+encodeURIComponent(id)+'/stats'),
+    eventOrders:(id:string,page:number)=>request<{items:{id:string;reference:string;buyerName:string;totalMinor:number;currency:string;status:string;createdAt:string}[];total:number}>('GET','/events/'+encodeURIComponent(id)+'/orders?page='+page+'&pageSize=25'),
+    eventAttendees:(id:string,page:number)=>request<{items:{id:string;code:string;holderName:string;ticketType:string;status:string;checkedInAt:string|null}[];total:number}>('GET','/events/'+encodeURIComponent(id)+'/attendees?page='+page+'&pageSize=25'),
+    createTicketType:(id:string,body:unknown)=>request<{ticketType:TicketType}>('POST','/events/'+encodeURIComponent(id)+'/ticket-types',body),
+    publishEvent:(id:string)=>request<unknown>('POST','/events/'+encodeURIComponent(id)+'/transition',{to:'PUBLISHED'}),
     memberships: () => request<{ items: Membership[] }>('GET','/orgs'),
     createOrganization: (payload: unknown) => request<{org:{id:string;name:string;status:string};note:string}>(
       'POST','/orgs',payload,
@@ -854,6 +861,12 @@ export const api = {
     ),
   },
   marketplace: {
+    myStores:()=>request<{stores:NativeMarketplaceStore[]}>('GET','/marketplace/stores?mine=1'),
+    createStore:(body:unknown)=>request<{store:{id:string;slug:string;name:string;status:string}}>('POST','/marketplace/stores',body),
+    updateStore:(slug:string,body:unknown)=>request<{store:{id:string;slug:string;status:string}}>('PATCH','/marketplace/stores/'+encodeURIComponent(slug),body),
+    createProduct:(slug:string,body:unknown)=>request<{product:{id:string;slug:string;name:string;status:string}}>('POST','/marketplace/stores/'+encodeURIComponent(slug)+'/products',body),
+    publishProduct:(id:string,status:'ACTIVE'|'DRAFT'|'ARCHIVED')=>request<unknown>('PATCH','/marketplace/products/'+encodeURIComponent(id),{status}),
+    adjustStock:(id:string,body:{delta:number;reason:string;requestKey:string})=>request<unknown>('POST','/marketplace/variants/'+encodeURIComponent(id)+'/stock',body),
     stores: (q = '') => request<{ stores: NativeMarketplaceStore[]; checkoutEnabled: false }>(
       'GET', '/marketplace/stores' + (q ? '?q=' + encodeURIComponent(q) : ''),
     ),

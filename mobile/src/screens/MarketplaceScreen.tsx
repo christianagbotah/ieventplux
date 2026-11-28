@@ -43,6 +43,7 @@ export default function MarketplaceScreen({navigation}:MarketplaceScreenProps){
         </Pressable>
       </View>
     </View>
+    <Pressable accessibilityRole="button" onPress={()=>navigation.navigate('SellerStudio')} style={[styles.advisory,{marginBottom:12}]}><TileGlyph kind="store" size={40}/><View style={{flex:1}}><Text style={{fontSize:16,fontWeight:'700',color:mobileDesign.ink}}>Sell on iEventPlux</Text><Text style={styles.advisoryText}>Create or manage your store  ›</Text></View></Pressable>
     <View style={styles.advisory}><Text style={styles.advisoryIcon}>ⓘ</Text><Text style={styles.advisoryText}>Independent storefront discovery is available. Online checkout and delivery are not yet enabled for these stores.</Text></View>
     <Pressable accessibilityRole="button" onPress={()=>navigation.navigate('Services')} style={styles.advisory}><Text style={styles.advisoryText}>Find local services or register as a service provider  →</Text></Pressable>
     <SectionHeading eyebrow="OUR COMMUNITY OF SELLERS" title="Explore storefronts"

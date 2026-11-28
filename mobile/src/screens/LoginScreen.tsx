@@ -28,7 +28,7 @@ import { AppBrand } from '../components/AppBrand'
 import { useSession } from '../store/session'
 import type { LoginScreenProps } from '../navigation'
 
-export default function LoginScreen({ navigation }: LoginScreenProps) {
+export default function LoginScreen({ navigation,route }: LoginScreenProps) {
   const { signIn } = useSession()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -53,7 +53,18 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
     try {
       const res = await api.auth.login(normalizedEmail, password)
       signIn(res.user, res.memberships)
-      navigation.replace('Discover')
+      const target=route.params?.returnTo
+      switch(target){
+        case 'CreateHub': navigation.replace('CreateHub');break
+        case 'OrganizerStudio': navigation.replace('OrganizerStudio');break
+        case 'CreateOrganizer': navigation.replace('CreateOrganizer');break
+        case 'SellerStudio': navigation.replace('SellerStudio');break
+        case 'Services': navigation.replace('Services');break
+        case 'Checkin': navigation.replace('Checkin');break
+        case 'Account': navigation.replace('Account');break
+        case 'MyTickets': navigation.replace('MyTickets');break
+        default: navigation.replace('Discover')
+      }
     } catch (err) {
       setError(
         err instanceof ApiClientError
@@ -237,6 +248,7 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
             </>
           )}
 
+          {!resetMode?<Pressable accessibilityRole="button" disabled={busy} style={styles.secondaryButton} onPress={()=>navigation.navigate('Register')}><Text style={styles.secondaryButtonText}>New to iEventPlux? Create an account</Text></Pressable>:null}
           <Text style={styles.footnote}>
             Powered by Lightworld Technologies.
           </Text>
