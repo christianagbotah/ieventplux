@@ -35,6 +35,10 @@ export interface User {
   displayName: string
   role: string
   avatarUrl?: string | null
+  bannerUrl?:string|null
+  bio?:string|null
+  city?:string|null
+  phone?:string|null
 }
 
 export interface Membership {
@@ -796,6 +800,8 @@ export const api = {
     decide:(eventId:string,id:string,status:string)=>request<{status:string}>('PATCH','/events/'+encodeURIComponent(eventId)+'/souvenir-requests/'+encodeURIComponent(id),{status}),
   },
   auth: {
+    updateProfile:(body:{expectedUserId:string;displayName:string;city:string;bio:string})=>request<{ok:boolean}>('POST','/auth/profile',body),
+    uploadProfileImage:(body:FormData)=>request<{url:string}>('POST','/auth/branding',body),
     register:(body:{displayName:string;email:string;password:string})=>request<{user:User;verificationEmailAvailable:boolean}>('POST','/auth/register',body),
     login: (email: string, password: string) =>
       request<LoginResponse>('POST', '/auth/login', { email, password }),
@@ -861,6 +867,7 @@ export const api = {
     ),
   },
   marketplace: {
+    uploadImage:(slug:string,body:FormData)=>request<{url:string}>('POST','/marketplace/stores/'+encodeURIComponent(slug)+'/images',body),
     myStores:()=>request<{stores:NativeMarketplaceStore[]}>('GET','/marketplace/stores?mine=1'),
     createStore:(body:unknown)=>request<{store:{id:string;slug:string;name:string;status:string}}>('POST','/marketplace/stores',body),
     updateStore:(slug:string,body:unknown)=>request<{store:{id:string;slug:string;status:string}}>('PATCH','/marketplace/stores/'+encodeURIComponent(slug),body),

@@ -103,7 +103,7 @@ export default function Me({ route }: { route: Route }) {
       navigate('/signin')
       return
     }
-    setProfile({ displayName: user.displayName, phone: user.phone ?? '', city: user.city ?? '', bio: '' })
+    setProfile({ displayName: user.displayName, phone: user.phone ?? '', city: user.city ?? '', bio: user.bio ?? '' })
     const next={ email: true, push: false, sms: Boolean(user.phone), marketing: false, ...user.notifPrefs }
     preferenceBaseline.current=next;setPrefs(next)
   }, [user, booted])
@@ -546,6 +546,7 @@ export default function Me({ route }: { route: Route }) {
                   <p className="rounded-lg bg-secondary/60 px-3 py-2.5 text-sm text-muted-foreground">{user.email} · {humanize(user.role)} · {user.timezone}</p>
                 </div>
               </div>
+              <div className="space-y-1.5"><Label htmlFor="profileBio">About you</Label><textarea id="profileBio" className="w-full rounded-lg border bg-background p-3 text-sm" maxLength={300} value={profile.bio} onChange={e=>setProfile(p=>({...p,bio:e.target.value}))}/></div>
               <div className="space-y-3 rounded-xl border border-border/60 p-4">
                 <p className="text-sm font-semibold">Notifications</p>
                 {[

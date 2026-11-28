@@ -42,6 +42,8 @@ export interface AuthUser {
   displayName: string
   role: string
   avatarUrl: string | null
+  bannerUrl?: string | null
+  bio?: string | null
   phone: string | null
   country: string
   city: string | null
@@ -102,6 +104,8 @@ export async function getSession(): Promise<FullSession | null> {
       displayName: session.user.displayName,
       role: session.user.role,
       avatarUrl: session.user.avatarUrl,
+      bannerUrl: session.user.bannerUrl,
+      bio: session.user.bio,
       phone: session.user.phone,
       country: session.user.country,
       city: session.user.city,

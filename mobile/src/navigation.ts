@@ -15,6 +15,7 @@ export type RootStackParamList = {
   Account: undefined
   Notifications: undefined
   DirectMessages: {id?:string}|undefined
+  EditProfile: undefined
   Register: undefined
   EventManagement:{eventId:string;orgId:string}
   CreateHub: undefined
@@ -95,3 +96,5 @@ export type SellerProductScreenProps=NativeStackScreenProps<RootStackParamList,'
 
 export type RegisterScreenProps=NativeStackScreenProps<RootStackParamList,'Register'>
 export type EventManagementScreenProps=NativeStackScreenProps<RootStackParamList,'EventManagement'>
+
+export type EditProfileScreenProps=NativeStackScreenProps<RootStackParamList,'EditProfile'>

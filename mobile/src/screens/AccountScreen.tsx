@@ -49,6 +49,7 @@ export default function AccountScreen({ navigation }: AccountScreenProps) {
   return <ScrollView style={styles.screen} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
     <View style={styles.profile}>
       <PremiumBackdrop mode="midnight" />
+      {user?.bannerUrl&&absoluteUrl(user.bannerUrl)?<><Image source={{uri:absoluteUrl(user.bannerUrl)!}} style={styles.banner} resizeMode="cover"/><View style={styles.bannerShade}/></>:null}
       <View style={styles.identity}>
         <View style={styles.avatar}>
           {avatarUrl ? <Image source={{uri:avatarUrl}} style={styles.avatarImage} accessibilityLabel="Profile photo"/> : <Text style={styles.initials}>{initials}</Text>}
@@ -58,6 +59,7 @@ export default function AccountScreen({ navigation }: AccountScreenProps) {
           <Text style={styles.email} numberOfLines={1}>{user?.email || 'Signed-in member'}</Text>
         </View>
       </View>
+      <Pressable accessibilityRole="button" onPress={()=>navigation.navigate('EditProfile')} style={{marginTop:14,borderWidth:1,borderColor:'#ffffff70',borderRadius:12,minHeight:44,justifyContent:'center',alignItems:'center'}}><Text style={{color:'#fff',fontWeight:'700'}}>Edit profile & branding</Text></Pressable>
       <View style={styles.profileDivider}/>
       <View style={styles.profileBottom}>
         <View><Text style={styles.metricValue}>{memberships.length.toLocaleString('en-US')}</Text><Text style={styles.metricCaption}>organizations</Text></View>
@@ -96,7 +98,7 @@ export default function AccountScreen({ navigation }: AccountScreenProps) {
       <View style={styles.menu}>
         <MenuRow kind="store" title="Advanced organizer tools" detail="Tickets, lineup, team & financial settings" web onPress={()=>void openPortal('/organizer')}/>
         <View style={styles.menuDivider}/>
-        <MenuRow kind="settings" title="Profile & preferences" detail="Additional account settings on web" web onPress={()=>void openPortal('/')}/>
+        <MenuRow kind="settings" title="Edit profile" detail="Photo, banner and personal information" onPress={()=>navigation.navigate('EditProfile')}/>
       </View>
     </View>
 
@@ -128,6 +130,7 @@ const styles=StyleSheet.create({
   screen:{flex:1,backgroundColor:mobileDesign.canvas},content:{paddingHorizontal:16,paddingTop:12,paddingBottom:40},
   profile:{borderRadius:18,overflow:'hidden',padding:16,marginBottom:20,backgroundColor:mobileDesign.forestDeep,
     shadowColor:mobileDesign.forestDeep,shadowOpacity:.08,shadowRadius:20,shadowOffset:{width:0,height:12},elevation:6},
+  banner:{position:'absolute',width:'100%',height:'100%'},bannerShade:{position:'absolute',top:0,bottom:0,left:0,right:0,backgroundColor:'#071d2b99'},
   profileTop:{flexDirection:'row',justifyContent:'space-between',alignItems:'center'},
   kicker:{fontSize:10,letterSpacing:1.25,fontWeight:'900',color:'#c4f2e0'},
   profileSpark:{color:'#f3dab1',fontWeight:'900',fontSize:10,letterSpacing:.5},
