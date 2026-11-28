@@ -6,13 +6,14 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack'
 
 export type RootStackParamList = {
   /** Signed-out gate. Replaced (not pushed) after a successful login. */
-  Login: {returnTo?:'CreateHub'|'OrganizerStudio'|'CreateOrganizer'|'SellerStudio'|'Services'|'Checkin'|'Account'|'MyTickets'}|undefined
+  Login: {returnTo?:'CreateHub'|'OrganizerStudio'|'CreateOrganizer'|'SellerStudio'|'Services'|'Checkin'|'Account'|'MyTickets'|'VerifyEmail'}|undefined
   /** Event discovery feed (GET /api/v1/discovery/home). */
   Discover: undefined
   LiveHub: undefined
   Following: undefined
   Reels: undefined
   Account: undefined
+  VerifyEmail: undefined
   Notifications: undefined
   DirectMessages: {id?:string}|undefined
   OrganizerProfileEditor:{orgId:string;slug:string}
@@ -107,3 +108,5 @@ export type OrganizerProfileEditorScreenProps=NativeStackScreenProps<RootStackPa
 export type EventProgrammeScreenProps=NativeStackScreenProps<RootStackParamList,'EventProgramme'>
 
 export type SellerPaymentSettingsScreenProps=NativeStackScreenProps<RootStackParamList,'SellerPaymentSettings'>
+
+export type VerifyEmailScreenProps=NativeStackScreenProps<RootStackParamList,'VerifyEmail'>

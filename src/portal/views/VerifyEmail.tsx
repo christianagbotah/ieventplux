@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef,useState } from 'react'
 import { Mail, ShieldCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -10,35 +10,37 @@ import {useRoute} from '../router'
 import {shopVerificationReturn} from '../lib/shop-verification'
 import { usePortal, type SessionUser } from '../store'
 
-export default function VerifyEmail() {
+export default function VerifyEmail(){const {user,booted}=usePortal();return <Verification key={(user?.id??'guest')+':'+booted}/>}
+function Verification() {
   const { user, booted, setUser } = usePortal()
   const route = useRoute()
   const shopReturn = shopVerificationReturn(route.query.get('returnTo'))
   const returnHref = shopReturn ? '#'+shopReturn : '#/me?tab=profile'
   const returnLabel = shopReturn ? 'Return to my shop' : 'Back to my account'
   const [code, setCode] = useState('')
+  const lock=useRef(false)
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState('')
   const [error, setError] = useState('')
   const [attempt,setAttempt] = useState(0)
   const refresh = async () => {
     const response = await api.get<{user: SessionUser | null}>('/auth/me')
-    setUser(response.user)
+    if(usePortal.getState().user?.id===user?.id)setUser(response.user)
   }
   const submit = async (resend: boolean) => {
-    if (busy) return
-    setBusy(true); setError(''); setNotice('')
+    if (lock.current||!user) return
+    lock.current=true;setBusy(true); setError(''); setNotice('')
     try {
       if (resend) {
-        const result = await api.post<{alreadyVerified?: boolean}>('/auth/resend-code', {})
+        const result = await api.post<{alreadyVerified?: boolean}>('/auth/resend-code', {expectedUserId:user.id})
         if (result.alreadyVerified) await refresh()
         else { setCode(''); setNotice('A new code has been requested. Check your inbox and spam folder shortly.') }
       } else {
-        await api.post('/auth/verify-contact', {channel: 'EMAIL', code})
+        await api.post('/auth/verify-contact', {channel: 'EMAIL', code,expectedUserId:user.id})
         await refresh()
       }
     } catch (err) { setError(err instanceof Error ? err.message : 'Please try again.'); setAttempt(n=>n+1) }
-    finally { setBusy(false) }
+    finally { lock.current=false;setBusy(false) }
   }
   return <section className="mx-auto max-w-md px-4 py-10">
     <div className="space-y-5 rounded-2xl border bg-card p-5 shadow-sm sm:p-7">
@@ -61,6 +63,7 @@ export default function VerifyEmail() {
         </form>
         <Button disabled={busy} variant="outline" onClick={() => void submit(true)}>{busy ? 'Please wait…' : 'Send a new code'}</Button>
         <p className="text-xs text-muted-foreground">Codes expire after 30 minutes.</p>
+        <a href="ieventplux://verify-email" className="block text-sm text-primary underline underline-offset-4">Open verification in the installed mobile app</a>
         <a className="block text-sm text-primary underline underline-offset-4" href={returnHref}>{returnLabel}</a>
       </>}
     </div>

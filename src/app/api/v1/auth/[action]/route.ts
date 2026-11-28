@@ -156,7 +156,8 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     if (action === 'verify-contact') {
       await rateLimit(req, 'verify', 10, 60_000)
       const user = await requireUser()
-      const body = await readJson<{ channel?: string; code?: string }>(req)
+      const body = await readJson<{ channel?: string; code?: string; expectedUserId?: string }>(req)
+      if(body.expectedUserId!==undefined&&body.expectedUserId!==user.id)throw errors.conflict('The signed-in account changed.')
       const channel = body.channel === 'SMS' ? 'SMS' : 'EMAIL'
       if (channel === 'EMAIL' && user.emailVerifiedAt) return jsonOk({ verified: true, channel })
       const target = channel === 'SMS' ? user.phone : user.email
@@ -191,6 +192,8 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     if (action === 'resend-code') {
       await rateLimit(req, 'verify', 5, 60_000)
       const user = await requireUser()
+      const body=await readJson<{expectedUserId?:string}>(req)
+      if(body.expectedUserId!==undefined&&body.expectedUserId!==user.id)throw errors.conflict('The signed-in account changed.')
       if (user.emailVerifiedAt) return jsonOk({ queued: false, alreadyVerified: true })
       if (env.isProd && !(await resolveSmtpConfig()).configured) throw errors.unavailable('EMAIL_UNAVAILABLE', 'Email delivery is currently unavailable. Please try again later or contact support.')
       const code = otpCode()

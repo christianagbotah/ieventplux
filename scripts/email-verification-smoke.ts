@@ -24,6 +24,8 @@ async function main() {
   const me = async () => fetch(base + '/auth/me', {headers:{Cookie:cookie}}).then(r=>r.json())
   assert((await me()).user.emailVerifiedAt === null, 'unverified account state exposed')
   assert((await post('verify-contact',{code:reg.data.devVerificationCode},'', '192.0.2.41')).response.status === 401, 'anonymous verification rejected')
+  assert((await post('resend-code',{expectedUserId:'different-account'},cookie,'192.0.2.46')).response.status===409,'stale account cannot request replacement code')
+  assert((await post('verify-contact',{code:reg.data.devVerificationCode,expectedUserId:'different-account'},cookie,'192.0.2.47')).response.status===409,'stale account cannot consume code')
   const resend = await post('resend-code', {}, cookie, '192.0.2.42')
   assert(resend.response.ok && resend.data.queued && /^\d{6}$/.test(resend.data.devVerificationCode), 'replacement code queued')
   const rows = await db.contactVerification.findMany({where:{target:email, purpose:'VERIFY'}})
