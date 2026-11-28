@@ -184,6 +184,7 @@ export interface NativeMarketplaceStore {
   city: string | null
   verificationState: string
   productCount: number
+  status?:string
 }
 export interface NativeMarketplaceVariant {
   id: string
@@ -854,6 +855,12 @@ export const api = {
     ),
   },
   marketplace: {
+    myStores:()=>request<{stores:NativeMarketplaceStore[]}>('GET','/marketplace/stores?mine=1'),
+    createStore:(body:unknown)=>request<{store:{id:string;slug:string;name:string;status:string}}>('POST','/marketplace/stores',body),
+    updateStore:(slug:string,body:unknown)=>request<{store:{id:string;slug:string;status:string}}>('PATCH','/marketplace/stores/'+encodeURIComponent(slug),body),
+    createProduct:(slug:string,body:unknown)=>request<{product:{id:string;slug:string;name:string;status:string}}>('POST','/marketplace/stores/'+encodeURIComponent(slug)+'/products',body),
+    publishProduct:(id:string,status:'ACTIVE'|'DRAFT'|'ARCHIVED')=>request<unknown>('PATCH','/marketplace/products/'+encodeURIComponent(id),{status}),
+    adjustStock:(id:string,body:{delta:number;reason:string;requestKey:string})=>request<unknown>('POST','/marketplace/variants/'+encodeURIComponent(id)+'/stock',body),
     stores: (q = '') => request<{ stores: NativeMarketplaceStore[]; checkoutEnabled: false }>(
       'GET', '/marketplace/stores' + (q ? '?q=' + encodeURIComponent(q) : ''),
     ),

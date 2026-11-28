@@ -17,10 +17,7 @@ function TabIcon({ name, selected }: { name: IconName; selected: boolean }) {
     </> : name === 'users' ? <>
       <Circle cx="9" cy="8" r="3" {...common} />
       <Path d="M3 20v-1.5c0-3 2.5-5 6-5s6 2 6 5V20M16 5.5a3 3 0 0 1 0 5.5M18 14c2.3.5 3 2.2 3 4.5V20" {...common} />
-    </> : name === 'film' ? <>
-      <Rect x="3" y="4" width="18" height="16" rx="2.5" {...common} />
-      <Path d="M7 4v16M17 4v16M3 9h4M3 15h4M17 9h4M17 15h4M10 9l4.8 3-4.8 3z" {...common} />
-    </> : name === 'bag' ? <>
+    </> : name === 'plus' ? <Path d="M12 5v14M5 12h14" {...common} stroke="#fff" strokeWidth={2.4} /> : name === 'bag' ? <>
       <Rect x="3.5" y="7.5" width="17" height="14" rx="2.4" {...common} />
       <Path d="M8.5 9V6a3.5 3.5 0 0 1 7 0v3" {...common} />
     </> : name === 'ticket' ? <>
@@ -42,7 +39,7 @@ export function AppTabBar({ active, onSelect }: { active: MainTabRoute; onSelect
       return <Pressable key={tab.route} accessibilityRole="tab" accessibilityLabel={tab.label}
         accessibilityState={{ selected }} onPress={() => onSelect(tab.route)}
         style={({ pressed }) => [styles.tab, expanded&&styles.tabExpanded, pressed && styles.pressed]}>
-        <View style={[styles.iconBox, selected && styles.selectedIcon]}>
+        <View style={[styles.iconBox, selected && styles.selectedIcon,tab.route==='CreateHub'&&styles.createIcon]}>
           <TabIcon name={tab.icon} selected={selected} />
         </View>
         <Text allowFontScaling style={[styles.label, selected && styles.selectedLabel]}>{tab.label}</Text>
@@ -64,6 +61,7 @@ const styles = StyleSheet.create({
   tab:{flex:1,minHeight:54,alignItems:'center',justifyContent:'center',gap:2,paddingHorizontal:1},
   iconBox:{height:29,minWidth:36,alignItems:'center',justifyContent:'center',borderRadius:14},
   selectedIcon:{backgroundColor:'#e4f5ee'},
+  createIcon:{backgroundColor:theme.colors.primary,minWidth:42,height:33,borderRadius:12},
   label:{fontSize:11,lineHeight:15,textAlign:'center',fontWeight:'600',color:theme.colors.textMuted,letterSpacing:-.1},
   selectedLabel:{color:theme.colors.primaryDark,fontWeight:'700'},
   indicator:{height:3,width:13,borderRadius:2,backgroundColor:'transparent',marginTop:2},

@@ -1,15 +1,20 @@
 /** Real seller catalogue; no checkout until certified provider settlement. */
-import {useCallback,useEffect,useRef,useState} from 'react'
+import {useCallback,useRef,useState} from 'react'
+import {useFocusEffect} from '@react-navigation/native'
+import * as Crypto from 'expo-crypto'
+import {ActionDialog,type ActionPrompt} from '../components/ActionDialog'
+import {StudioField,StudioFeedback} from '../ui/StudioForm'
+import {sellerStockDelta} from '../lib/seller-creation-policy'
 import {ActivityIndicator,Alert,Image,Modal,TextInput,Pressable,ScrollView,StyleSheet,Text,View} from 'react-native'
 import {absoluteUrl,api,ApiClientError,formatMinor,type NativeStoreDetail,type NativeMarketplaceProduct,type NativeMarketplaceQuote} from '../api/client'
 import {marketplaceBasketSelection,canAddBasketUnit} from '../lib/marketplace-basket'
 import {theme} from '../theme'
 import {useSession} from '../store/session'
 import {MarketplaceRequests} from '../components/MarketplaceRequests'
-import {LabelPill,PremiumBackdrop,SectionHeading,TileGlyph,mobileDesign} from '../ui/PremiumUI'
+import {LabelPill,PremiumBackdrop,PremiumButton,SectionHeading,TileGlyph,mobileDesign} from '../ui/PremiumUI'
 import type {MarketplaceStoreScreenProps} from '../navigation'
 
-export default function MarketplaceStoreScreen({route}:MarketplaceStoreScreenProps){
+export default function MarketplaceStoreScreen({route,navigation}:MarketplaceStoreScreenProps){
   const {slug}=route.params
   const {user}=useSession()
   const [detail,setDetail]=useState<NativeStoreDetail|null>(null)
@@ -19,6 +24,11 @@ export default function MarketplaceStoreScreen({route}:MarketplaceStoreScreenPro
   const [priceText,setPriceText]=useState('')
   const [priceBusy,setPriceBusy]=useState(false)
   const [priceError,setPriceError]=useState('')
+  const [stockVariant,setStockVariant]=useState<NativeMarketplaceProduct['variants'][number]|null>(null)
+  const [stockDelta,setStockDelta]=useState(''),[stockReason,setStockReason]=useState(''),[stockError,setStockError]=useState('')
+  const [manageBusy,setManageBusy]=useState(false),[manageError,setManageError]=useState(''),[manageNotice,setManageNotice]=useState('')
+  const [prompt,setPrompt]=useState<ActionPrompt|null>(null)
+  const stockKey=useRef(''),manageLock=useRef(false),scrollRef=useRef<ScrollView>(null)
   const [basket,setBasket]=useState<Record<string,number>>({})
   const [quote,setQuote]=useState<NativeMarketplaceQuote|null>(null)
   const [quoteLoading,setQuoteLoading]=useState(false)
@@ -53,7 +63,7 @@ export default function MarketplaceStoreScreen({route}:MarketplaceStoreScreenPro
     }catch(cause){if(request===catalogueEpoch.current){setDetail(null);setError(cause instanceof ApiClientError?cause.message:'Cannot load storefront.')}}
     finally{if(request===catalogueEpoch.current)setLoading(false)}
   },[slug,user?.id])
-  useEffect(()=>{setDetail(null);setBasket({});setQuote(null);setQuoteError('');void load();return()=>{quoteEpoch.current++;catalogueEpoch.current++}},[load])
+  useFocusEffect(useCallback(()=>{setDetail(null);setBasket({});setQuote(null);setQuoteError('');setManageError('');setPrompt(null);setStockVariant(null);setPriceVariant(null);void load();return()=>{quoteEpoch.current++;catalogueEpoch.current++}},[load]))
   async function savePrice(){
     if(!priceVariant||priceBusy)return
     const match=/^(\d{1,7})(?:\.(\d{1,2}))?$/.exec(priceText.trim())
@@ -67,13 +77,33 @@ export default function MarketplaceStoreScreen({route}:MarketplaceStoreScreenPro
     }catch(e){const message=e instanceof Error?e.message:'Could not update price.';setPriceError(message);Alert.alert('Price not updated',message)}
     finally{setPriceBusy(false)}
   }
+  function askManage(title:string,description:string,fn:()=>Promise<unknown>,message:string){
+    if(manageLock.current)return
+    setPrompt({title,description,confirmLabel:'Confirm',onConfirm:()=>void runManage(fn,message)})
+  }
+  async function runManage(fn:()=>Promise<unknown>,message:string){
+    if(manageLock.current)return;manageLock.current=true;setManageBusy(true);setManageError('');setManageNotice('')
+    try{await fn();setManageNotice(message);await load()}
+    catch(e){setManageError(e instanceof Error?e.message:'Could not save change.');scrollRef.current?.scrollTo({y:0,animated:true})}
+    finally{manageLock.current=false;setManageBusy(false);setPrompt(null)}
+  }
+  function openStock(v:NativeMarketplaceProduct['variants'][number]){setStockVariant(v);setStockDelta('');setStockReason('');setStockError('');stockKey.current=Crypto.randomUUID()}
+  async function saveStock(){
+    if(!stockVariant||manageLock.current)return;const delta=sellerStockDelta(stockDelta)
+    if(delta===null||stockReason.trim().length<4){setStockError('Enter a nonzero whole quantity and a meaningful reason (at least four characters).');return}
+    manageLock.current=true;setManageBusy(true);setStockError('')
+    try{await api.marketplace.adjustStock(stockVariant.id,{delta,reason:stockReason.trim(),requestKey:stockKey.current});setStockVariant(null);setManageNotice('Stock movement recorded.');await load()}
+    catch(e){setStockError(e instanceof Error?e.message:'Could not adjust stock. Refresh before retrying.')}
+    finally{manageLock.current=false;setManageBusy(false)}
+  }
   const store=detail?.store
   const cover=store?.coverUrl?absoluteUrl(store.coverUrl):null
   const logo=store?.logoUrl?absoluteUrl(store.logoUrl):null
-  return <><ScrollView style={styles.screen} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+  return <><ScrollView ref={scrollRef} style={styles.screen} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
     {loading&&!detail?<ActivityIndicator size="large" color={theme.colors.primary} style={styles.loader}/>:null}
     {error?<View style={styles.errorBox}><Text style={styles.error} accessibilityRole="alert">{error}</Text>
       <Pressable accessibilityRole="button" onPress={()=>void load()} style={styles.retry}><Text style={styles.retryText}>Try again  ↗</Text></Pressable></View>:null}
+    <StudioFeedback error={manageError} notice={manageNotice}/>
     {detail&&store?<>
       <View style={styles.hero}>
         <PremiumBackdrop mode="midnight"/>
@@ -90,14 +120,15 @@ export default function MarketplaceStoreScreen({route}:MarketplaceStoreScreenPro
         <View style={styles.heroBottom}><Text style={styles.heroMeta}>{[store.city,store.country].filter(Boolean).join(', ')}  ·  {store.category}</Text>
           <Text style={styles.heroCount}>{detail.products.length} products</Text></View>
       </View>
+      {detail.canManage?<View style={styles.about}><SectionHeading title="Seller tools" subtitle="Manage your catalogue and stock here."/><LabelPill label={store.status} tone={store.status==='ACTIVE'?'mint':'light'}/>{store.status!=='SUSPENDED'?<><PremiumButton label="+ Add product" disabled={manageBusy} onPress={()=>navigation.navigate('SellerProduct',{slug})}/>{store.status!=='ACTIVE'&&!user?.emailVerifiedAt?<PremiumButton label="Verify email to publish" secondary onPress={()=>navigation.navigate('Account')}/>:<PremiumButton label={store.status==='ACTIVE'?'Unpublish store':'Publish store'} secondary disabled={manageBusy} onPress={()=>askManage(store.status==='ACTIVE'?'Unpublish store?':'Publish store?',store.status==='ACTIVE'?'The storefront will no longer appear in public discovery.':'Your storefront will become publicly discoverable. Payment checkout remains disabled.',()=>api.marketplace.updateStore(slug,{status:store.status==='ACTIVE'?'DRAFT':'ACTIVE'}),'Store status saved.')}/>}</>:<Text style={styles.aboutText}>Suspended stores require platform review.</Text>}<PremiumButton label="All my stores" secondary onPress={()=>navigation.navigate('SellerStudio')}/></View>:null}
       {store.description?<View style={styles.about}><Text style={styles.aboutTitle}>About this store</Text><Text style={styles.aboutText}>{store.description}</Text></View>:null}
       <View style={styles.notice}><Text style={styles.noticeIcon}>ⓘ</Text><View style={styles.noticeBody}>
         <Text style={styles.noticeTitle}>Product discovery & purchase requests</Text><Text style={styles.noticeText}>Prices, stock and options come from the seller's published catalogue. Online checkout and delivery are not yet available.</Text>
       </View></View>
-      <SectionHeading eyebrow="DISCOVER WHAT'S AVAILABLE" title="Products & inventory" subtitle={`${detail.products.length} published products at this storefront`}/>
+      <SectionHeading eyebrow="DISCOVER WHAT'S AVAILABLE" title="Products & inventory" subtitle={`${detail.products.length} ${detail.canManage?'catalogue':'published'} products at this storefront`}/>
       {detail.products.length===0?<View style={styles.empty}><TileGlyph kind="store" size={70}/><Text style={styles.emptyTitle}>More products are on the way.</Text>
         <Text style={styles.emptyBody}>This store has no published products yet. Check back as the seller adds new items.</Text></View>:
-        detail.products.map(item=><ProductCard key={item.id} item={item} basket={basket} onChangeQty={changeQuantity} canSelect={!detail.canManage} selectionLocked={quoteLoading||loading} onEditPrice={detail.canManage&&store.status!=='SUSPENDED'&&item.status!=='ARCHIVED'?(v)=>{setPriceVariant(v);setPriceText((v.priceMinor/100).toFixed(2));setPriceError('')}:undefined}/>)}
+        detail.products.map(item=><ProductCard key={item.id} item={item} basket={basket} onChangeQty={changeQuantity} canSelect={!detail.canManage} selectionLocked={quoteLoading||loading} onStock={detail.canManage&&store.status!=='SUSPENDED'&&item.status!=='ARCHIVED'?openStock:undefined} onPublish={detail.canManage&&store.status!=='SUSPENDED'&&item.status!=='ARCHIVED'?()=>askManage(item.status==='ACTIVE'?'Unpublish product?':'Publish product?',item.status==='ACTIVE'?'The item will be hidden from buyers.':'The item will become available for discovery when the store is published.',()=>api.marketplace.publishProduct(item.id,item.status==='ACTIVE'?'DRAFT':'ACTIVE'),'Product status saved.'):undefined} manageBusy={manageBusy} onEditPrice={detail.canManage&&store.status!=='SUSPENDED'&&item.status!=='ARCHIVED'?(v)=>{setPriceVariant(v);setPriceText((v.priceMinor/100).toFixed(2));setPriceError('')}:undefined}/>)}
     </>:null}
     {detail&&!detail.canManage?<View style={styles.basketPanel}>
       <Text style={styles.basketKicker}>YOUR SHOPPING SELECTION</Text>
@@ -126,6 +157,8 @@ export default function MarketplaceStoreScreen({route}:MarketplaceStoreScreenPro
     {detail&&!user?<Text style={styles.basketInfo}>Sign in to submit purchase requests.</Text>:null}
     {detail?<Pressable onPress={()=>void load()} style={styles.reload} accessibilityRole="button"><Text style={styles.reloadText}>Refresh catalogue  ↻</Text></Pressable>:null}
   </ScrollView>
+    <ActionDialog prompt={prompt} busy={manageBusy} onDismiss={()=>setPrompt(null)}/>
+    <Modal transparent animationType="fade" visible={stockVariant!==null} onRequestClose={()=>{if(!manageBusy)setStockVariant(null)}} accessibilityViewIsModal><View style={styles.priceBackdrop}><View style={styles.priceDialog}><Text style={styles.basketTitle}>Record stock movement</Text><Text style={styles.basketInfo}>{stockVariant?.title} · {stockVariant?.sku}</Text><StudioField label="Quantity change" hint="Positive to receive, negative to remove" keyboardType="numbers-and-punctuation" value={stockDelta} onChangeText={v=>{setStockDelta(v);stockKey.current=Crypto.randomUUID()}} editable={!manageBusy}/><StudioField label="Reason" value={stockReason} onChangeText={v=>{setStockReason(v);stockKey.current=Crypto.randomUUID()}} maxLength={200} editable={!manageBusy}/><StudioFeedback error={stockError}/><PremiumButton label={manageBusy?'Saving…':'Record movement'} disabled={manageBusy} onPress={()=>void saveStock()}/><PremiumButton label="Cancel" secondary disabled={manageBusy} onPress={()=>setStockVariant(null)}/></View></View></Modal>
     <Modal transparent animationType="fade" visible={priceVariant!==null} onRequestClose={()=>{if(!priceBusy)setPriceVariant(null)}} accessibilityViewIsModal>
       <View style={styles.priceBackdrop}><View style={styles.priceDialog}>
         <Text style={styles.basketTitle}>Edit product price</Text>
@@ -139,7 +172,7 @@ export default function MarketplaceStoreScreen({route}:MarketplaceStoreScreenPro
     </Modal>
   </>
 }
-function ProductCard({item,basket,onChangeQty,canSelect,selectionLocked,onEditPrice}:{item:NativeMarketplaceProduct;basket:Record<string,number>;onChangeQty:(id:string,next:number,available:number)=>void;canSelect:boolean;selectionLocked:boolean;onEditPrice?: (variant:NativeMarketplaceProduct['variants'][number])=>void}){
+function ProductCard({item,basket,onChangeQty,canSelect,selectionLocked,onEditPrice,onStock,onPublish,manageBusy}:{item:NativeMarketplaceProduct;basket:Record<string,number>;onChangeQty:(id:string,next:number,available:number)=>void;canSelect:boolean;selectionLocked:boolean;onEditPrice?: (variant:NativeMarketplaceProduct['variants'][number])=>void;onStock?:(variant:NativeMarketplaceProduct['variants'][number])=>void;onPublish?:()=>void;manageBusy:boolean}){
   const photo=item.images[0]?absoluteUrl(item.images[0]):null
   const priced=item.variants.filter(variant=>variant.priceMinor>=0)
   const from=priced.length?priced.reduce((min,v)=>v.priceMinor<min.priceMinor?v:min,priced[0]!):null
@@ -150,7 +183,7 @@ function ProductCard({item,basket,onChangeQty,canSelect,selectionLocked,onEditPr
       <View style={styles.productCategory}><Text style={styles.productCategoryText}>{item.category}</Text></View>
     </View>
     <View style={styles.cardBody}>
-      <Text style={styles.productName}>{item.name}</Text>
+      <Text style={styles.productName}>{item.name}</Text>{!canSelect?<LabelPill label={item.status} tone={item.status==='ACTIVE'?'mint':'light'}/>:null}
       {item.brand?<Text style={styles.brand}>By {item.brand}</Text>:null}
       {item.shortDesc?<Text style={styles.productDescription}>{item.shortDesc}</Text>:null}
       {item.description?<Text style={styles.productDescription}>{item.description}</Text>:null}
@@ -165,6 +198,7 @@ function ProductCard({item,basket,onChangeQty,canSelect,selectionLocked,onEditPr
             <Text style={[styles.variantStock,variant.available===0&&styles.variantOut]}>{variant.available>0?`${variant.available} in stock`:'Out of stock'}</Text>
           </View></View>
           {onEditPrice&&variant.active?<Pressable accessibilityRole="button" onPress={()=>onEditPrice(variant)} style={styles.reload}><Text style={styles.reloadText}>Edit price</Text></Pressable>:null}
+          {onStock&&variant.active?<PremiumButton label="Adjust stock" secondary disabled={manageBusy} onPress={()=>onStock(variant)}/>:null}
           {canSelect?<View style={styles.qtyGroup}>
             <Pressable accessibilityRole="button" accessibilityLabel={'Remove one '+variant.title}
               disabled={selectionLocked||!(basket[variant.id]??0)} style={[styles.qtyButton,(selectionLocked||!(basket[variant.id]??0))&&styles.qtyDisabled]}
@@ -177,6 +211,7 @@ function ProductCard({item,basket,onChangeQty,canSelect,selectionLocked,onEditPr
           </View>:null}
         </View>)}
       </View>:null}
+      {onPublish?<PremiumButton label={item.status==='ACTIVE'?'Unpublish product':'Publish product'} secondary disabled={manageBusy} onPress={onPublish}/>:null}
       {canSelect?<View style={styles.checkoutNotice}><Text style={styles.checkoutNoticeText}>Checkout & delivery not yet available</Text></View>:null}
     </View>
   </View>

@@ -13,6 +13,8 @@ Maintain this file as the public, sanitized engineering checkpoint. Keep credent
 
 - QA batch: removable fixture seed and acceptance matrix in `ops/qa/`; rehearsal and safety guard required before staging load. Payment, notification and cleanup isolation must pass. Pilot only after reviewed cleanup.
 
+- Mobile creation parity: prioritize visible Create navigation, native organizer and seller workflows, catalogue creation, inventory and publication; physical-device UX acceptance required.
+
 ## P0 — Runtime and release reliability
 - [ ] Run runtime role preflight as application role before and after schema changes; rehearse on disposable PostgreSQL first.
 - [ ] Review additive migration order, role ownership, constraints, defaults, indexes, rollback compatibility; test twice.

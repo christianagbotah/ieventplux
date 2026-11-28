@@ -65,6 +65,7 @@ export default function AccountScreen({ navigation }: AccountScreenProps) {
       </View>
     </View>
 
+    <View style={styles.quickGrid}><QuickTile kind="event" title="Create & manage" detail="Events, organizations and stores" onPress={()=>navigation.navigate('CreateHub')}/><QuickTile kind="store" title="Seller Studio" detail="My stores and inventory" onPress={()=>navigation.navigate('SellerStudio')}/></View>
     {user && <View style={[styles.menu, {padding:14, marginBottom:20, gap:10}]}>
       <Text style={styles.rowTitle}>{user.emailVerifiedAt ? '✓ Email verified' : 'Verify your email'}</Text>
       {!user.emailVerifiedAt && <>

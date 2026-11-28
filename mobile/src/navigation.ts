@@ -6,7 +6,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack'
 
 export type RootStackParamList = {
   /** Signed-out gate. Replaced (not pushed) after a successful login. */
-  Login: undefined
+  Login: {returnTo?:'CreateHub'|'OrganizerStudio'|'CreateOrganizer'|'SellerStudio'|'Services'|'Checkin'|'Account'|'MyTickets'}|undefined
   /** Event discovery feed (GET /api/v1/discovery/home). */
   Discover: undefined
   LiveHub: undefined
@@ -15,6 +15,9 @@ export type RootStackParamList = {
   Account: undefined
   Notifications: undefined
   DirectMessages: {id?:string}|undefined
+  CreateHub: undefined
+  SellerStudio: undefined
+  SellerProduct: {slug:string}
   OrganizerStudio: undefined
   CreateOrganizer: undefined
   EventEditor: {orgId:string;eventId?:string}
@@ -83,3 +86,7 @@ export type OrganizerStudioScreenProps = NativeStackScreenProps<RootStackParamLi
 export type EventEditorScreenProps = NativeStackScreenProps<RootStackParamList, 'EventEditor'>
 
 export type CreateOrganizerScreenProps = NativeStackScreenProps<RootStackParamList, 'CreateOrganizer'>
+
+export type CreateHubScreenProps=NativeStackScreenProps<RootStackParamList,'CreateHub'>
+export type SellerStudioScreenProps=NativeStackScreenProps<RootStackParamList,'SellerStudio'>
+export type SellerProductScreenProps=NativeStackScreenProps<RootStackParamList,'SellerProduct'>

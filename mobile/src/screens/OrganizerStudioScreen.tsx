@@ -84,6 +84,7 @@ export default function OrganizerStudioScreen({navigation}:OrganizerStudioScreen
     {orgError?<Text style={styles.error} accessibilityRole="alert">{orgError}</Text>:null}
     {webError?<Text style={styles.error} accessibilityRole="alert">{webError}</Text>:null}
     {orgLoading?<ActivityIndicator style={styles.loader} color={theme.colors.primary}/>:null}
+    <Pressable style={styles.secondaryAction} accessibilityRole="button" onPress={()=>navigation.navigate('CreateOrganizer')}><Text style={styles.secondaryText}>＋ Create another organization</Text></Pressable>
     {orgs.length>0?<>
       <Text style={styles.sectionLabel}>YOUR ORGANIZATIONS</Text>
       <View style={styles.orgs}>{orgs.map(org=><Pressable accessibilityRole="button" accessibilityState={{selected:org.orgId===orgId}}
