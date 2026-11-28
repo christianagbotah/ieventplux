@@ -2,6 +2,8 @@ import {Prisma} from '@prisma/client'
 import {db} from '@/lib/db'
 import {errors} from '@/server/api'
 import {publishNotification} from './notify'
+import {checkoutDraftEnabled} from '../marketplace-checkout-draft-policy'
+import {checkoutDraftView} from './marketplace-checkout-drafts'
 import {holdPilotEnabled} from '../marketplace-hold-policy'
 import type {Notification} from '@prisma/client'
 import {buildMarketplaceQuote,MarketplaceQuoteError} from '@/server/marketplace-quote-policy'
@@ -15,9 +17,9 @@ export async function listPurchaseRequests(slug:string,userId:string){
   const seller=store.ownerId===userId
   const requests=await db.marketplacePurchaseRequest.findMany({
     where:{storeId:store.id,...(seller?{}:{buyerId:userId})},
-    select:{...requestSelect,stockHold:{select:{id:true,status:true,expiresAt:true,releasedAt:true}}},orderBy:[{createdAt:'desc'},{id:'desc'}],take:50,
+    select:{...requestSelect,stockHold:{select:{id:true,status:true,expiresAt:true,releasedAt:true,checkoutDraft:{select:checkoutDraftView}}}},orderBy:[{createdAt:'desc'},{id:'desc'}],take:50,
   })
-  return {requests,seller,checkoutEnabled:false,inventoryReserved:false,stockHoldEnabled:holdPilotEnabled(process.env)}
+  return {requests,seller,checkoutEnabled:false,inventoryReserved:false,stockHoldEnabled:holdPilotEnabled(process.env),checkoutDraftEnabled:checkoutDraftEnabled(process.env)}
 }
 
 export async function createPurchaseRequest(slug:string,userId:string,raw:unknown){

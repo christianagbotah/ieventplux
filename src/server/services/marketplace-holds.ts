@@ -41,6 +41,7 @@ async function releaseInTransaction(tx:Prisma.TransactionClient,requestId:string
  const status=row.expiresAt<=now?'EXPIRED':'RELEASED'
  for(const line of row.lines){const updated=await tx.marketplaceVariant.updateMany({where:{id:line.variantId,stockReserved:{gte:line.quantity}},data:{stockReserved:{decrement:line.quantity}}});if(updated.count!==1)throw errors.conflict('Stock reservation reconciliation is required.')}
  const hold=await tx.marketplaceStockHold.update({where:{id:row.id},data:{status,releasedAt:now},select:holdView})
+ await tx.marketplaceCheckoutDraft.updateMany({where:{holdId:row.id,status:'PREPARED'},data:{status,closedAt:now}})
  await tx.auditLog.create({data:{...(actorId?{actorUserId:actorId}:{}),actorLabel:actorId?'marketplace-participant':'marketplace-expiry',action:'marketplace.hold.'+status.toLowerCase(),entityType:'MarketplaceStockHold',entityId:row.id}})
  const recipients=[...new Set([row.request.buyerId,row.request.store.ownerId])].filter(x=>x!==actorId)
  const notices=await Promise.all(recipients.map(userId=>tx.notification.create({data:{userId,type:'MARKETPLACE_REQUEST',title:status==='EXPIRED'?'Stock reservation expired':'Stock reservation released',body:'The temporary stock hold has ended. No payment was collected.',link:'#/shop/'+encodeURIComponent(row.request.store.slug)}})))
