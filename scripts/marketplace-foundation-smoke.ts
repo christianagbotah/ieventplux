@@ -236,8 +236,8 @@ try{
  assert(await prepareMarketplaceCheckout(hId,buyerUser.id,{expectedTotalMinor:60000}).then(()=>false,e=>e.status===409),'stale buyer total rejected')
  const prepared=await prepareMarketplaceCheckout(hId,buyerUser.id,{expectedTotalMinor:70000})
  assert(prepared.draft.status==='PREPARED'&&!prepared.paymentCollected&&!prepared.checkoutEnabled,'buyer review persists without payment')
- const replay=await prepareMarketplaceCheckout(hId,buyerUser.id,{expectedTotalMinor:70000})
- assert(replay.replayed&&replay.draft.id===prepared.draft.id,'checkout replay returns original draft')
+ const checkoutReplay=await prepareMarketplaceCheckout(hId,buyerUser.id,{expectedTotalMinor:70000})
+ assert(checkoutReplay.replayed&&checkoutReplay.draft.id===prepared.draft.id,'checkout replay returns original draft')
  assert(await db.platformPaymentIntent.count({where:{sourceId:prepared.draft.id}})===0,'review never creates a payment intent')
 
  assert((await send('PATCH','/marketplace/requests/'+hId,stranger,{status:'WITHDRAWN'})).status===409,'request cannot be withdrawn while stock held')
