@@ -28,6 +28,7 @@ model User {
   passwordHash      String
   displayName       String
   avatarUrl         String?
+  bannerUrl         String?
   bio               String?
   // Platform role: USER | SUPPORT | MODERATOR | FINANCE_ADMIN | SUPER_ADMIN
   role              String    @default("USER")

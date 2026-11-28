@@ -130,7 +130,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
       await setSessionCookie(token, expiresAt)
       await audit({ actorUserId: user.id, actorLabel: email, action: 'auth.login', entityType: 'User', entityId: user.id })
       const { membershipsOf } = await import('@/server/permissions')
-      return jsonOk({ user: { id: user.id, email: user.email, displayName: user.displayName, role: user.role, avatarUrl: user.avatarUrl, emailVerifiedAt: user.emailVerifiedAt?.toISOString() ?? null }, memberships: await membershipsOf(user.id) })
+      return jsonOk({ user: { id: user.id, email: user.email, displayName: user.displayName, role: user.role, avatarUrl: user.avatarUrl, bannerUrl:user.bannerUrl, bio:user.bio, city:user.city, phone:user.phone, emailVerifiedAt: user.emailVerifiedAt?.toISOString() ?? null }, memberships: await membershipsOf(user.id) })
     }
 
     if (action === 'logout') {

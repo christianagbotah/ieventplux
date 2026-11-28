@@ -54,7 +54,7 @@ interface NotificationRow {
 }
 
 export default function Me({ route }: { route: Route }) {
-  const { user, memberships, unread, setUnread, booted } = usePortal()
+  const { user, memberships, unread, setUnread, booted, setUser } = usePortal()
   const { toast } = useToast()
   const [tab, setTab] = useState(route.query.get('tab') ?? 'tickets')
   const [tickets, setTickets] = useState<TicketRow[] | null>(null)
@@ -77,6 +77,8 @@ export default function Me({ route }: { route: Route }) {
   const [prefs, setPrefs] = useState<Record<string, boolean>>({})
   const preferenceBaseline=useRef<Record<string,boolean>>({})
   const [savingProfile, setSavingProfile] = useState(false)
+  const [brandingBusy,setBrandingBusy]=useState(false)
+  const brandingLock=useRef(false)
   const [elevated, setElevated] = useState(false)
   const [elevPassword, setElevPassword] = useState('')
   // R24: minute-resolution clock so the wallet's countdowns tick live without a
@@ -103,10 +105,11 @@ export default function Me({ route }: { route: Route }) {
       navigate('/signin')
       return
     }
-    setProfile({ displayName: user.displayName, phone: user.phone ?? '', city: user.city ?? '', bio: '' })
+    setProfile({ displayName: user.displayName, phone: user.phone ?? '', city: user.city ?? '', bio: user.bio ?? '' })
     const next={ email: true, push: false, sms: Boolean(user.phone), marketing: false, ...user.notifPrefs }
     preferenceBaseline.current=next;setPrefs(next)
-  }, [user, booted])
+  // Branding refresh must not discard unrelated unsaved profile fields.
+  }, [user?.id, user?.displayName, user?.phone, user?.city, user?.bio, user?.notifPrefs, booted])
 
   const loadTickets = useCallback(async () => {
     const data = await api.get<{ items: TicketRow[] }>('/tickets').catch(() => null)
@@ -221,6 +224,13 @@ export default function Me({ route }: { route: Route }) {
     catch (err) { setNotificationError(err instanceof Error ? err.message : 'Could not mark notifications read.') }
   }
 
+  const uploadBranding=async(file:File|undefined,purpose:'avatar'|'banner')=>{
+    if(!file||!user||brandingLock.current)return
+    const owner=user.id
+    if(!['image/jpeg','image/png','image/webp'].includes(file.type)||file.size<1||file.size>5*1024*1024){toast({description:'Choose a JPG, PNG or WebP image up to 5 MB.',variant:'destructive'});return}
+    brandingLock.current=true;setBrandingBusy(true)
+    try{const form=new FormData();form.append('file',file);form.append('purpose',purpose);form.append('expectedUserId',owner);const result=await api.upload<{url:string}>('/auth/branding',form);const current=usePortal.getState().user;if(current?.id===owner)setUser({...current,...(purpose==='avatar'?{avatarUrl:result.url}:{bannerUrl:result.url})});toast({title:'Profile image saved'})}catch(e){toast({description:e instanceof Error?e.message:'Image upload failed.',variant:'destructive'})}finally{brandingLock.current=false;setBrandingBusy(false)}
+  }
   const saveProfile = async () => {
     setSavingProfile(true)
     try {
@@ -298,8 +308,9 @@ export default function Me({ route }: { route: Route }) {
     <div className="mx-auto max-w-5xl px-4 py-8">
       {/* Two-column mobile identity header. Keep email and actions on their own
           full-width rows instead of squeezing the name into a sliver. */}
+      {user.bannerUrl?<img src={user.bannerUrl} alt="Your profile banner" className="mb-4 h-32 w-full rounded-2xl object-cover sm:h-48"/>:null}
       <header className="mb-5 grid grid-cols-[56px_minmax(0,1fr)] items-center gap-x-3 gap-y-3 sm:mb-6 sm:grid-cols-[64px_minmax(0,1fr)_auto] sm:gap-x-4">
-        <span className="flex size-14 items-center justify-center rounded-2xl bg-primary/10 text-lg font-extrabold text-primary sm:size-16" aria-hidden="true">{initials(user.displayName)}</span>
+        {user.avatarUrl?<img src={user.avatarUrl} alt="Your profile picture" className="size-14 rounded-2xl object-cover sm:size-16"/>:<span className="flex size-14 items-center justify-center rounded-2xl bg-primary/10 text-lg font-extrabold text-primary sm:size-16" aria-hidden="true">{initials(user.displayName)}</span>}
         <h1 className="min-w-0 text-xl font-extrabold leading-tight tracking-tight [overflow-wrap:break-word] sm:text-2xl">{user.displayName}</h1>
         <div className="col-span-2 min-w-0 space-y-0.5 sm:col-span-1 sm:col-start-2 sm:row-start-2">
           <p className="text-sm leading-relaxed text-muted-foreground [overflow-wrap:anywhere]">{user.email}</p>
@@ -528,6 +539,7 @@ export default function Me({ route }: { route: Route }) {
           <Card className="rounded-2xl">
             <CardHeader><CardTitle className="text-base">Profile & preferences</CardTitle></CardHeader>
             <CardContent className="space-y-5">
+              <div className="grid gap-4 rounded-xl border p-4 sm:grid-cols-2"><div className="space-y-2"><Label htmlFor="profileAvatar">Profile picture</Label><Input id="profileAvatar" type="file" accept="image/jpeg,image/png,image/webp" disabled={brandingBusy||savingProfile} onChange={e=>{const file=e.currentTarget.files?.[0];e.currentTarget.value='';void uploadBranding(file,'avatar')}}/></div><div className="space-y-2"><Label htmlFor="profileBanner">Profile banner</Label><Input id="profileBanner" type="file" accept="image/jpeg,image/png,image/webp" disabled={brandingBusy||savingProfile} onChange={e=>{const file=e.currentTarget.files?.[0];e.currentTarget.value='';void uploadBranding(file,'banner')}}/></div><p className="text-xs text-muted-foreground sm:col-span-2">{brandingBusy?'Uploading image…':'JPG, PNG or WebP up to 5 MB. Choose images suitable for public display.'}</p></div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label htmlFor="displayName">Display name</Label>
@@ -546,6 +558,7 @@ export default function Me({ route }: { route: Route }) {
                   <p className="rounded-lg bg-secondary/60 px-3 py-2.5 text-sm text-muted-foreground">{user.email} · {humanize(user.role)} · {user.timezone}</p>
                 </div>
               </div>
+              <div className="space-y-1.5"><Label htmlFor="profileBio">About you</Label><textarea id="profileBio" className="w-full rounded-lg border bg-background p-3 text-sm" maxLength={300} value={profile.bio} onChange={e=>setProfile(p=>({...p,bio:e.target.value}))}/></div>
               <div className="space-y-3 rounded-xl border border-border/60 p-4">
                 <p className="text-sm font-semibold">Notifications</p>
                 {[

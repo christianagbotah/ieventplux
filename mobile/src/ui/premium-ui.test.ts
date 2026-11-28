@@ -41,3 +41,5 @@ test('native seller workflow exposes creation, publication and stock without emb
 })
 
 test('native registration and organizer operations use existing server endpoints',()=>{expect(screen('RegisterScreen')).toContain('api.auth.register');const manage=screen('EventManagementScreen');for(const action of ['eventStats','eventOrders','eventAttendees','createTicketType','publishEvent'])expect(manage).toContain('api.organizer.'+action);expect(manage).not.toContain('WebView')})
+
+test('native profile and storefront image workflows use authenticated API endpoints',()=>{const profile=screen('EditProfileScreen');expect(profile).toContain('api.auth.uploadProfileImage');expect(profile).toContain('expectedUserId');expect(profile).toContain('api.auth.updateProfile');expect(screen('MarketplaceStoreScreen')).toContain('api.marketplace.uploadImage');const product=screen('SellerProductScreen');expect(product).toContain('parseSellerVariants');expect(product).toContain('api.marketplace.uploadImage');expect(product).toContain('specifications:specs')})

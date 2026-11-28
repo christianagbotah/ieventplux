@@ -9,6 +9,8 @@ export interface SessionUser {
   displayName: string
   role: string
   avatarUrl: string | null
+  bannerUrl?:string|null
+  bio?:string|null
   phone: string | null
   country: string
   city: string | null
