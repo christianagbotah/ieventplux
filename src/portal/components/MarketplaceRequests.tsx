@@ -5,7 +5,7 @@ import {useToast} from '@/hooks/use-toast'
 import {Button} from '@/components/ui/button'
 import {useConfirm} from '@/components/ui/confirm-dialog-provider'
 import {api} from '../api'
-import {purchaseRequestBody,purchaseRequestFingerprint,requestStatusLabel,availableRequestDecisions,decisionLabel,type RequestDecision,type PurchaseRequestRow,type ReviewedBasket,type PurchaseRequestHistory,type PurchaseRequestResponse} from '../lib/marketplace-requests'
+import {canPrepareCheckout,purchaseRequestBody,purchaseRequestFingerprint,requestStatusLabel,availableRequestDecisions,decisionLabel,type RequestDecision,type PurchaseRequestRow,type ReviewedBasket,type PurchaseRequestHistory,type PurchaseRequestResponse} from '../lib/marketplace-requests'
 const price=(n:number)=>'₵'+(n/100).toLocaleString('en-GH',{minimumFractionDigits:2,maximumFractionDigits:2})
 export function MarketplaceRequests({slug,seller,quote,onSubmitted}:{slug:string;seller:boolean;quote:ReviewedBasket|null;onSubmitted:(submitted:ReviewedBasket)=>void}){
  const confirm=useConfirm()
@@ -73,6 +73,11 @@ export function MarketplaceRequests({slug,seller,quote,onSubmitted}:{slug:string
   }catch(e){if(active.current){fail(e,'Could not update stock hold.');await load()}}
   finally{locked.current=false;if(active.current)setDecisionBusy(false)}
  }
+ async function prepare(row:PurchaseRequestRow){
+  if(locked.current||!canPrepareCheckout(history,row))return
+  locked.current=true;setDecisionBusy(true);setSubmissionError('');setNotice('')
+  try{const approved=await confirm({title:'Review reserved items?',description:'Prepare a checkout draft for '+price(row.totalMinor)+'. No charge, confirmed order or delivery fee is created.',confirmLabel:'Prepare checkout draft'});if(!approved||!active.current)return;const result=await api.post<{checkoutEnabled:false;paymentCollected:false}>('/marketplace/requests/'+encodeURIComponent(row.id)+'/checkout-draft',{expectedTotalMinor:row.totalMinor});if(result.checkoutEnabled!==false||result.paymentCollected!==false)throw new Error('Unexpected checkout draft response.');if(active.current){setNotice('Checkout draft prepared. No payment collected.');await load()}}catch(e){if(active.current){fail(e,'Could not prepare checkout.');await load()}}finally{locked.current=false;if(active.current)setDecisionBusy(false)}
+ }
  return <section className="space-y-3 rounded-2xl border bg-card p-4 sm:p-6" aria-label="Purchase requests">
   <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-extrabold">{seller?'Incoming purchase requests':'Your purchase requests'}</h2><p className="text-xs text-muted-foreground">Purchase requests are non-binding. Temporary stock holds are separate; no payment is collected.</p></div>
    <Button variant="outline" size="sm" disabled={loading} onClick={()=>void load()}>{loading?'Refreshing…':'Refresh requests'}</Button></div>
@@ -87,7 +92,8 @@ export function MarketplaceRequests({slug,seller,quote,onSubmitted}:{slug:string
    <p className="break-all text-xs text-muted-foreground">{new Date(row.createdAt).toLocaleString()} · {row.id}</p>
    {row.items.map(item=><div key={item.variantId} className="flex justify-between gap-3 text-sm"><span>{item.productName} · {item.variantTitle} × {item.quantity}</span><span className="shrink-0">{price(item.lineMinor)}</span></div>)}
    {row.stockHold&&<p className="rounded-lg bg-muted p-2 text-xs">Stock hold: {row.stockHold.status.toLowerCase()}{row.stockHold.status==='HELD'?' · Expires '+new Date(row.stockHold.expiresAt).toLocaleString():''}</p>}
-   <div className="flex flex-wrap gap-2">{history?.stockHoldEnabled&&seller&&row.status==='ACKNOWLEDGED'&&!row.stockHold&&<Button size="sm" disabled={decisionBusy||submitting||loading} onClick={()=>void hold(row.id,false)}>Hold stock for 30 minutes</Button>}{row.stockHold?.status==='HELD'?<Button variant="outline" size="sm" disabled={decisionBusy||submitting||loading} onClick={()=>void hold(row.id,true)}>Release stock hold</Button>:null}{(row.stockHold?.status==='HELD'?[]:availableRequestDecisions(seller,row.status)).map(action=><Button key={action} size="sm" variant={action==='ACKNOWLEDGED'?'default':'outline'} disabled={decisionBusy||submitting||loading} onClick={()=>void decide(row.id,action)}>{decisionLabel(action)}</Button>)}</div>
+   {row.stockHold?.checkoutDraft&&<p className="rounded-lg border p-2 text-xs">Checkout draft: {row.stockHold.checkoutDraft.status.toLowerCase()} · {price(row.stockHold.checkoutDraft.totalMinor)} · No payment collected</p>}
+   <div className="flex flex-wrap gap-2">{canPrepareCheckout(history,row)&&<Button size="sm" disabled={decisionBusy||submitting||loading} onClick={()=>void prepare(row)}>Prepare checkout draft</Button>}{history?.stockHoldEnabled&&seller&&row.status==='ACKNOWLEDGED'&&!row.stockHold&&<Button size="sm" disabled={decisionBusy||submitting||loading} onClick={()=>void hold(row.id,false)}>Hold stock for 30 minutes</Button>}{row.stockHold?.status==='HELD'?<Button variant="outline" size="sm" disabled={decisionBusy||submitting||loading} onClick={()=>void hold(row.id,true)}>Release stock hold</Button>:null}{(row.stockHold?.status==='HELD'?[]:availableRequestDecisions(seller,row.status)).map(action=><Button key={action} size="sm" variant={action==='ACKNOWLEDGED'?'default':'outline'} disabled={decisionBusy||submitting||loading} onClick={()=>void decide(row.id,action)}>{decisionLabel(action)}</Button>)}</div>
   </article>)}
   {history&&history.requests.length===50&&<p className="text-xs text-muted-foreground">Showing the latest 50 requests.</p>}
  </section>

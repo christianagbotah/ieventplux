@@ -1,8 +1,9 @@
 /** Reviewed merchandise snapshot, never a confirmed order or a payment. */
-export type StockHold={id:string;status:'HELD'|'RELEASED'|'EXPIRED';expiresAt:string;releasedAt:string|null}
+export type CheckoutDraft={id:string;status:'PREPARED'|'RELEASED'|'EXPIRED';totalMinor:number;currency:string;unitCount:number;closedAt:string|null}
+export type StockHold={id:string;status:'HELD'|'RELEASED'|'EXPIRED';expiresAt:string;releasedAt:string|null;checkoutDraft?:CheckoutDraft|null}
 export type PurchaseRequestRow={id:string;status:string;totalMinor:number;currency:string;unitCount:number;createdAt:string;stockHold?:StockHold|null;
   items:{variantId:string;productName:string;variantTitle:string;quantity:number;unitPriceMinor:number;lineMinor:number;currency:string}[]}
-export type PurchaseRequestHistory={requests:PurchaseRequestRow[];seller:boolean;stockHoldEnabled?:boolean;checkoutEnabled:false;inventoryReserved:false}
+export type PurchaseRequestHistory={requests:PurchaseRequestRow[];seller:boolean;stockHoldEnabled?:boolean;checkoutDraftEnabled?:boolean;checkoutEnabled:false;inventoryReserved:false}
 export type ReviewedBasket={totalMinor:number;items:{variantId:string;quantity:number;unitPriceMinor:number}[]}
 export function purchaseRequestBody(quote:ReviewedBasket,requestKey:string){
   return {requestKey,expectedTotalMinor:quote.totalMinor,items:quote.items.map(item=>({
@@ -32,3 +33,5 @@ export function availableRequestDecisions(seller:boolean,status:string):RequestD
 export function decisionLabel(decision:RequestDecision){
  return decision==='ACKNOWLEDGED'?'Acknowledge request':decision==='DECLINED'?'Decline request':'Withdraw request'
 }
+
+export function canPrepareCheckout(history:PurchaseRequestHistory|null,row:PurchaseRequestRow,now=Date.now()){return !!history?.checkoutDraftEnabled&&!history.seller&&row.status==='ACKNOWLEDGED'&&row.stockHold?.status==='HELD'&&Date.parse(row.stockHold.expiresAt)>now&&!row.stockHold.checkoutDraft}

@@ -14,10 +14,16 @@ CREATE TABLE "MarketplaceVariant" (id TEXT PRIMARY KEY);
 INSERT INTO "MarketplacePurchaseRequest" VALUES ('request');
 INSERT INTO "MarketplaceVariant" VALUES ('variant');
 SQL
-for attempt in 1 2; do sql -f ops/migrations/20261127_marketplace_stock_holds.sql; done
+for attempt in 1 2; do sql -f ops/migrations/20261127_marketplace_stock_holds.sql; sql -f ops/migrations/20261128_marketplace_checkout_drafts.sql; done
 sql <<'SQL'
 INSERT INTO "MarketplaceStockHold" (id,"requestId","expiresAt") VALUES ('hold','request',CURRENT_TIMESTAMP);
 INSERT INTO "MarketplaceStockHoldLine" VALUES ('hold','variant',2);
+INSERT INTO "MarketplaceCheckoutDraft" (id,"holdId",currency,"totalMinor","unitCount",items) VALUES ('review','hold','GHS',100,2,'[{"variantId":"variant","quantity":2}]');
+DO $$ BEGIN
+ BEGIN UPDATE "MarketplaceCheckoutDraft" SET status='PAID'; RAISE EXCEPTION 'false payment state accepted'; EXCEPTION WHEN check_violation THEN NULL; END;
+ BEGIN UPDATE "MarketplaceCheckoutDraft" SET "totalMinor"=0; RAISE EXCEPTION 'invalid amount accepted'; EXCEPTION WHEN check_violation THEN NULL; END;
+ BEGIN UPDATE "MarketplaceCheckoutDraft" SET status='EXPIRED'; RAISE EXCEPTION 'missing close timestamp accepted'; EXCEPTION WHEN check_violation THEN NULL; END;
+END $$;
 DO $$ BEGIN
  BEGIN
   UPDATE "MarketplaceStockHoldLine" SET quantity=0;
