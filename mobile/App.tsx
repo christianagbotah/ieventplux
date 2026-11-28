@@ -39,6 +39,7 @@ import {activityDestination} from './src/lib/push-activity-policy'
 import OrganizerProfileEditorScreen from './src/screens/OrganizerProfileEditorScreen'
 import EditProfileScreen from './src/screens/EditProfileScreen'
 import RegisterScreen from './src/screens/RegisterScreen'
+import EventProgrammeScreen from './src/screens/EventProgrammeScreen'
 import EventManagementScreen from './src/screens/EventManagementScreen'
 import CreateHubScreen from './src/screens/CreateHubScreen'
 import SellerStudioScreen from './src/screens/SellerStudioScreen'
@@ -137,6 +138,7 @@ function AppRoutes() {
       <Stack.Screen name="OrganizerProfileEditor" component={OrganizerProfileEditorScreen} options={{title:'Organizer profile'}}/>
       <Stack.Screen name="EditProfile" component={EditProfileScreen} options={{title:'Edit profile'}}/>
       <Stack.Screen name="Register" component={RegisterScreen} options={{title:'Create your account'}}/>
+      <Stack.Screen name="EventProgramme" component={EventProgrammeScreen} options={{title:'Programme & lineup'}}/>
       <Stack.Screen name="EventManagement" component={EventManagementScreen} options={{title:'Manage event'}}/>
       <Stack.Screen name="Login" component={LoginScreen} options={{ title: 'Sign in', headerShown: false }} />
       <Stack.Screen name="Discover" component={DiscoverScreen} options={{ headerTitle: () => <AppBrand /> }} />

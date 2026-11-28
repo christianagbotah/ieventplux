@@ -18,6 +18,7 @@ export type RootStackParamList = {
   OrganizerProfileEditor:{orgId:string;slug:string}
   EditProfile: undefined
   Register: undefined
+  EventProgramme:{eventId:string;orgId:string}
   EventManagement:{eventId:string;orgId:string}
   CreateHub: undefined
   SellerStudio: undefined
@@ -101,3 +102,5 @@ export type EventManagementScreenProps=NativeStackScreenProps<RootStackParamList
 export type EditProfileScreenProps=NativeStackScreenProps<RootStackParamList,'EditProfile'>
 
 export type OrganizerProfileEditorScreenProps=NativeStackScreenProps<RootStackParamList,'OrganizerProfileEditor'>
+
+export type EventProgrammeScreenProps=NativeStackScreenProps<RootStackParamList,'EventProgramme'>

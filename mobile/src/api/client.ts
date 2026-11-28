@@ -847,6 +847,13 @@ export const api = {
     questionAction:(id:string,action:'upvote'|'answer'|'hide'|'unhide'|'pin'|'unpin',answer?:string)=>request<unknown>('POST','/questions/'+encodeURIComponent(id)+'/'+action,answer===undefined?{}:{answer}),
   },
   organizer: {
+    agenda:(id:string)=>request<{items:(EventAgendaItem&{sortOrder:number})[]}>('GET','/events/'+encodeURIComponent(id)+'/agenda'),
+    saveAgenda:(id:string,itemId:string|null,body:unknown)=>request<unknown>(itemId?'PATCH':'POST','/events/'+encodeURIComponent(id)+'/agenda'+(itemId?'/'+encodeURIComponent(itemId):''),body),
+    removeAgenda:(id:string,itemId:string)=>request<unknown>('DELETE','/events/'+encodeURIComponent(id)+'/agenda/'+encodeURIComponent(itemId)),
+    contributors:(id:string)=>request<{items:(EventContributor&{endsAt:string|null;sortOrder:number;published:boolean})[]}>('GET','/events/'+encodeURIComponent(id)+'/contributors'),
+    saveContributor:(id:string,itemId:string|null,body:unknown)=>request<unknown>(itemId?'PATCH':'POST','/events/'+encodeURIComponent(id)+'/contributors'+(itemId?'/'+encodeURIComponent(itemId):''),body),
+    removeContributor:(id:string,itemId:string)=>request<unknown>('DELETE','/events/'+encodeURIComponent(id)+'/contributors/'+encodeURIComponent(itemId)),
+    archiveProgramme:(id:string,assetId:string)=>request<unknown>('DELETE','/events/'+encodeURIComponent(id)+'/programmes/'+encodeURIComponent(assetId)),
     profile:(slug:string)=>request<{org:{id:string;slug:string;name:string;tagline:string|null;description:string|null;city:string|null;logoUrl:string|null;coverUrl:string|null;verified:boolean};canEdit:boolean}>('GET','/orgs/'+encodeURIComponent(slug)+'/profile'),
     updateProfile:(slug:string,body:unknown)=>request<{ok:boolean}>('PATCH','/orgs/'+encodeURIComponent(slug)+'/profile',body),
     uploadBranding:(id:string,body:FormData)=>request<{url:string}>('POST','/orgs/'+encodeURIComponent(id)+'/branding',body),
