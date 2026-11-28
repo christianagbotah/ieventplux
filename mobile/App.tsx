@@ -30,6 +30,7 @@ import LiveHubScreen from './src/screens/LiveHubScreen'
 import FollowingScreen from './src/screens/FollowingScreen'
 import ReelsScreen from './src/screens/ReelsScreen'
 import AccountScreen from './src/screens/AccountScreen'
+import VerifyEmailScreen from './src/screens/VerifyEmailScreen'
 import NotificationsScreen from './src/screens/NotificationsScreen'
 import DirectMessagesScreen from './src/screens/DirectMessagesScreen'
 import ForegroundActivity from './src/components/ForegroundActivity'
@@ -96,6 +97,7 @@ const linking: LinkingOptions<RootStackParamList> = {
     screens: {
       Discover: '',
       MyTickets: 'order/:orderRef',
+      VerifyEmail: 'verify-email',
     },
   },
 }
@@ -146,6 +148,7 @@ function AppRoutes() {
       <Stack.Screen name="LiveHub" component={LiveHubScreen} options={{ title: 'Live now' }} />
       <Stack.Screen name="Following" component={FollowingScreen} options={{ title: 'Following' }} />
       <Stack.Screen name="Reels" component={ReelsScreen} options={{ title: 'Reels' }} />
+      <Stack.Screen name="VerifyEmail" component={VerifyEmailScreen} options={{title:'Verify email'}}/>
       <Stack.Screen name="Account" component={AccountScreen} options={{ title: 'Your space' }} />
       <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ title: 'Notifications' }} />
       <Stack.Screen name="DirectMessages" component={DirectMessagesScreen} options={{title:'Messages'}}/>

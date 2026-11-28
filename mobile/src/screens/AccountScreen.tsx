@@ -1,7 +1,7 @@
 /** Premium, native account hub with clear web-only advanced handoffs. */
 import { useState } from 'react'
-import { ActivityIndicator, Image, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
-import { absoluteUrl, api } from '../api/client'
+import { ActivityIndicator, Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { absoluteUrl } from '../api/client'
 import { clearTicketWallet } from '../lib/ticket-wallet'
 import { useSession } from '../store/session'
 import PushSettings from '../components/PushSettings'
@@ -12,23 +12,7 @@ import type { AccountScreenProps } from '../navigation'
 
 type Glyph = 'ticket'|'event'|'organizer'|'store'|'scanner'|'settings'|'spark'
 export default function AccountScreen({ navigation }: AccountScreenProps) {
-  const { user, memberships, signOut, refresh } = useSession()
-  const [verifyOpen, setVerifyOpen] = useState(false)
-  const [verifyCode, setVerifyCode] = useState('')
-  const [verifyBusy, setVerifyBusy] = useState(false)
-  const [verifyNotice, setVerifyNotice] = useState('')
-  const verify = async (resend: boolean) => {
-    if (verifyBusy) return
-    setVerifyBusy(true); setVerifyNotice('')
-    try {
-      if (resend) {
-        const result = await api.auth.resendVerification()
-        if (result.alreadyVerified) await refresh()
-        else { setVerifyCode(''); setVerifyNotice('New code requested. Check your inbox and spam folder shortly.') }
-      } else { await api.auth.verifyEmail(verifyCode); await refresh(); setVerifyNotice('Email verification completed.') }
-    } catch (err) { setVerifyNotice(err instanceof Error ? err.message : 'Please try again.') }
-    finally { setVerifyBusy(false) }
-  }
+  const { user, memberships, signOut } = useSession()
   const [busy, setBusy] = useState(false)
   const [linkError, setLinkError] = useState('')
   const initials = (user?.displayName || user?.email || 'U').trim().split(/\s+/).slice(0, 2).map(s => s[0]?.toUpperCase()).join('')
@@ -68,19 +52,7 @@ export default function AccountScreen({ navigation }: AccountScreenProps) {
     </View>
 
     <View style={styles.quickGrid}><QuickTile kind="event" title="Create & manage" detail="Events, organizations and stores" onPress={()=>navigation.navigate('CreateHub')}/><QuickTile kind="store" title="Seller Studio" detail="My stores and inventory" onPress={()=>navigation.navigate('SellerStudio')}/></View>
-    {user && <View style={[styles.menu, {padding:14, marginBottom:20, gap:10}]}>
-      <Text style={styles.rowTitle}>{user.emailVerifiedAt ? '✓ Email verified' : 'Verify your email'}</Text>
-      {!user.emailVerifiedAt && <>
-        <Pressable accessibilityRole="button" onPress={()=>setVerifyOpen(v=>!v)}><Text style={{color:mobileDesign.emerald,fontWeight:'700',paddingVertical:8}}>{verifyOpen ? 'Hide verification' : 'Verify email address ›'}</Text></Pressable>
-        {verifyOpen && <>
-          <Text style={styles.rowDetail}>Enter the six-digit code from your email, or request a new one.</Text>
-          <TextInput accessibilityLabel="Verification code" keyboardType="number-pad" autoComplete="one-time-code" maxLength={6} value={verifyCode} onChangeText={v=>setVerifyCode(v.replace(/\D/g,''))} placeholder="000000" placeholderTextColor={mobileDesign.inkMuted} style={{borderWidth:1,borderColor:mobileDesign.border,borderRadius:12,padding:12,color:mobileDesign.ink}}/>
-          <Pressable accessibilityRole="button" accessibilityState={{disabled:verifyBusy||verifyCode.length!==6}} disabled={verifyBusy||verifyCode.length!==6} onPress={()=>void verify(false)} style={{backgroundColor:mobileDesign.emerald,borderRadius:12,padding:13,opacity:(verifyBusy || verifyCode.length !== 6) ? 0.5 : 1}}><Text style={{color:'#fff',fontWeight:'700',textAlign:'center'}}>Verify email</Text></Pressable>
-          <Pressable accessibilityRole="button" disabled={verifyBusy} onPress={()=>void verify(true)} style={{paddingVertical:10}}><Text style={{color:mobileDesign.emerald,fontWeight:'700'}}>Send a new code</Text></Pressable>
-        </>}
-      </>}
-      {verifyNotice ? <Text accessibilityLiveRegion="polite" style={styles.rowDetail}>{verifyNotice}</Text> : null}
-    </View>}
+    {user&&<View style={[styles.menu,{padding:14,marginBottom:20,gap:10}]}><Text style={styles.rowTitle}>{user.emailVerifiedAt?'✓ Email verified':'Verify your email'}</Text>{!user.emailVerifiedAt?<><Text style={styles.rowDetail}>Verify your email to publish stores and access account features.</Text><Pressable accessibilityRole="button" onPress={()=>navigation.navigate('VerifyEmail')} style={{minHeight:44,justifyContent:'center'}}><Text style={{color:mobileDesign.emerald,fontWeight:'700'}}>Verify email address ›</Text></Pressable></>:null}</View>}
     {user&&<PushSettings key={user.id} userId={user.id}/>}
     {user&&<PushDeviceManager key={'devices:'+user.id} userId={user.id}/>}
     <SectionHeading title="Your account"/>

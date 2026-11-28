@@ -61,6 +61,7 @@ export default function LoginScreen({ navigation,route }: LoginScreenProps) {
         case 'SellerStudio': navigation.replace('SellerStudio');break
         case 'Services': navigation.replace('Services');break
         case 'Checkin': navigation.replace('Checkin');break
+        case 'VerifyEmail': navigation.replace('VerifyEmail');break
         case 'Account': navigation.replace('Account');break
         case 'MyTickets': navigation.replace('MyTickets');break
         default: navigation.replace('Discover')

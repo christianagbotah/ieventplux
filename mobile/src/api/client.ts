@@ -809,8 +809,8 @@ export const api = {
       request<{ devResetCode?: string | null }>('POST', '/auth/password-reset', { email }),
     confirmReset: (email: string, code: string, password: string) =>
       request<{ message?: string }>('POST', '/auth/password-reset-confirm', { email, code, password }),
-    resendVerification: () => request<{queued: boolean; alreadyVerified?: boolean; devVerificationCode?: string | null}>('POST', '/auth/resend-code', {}),
-    verifyEmail: (code: string) => request<{verified: boolean}>('POST', '/auth/verify-contact', { channel: 'EMAIL', code }),
+    resendVerification: (expectedUserId?:string) => request<{queued: boolean; alreadyVerified?: boolean; devVerificationCode?: string | null}>('POST', '/auth/resend-code', {expectedUserId}),
+    verifyEmail: (code: string,expectedUserId?:string) => request<{verified: boolean}>('POST', '/auth/verify-contact', { channel: 'EMAIL', code,expectedUserId }),
     me: () => request<MeResponse>('GET', '/auth/me'),
     logout: () => request<{ ok: boolean }>('POST', '/auth/logout'),
   },
